@@ -135,7 +135,8 @@ kover {
                     "*_HiltModules*",
                     "hilt_aggregated_deps.*",
                     "dagger.hilt.internal.*",
-                    "*_Impl", // Room-generated DAO/database implementations
+                    // Room-generated DAO/database implementations.
+                    "*_Impl",
                     "*ComposableSingletons*",
                     "*BuildConfig",
                 )
