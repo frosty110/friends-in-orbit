@@ -36,8 +36,18 @@ jobs:
       - name: ktlint
         run: ./gradlew :app:ktlintCheck --no-daemon
 
-      - name: Unit tests
-        run: ./gradlew :app:testDebugUnitTest --no-daemon
+      # koverXmlReportDebug depends on testDebugUnitTest, so this runs the unit
+      # tests AND produces the unified coverage report in one pass.
+      - name: Unit tests + coverage
+        run: ./gradlew :app:koverXmlReportDebug :app:koverHtmlReportDebug --no-daemon
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: orbit-coverage
+          path: android/app/build/reports/kover
+          if-no-files-found: warn
 
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug --no-daemon

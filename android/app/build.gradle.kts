@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kover)
 }
 
 val keystoreProps =
@@ -102,6 +103,45 @@ android {
 // plugin-classpath bug entirely.
 hilt {
     enableAggregatingTask = false
+}
+
+// Unified coverage via Kover, bound to the JVM unit-test source set (src/test).
+// Kover wires itself to testDebugUnitTest, so the per-variant report tasks
+// produce ONE merged number across every unit test:
+//   ./gradlew :app:koverHtmlReportDebug   -> build/reports/kover/htmlDebug (browse)
+//   ./gradlew :app:koverXmlReportDebug    -> build/reports/kover (single value, CI/badges)
+//   ./gradlew :app:koverVerifyDebug       -> enforce a threshold (none set yet — measure first)
+//
+// Instrumented tests (src/androidTest: DAO/migration/Compose) are NOT in this
+// number; folding them in needs an emulator in CI and a Kover variant merge —
+// deferred per the JVM-only decision.
+kover {
+    reports {
+        filters {
+            excludes {
+                // Generated code must not dilute the denominator.
+                annotatedBy(
+                    "dagger.internal.DaggerGenerated",
+                    "javax.annotation.processing.Generated",
+                    // @Composable UI is exercised by androidTest (out of scope for the
+                    // JVM number), so counting it here would only deflate coverage.
+                    "androidx.compose.runtime.Composable",
+                )
+                classes(
+                    "*Hilt_*",
+                    "*_Factory",
+                    "*_Factory\$*",
+                    "*_MembersInjector",
+                    "*_HiltModules*",
+                    "hilt_aggregated_deps.*",
+                    "dagger.hilt.internal.*",
+                    "*_Impl", // Room-generated DAO/database implementations
+                    "*ComposableSingletons*",
+                    "*BuildConfig",
+                )
+            }
+        }
+    }
 }
 
 dependencies {
