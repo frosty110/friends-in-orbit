@@ -10,6 +10,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Needed by the Kover PR-comment step to post/update a comment.
+    permissions:
+      contents: read
+      pull-requests: write
+
     defaults:
       run:
         working-directory: android
@@ -48,6 +53,18 @@ jobs:
           name: orbit-coverage
           path: android/app/build/reports/kover
           if-no-files-found: warn
+
+      # Post the unified coverage as a PR comment (created once, updated in
+      # place on later pushes). SHA-pinned to mi-kas/kover-report v2.4.
+      # No min-coverage thresholds set yet, so this reports but never fails.
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: mi-kas/kover-report@db9938358b8e1e6175dd4136132bf4eb7aa4ae6d
+        with:
+          path: ${{ github.workspace }}/android/app/build/reports/kover/reportDebug.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: Code Coverage (unit tests)
+          update-comment: true
 
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug --no-daemon
