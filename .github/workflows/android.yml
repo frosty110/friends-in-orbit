@@ -58,6 +58,14 @@ jobs:
           path: android/app/build/reports/kover
           if-no-files-found: warn
 
+      # Per-layer + per-package breakdown into the log, incl. a combined
+      # domain+data "critical paths" figure. Pure-Python parse of the Kover
+      # XML; never fails the build.
+      - name: Coverage by layer
+        if: always()
+        continue-on-error: true
+        run: python3 scripts/coverage-summary.py
+
       # Post the unified coverage as a PR comment (created once, updated in
       # place on later pushes). SHA-pinned to mi-kas/kover-report v2.4.
       # No min-coverage thresholds set yet, so this reports but never fails.
