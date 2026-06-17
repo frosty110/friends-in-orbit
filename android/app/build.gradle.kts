@@ -1,4 +1,3 @@
-import java.io.FileInputStream
 import java.util.Properties
 
 plugins {
@@ -10,10 +9,11 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-val keystoreProps = Properties().apply {
-    val f = rootProject.file("keystore.properties")
-    if (f.exists()) load(f.inputStream())
-}
+val keystoreProps =
+    Properties().apply {
+        val f = rootProject.file("keystore.properties")
+        if (f.exists()) load(f.inputStream())
+    }
 
 android {
     namespace = "app.orbit"
