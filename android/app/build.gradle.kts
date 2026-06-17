@@ -51,6 +51,11 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             isDebuggable = true
+            // Instrumented-test (androidTest) coverage instrumentation is opt-in:
+            // the emulator CI job passes -PinstrumentedCoverage so Kover folds
+            // connectedDebugAndroidTest results into the debug report. Off by
+            // default so the JVM-only unit job never tries to reach a device.
+            enableAndroidTestCoverage = project.hasProperty("instrumentedCoverage")
         }
         release {
             isMinifyEnabled = true
