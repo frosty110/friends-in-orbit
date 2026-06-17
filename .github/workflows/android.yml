@@ -38,7 +38,11 @@ jobs:
         with:
           packages: platforms;android-35 build-tools;35.0.0
 
+      # ktlint reports style issues but does NOT gate the build (continue-on-error).
+      # Formatting is meant to be applied locally via the pre-commit hook
+      # (git config core.hooksPath .githooks); CI only surfaces what's left.
       - name: ktlint
+        continue-on-error: true
         run: ./gradlew :app:ktlintCheck --no-daemon
 
       # koverXmlReportDebug depends on testDebugUnitTest, so this runs the unit

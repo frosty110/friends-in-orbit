@@ -1,0 +1,22 @@
+#!/bin/sh
+# Auto-format staged Kotlin sources with ktlint before each commit, so
+# formatting never reaches CI as a violation.
+#
+# Enable once per clone:
+#   git config core.hooksPath .githooks
+#
+# Non-blocking by design: if ktlint can't run (no SDK, offline), the commit
+# still proceeds — CI's ktlint step is report-only anyway.
+
+staged=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.kts?$')
+[ -z "$staged" ] && exit 0
+
+echo "pre-commit: running ktlintFormat on staged Kotlin files…"
+( cd android && ./gradlew --quiet ktlintFormat ) || {
+  echo "pre-commit: ktlintFormat skipped (non-fatal); committing as-is."
+  exit 0
+}
+
+# Re-stage only the files that were already staged, in case ktlint reformatted them.
+echo "$staged" | xargs git add
+exit 0
