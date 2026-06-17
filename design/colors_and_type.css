@@ -1,0 +1,282 @@
+/* ============================================================
+   My Orbit — Design Tokens
+   Warm, earthy, low-saturation. Feels like natural light.
+   ============================================================ */
+
+/* ---- Fonts (self-hosted Inter) ---- */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/Inter-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('fonts/Inter-Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('fonts/Inter-SemiBold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('fonts/Inter-Bold.woff2') format('woff2');
+}
+
+:root {
+  /* ---------- COLOR: PRIMITIVES (light mode defaults) ---------- */
+
+  /* Brand */
+  --orbit-terracotta:        #C8654A;   /* primary CTA */
+  --orbit-terracotta-dark:   #9B4A32;   /* pressed / dark-mode accent */
+  --orbit-terracotta-tint:   #EDD6CE;   /* soft pill / selected bg */
+  --orbit-sage:              #87A383;   /* positive "you're caught up" */
+  --orbit-sage-tint:         #D8E3D6;
+  /* Overdue — cooled toward olive so it reads distinctly from terracotta */
+  --orbit-olive:             #B49A3A;   /* overdue / important (v2 cooler) */
+  --orbit-olive-tint:        #EEE3B8;
+  /* Legacy amber kept for rare true urgency (e.g. sync failure) */
+  --orbit-amber:             #D4A144;
+  --orbit-amber-tint:        #F2E2BF;
+  /* Destructive — pulled toward brown, less red. Reserved for truly final actions. */
+  --orbit-clay:              #8E5141;   /* destructive / delete-from-all */
+  /* Soft destructive — stone-gray for gentle actions like Pause */
+  --orbit-stone-deep:        #524B45;
+
+  /* Cool neutral — the only cool slot, for purely informational states
+     (sync, import progress, read-only badge). Keeps warm family for emotion. */
+  --orbit-slate:             #6B7570;
+  --orbit-slate-tint:         #DCE1DE;
+
+  /* Neutrals — warm, not gray */
+  --orbit-cream:             #FAF6F0;   /* light bg */
+  --orbit-cream-deep:        #F2ECE2;   /* subtle zone, hover bg */
+  --orbit-paper:             #FFFFFF;   /* light surface (cards) */
+  --orbit-ink:               #211E1C;   /* text primary (light) */
+  --orbit-ink-soft:          #3A3531;   /* text strong alt */
+  --orbit-stone:             #6B6560;   /* text secondary */
+  --orbit-stone-soft:        #9A928B;   /* text tertiary / hints */
+  --orbit-line:              #E5DDD1;   /* hairline on cream */
+  --orbit-line-soft:         #EFE8DC;   /* lighter hairline */
+
+  /* Dark-mode primitives */
+  --orbit-charcoal:          #1F1C1A;   /* dark bg */
+  --orbit-graphite:          #2B2724;   /* dark surface (cards) */
+  --orbit-graphite-deep:     #35302C;   /* dark elevated */
+  --orbit-cream-text:        #F0EBE4;   /* text primary (dark) */
+  --orbit-cream-dim:         #C9C2B9;   /* text secondary (dark) */
+  --orbit-line-dark:         #3D3631;   /* hairline on charcoal */
+
+  /* ---------- COLOR: SEMANTIC (light) ---------- */
+  --bg:            var(--orbit-cream);
+  --bg-subtle:     var(--orbit-cream-deep);
+  --surface:       var(--orbit-paper);
+  --surface-alt:   var(--orbit-cream-deep);
+  --fg:            var(--orbit-ink);
+  --fg-strong:     var(--orbit-ink);
+  --fg-soft:       var(--orbit-ink-soft);
+  --fg-muted:      var(--orbit-stone);
+  --fg-subtle:     var(--orbit-stone-soft);
+  --line:          var(--orbit-line);
+  --line-soft:     var(--orbit-line-soft);
+
+  --accent:        var(--orbit-terracotta);
+  --accent-hover:  #B85A40;
+  --accent-press:  var(--orbit-terracotta-dark);
+  --accent-tint:   var(--orbit-terracotta-tint);
+  --accent-fg:     #FFFFFF;
+
+  --positive:      var(--orbit-sage);
+  --positive-tint: var(--orbit-sage-tint);
+  /* Overdue now points at cooled olive (v2). Amber still available for urgency. */
+  --warning:       var(--orbit-olive);
+  --warning-tint:  var(--orbit-olive-tint);
+  --urgent:        var(--orbit-amber);
+  --urgent-tint:   var(--orbit-amber-tint);
+  /* Gentle destructive (Pause) — stone, not red. */
+  --danger-soft:   var(--orbit-stone-deep);
+  /* Final destructive (Remove, Delete data) — clay brown. */
+  --danger:        var(--orbit-clay);
+  /* Informational cool slot — sync state, read-only, offline */
+  --info:          var(--orbit-slate);
+  --info-tint:     var(--orbit-slate-tint);
+
+  /* ---------- TYPOGRAPHY ---------- */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+
+  /* Type scale (mobile-first, 16sp min body) */
+  --fs-hero:      32px;   /* contact name on card view */
+  --fs-title:     24px;   /* screen titles */
+  --fs-h2:        20px;   /* section headers */
+  --fs-h3:        18px;   /* list row primary */
+  --fs-body:      16px;   /* minimum body, non-negotiable */
+  --fs-meta:      14px;   /* timestamps, secondary */
+  --fs-micro:     12px;   /* badges, captions */
+
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semi:    600;
+  --fw-bold:    700;
+
+  --lh-tight:   1.15;
+  --lh-snug:    1.3;
+  --lh-body:    1.5;
+  --lh-loose:   1.65;
+
+  --tracking-tight: -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.01em;
+  --tracking-caps:   0.08em;
+
+  /* ---------- SHAPE ---------- */
+  --radius-xs:  4px;
+  --radius-sm:  8px;    /* small elements */
+  --radius-md:  12px;   /* buttons */
+  --radius-lg:  16px;   /* cards */
+  --radius-xl:  24px;   /* hero / contact card */
+  --radius-full: 999px;
+
+  /* ---------- SPACING (4px base) ---------- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;   /* between elements */
+  --space-5:  20px;   /* inside cards min */
+  --space-6:  24px;   /* inside cards max */
+  --space-7:  32px;
+  --space-8:  40px;
+  --space-9:  56px;
+  --space-10: 72px;
+
+  /* Tap target */
+  --tap-min: 48px;
+
+  /* ---------- ELEVATION ---------- */
+  --shadow-sm:   0 1px 2px rgba(33, 30, 28, 0.04), 0 1px 1px rgba(33, 30, 28, 0.03);
+  --shadow-md:   0 2px 8px rgba(33, 30, 28, 0.06), 0 1px 2px rgba(33, 30, 28, 0.04);
+  --shadow-lg:   0 8px 24px rgba(33, 30, 28, 0.08), 0 2px 6px rgba(33, 30, 28, 0.04);
+  --shadow-card: 0 2px 12px rgba(33, 30, 28, 0.05), 0 1px 2px rgba(33, 30, 28, 0.03);
+  --shadow-hero: 0 12px 36px rgba(33, 30, 28, 0.10), 0 4px 12px rgba(33, 30, 28, 0.06);
+
+  /* ---------- MOTION ---------- */
+  --dur-fast:   150ms;
+  --dur-base:   250ms;
+  --dur-slow:   350ms;
+  --ease-out:   cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.26, 0.64, 1);  /* gentle, not bouncy */
+}
+
+/* ---------- DARK MODE ---------- */
+:root.dark,
+[data-theme="dark"] {
+  --bg:          var(--orbit-charcoal);
+  --bg-subtle:   #25211F;
+  --surface:     var(--orbit-graphite);
+  --surface-alt: var(--orbit-graphite-deep);
+  --fg:          var(--orbit-cream-text);
+  --fg-strong:   var(--orbit-cream-text);
+  --fg-soft:     #DDD5CC;
+  --fg-muted:    var(--orbit-cream-dim);
+  --fg-subtle:   #8F887F;
+  --line:        var(--orbit-line-dark);
+  --line-soft:   #332E2A;
+
+  --accent:      #D87560;  /* slightly lifted for dark bg */
+  --accent-hover:#E18670;
+  --accent-press:var(--orbit-terracotta-dark);
+  --accent-tint: #4A2D24;
+
+  --positive-tint: #344035;
+  --warning-tint:  #4A3E25;
+
+  --shadow-sm:   0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md:   0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-lg:   0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.3);
+  --shadow-hero: 0 12px 36px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- SEMANTIC ELEMENTS ---------- */
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, .h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-hero);
+  font-weight: var(--fw-semi);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-strong);
+}
+h2, .h2 {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-semi);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-strong);
+}
+h3, .h3 {
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-semi);
+  line-height: var(--lh-snug);
+  color: var(--fg-strong);
+}
+h4, .h4 {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+  color: var(--fg-strong);
+}
+p, .body {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--fg);
+}
+.meta {
+  font-size: var(--fs-meta);
+  color: var(--fg-muted);
+  font-weight: var(--fw-regular);
+}
+.micro, .badge-text {
+  font-size: var(--fs-micro);
+  color: var(--fg-muted);
+  letter-spacing: var(--tracking-wide);
+}
+.eyebrow {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+/* Contact-name treatment — the hero of card view */
+.contact-name {
+  font-family: var(--font-display);
+  font-size: var(--fs-hero);
+  font-weight: var(--fw-semi);
+  letter-spacing: -0.005em;
+  line-height: var(--lh-tight);
+  color: var(--fg-strong);
+}

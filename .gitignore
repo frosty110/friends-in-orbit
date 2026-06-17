@@ -1,0 +1,33 @@
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/local.properties
+android/.idea/
+android/.cxx/
+*.iml
+
+# Signing — NEVER commit
+*.keystore
+*.jks
+keystore.properties
+local.properties
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Node — convenience scripts only; no runtime deps
+yarn.lock
+node_modules/

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AppWidgetProviderInfo for the 4×2 "Call suggestions" widget.
+
+  Dimensions: 250dp × 110dp — two standard Android grid cells wide × one cell tall.
+  resizeMode="horizontal" — users can expand the widget width on their launcher.
+  updatePeriodMillis="0" — WorkManager owns all update timing (WidgetUpdateScheduler).
+  initialLayout — glance_default_loading_layout ships with the Glance library and
+                  displays a spinner while provideGlance runs for the first time.
+
+  SPIKE VERDICT: Glance 1.1.1 has no LazyRow or horizontal scroll primitive.
+  This widget ships as a static three-column layout only. Swipe is deferred to v1.1.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:resizeMode="horizontal"
+    android:widgetCategory="home_screen"
+    android:previewImage="@drawable/widget_preview_4x2"
+    android:description="@string/widget_4x2_description"
+    android:updatePeriodMillis="0" />

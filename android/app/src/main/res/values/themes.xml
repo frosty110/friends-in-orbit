@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Post-splash theme. Compose owns the visuals; we only set status/nav
+         bar colors so there's no blue flash before MaterialTheme takes over. -->
+    <style name="Theme.Orbit" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/cream</item>
+        <item name="android:statusBarColor">@color/cream</item>
+        <item name="android:navigationBarColor">@color/cream</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+
+    <!-- Splash / cold-launch theme. core-splashscreen backports the Android 12
+         API so the same style works from API 31 up. Icon is the adaptive
+         launcher foreground (two concentric orbits). -->
+    <style name="Theme.Orbit.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/cream</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Orbit</item>
+    </style>
+</resources>

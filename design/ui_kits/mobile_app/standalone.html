@@ -1,0 +1,245 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>My Orbit — Mobile App</title>
+  <link rel="stylesheet" href="../../colors_and_type.css">
+
+  <!-- Icons (referenced dynamically by name in Icon component) -->
+  <meta name="ext-resource-dependency" content="../../assets/icons/arrow-left.svg" data-resource-id="icon_arrow_left" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/arrow-right.svg" data-resource-id="icon_arrow_right" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/bell-slash.svg" data-resource-id="icon_bell_slash" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/bell.svg" data-resource-id="icon_bell" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/bookmark-simple.svg" data-resource-id="icon_bookmark_simple" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/calendar-blank.svg" data-resource-id="icon_calendar_blank" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/caret-down.svg" data-resource-id="icon_caret_down" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/caret-left.svg" data-resource-id="icon_caret_left" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/caret-right.svg" data-resource-id="icon_caret_right" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/chat-circle.svg" data-resource-id="icon_chat_circle" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/check-circle.svg" data-resource-id="icon_check_circle" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/check.svg" data-resource-id="icon_check" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/circle-notch.svg" data-resource-id="icon_circle_notch" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/clock-counter-clockwise.svg" data-resource-id="icon_clock_counter_clockwise" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/clock.svg" data-resource-id="icon_clock" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/dots-three.svg" data-resource-id="icon_dots_three" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/download-simple.svg" data-resource-id="icon_download_simple" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/eye-slash.svg" data-resource-id="icon_eye_slash" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/eye.svg" data-resource-id="icon_eye" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/fingerprint.svg" data-resource-id="icon_fingerprint" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/funnel.svg" data-resource-id="icon_funnel" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/gear.svg" data-resource-id="icon_gear" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/heart.svg" data-resource-id="icon_heart" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/house-simple.svg" data-resource-id="icon_house_simple" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/house.svg" data-resource-id="icon_house" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/info.svg" data-resource-id="icon_info" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/link.svg" data-resource-id="icon_link" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/list-bullets.svg" data-resource-id="icon_list_bullets" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/list.svg" data-resource-id="icon_list" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/magnifying-glass.svg" data-resource-id="icon_magnifying_glass" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/moon.svg" data-resource-id="icon_moon" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/note-pencil.svg" data-resource-id="icon_note_pencil" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/pause-circle.svg" data-resource-id="icon_pause_circle" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/pencil-simple.svg" data-resource-id="icon_pencil_simple" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/phone-call.svg" data-resource-id="icon_phone_call" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/phone-incoming.svg" data-resource-id="icon_phone_incoming" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/phone-outgoing.svg" data-resource-id="icon_phone_outgoing" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/phone-pause.svg" data-resource-id="icon_phone_pause" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/phone-slash.svg" data-resource-id="icon_phone_slash" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/phone.svg" data-resource-id="icon_phone" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/play.svg" data-resource-id="icon_play" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/plus.svg" data-resource-id="icon_plus" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/shield-check.svg" data-resource-id="icon_shield_check" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/shuffle-angular.svg" data-resource-id="icon_shuffle_angular" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/shuffle.svg" data-resource-id="icon_shuffle" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/sliders-horizontal.svg" data-resource-id="icon_sliders_horizontal" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/squares-four.svg" data-resource-id="icon_squares_four" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/star.svg" data-resource-id="icon_star" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/sun.svg" data-resource-id="icon_sun" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/trash.svg" data-resource-id="icon_trash" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/upload-simple.svg" data-resource-id="icon_upload_simple" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/user-circle.svg" data-resource-id="icon_user_circle" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/user-plus.svg" data-resource-id="icon_user_plus" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/user.svg" data-resource-id="icon_user" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/users.svg" data-resource-id="icon_users" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/warning-circle.svg" data-resource-id="icon_warning_circle" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/warning.svg" data-resource-id="icon_warning" />
+  <meta name="ext-resource-dependency" content="../../assets/icons/x.svg" data-resource-id="icon_x" />
+
+  <template id="__bundler_thumbnail" data-bg-color="#1F1C1A">
+    <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+      <!-- Warm orbit mark: terracotta core + sage ring -->
+      <circle cx="200" cy="200" r="150" fill="none" stroke="#87A383" stroke-width="3" stroke-dasharray="4 10" opacity="0.6"/>
+      <circle cx="200" cy="200" r="100" fill="none" stroke="#C8654A" stroke-width="6"/>
+      <circle cx="200" cy="200" r="54" fill="#C8654A"/>
+      <circle cx="310" cy="140" r="14" fill="#EDD6CE"/>
+      <circle cx="90" cy="260" r="10" fill="#D8E3D6"/>
+    </svg>
+  </template>
+
+  <style>
+    html, body { margin: 0; padding: 0; background: #2B2724; min-height: 100vh; }
+    body {
+      font-family: 'Inter', sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      padding: 40px 20px; box-sizing: border-box;
+      background:
+        radial-gradient(ellipse at 30% 20%, rgba(200,101,74,0.18), transparent 60%),
+        radial-gradient(ellipse at 70% 80%, rgba(135,163,131,0.10), transparent 60%),
+        #1F1C1A;
+    }
+    .stage { display: flex; align-items: center; justify-content: center; gap: 40px; flex-wrap: wrap; }
+    .screen-picker {
+      position: fixed; top: 16px; right: 16px; z-index: 10;
+      background: rgba(43, 39, 36, 0.9); border: 1px solid #3D3631;
+      backdrop-filter: blur(12px);
+      border-radius: 12px; padding: 8px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .screen-picker button {
+      background: transparent; border: 0; color: #C9C2B9;
+      font-family: Inter; font-size: 13px; padding: 8px 12px;
+      border-radius: 8px; cursor: pointer; text-align: left;
+      min-width: 140px;
+    }
+    .screen-picker button.active { background: #C8654A; color: #fff; }
+    .screen-picker button:hover:not(.active) { background: rgba(255,255,255,0.05); color: #F0EBE4; }
+    .screen-picker .label {
+      font-size: 10px; color: #8F887F; letter-spacing: 0.08em;
+      text-transform: uppercase; font-weight: 500; padding: 6px 12px 2px;
+    }
+    #root { display: flex; align-items: center; justify-content: center; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="Primitives.standalone.jsx"></script>
+  <script type="text/babel" src="PhoneFrame.jsx"></script>
+  <script type="text/babel" src="HomeScreen.jsx"></script>
+  <script type="text/babel" src="CardViewScreen.jsx"></script>
+  <script type="text/babel" src="BrowseListScreen.jsx"></script>
+  <script type="text/babel" src="ContactDetailScreen.jsx"></script>
+  <script type="text/babel" src="SettingsScreen.jsx"></script>
+  <script type="text/babel" src="ListsManagerScreen.jsx"></script>
+  <script type="text/babel" src="ListConfigScreen.jsx"></script>
+  <script type="text/babel" src="OnboardingPermissionsScreen.jsx"></script>
+  <script type="text/babel" src="OnboardingCreateListScreen.jsx"></script>
+  <script type="text/babel" src="OnboardingBulkAddScreen.jsx"></script>
+  <script type="text/babel" src="WidgetGallery.jsx"></script>
+
+  <script type="text/babel" data-presets="env,react">
+    const { useState } = React;
+
+    function App() {
+      const [screen, setScreen] = useState(() => localStorage.getItem('orbit.screen') || 'home');
+      const [dark, setDark] = useState(() => localStorage.getItem('orbit.dark') === '1');
+      const [currentList, setCurrentList] = useState({ id: 'inner', name: 'Inner orbit' });
+      const [currentContact, setCurrentContact] = useState('Sarah Chen');
+
+      const go = (s) => { setScreen(s); localStorage.setItem('orbit.screen', s); };
+      const toggleDark = () => { setDark(d => { localStorage.setItem('orbit.dark', d ? '0' : '1'); return !d; }); };
+
+      React.useEffect(() => {
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      }, [dark]);
+
+      const screenGroups = [
+        { label: 'Main', screens: [
+          { id: 'home',     label: 'Home' },
+          { id: 'card',     label: 'Card view' },
+          { id: 'browse',   label: 'Browse list' },
+          { id: 'contact',  label: 'Contact detail' },
+        ]},
+        { label: 'Manage', screens: [
+          { id: 'lists',    label: 'Lists manager' },
+          { id: 'config',   label: 'List config' },
+          { id: 'settings', label: 'Settings' },
+        ]},
+        { label: 'Onboarding', screens: [
+          { id: 'ob-perms', label: '1 · Permissions' },
+          { id: 'ob-list',  label: '2 · Create list' },
+          { id: 'ob-add',   label: '3 · Bulk add' },
+        ]},
+        { label: 'Widgets', screens: [
+          { id: 'widgets',  label: 'Widget gallery' },
+        ]},
+      ];
+
+      let content;
+      if (screen === 'home') content = <HomeScreen
+        onOpenList={(id, name) => { setCurrentList({id, name}); go('card'); }}
+        onOpenSettings={() => go('settings')}
+      />;
+      else if (screen === 'card') content = <CardViewScreen
+        listName={currentList.name}
+        onBack={() => go('home')}
+        onCall={() => go('contact')}
+      />;
+      else if (screen === 'browse') content = <BrowseListScreen
+        listName={currentList.name}
+        onBack={() => go('home')}
+        onOpenContact={(n) => { setCurrentContact(n); go('contact'); }}
+      />;
+      else if (screen === 'contact') content = <ContactDetailScreen
+        name={currentContact}
+        onBack={() => go('home')}
+      />;
+      else if (screen === 'settings') content = <SettingsScreen onBack={() => go('home')} />;
+      else if (screen === 'lists') content = <ListsManagerScreen
+        onBack={() => go('home')}
+        onOpenList={(id, name) => { setCurrentList({id, name}); go('config'); }}
+        onCreate={() => go('config')}
+      />;
+      else if (screen === 'config') content = <ListConfigScreen
+        listName={currentList.name}
+        onBack={() => go('lists')}
+        onSave={() => go('lists')}
+      />;
+      else if (screen === 'ob-perms') content = <OnboardingPermissionsScreen
+        onBack={() => go('home')}
+        onContinue={() => go('ob-list')}
+      />;
+      else if (screen === 'ob-list') content = <OnboardingCreateListScreen
+        onBack={() => go('ob-perms')}
+        onContinue={() => go('ob-add')}
+      />;
+      else if (screen === 'ob-add') content = <OnboardingBulkAddScreen
+        listName={currentList.name}
+        onBack={() => go('ob-list')}
+        onContinue={() => go('home')}
+      />;
+
+      return (
+        <>
+          <div className="screen-picker">
+            {screenGroups.map(g => (
+              <React.Fragment key={g.label}>
+                <div className="label">{g.label}</div>
+                {g.screens.map(s => (
+                  <button key={s.id}
+                    onClick={() => go(s.id)}
+                    className={screen === s.id ? 'active' : ''}
+                  >{s.label}</button>
+                ))}
+              </React.Fragment>
+            ))}
+            <div className="label" style={{ marginTop: 6 }}>Theme</div>
+            <button onClick={toggleDark}>{dark ? '☾ Dark' : '☀ Light'}</button>
+          </div>
+          <div className="stage">
+            {screen === 'widgets'
+              ? <WidgetGallery />
+              : <PhoneFrame dark={dark}>{content}</PhoneFrame>}
+          </div>
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

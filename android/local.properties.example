@@ -1,0 +1,4 @@
+## Copy to local.properties and adjust. This file is not committed.
+## Android Studio generates this automatically on first sync; the CLI needs it
+## manually.
+sdk.dir=/Users/your-user/Library/Android/sdk

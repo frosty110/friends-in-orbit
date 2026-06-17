@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    WIDGET-01 — AppWidgetProviderInfo for the 2×2 "Next call" widget.
+
+    Dimensions: 110dp × 110dp.
+    resizeMode="none" — fixed single-cell widget.
+    updatePeriodMillis="0" — all update timing is driven by WidgetUpdateWorker
+    (WorkManager); system-floor 30-min polling is disabled (WIDGET-05 / WIDGET-06).
+
+    PREVIEW NOTE: widget_preview_2x2.png is a 440×440px placeholder (110dp at
+    xxhdpi ×4) generated for build-time compilation. Production-fidelity screenshot
+    replacement is a deferred on-device step in UAT.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:resizeMode="none"
+    android:widgetCategory="home_screen"
+    android:previewImage="@drawable/widget_preview_2x2"
+    android:description="@string/widget_2x2_description"
+    android:updatePeriodMillis="0" />

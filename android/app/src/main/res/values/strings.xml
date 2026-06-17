@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Orbit</string>
+
+    <plurals name="onb_sync_calls">
+        <item quantity="one">%1$d call</item>
+        <item quantity="other">%1$d calls</item>
+    </plurals>
+    <plurals name="onb_sync_contacts">
+        <item quantity="one">%1$d contact</item>
+        <item quantity="other">%1$d contacts</item>
+    </plurals>
+
+    <!-- Widget strings — 2×2 widget picker label + description.
+         Sentence case, no exclamation marks (voice rules). -->
+    <string name="widget_2x2_label">Next call</string>
+    <string name="widget_2x2_description">Shows who to call next.</string>
+
+    <!-- 4×2 widget picker label + description. -->
+    <string name="widget_4x2_label">Call suggestions</string>
+    <string name="widget_4x2_description">Shows your next suggestions at a glance.</string>
+</resources>

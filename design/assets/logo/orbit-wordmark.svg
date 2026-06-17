@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 56" width="220" height="56" fill="none">
+  <g transform="translate(4 4)">
+    
+    <ellipse cx="24" cy="24" rx="20" ry="10.5" stroke="#C8654A" stroke-width="1.6" opacity="0.35" transform="rotate(-18 24 24)"></ellipse>
+    <ellipse cx="24" cy="24" rx="13.5" ry="6.8" stroke="#C8654A" stroke-width="1.6" opacity="0.6" transform="rotate(-18 24 24)"></ellipse>
+    <circle cx="24" cy="24" r="3.8" fill="#C8654A"></circle>
+    <circle cx="41.8" cy="17.5" r="2.2" fill="#211E1C"></circle>
+    <circle cx="7.5" cy="30" r="2.2" fill="#87A383"></circle>
+  </g>
+  
+  <text x="62" y="36" font-family="Inter, -apple-system, sans-serif" font-size="22" font-weight="600" fill="#211E1C" letter-spacing="-0.01em">My Orbit</text>
+</svg>
