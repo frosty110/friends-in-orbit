@@ -136,9 +136,10 @@ jobs:
           # does NOT trigger it. Failures are tolerated on this first-ever CI run
           # so the report still merges coverage from whatever passed; the report
           # task then folds the on-device coverage into the debug Kover report.
+          # NOTE: each command must be one physical line — the action passes
+          # backslash line-continuations through literally (Gradle saw '\' as a task).
           script: |
-            ./gradlew -PinstrumentedCoverage :app:connectedDebugAndroidTest --no-daemon \
-              || echo "::warning::instrumented tests had failures — continuing to report"
+            ./gradlew -PinstrumentedCoverage :app:connectedDebugAndroidTest --no-daemon || echo "::warning::instrumented tests had failures — continuing to report"
             ./gradlew -PinstrumentedCoverage :app:koverXmlReportDebug :app:koverHtmlReportDebug --no-daemon
 
       # Per-layer breakdown of the MERGED report (unit + instrumented).
