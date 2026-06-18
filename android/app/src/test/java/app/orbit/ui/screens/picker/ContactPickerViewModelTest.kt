@@ -340,6 +340,200 @@ class ContactPickerViewModelTest {
         )
     }
 
+    // ─── Add commit (the add-contacts-to-list flow) ──────────
+
+    @Test
+    fun `onCommit in Add mode inserts memberships, publishes Added with Undo, clears selection`() =
+        runTest {
+            val s = fixture(mode = "add")
+            s.contactRepo.seed(
+                listOf(
+                    contactFixture(id = 12L, displayName = "Sarah"),
+                    contactFixture(id = 13L, displayName = "Marcus"),
+                ),
+            )
+            s.vm.onToggleSelect(12L)
+            s.vm.onToggleSelect(13L)
+
+            s.commitBus.events.test {
+                s.vm.onCommit()
+                val event = awaitItem()
+                assertEquals("Added 2 to Inner orbit", event.message)
+                assertEquals("Undo", event.actionLabel)
+            }
+
+            val insert = s.membershipDao.insertCalls.single()
+            assertEquals(
+                "Add commit inserts one membership row per selected contact onto the target list",
+                setOf(12L to 1L, 13L to 1L),
+                insert.memberships.map { it.contactId to it.listId }.toSet(),
+            )
+            assertTrue("commit clears the selection", selectedIdsIn(s.savedState).isEmpty())
+        }
+
+    @Test
+    fun `onCommit Add undo inverse removes the freshly-added memberships`() = runTest {
+        val s = fixture(mode = "add")
+        s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
+        s.vm.onToggleSelect(12L)
+        s.vm.onCommit()
+        assertEquals(1, s.membershipDao.insertCalls.size)
+
+        val pending = s.undoStack.take()
+        assertNotNull("add must record a depth-1 undo", pending)
+        assertEquals("Added 1 to Inner orbit", pending?.label)
+        pending?.inverse?.invoke()
+        val removed = s.membershipDao.removeCalls.single()
+        assertEquals(1L, removed.fromListId)
+        assertEquals(listOf(12L), removed.ids)
+    }
+
+    @Test
+    fun `onCommit with an empty selection is a no-op`() = runTest {
+        val s = fixture(mode = "add")
+        s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
+
+        s.commitBus.events.test {
+            s.vm.onCommit()
+            expectNoEvents()
+        }
+        assertTrue("no insert without a selection", s.membershipDao.insertCalls.isEmpty())
+        assertNull("no undo for an empty commit", s.undoStack.peek())
+    }
+
+    @Test
+    fun `onCommit Add failure surfaces couldn't save and records no undo`() = runTest {
+        val throwingDao = object : RecordingListMembershipDao() {
+            override suspend fun insertAll(memberships: List<ListMembershipEntity>) =
+                throw IllegalStateException("simulated cipher write failure")
+        }
+        val s = fixture(membershipDao = throwingDao, mode = "add")
+        s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
+        s.vm.onToggleSelect(12L)
+
+        s.commitBus.events.test {
+            s.vm.onCommit()
+            val event = awaitItem()
+            assertEquals("Couldn't save that", event.message)
+            assertNull("failure toast carries no action", event.actionLabel)
+        }
+        assertNull("failed add must not record an undo", s.undoStack.peek())
+    }
+
+    // ─── Copy commit ─────────────────────────────────────────
+
+    @Test
+    fun `onCommit in Copy mode dispatches CopyContactsUseCase with undo and snackbar`() = runTest {
+        val s = fixture(mode = "copy")
+        s.contactRepo.seed(
+            listOf(
+                contactFixture(id = 12L, displayName = "Sarah"),
+                contactFixture(id = 13L, displayName = "Marcus"),
+            ),
+        )
+        s.vm.onToggleSelect(12L)
+        s.vm.onToggleSelect(13L)
+
+        s.commitBus.events.test {
+            s.vm.onCommit()
+            val event = awaitItem()
+            assertEquals("Copied 2 to Inner orbit", event.message)
+            assertEquals("Undo", event.actionLabel)
+        }
+
+        val insert = s.membershipDao.insertCalls.single()
+        assertEquals(
+            setOf(12L to 1L, 13L to 1L),
+            insert.memberships.map { it.contactId to it.listId }.toSet(),
+        )
+        assertTrue("commit clears the selection", selectedIdsIn(s.savedState).isEmpty())
+        assertNotNull("copy must record a depth-1 undo", s.undoStack.peek())
+    }
+
+    // ─── Selection state ─────────────────────────────────────
+
+    @Test
+    fun `onToggleSelect adds then removes an id through SavedStateHandle`() = runTest {
+        val s = fixture()
+        s.vm.onToggleSelect(12L)
+        assertEquals(setOf(12L), selectedIdsIn(s.savedState))
+        s.vm.onToggleSelect(13L)
+        assertEquals(setOf(12L, 13L), selectedIdsIn(s.savedState))
+        s.vm.onToggleSelect(12L)
+        assertEquals(setOf(13L), selectedIdsIn(s.savedState))
+    }
+
+    @Test
+    fun `onSelectAllMatching unions the filtered ids into the existing selection`() = runTest {
+        val s = fixture()
+        s.vm.onToggleSelect(12L)
+        s.vm.onSelectAllMatching(setOf(13L, 14L, 12L))
+        assertEquals(
+            "select-all unions, never replaces",
+            setOf(12L, 13L, 14L),
+            selectedIdsIn(s.savedState),
+        )
+    }
+
+    @Test
+    fun `onClearSelection empties the selection`() = runTest {
+        val s = fixture()
+        s.vm.onToggleSelect(12L)
+        s.vm.onToggleSelect(13L)
+        s.vm.onClearSelection()
+        assertTrue(selectedIdsIn(s.savedState).isEmpty())
+    }
+
+    // ─── Search + sort persistence ───────────────────────────
+
+    @Test
+    fun `onSearchChanged round-trips through SavedStateHandle`() = runTest {
+        val s = fixture()
+        s.vm.onSearchChanged("sarah")
+        assertEquals("sarah", s.savedState.get<String>("searchQuery"))
+    }
+
+    @Test
+    fun `setSortBy persists the chosen sort token`() = runTest {
+        val s = fixture()
+        s.vm.setSortBy(PickerSort.ByRecency)
+        assertEquals("ByRecency", s.savedState.get<String>("sortBy"))
+        s.vm.setSortBy(PickerSort.ByMostCalled)
+        assertEquals("ByMostCalled", s.savedState.get<String>("sortBy"))
+        s.vm.setSortBy(PickerSort.ByName)
+        assertEquals("ByName", s.savedState.get<String>("sortBy"))
+    }
+
+    // ─── Filter toggling (call-frequency single-select group) ─
+
+    @Test
+    fun `call-frequency filters are mutually exclusive in SavedStateHandle`() = runTest {
+        val s = fixture()
+        s.vm.onToggleFilter(PickerFilter.CommonlyCalled)
+        assertEquals(
+            listOf("CommonlyCalled"),
+            s.savedState.get<Array<String>>("activeFilters")?.toList(),
+        )
+        // Activating Rarely clears Commonly — single-select group.
+        s.vm.onToggleFilter(PickerFilter.RarelyCalled)
+        assertEquals(
+            listOf("RarelyCalled"),
+            s.savedState.get<Array<String>>("activeFilters")?.toList(),
+        )
+    }
+
+    @Test
+    fun `non-frequency filters coexist with a frequency filter`() = runTest {
+        val s = fixture()
+        s.vm.onToggleFilter(PickerFilter.CommonlyCalled)
+        s.vm.onToggleFilter(PickerFilter.RecentlyAdded)
+        assertEquals(
+            "RecentlyAdded does not clear the frequency filter",
+            setOf("CommonlyCalled", "RecentlyAdded"),
+            s.savedState.get<Array<String>>("activeFilters")?.toSet(),
+        )
+    }
+
     // ─── Unignore flow ───────────────────────────────────────
 
     @Test
