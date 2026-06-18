@@ -14,7 +14,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -102,11 +101,6 @@ class OnboardingSyncViewModelTest {
             controller = controller,
             callEventRepo = callEventRepo,
         )
-
-    private suspend fun StateFlow<OnboardingSyncUiState>.awaitReady(): OnboardingSyncUiState.Ready =
-        (this as Flow<OnboardingSyncUiState>)
-            .filterIsInstance<OnboardingSyncUiState.Ready>()
-            .first()
 
     // ============================================================================
     // Test 1 — READ_CALL_LOG not granted (Robolectric default): init must not
