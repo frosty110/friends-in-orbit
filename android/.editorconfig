@@ -1,0 +1,6 @@
+root = true
+
+[*.{kt,kts}]
+# The codebase follows Android Studio Kotlin style. ktlint defaults to the
+# stricter "ktlint_official" style, which this code does not target — align them.
+ktlint_code_style = android_studio
