@@ -13,6 +13,8 @@ subprojects {
         android.set(true)
         filter {
             exclude { entry -> entry.file.path.contains("build/generated") }
+            // Instrumented test sources (androidTest) are not style-gated.
+            exclude { entry -> entry.file.path.contains("/androidTest/") }
         }
     }
 }
