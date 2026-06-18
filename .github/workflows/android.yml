@@ -132,7 +132,14 @@ jobs:
           target: google_apis
           profile: pixel_6
           working-directory: android
-          script: ./gradlew -PinstrumentedCoverage :app:koverXmlReportDebug :app:koverHtmlReportDebug --no-daemon
+          # connectedDebugAndroidTest must run explicitly — Kover's report task
+          # does NOT trigger it. Failures are tolerated on this first-ever CI run
+          # so the report still merges coverage from whatever passed; the report
+          # task then folds the on-device coverage into the debug Kover report.
+          script: |
+            ./gradlew -PinstrumentedCoverage :app:connectedDebugAndroidTest --no-daemon \
+              || echo "::warning::instrumented tests had failures — continuing to report"
+            ./gradlew -PinstrumentedCoverage :app:koverXmlReportDebug :app:koverHtmlReportDebug --no-daemon
 
       # Per-layer breakdown of the MERGED report (unit + instrumented).
       - name: Coverage by layer (incl. instrumented)
