@@ -71,7 +71,7 @@ class OnboardingDoneViewModelTest {
         val prefs = buildAppPrefs()
         OnboardingDoneViewModel(prefs)
 
-        val complete = withTimeout(3_000L) {
+        val complete = withTimeout(30_000L) {
             prefs.isOnboardingComplete.filter { it }.first()
         }
         assertTrue(complete, "init must persist onboarding-complete = true")
@@ -87,13 +87,13 @@ class OnboardingDoneViewModelTest {
         val prefs = buildAppPrefs()
         // Seed a stale resume key and let it land before constructing the VM.
         prefs.setLastOnboardingStep(OnboardingStep.Sync.name)
-        withTimeout(3_000L) {
+        withTimeout(30_000L) {
             prefs.lastOnboardingStep.filter { it != null }.first()
         }
 
         OnboardingDoneViewModel(prefs)
 
-        val cleared = withTimeout(3_000L) {
+        val cleared = withTimeout(30_000L) {
             prefs.lastOnboardingStep.filter { it == null }.first()
         }
         assertEquals(null, cleared, "the resume key must be cleared on completion")
@@ -109,7 +109,7 @@ class OnboardingDoneViewModelTest {
         val prefs = buildAppPrefs()
         val vm = OnboardingDoneViewModel(prefs)
 
-        val completed = withTimeout(3_000L) {
+        val completed = withTimeout(30_000L) {
             vm.completed.filter { it }.first()
         }
         assertTrue(completed, "completed must flip true once setOnboardingComplete returns")

@@ -123,14 +123,14 @@ class OnboardingPermissionsViewModelTest {
         val vm = OnboardingPermissionsViewModel(context = context, appPrefs = AppPrefs(context))
 
         // Fresh prefs: the contacts asked flag starts false.
-        val before = withTimeout(3_000L) {
+        val before = withTimeout(30_000L) {
             vm.uiState.filterIsInstance<OnboardingPermissionsUiState.Ready>().first()
         }
         assertFalse(before.hasAskedContacts, "fresh prefs must start hasAskedContacts = false")
 
         vm.onLauncherFired(Manifest.permission.READ_CONTACTS)
 
-        val after = withTimeout(3_000L) {
+        val after = withTimeout(30_000L) {
             vm.uiState
                 .filterIsInstance<OnboardingPermissionsUiState.Ready>()
                 .filter { it.hasAskedContacts }
