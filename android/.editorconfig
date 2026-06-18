@@ -1,22 +1,15 @@
 root = true
 
 [*.{kt,kts}]
-# ktlint configuration. We keep the formatting majority (indentation, spacing,
-# import ordering, trailing commas, blank-line rules) because those are
-# auto-fixable and keep diffs small. We disable only a handful of opinionated,
-# largely non-auto-correctable rules whose cost (CI round-trips, hand-edits)
-# outweighs their benefit — especially for machine-written code.
+# The codebase follows Android Studio Kotlin style. ktlint defaults to the
+# stricter "ktlint_official" style, which this code does not target — align them.
+ktlint_code_style = android_studio
 
-# "A comment in a 'value_argument_list' is only allowed on a separate line"
-# and "A block comment may not be followed by any other element on that same
-# line": both forbid inline/trailing comments next to arguments and are NOT
-# auto-correctable. We use trailing comments deliberately for documentation.
+# On top of the style alignment, disable a few opinionated, largely
+# non-auto-correctable rules whose cost (CI round-trips, hand-edits) outweighs
+# their benefit — especially for machine-written code. Harmless if the style
+# above already relaxes them.
 ktlint_standard_value-argument-comment = disabled
 ktlint_standard_comment-wrapping = disabled
-
-# "A multiline expression should start on a new line" — stylistic, not
-# auto-correctable, and frequently fights idiomatic builder/DSL call layout.
 ktlint_standard_multiline-expression-wrapping = disabled
-
-# "Class body should not start with blank line" — cosmetic only.
 ktlint_standard_no-empty-first-line-in-class-body = disabled

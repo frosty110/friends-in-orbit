@@ -38,10 +38,13 @@ jobs:
         with:
           packages: platforms;android-35 build-tools;35.0.0
 
-      # ktlint reports style issues but does NOT gate the build (continue-on-error).
-      # Formatting is meant to be applied locally via the pre-commit hook
-      # (git config core.hooksPath .githooks); CI only surfaces what's left.
-      - name: ktlint
+      # Advisory: the codebase predates this strict ktlint config and does not
+      # yet fully conform (many findings, including some not auto-correctable).
+      # ktlint still runs and reports here, but does not block the build — the
+      # enforced gates are the unit tests, coverage, and assemble steps below.
+      # Formatting can be auto-applied locally via the pre-commit hook
+      # (git config core.hooksPath .githooks).
+      - name: ktlint (advisory)
         continue-on-error: true
         run: ./gradlew :app:ktlintCheck --no-daemon
 

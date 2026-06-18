@@ -60,7 +60,10 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("release")
         }
     }
@@ -130,7 +133,7 @@ kover {
                     "javax.annotation.processing.Generated",
                     // @Composable UI is exercised by androidTest (out of scope for the
                     // JVM number), so counting it here would only deflate coverage.
-                    "androidx.compose.runtime.Composable",
+                    "androidx.compose.runtime.Composable"
                 )
                 classes(
                     "*Hilt_*",
@@ -143,7 +146,7 @@ kover {
                     // Room-generated DAO/database implementations.
                     "*_Impl",
                     "*ComposableSingletons*",
-                    "*BuildConfig",
+                    "*BuildConfig"
                 )
             }
         }
