@@ -88,10 +88,10 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-  # Instrumented (androidTest) tests on an emulator, with coverage folded into
-  # the debug Kover report so the per-layer numbers include data/ui exercised on
-  # a real device. Non-blocking for now: this suite has never run in CI, so it is
-  # being stabilised before it gates anything or feeds the PR-comment number.
+  # Instrumented (androidTest) tests on an emulator, reporting their on-device
+  # coverage via AGP's native JaCoCo report (Kover does not consume AGP
+  # instrumented coverage). This surfaces a separate data/ui "instrumented
+  # coverage" figure alongside the unit number from the build job. Non-blocking.
   instrumented:
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -121,10 +121,12 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # Runs connectedDebugAndroidTest inside the emulator via Kover. With
-      # -PinstrumentedCoverage the debug build instruments androidTest, so
-      # koverXmlReportDebug merges unit + instrumented coverage into one report.
-      - name: Instrumented tests + merged coverage
+      # Run the instrumented suite, then AGP's native coverage report. The two
+      # commands are separate so a flaky test can't block report generation; the
+      # report reuses whatever .ec coverage the (cached) test run produced.
+      # NOTE: each command must be one physical line — the action passes
+      # backslash line-continuations through literally (Gradle saw '\' as a task).
+      - name: Instrumented tests + AGP coverage report
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -132,26 +134,30 @@ jobs:
           target: google_apis
           profile: pixel_6
           working-directory: android
-          # connectedDebugAndroidTest must run explicitly — Kover's report task
-          # does NOT trigger it. Failures are tolerated on this first-ever CI run
-          # so the report still merges coverage from whatever passed; the report
-          # task then folds the on-device coverage into the debug Kover report.
-          # NOTE: each command must be one physical line — the action passes
-          # backslash line-continuations through literally (Gradle saw '\' as a task).
           script: |
-            ./gradlew -PinstrumentedCoverage :app:connectedDebugAndroidTest --no-daemon || echo "::warning::instrumented tests had failures — continuing to report"
-            ./gradlew -PinstrumentedCoverage :app:koverXmlReportDebug :app:koverHtmlReportDebug --no-daemon
+            ./gradlew -PinstrumentedCoverage :app:connectedDebugAndroidTest --no-daemon || echo "::warning::instrumented tests had failures — continuing"
+            ./gradlew -PinstrumentedCoverage :app:createDebugAndroidTestCoverageReport --no-daemon || echo "::warning::coverage report task failed — continuing"
 
-      # Per-layer breakdown of the MERGED report (unit + instrumented).
-      - name: Coverage by layer (incl. instrumented)
+      # Locate AGP's JaCoCo XML (path varies by AGP version) and summarise it by
+      # layer. Self-diagnosing: lists the coverage files it finds.
+      - name: Instrumented coverage by layer
         if: always()
         continue-on-error: true
-        run: python3 scripts/coverage-summary.py
+        run: |
+          echo "== coverage outputs =="
+          find app/build/reports/coverage app/build/outputs/code_coverage -type f 2>/dev/null | head -50 || true
+          REPORT=$(find app/build/reports/coverage -name '*.xml' 2>/dev/null | head -1)
+          if [ -n "$REPORT" ]; then
+            echo "== Parsing $REPORT =="
+            python3 scripts/coverage-summary.py "$REPORT"
+          else
+            echo "No instrumented coverage XML found (see listing above)."
+          fi
 
-      - name: Upload merged coverage report
+      - name: Upload instrumented coverage report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: orbit-coverage-merged
-          path: android/app/build/reports/kover
+          name: orbit-coverage-instrumented
+          path: android/app/build/reports/coverage
           if-no-files-found: warn
