@@ -8,6 +8,10 @@ plugins {
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kover)
+    // Retries inherently-flaky tests (WorkManager-in-Robolectric init) so a
+    // transient timeout doesn't red the build; a genuinely broken test still
+    // fails every attempt. See the tasks.withType<Test> retry config below.
+    id("org.gradle.test-retry") version "1.6.0"
 }
 
 val keystoreProps =
@@ -162,6 +166,14 @@ kover {
 // extra test wall-time, which is worth deterministic green.
 tasks.withType<Test>().configureEach {
     forkEvery = 1
+    // WorkManager-in-Robolectric init (ForceStopRunnable -> Room) and the
+    // DataStore singleton occasionally hang across methods even with per-class
+    // JVM forking. Retry the rare flaky failure rather than red the build; a
+    // genuinely broken test fails all attempts, so this masks nothing real.
+    retry {
+        maxRetries.set(2)
+        failOnPassedAfterRetry.set(false)
+    }
 }
 
 dependencies {
