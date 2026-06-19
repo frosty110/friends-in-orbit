@@ -38,7 +38,10 @@ LAYER_TARGETS = {
     "data": 30,      # logic only; DAOs/migrations covered by the instrumented job
     "nav": 10,       # navigation graph — framework glue
     "di": 0,         # Hilt wiring — not unit-tested
-    "app/orbit": 20,  # app entry points (MainActivity / OrbitApp / AppViewModel)
+    # ~87% of this package is MainActivity + OrbitApp (Android entry points, not
+    # unit-testable); only AppViewModel (~60 exec lines) is. Unit ceiling ≈ 13%,
+    # so the target reflects "AppViewModel covered", not the whole package.
+    "app/orbit": 10,
 }
 DEFAULT_TARGET = 50
 YELLOW_MARGIN = 10  # percentage points below target still counts as "close"
