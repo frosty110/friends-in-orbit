@@ -61,25 +61,44 @@ jobs:
           path: android/app/build/reports/kover
           if-no-files-found: warn
 
-      # Per-layer + per-package breakdown into the log, incl. a combined
-      # domain+data "critical paths" figure. Pure-Python parse of the Kover
-      # XML; never fails the build.
+      # Per-layer + per-package breakdown into the log, plus a markdown summary
+      # for the PR comment. Pure-Python parse of the Kover XML; never fails here.
       - name: Coverage by layer
         if: always()
         continue-on-error: true
-        run: python3 scripts/coverage-summary.py
+        run: python3 scripts/coverage-summary.py --markdown app/build/reports/kover/coverage-summary.md
 
-      # Post the unified coverage as a PR comment (created once, updated in
-      # place on later pushes). SHA-pinned to mi-kas/kover-report v2.4.
-      # No min-coverage thresholds set yet, so this reports but never fails.
+      # Post the honest per-layer breakdown as a sticky PR comment (leads with the
+      # domain figure, not the diluted total). Updates in place; reuses the prior
+      # comment slot if present. Self-contained — no third-party action. Runs
+      # before the gate so a regression still shows the breakdown on the PR.
       - name: Comment coverage on PR
         if: github.event_name == 'pull_request'
-        uses: mi-kas/kover-report@db9938358b8e1e6175dd4136132bf4eb7aa4ae6d
+        continue-on-error: true
+        uses: actions/github-script@v7
         with:
-          path: ${{ github.workspace }}/android/app/build/reports/kover/reportDebug.xml
-          token: ${{ secrets.GITHUB_TOKEN }}
-          title: Code Coverage (unit tests)
-          update-comment: true
+          script: |
+            const fs = require('fs');
+            const path = 'android/app/build/reports/kover/coverage-summary.md';
+            if (!fs.existsSync(path)) { core.warning('no coverage summary to post'); return; }
+            const body = fs.readFileSync(path, 'utf8');
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find(c =>
+              c.body.includes('<!-- orbit-coverage -->') || c.body.includes('Total Project Coverage'));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      # GATE: fail the build if the domain (business-logic) layer regresses below
+      # the floor. domain sits at ~97%; 90 leaves headroom for normal churn while
+      # catching a real drop. This is the enforced coverage signal — the total is
+      # only advisory (it's diluted by UI/nav/DI and on-device-tested data).
+      - name: Enforce domain coverage floor
+        run: python3 scripts/coverage-summary.py --min-domain 90
 
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug --no-daemon
