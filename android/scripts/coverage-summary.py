@@ -38,7 +38,7 @@ LAYER_TARGETS = {
     "data": 30,      # logic only; DAOs/migrations covered by the instrumented job
     "nav": 10,       # navigation graph — framework glue
     "di": 0,         # Hilt wiring — not unit-tested
-    "(root)": 20,    # app entry points (MainActivity / OrbitApp / AppViewModel)
+    "app/orbit": 20,  # app entry points (MainActivity / OrbitApp / AppViewModel)
 }
 DEFAULT_TARGET = 50
 YELLOW_MARGIN = 10  # percentage points below target still counts as "close"
@@ -114,7 +114,7 @@ def write_markdown(path, layers, total, domain, critical):
         if target <= 0:
             icon, target_str = "⚪", "n/a"
         else:
-            icon, target_str = status_icon(p, target), f"≥&nbsp;{target}%"
+            icon, target_str = status_icon(p, target), f"≥ {target}%"
         out.append(f"| `{name}` | {icon} {p:.1f}% ({covered}/{missed + covered}) | {target_str} |")
     out.append("")
     out.append("🟢 meets target · 🟡 within 10 pts · 🔴 below · ⚪ no unit-test target. "
