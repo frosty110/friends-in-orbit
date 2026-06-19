@@ -24,6 +24,25 @@ DEFAULT_PATH = "app/build/reports/kover/reportDebug.xml"
 CRITICAL_PREFIXES = ("app/orbit/domain", "app/orbit/data")
 DOMAIN_LAYER = "app/orbit/domain"
 
+# Per-layer LINE-coverage targets — deliberately NOT uniform. Business logic is
+# held high; UI view-models moderate; navigation/DI/entry-point glue and the
+# data layer (DAOs/migrations are verified on-device, not here) are expected low.
+# A target of 0 means "no unit-test expectation" (shown as n/a, not pass/fail).
+LAYER_TARGETS = {
+    "domain": 90,    # business logic — also the enforced CI gate
+    "logging": 85,
+    "calllog": 70,
+    "notify": 65,
+    "widget": 60,
+    "ui": 55,        # view-models (composables excluded from the denominator)
+    "data": 30,      # logic only; DAOs/migrations covered by the instrumented job
+    "nav": 10,       # navigation graph — framework glue
+    "di": 0,         # Hilt wiring — not unit-tested
+    "(root)": 20,    # app entry points (MainActivity / OrbitApp / AppViewModel)
+}
+DEFAULT_TARGET = 50
+YELLOW_MARGIN = 10  # percentage points below target still counts as "close"
+
 
 def line_counter(elem):
     """Return (missed, covered) for the LINE counter of an element, or (0, 0)."""
@@ -61,6 +80,14 @@ def short(layer):
     return layer.replace("app/orbit/", "") or "(root)"
 
 
+def status_icon(actual, target):
+    if actual + 1e-9 >= target:
+        return "🟢"
+    if actual + YELLOW_MARGIN + 1e-9 >= target:
+        return "🟡"
+    return "🔴"
+
+
 def write_markdown(path, layers, total, domain, critical):
     dom_pct = pct(domain[1], domain[0] + domain[1])
     tot_pct = pct(total[1], total[0] + total[1])
@@ -77,13 +104,24 @@ def write_markdown(path, layers, total, domain, critical):
         "**instrumented** job). Judge confidence by the per-layer rows, not the total.",
     )
     out.append("")
-    out.append("| Layer | LINE coverage |")
-    out.append("|---|--:|")
+    out.append("| Layer | LINE coverage | Target |")
+    out.append("|---|--:|:--:|")
     for layer in sorted(layers, key=lambda k: pct(layers[k][1], sum(layers[k]) or 1), reverse=True):
         missed, covered = layers[layer]
-        out.append(f"| `{short(layer)}` | {pct(covered, missed + covered):.1f}% ({covered}/{missed + covered}) |")
+        p = pct(covered, missed + covered)
+        name = short(layer)
+        target = LAYER_TARGETS.get(name, DEFAULT_TARGET)
+        if target <= 0:
+            icon, target_str = "⚪", "n/a"
+        else:
+            icon, target_str = status_icon(p, target), f"≥&nbsp;{target}%"
+        out.append(f"| `{name}` | {icon} {p:.1f}% ({covered}/{missed + covered}) | {target_str} |")
     out.append("")
-    out.append(f"_Critical paths (domain + data): {crit_pct:.1f}%. Domain floor enforced in CI._")
+    out.append("🟢 meets target · 🟡 within 10 pts · 🔴 below · ⚪ no unit-test target. "
+               "Targets are per-layer — UI/nav/DI/entry-point code is expected lower, and "
+               "`data` is mostly verified on-device.")
+    out.append("")
+    out.append(f"_Critical paths (domain + data): {crit_pct:.1f}%. Domain floor (90%) enforced in CI._")
     with open(path, "w") as fh:
         fh.write("\n".join(out) + "\n")
 
