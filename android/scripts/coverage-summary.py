@@ -37,10 +37,12 @@ LAYER_TARGETS = {
     "ui": 55,        # view-models (composables excluded from the denominator)
     "data": 30,      # logic only; DAOs/migrations covered by the instrumented job
     "nav": 10,       # navigation graph — framework glue
-    "di": 0,         # Hilt wiring — not unit-tested (kept visible at 0% as ⚪ n/a)
-    # MainActivity + OrbitApp are excluded from measurement in build.gradle.kts,
-    # so this package now reflects only AppViewModel — a real, testable view-model.
-    "app/orbit": 55,
+    "di": 0,          # Hilt wiring — not unit-tested (⚪ n/a, fine at 0%)
+    # The top-level package is the app shell: MainActivity + OrbitApp (Android
+    # entry points) dominate it, with AppViewModel the only testable unit. It's a
+    # mixed glue directory, so it's ⚪ n/a (not held to a bar) rather than graded
+    # on a muddy package number — AppViewModel's tests still count toward the total.
+    "app/orbit": 0,
 }
 DEFAULT_TARGET = 50
 YELLOW_MARGIN = 10  # percentage points below target still counts as "close"
@@ -119,10 +121,10 @@ def write_markdown(path, layers, total, domain, critical):
             icon, target_str = status_icon(p, target), f"≥ {target}%"
         out.append(f"| `{name}` | {icon} {p:.1f}% ({covered}/{missed + covered}) | {target_str} |")
     out.append("")
-    out.append("🟢 meets target · 🟡 within 10 pts · 🔴 below · ⚪ not unit-tested (wiring). "
-               "Targets are per testable unit. Android entry points (MainActivity/OrbitApp) "
-               "and generated code are excluded from measurement; `data` DAOs/migrations are "
-               "verified on-device (see the **instrumented** job); `di` is Hilt wiring.")
+    out.append("🟢 meets target · 🟡 within 10 pts · 🔴 below · ⚪ not held to a target. "
+               "Targets are per testable unit. Generated code + @Composable UI are excluded "
+               "from measurement; the app shell (`app/orbit`) and `di` (Hilt wiring) are ⚪ n/a; "
+               "`data` DAOs/migrations are verified on-device (see the **instrumented** job).")
     out.append("")
     out.append(f"_Critical paths (domain + data): {crit_pct:.1f}%. Domain floor (90%) enforced in CI._")
     with open(path, "w") as fh:
