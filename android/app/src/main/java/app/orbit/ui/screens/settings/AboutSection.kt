@@ -23,7 +23,6 @@ import app.orbit.BuildConfig
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 
-// PLACEHOLDER — RELEASE-05: replace with the live hosted URL after the privacy-policy page is published.
 private const val PRIVACY_POLICY_URL = "https://frosty110.github.io/friends-in-orbit/privacy"
 
 /**
@@ -33,9 +32,8 @@ private const val PRIVACY_POLICY_URL = "https://frosty110.github.io/friends-in-o
  *   - Send feedback — `mailto:hello@bearlumen.com` via ACTION_SENDTO.
  *     Fulfills the parked follow-up from the welcome-screen mailto removal;
  *     Settings → About is its decided home.
- *   - Privacy policy — opens [PRIVACY_POLICY_URL] in the system browser via
- *     ACTION_VIEW. The constant holds a placeholder URL that the release step
- *     replaces with the live hosted URL once published.
+ *   - Privacy policy — opens [PRIVACY_POLICY_URL], the live hosted privacy
+ *     policy, in the system browser via ACTION_VIEW.
  *   - Source code — ACTION_VIEW to the public repository URL.
  *   - Open source licenses — opens [LicensesDialog], a static list derived
  *     from `libs.versions.toml` (kept honest by hand; no plugin).
