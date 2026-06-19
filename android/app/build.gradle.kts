@@ -150,7 +150,15 @@ kover {
                     // Room-generated DAO/database implementations.
                     "*_Impl",
                     "*ComposableSingletons*",
-                    "*BuildConfig"
+                    "*BuildConfig",
+                    // Android entry points — Activity/Application lifecycle glue
+                    // with no unit-testable surface. Excluded so coverage measures
+                    // testable units, not framework wiring (these belong to
+                    // instrumented/manual testing, if anything).
+                    "app.orbit.MainActivity",
+                    "app.orbit.MainActivity*",
+                    "app.orbit.OrbitApp",
+                    "app.orbit.OrbitApp*"
                 )
             }
         }

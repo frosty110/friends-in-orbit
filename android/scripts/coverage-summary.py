@@ -37,11 +37,10 @@ LAYER_TARGETS = {
     "ui": 55,        # view-models (composables excluded from the denominator)
     "data": 30,      # logic only; DAOs/migrations covered by the instrumented job
     "nav": 10,       # navigation graph — framework glue
-    "di": 0,         # Hilt wiring — not unit-tested
-    # ~87% of this package is MainActivity + OrbitApp (Android entry points, not
-    # unit-testable); only AppViewModel (~60 exec lines) is. Unit ceiling ≈ 13%,
-    # so the target reflects "AppViewModel covered", not the whole package.
-    "app/orbit": 10,
+    "di": 0,         # Hilt wiring — not unit-tested (kept visible at 0% as ⚪ n/a)
+    # MainActivity + OrbitApp are excluded from measurement in build.gradle.kts,
+    # so this package now reflects only AppViewModel — a real, testable view-model.
+    "app/orbit": 55,
 }
 DEFAULT_TARGET = 50
 YELLOW_MARGIN = 10  # percentage points below target still counts as "close"
@@ -120,9 +119,10 @@ def write_markdown(path, layers, total, domain, critical):
             icon, target_str = status_icon(p, target), f"≥ {target}%"
         out.append(f"| `{name}` | {icon} {p:.1f}% ({covered}/{missed + covered}) | {target_str} |")
     out.append("")
-    out.append("🟢 meets target · 🟡 within 10 pts · 🔴 below · ⚪ no unit-test target. "
-               "Targets are per-layer — UI/nav/DI/entry-point code is expected lower, and "
-               "`data` is mostly verified on-device.")
+    out.append("🟢 meets target · 🟡 within 10 pts · 🔴 below · ⚪ not unit-tested (wiring). "
+               "Targets are per testable unit. Android entry points (MainActivity/OrbitApp) "
+               "and generated code are excluded from measurement; `data` DAOs/migrations are "
+               "verified on-device (see the **instrumented** job); `di` is Hilt wiring.")
     out.append("")
     out.append(f"_Critical paths (domain + data): {crit_pct:.1f}%. Domain floor (90%) enforced in CI._")
     with open(path, "w") as fh:

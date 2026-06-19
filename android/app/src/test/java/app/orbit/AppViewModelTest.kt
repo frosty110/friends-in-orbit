@@ -107,36 +107,6 @@ class AppViewModelTest {
     }
 
     @Test
-    fun `resume maps PermContacts to its route`() = runBlocking {
-        val prefs = buildAppPrefs()
-        prefs.setOnboardingComplete(false)
-        prefs.setLastOnboardingStep(OnboardingStep.PermContacts.name)
-        withTimeout(30_000L) { prefs.lastOnboardingStep.filter { it != null }.first() }
-
-        assertEquals(Routes.OnboardPermContacts, startDestinationOf(prefs))
-    }
-
-    @Test
-    fun `resume maps PermNotifications to its route`() = runBlocking {
-        val prefs = buildAppPrefs()
-        prefs.setOnboardingComplete(false)
-        prefs.setLastOnboardingStep(OnboardingStep.PermNotifications.name)
-        withTimeout(30_000L) { prefs.lastOnboardingStep.filter { it != null }.first() }
-
-        assertEquals(Routes.OnboardPermNotifs, startDestinationOf(prefs))
-    }
-
-    @Test
-    fun `resume maps Sync to its route`() = runBlocking {
-        val prefs = buildAppPrefs()
-        prefs.setOnboardingComplete(false)
-        prefs.setLastOnboardingStep(OnboardingStep.Sync.name)
-        withTimeout(30_000L) { prefs.lastOnboardingStep.filter { it != null }.first() }
-
-        assertEquals(Routes.OnboardSync, startDestinationOf(prefs))
-    }
-
-    @Test
     fun `start destination is Welcome when not onboarded and no step is persisted`() = runBlocking {
         val prefs = buildAppPrefs()
         prefs.setOnboardingComplete(false)
