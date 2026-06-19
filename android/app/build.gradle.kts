@@ -153,6 +153,17 @@ kover {
     }
 }
 
+// Run each unit-test class in its own JVM. WorkManager's process-global singleton
+// and its in-memory Room DB leak across Robolectric test classes in a shared JVM,
+// intermittently timing out WorkManagerTestInitHelper init (ForceStopRunnable →
+// Room runBlockingUninterruptible) and surfacing as a flaky TimeoutCancellation
+// in whichever WorkManager/DataStore-touching class runs at the wrong moment. A
+// fresh JVM per class removes that cross-class contamination; the cost is some
+// extra test wall-time, which is worth deterministic green.
+tasks.withType<Test>().configureEach {
+    forkEvery = 1
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
