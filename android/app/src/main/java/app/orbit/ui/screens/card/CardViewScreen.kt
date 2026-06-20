@@ -92,8 +92,9 @@ private const val USUALLY_TOOLTIP = "Based on when you usually answer or call th
 
 // Card View — drag to defer/surface, tap to call.
 // 2026-06-09 card-loop revision: hydrated stats + heat, swipe undo snackbars,
-// post-dial "Mark it" prompt, call-log-denied notice, actionable empty states,
-// and crossfaded card advancement via [CardSwipeFrame].
+// call-log-denied notice, actionable empty states, and crossfaded card
+// advancement via [CardSwipeFrame]. A call placed from here advances the deck
+// silently once the call log is synced (no "did you talk?" confirmation).
 
 @Composable
 fun CardViewScreen(
@@ -108,13 +109,12 @@ fun CardViewScreen(
     vm: CardViewViewModel = hiltViewModel(),
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
-    val callPrompt by vm.callPrompt.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    // Permission visibility + post-dial handshake. Both refresh on every
-    // ON_RESUME: returning from the dialer promotes the pending "Mark it"
-    // prompt, and returning from Settings clears the denied notice once the
-    // user grants READ_CALL_LOG.
+    // Permission visibility + post-dial resync. Both refresh on every ON_RESUME:
+    // returning from the dialer triggers an immediate call-log resync (so a
+    // just-placed call advances the deck on its own), and returning from Settings
+    // clears the denied notice once the user grants READ_CALL_LOG.
     var callLogDenied by remember { mutableStateOf(false) }
     LifecycleResumeEffect(Unit) {
         vm.onReturnedFromDial()
@@ -128,7 +128,6 @@ fun CardViewScreen(
     CardViewContent(
         state = state,
         listId = listId,
-        callPrompt = callPrompt,
         callLogDenied = callLogDenied,
         snackbarEvents = vm.snackbarEvents,
         onBack = onBack,
@@ -137,15 +136,14 @@ fun CardViewScreen(
         onAddContacts = onAddContacts,
         onTapToCall = { contactId, phone ->
             // Tap-to-call dials only — navigation to contact detail is
-            // explicit via "View details". vm.onCall records the dialed
-            // contact so the post-dial prompt knows who to offer marking.
+            // explicit via "View details". vm.onCall records that a dial
+            // happened so the screen triggers an immediate call-log resync on
+            // return and the deck advances on its own.
             context.dialPhoneNumber(phone)
             vm.onCall(contactId)
         },
         onSwipeLeft = vm::onSwipeLeft,
         onSwipeRight = vm::onSwipeRight,
-        onMarkTalked = vm::onMarkTalked,
-        onDismissCallPrompt = vm::onDismissCallPrompt,
         onUndo = vm::onUndo,
         onOpenSettings = onOpenSettings,
         onOpenContact = { contactId -> onOpenContact("c-$contactId") },
@@ -196,7 +194,6 @@ private fun ListActionsMenu(
 private fun CardViewContent(
     state: CardViewUiState,
     listId: String,
-    callPrompt: CardViewViewModel.CallPrompt?,
     callLogDenied: Boolean,
     snackbarEvents: SharedFlow<SnackbarEvent>,
     onBack: () -> Unit,
@@ -206,8 +203,6 @@ private fun CardViewContent(
     onTapToCall: (contactId: Long, phone: String) -> Unit,
     onSwipeLeft: (contactId: Long) -> Unit,
     onSwipeRight: (contactId: Long) -> Unit,
-    onMarkTalked: () -> Unit,
-    onDismissCallPrompt: () -> Unit,
     onUndo: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenContact: (contactId: Long) -> Unit,
@@ -285,14 +280,6 @@ private fun CardViewContent(
                     .padding(OrbitTheme.spacing.x4),
             )
         }
-
-        if (callPrompt != null) {
-            PostDialPrompt(
-                prompt = callPrompt,
-                onMarkTalked = onMarkTalked,
-                onDismiss = onDismissCallPrompt,
-            )
-        }
     }
 }
 
@@ -363,57 +350,6 @@ private fun InlineTextActionPreview() {
 private fun CallLogDeniedNoticePreview() {
     OrbitTheme {
         CallLogDeniedNotice(onOpenSettings = {})
-    }
-}
-
-/**
- * Post-dial follow-through (2026-06-09) — one-tap manual mark for the call
- * the user just placed. Quiet bottom strip, dismissible; never a dialog.
- */
-@Composable
-private fun PostDialPrompt(
-    prompt: CardViewViewModel.CallPrompt,
-    onMarkTalked: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val curtain = LocalPrivacyCurtain.current
-    val who = if (curtain) "them" else prompt.firstName
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = OrbitTheme.spacing.x4)
-            .padding(bottom = OrbitTheme.spacing.x3)
-            .clip(OrbitTheme.shapes.lg)
-            .background(OrbitTheme.colors.bgSubtle)
-            .padding(start = OrbitTheme.spacing.x4),
-    ) {
-        Text(
-            text = "Talked to $who?",
-            style = OrbitTheme.type.body,
-            color = OrbitTheme.colors.fg,
-            modifier = Modifier
-                .weight(1f)
-                .padding(vertical = OrbitTheme.spacing.x3),
-        )
-        InlineTextAction(
-            text = "Not now",
-            onClick = onDismiss,
-            color = OrbitTheme.colors.fgMuted,
-        )
-        InlineTextAction(text = "Mark it", onClick = onMarkTalked)
-    }
-}
-
-@PreviewLightDark
-@Composable
-private fun PostDialPromptPreview() {
-    OrbitTheme {
-        PostDialPrompt(
-            prompt = CardViewViewModel.CallPrompt(contactId = 1L, firstName = "Avery"),
-            onMarkTalked = {},
-            onDismiss = {},
-        )
     }
 }
 
@@ -1033,7 +969,6 @@ private fun PreviewContent(state: CardViewUiState, callLogDenied: Boolean = fals
     CardViewContent(
         state = state,
         listId = "inner-orbit",
-        callPrompt = null,
         callLogDenied = callLogDenied,
         snackbarEvents = MutableSharedFlow<SnackbarEvent>().asSharedFlow(),
         onBack = {},
@@ -1043,8 +978,6 @@ private fun PreviewContent(state: CardViewUiState, callLogDenied: Boolean = fals
         onTapToCall = { _, _ -> },
         onSwipeLeft = {},
         onSwipeRight = {},
-        onMarkTalked = {},
-        onDismissCallPrompt = {},
         onUndo = {},
         onOpenSettings = {},
         onOpenContact = {},

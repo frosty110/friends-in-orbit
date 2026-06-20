@@ -4,9 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.orbit.data.NoteRow
-import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.CallEventEntity
-import app.orbit.data.entity.CallSource
 import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.entity.NoteEntity
 import app.orbit.data.feed.CardFeed
@@ -15,9 +13,9 @@ import app.orbit.data.mappers.toUiContact
 import app.orbit.data.mappers.withCallPatterns
 import app.orbit.data.mappers.withCallStats
 import app.orbit.data.repository.ListRepository
+import app.orbit.domain.CallLogResyncTrigger
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.undo.UndoStack
-import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.SkipContactUseCase
 import app.orbit.domain.usecase.SurfaceResult
 import app.orbit.domain.usecase.SurfaceSoonerUseCase
@@ -33,12 +31,10 @@ import java.util.Locale
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -59,11 +55,12 @@ import kotlinx.coroutines.launch
  *     membership schedule, run the mutation, then emit a snackbar with Undo
  *     that restores `nextDueAt` + `skipCount` via [UndoStack] (same pattern
  *     as SettingsIgnoredViewModel).
- *   - **Call follow-through.** `onCall` remembers the dialed contact; when
- *     the screen resumes from the dialer, [callPrompt] surfaces a one-tap
- *     "Talked to {name}? Mark it" affordance that records a manual call via
- *     [MarkCalledUseCase] (CallSource.MANUAL, zero duration — the engines
- *     deliberately treat manual marks as full-cooldown calls).
+ *   - **Silent call advance (CORE-04).** `onCall` records that a dial left for
+ *     the dialer; on return ([onReturnedFromDial]) the VM kicks an immediate
+ *     incremental call-log sync so the detected call advances the deck on its
+ *     own within ~1-2s. There is no "did you talk?" confirmation — the call log
+ *     is the source of truth; off-log connections use "Log a connection" on the
+ *     contact screen.
  *
  * The VM keeps the `nowHour` snapshot, the `NoteEntity → NoteRow` mapping
  * (Option B layering), and the `WhileSubscribed(5_000L)` per-screen cache
@@ -79,11 +76,11 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class CardViewViewModel @Inject constructor(
     cardFeed: CardFeed,
-    private val markCalled: MarkCalledUseCase,
     private val skipContact: SkipContactUseCase,
     private val surfaceSooner: SurfaceSoonerUseCase,
     private val listRepo: ListRepository,
     private val undoStack: UndoStack,
+    private val callLogResync: CallLogResyncTrigger,
     private val clock: Clock,
     private val zoneId: ZoneId,
     savedStateHandle: SavedStateHandle,
@@ -116,23 +113,14 @@ class CardViewViewModel @Inject constructor(
                 )
         }
 
-    /** Swipe-commit + mark-called acknowledgments; screen hosts the snackbar. */
+    /** Swipe-commit + undo acknowledgments; screen hosts the snackbar. */
     private val _snackbarEvents = MutableSharedFlow<SnackbarEvent>(extraBufferCapacity = 1)
     val snackbarEvents: SharedFlow<SnackbarEvent> = _snackbarEvents.asSharedFlow()
 
-    /**
-     * "Talked to {firstName}? Mark it" affordance state. Non-null only after
-     * the user dialed from this screen AND the screen has resumed from the
-     * dialer ([onReturnedFromDial]). Dismiss / mark both clear it.
-     */
-    data class CallPrompt(val contactId: Long, val firstName: String)
-
-    private val _callPrompt = MutableStateFlow<CallPrompt?>(null)
-    val callPrompt: StateFlow<CallPrompt?> = _callPrompt.asStateFlow()
-
-    // Dial-in-flight marker: set on tap-to-call, promoted to [_callPrompt]
-    // on the next ON_RESUME. Plain field — no UI reads it directly.
-    private var pendingDial: CallPrompt? = null
+    // Dial-in-flight marker: the contact id set on tap-to-call, consumed on the
+    // next ON_RESUME to trigger an immediate call-log resync ([onReturnedFromDial]).
+    // Plain field — no UI reads it; a non-null value just means "a dial happened".
+    private var dialPendingContactId: Long? = null
 
     /** CORE-04 — left swipe defers this contact on the current list. */
     fun onSwipeLeft(contactId: Long) = viewModelScope.launch {
@@ -155,58 +143,37 @@ class CardViewViewModel @Inject constructor(
     }
 
     /**
-     * CORE-02 follow-through — the screen dials, then tells us which contact
-     * left for the dialer. The prompt itself only appears once the screen
-     * resumes ([onReturnedFromDial]); until then nothing changes on the card.
+     * CORE-04 — the screen dials, then tells us a dial left for the dialer.
+     * Recorded here and consumed on the next [onReturnedFromDial] to trigger an
+     * immediate call-log resync; nothing changes on the card until the detected
+     * call advances it on its own.
      */
     fun onCall(contactId: Long) {
-        val name = (uiState.value as? CardViewUiState.Ready)
-            ?.takeIf { it.contactId == contactId }
-            ?.contact?.name
-            ?: return
-        pendingDial = CallPrompt(contactId, name.substringBefore(' '))
+        dialPendingContactId = contactId
     }
 
     /**
-     * Screen-side ON_RESUME hook. The first resume after a dial promotes the
-     * pending marker to a visible prompt; resumes with nothing pending are
-     * no-ops (including the screen's very first composition).
+     * Screen-side ON_RESUME hook. When a dial is pending (the user just left for
+     * the dialer and came back — the single most likely moment a new completed
+     * call exists) kick an immediate INCREMENTAL call-log sync (expedited, no
+     * debounce) so the deck advances on its own within ~1-2s rather than waiting
+     * on the 10s-debounced content observer or the TTL-gated resume sync (the
+     * latter is suppressed precisely in this flow — foreground → dial → return
+     * all happen inside its 60s window).
+     *
+     * No "did you talk?" confirmation: the call log is the source of truth, so a
+     * connected call advances the deck silently and an unconnected one correctly
+     * does not. The sync is cheap (reads only rows since the last-sync watermark)
+     * and idempotent; a still-in-progress call (no call-log row yet) is a no-op
+     * and the observer picks it up on hang-up. Off-log connections (WhatsApp,
+     * landline, in person) use "Log a connection" on the contact screen.
+     *
+     * Resumes with nothing pending (including first composition) are no-ops.
      */
     fun onReturnedFromDial() {
-        pendingDial?.let {
-            _callPrompt.value = it
-            pendingDial = null
-        }
-    }
-
-    /** Quiet dismiss — the user didn't talk, or doesn't want to mark it. */
-    fun onDismissCallPrompt() {
-        _callPrompt.value = null
-    }
-
-    /**
-     * One-tap manual mark from the post-dial prompt. CallSource.MANUAL +
-     * zero duration is the engines' designed shape for an unverified mark —
-     * full cooldown applies, no short-call reduction (KeepInTouchEngine
-     * `isRealCall` filter). The card advances on the resulting emission.
-     */
-    fun onMarkTalked() {
-        val prompt = _callPrompt.value ?: return
-        _callPrompt.value = null
-        viewModelScope.launch {
-            runMutation("Couldn't mark that call") {
-                markCalled(
-                    contactId = prompt.contactId,
-                    callEvent = CallEventEntity(
-                        contactId = prompt.contactId,
-                        occurredAt = clock.now(),
-                        direction = CallDirection.OUTGOING,
-                        durationSeconds = 0,
-                        source = CallSource.MANUAL,
-                    ),
-                )
-                _snackbarEvents.tryEmit(SnackbarEvent("Marked — talked to ${prompt.firstName}"))
-            }
+        if (dialPendingContactId != null) {
+            dialPendingContactId = null
+            callLogResync.enqueueImmediateSync(fullResync = false)
         }
     }
 

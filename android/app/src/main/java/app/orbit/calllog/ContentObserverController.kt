@@ -14,6 +14,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import app.orbit.domain.CallLogResyncTrigger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -36,8 +37,13 @@ import timber.log.Timber
  * - The worker (CallLogSyncWorker) ALSO checks the permission and returns
  *   Result.success() on a revoked-mid-flight transition (CALL-06).
  *
- * Debounce (CALL-03): 10s setInitialDelay + ExistingWorkPolicy.REPLACE — a rapid
- * observer burst collapses into a single worker execution at the end of the window.
+ * Debounce (CALL-03): 10s setInitialDelay + ExistingWorkPolicy.KEEP — a rapid
+ * observer burst collapses into a single worker execution. KEEP (not REPLACE) so
+ * a background observer fire can never cancel an explicit run-now already in
+ * flight on the same unique work ([enqueueImmediateSync] / [enqueueResumeSyncIfStale]):
+ * the call-log change that prompts a card-dial return ALSO fires the observer,
+ * and a REPLACE here would clobber the expedited return-from-dial sync back into
+ * a 10s-delayed one (CORE-04).
  *
  * Quota policy: RUN_AS_NON_EXPEDITED_WORK_REQUEST. Never DROP.
  *
@@ -54,7 +60,7 @@ import timber.log.Timber
 @Singleton
 open class ContentObserverController @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : CallLogResyncTrigger {
 
     private val handler = Handler(Looper.getMainLooper())
     private val callLogObserver: ContentObserver = object : ContentObserver(handler) {
@@ -165,9 +171,16 @@ open class ContentObserverController @Inject constructor(
             .setInitialDelay(DEBOUNCE_SECONDS, TimeUnit.SECONDS)
             .setInputData(workDataOf(KEY_FULL_RESYNC to false))
             .build()
+        // KEEP, not REPLACE — see the class KDoc (CALL-03 / CORE-04). A dial
+        // placed from the card triggers [enqueueImmediateSync] (expedited) AND,
+        // via the same call-log change, this observer fire. REPLACE here would
+        // cancel that expedited run-now and re-queue a 10s-delayed sync, so the
+        // deck would not advance for ~10-20s. KEEP yields to the in-flight
+        // run-now; an observer burst still coalesces to one run, and when nothing
+        // is pending this enqueues normally.
         WorkManager.getInstance(context).enqueueUniqueWork(
             UNIQUE_NAME_SYNC,
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.KEEP,
             request,
         )
         Timber.tag(TAG).d("enqueued_debounced_sync delay_s=%d", DEBOUNCE_SECONDS)
@@ -251,8 +264,14 @@ open class ContentObserverController @Inject constructor(
      * Public helper used by SettingsViewModel for the "Resync now"
      * button AND by the first-run import path. REPLACE cancels any pending
      * debounced work.
+     *
+     * Also the production binding for [CallLogResyncTrigger]: the card view
+     * calls this on return-from-dial (CORE-04) so a just-completed call advances
+     * the deck immediately rather than waiting on the debounced observer / the
+     * TTL-gated resume sync. Expedited + no debounce = runs now; incremental
+     * (`fullResync = false`) so it only reads rows since the last-sync watermark.
      */
-    fun enqueueImmediateSync(fullResync: Boolean) {
+    override fun enqueueImmediateSync(fullResync: Boolean) {
         val request = OneTimeWorkRequestBuilder<CallLogSyncWorker>()
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .setInputData(workDataOf(KEY_FULL_RESYNC to fullResync))

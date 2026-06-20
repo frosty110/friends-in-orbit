@@ -15,7 +15,6 @@ import app.orbit.domain.listFixture
 import app.orbit.domain.membershipFixture
 import app.orbit.domain.ruleTemplateFixture
 import app.orbit.domain.undo.UndoStack
-import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.SkipContactUseCase
 import app.orbit.domain.usecase.SurfaceNextUseCase
 import app.orbit.domain.usecase.SurfaceQueueUseCase
@@ -84,14 +83,6 @@ class CardViewViewModelTest {
             clock = clock,
             json = json,
         )
-        val markCalled = MarkCalledUseCase(
-            contactRepo = contactRepo,
-            listRepo = listRepo,
-            callEventRepo = callEventRepo,
-            ruleTemplateRepo = templateRepo,
-            clock = clock,
-            json = json,
-        )
         val skipContact = SkipContactUseCase(
             contactRepo = contactRepo,
             listRepo = listRepo,
@@ -148,7 +139,6 @@ class CardViewViewModelTest {
         )
         val vm = CardViewViewModel(
             cardFeed = cardFeed,
-            markCalled = markCalled,
             skipContact = skipContact,
             surfaceSooner = surfaceSooner,
             // 2026-06-09 — swipe-undo surface: the VM captures + restores the
@@ -156,6 +146,9 @@ class CardViewViewModelTest {
             // on the depth-1 UndoStack.
             listRepo = listRepo,
             undoStack = UndoStack(),
+            // CORE-04 — return-from-dial resync seam; state-contract tests don't
+            // exercise the dial path, so a no-op SAM suffices.
+            callLogResync = { },
             clock = clock,
             // WR-02 — CardViewViewModel now takes ZoneId so the per-emission
             // nowHour snapshot reads from the injected binding instead of
