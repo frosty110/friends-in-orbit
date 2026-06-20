@@ -2,8 +2,6 @@ package app.orbit.ui.screens.card
 
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
-import app.orbit.data.entity.CallDirection
-import app.orbit.data.entity.CallSource
 import app.orbit.data.feed.CardFeed
 import app.orbit.domain.CallLogResyncTrigger
 import app.orbit.domain.FakeCallEventRepository
@@ -19,7 +17,6 @@ import app.orbit.domain.listFixture
 import app.orbit.domain.membershipFixture
 import app.orbit.domain.ruleTemplateFixture
 import app.orbit.domain.undo.UndoStack
-import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.SkipContactUseCase
 import app.orbit.domain.usecase.SurfaceNextUseCase
 import app.orbit.domain.usecase.SurfaceQueueUseCase
@@ -96,14 +93,6 @@ class CardViewViewModelInteractionTest {
             clock = clock,
             json = json,
         )
-        val markCalled = MarkCalledUseCase(
-            contactRepo = contactRepo,
-            listRepo = listRepo,
-            callEventRepo = callEventRepo,
-            ruleTemplateRepo = templateRepo,
-            clock = clock,
-            json = json,
-        )
         val skipContact = SkipContactUseCase(
             contactRepo = contactRepo,
             listRepo = listRepo,
@@ -146,7 +135,6 @@ class CardViewViewModelInteractionTest {
         val resync = RecordingResync()
         val vm = CardViewViewModel(
             cardFeed = cardFeed,
-            markCalled = markCalled,
             skipContact = skipContact,
             surfaceSooner = surfaceSooner,
             listRepo = listRepo,
@@ -331,117 +319,72 @@ class CardViewViewModelInteractionTest {
     }
 
     // ========================================================================
-    // Yes / mark-called path — the post-dial prompt lifecycle.
-    //
-    // onCall remembers the dialed contact (pendingDial); the prompt only
-    // appears after onReturnedFromDial. onMarkTalked records a MANUAL,
-    // zero-duration OUTGOING event and clears the prompt.
+    // Silent call advance (CORE-04) — a dial placed from the card triggers an
+    // immediate incremental call-log resync on return, so a detected call
+    // advances the deck on its own. There is no "did you talk?" confirmation:
+    // the call log is the source of truth (off-log calls use "Log a connection"
+    // on the contact screen), and tapping a confirmation would double-count.
     // ========================================================================
 
     @Test
-    fun `onCall then onReturnedFromDial surfaces the call prompt`() = runTest {
+    fun `onCall then onReturnedFromDial triggers one incremental resync`() = runTest {
         val setup = fixture()
         setup.seedSarahReady()
         setup.vm.uiState.test(timeout = 2.seconds) {
-            awaitItem() // Ready — onCall reads name off the Ready state
-            assertNull(setup.vm.callPrompt.value, "no prompt before dial")
+            awaitItem() // Ready
 
             setup.vm.onCall(contactId = 1L)
-            // Dial recorded but not yet promoted to a visible prompt.
-            assertNull(setup.vm.callPrompt.value, "prompt is deferred until resume")
+            // Dial recorded but nothing fires until the screen resumes.
+            assertTrue(setup.resync.calls.isEmpty(), "no resync until return")
 
             setup.vm.onReturnedFromDial()
-            val prompt = setup.vm.callPrompt.value
-            assertTrue(prompt != null, "resume promotes the pending dial")
-            assertEquals(1L, prompt.contactId)
-            assertEquals("Sarah", prompt.firstName) // substringBefore(' ')
-            // CORE-04 — return-from-dial kicks exactly one incremental resync so
-            // a just-completed call advances the deck without waiting on the
-            // debounced observer / TTL-gated resume sync.
+            // Exactly one incremental (non-full) resync so the detected call
+            // advances the deck without waiting on the debounced observer or the
+            // TTL-gated resume sync.
             assertEquals(
                 listOf(false),
                 setup.resync.calls,
-                "one incremental (non-full) resync on return-from-dial",
+                "one incremental resync on return-from-dial",
+            )
+            // No call is recorded by the VM itself — detection owns that.
+            assertTrue(
+                setup.callEventRepo.markCalledAtomicCalls.isEmpty(),
+                "the VM never records the call — no double-count",
             )
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `onCall is a no-op when the contactId is not the surfaced Ready contact`() = runTest {
+    fun `onReturnedFromDial without a prior dial does not resync`() = runTest {
         val setup = fixture()
         setup.seedSarahReady()
         setup.vm.uiState.test(timeout = 2.seconds) {
-            awaitItem() // Ready for contact 1
-            setup.vm.onCall(contactId = 999L) // not the head
+            awaitItem()
+            // Plain resume (config change, returning from Settings) — no dial
+            // was pending, so nothing syncs.
             setup.vm.onReturnedFromDial()
-            assertNull(setup.vm.callPrompt.value, "mismatched dial never promotes")
             assertTrue(setup.resync.calls.isEmpty(), "no pending dial → no resync")
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `onMarkTalked records a manual zero-duration outgoing call and clears the prompt`() = runTest {
-        val setup = fixture()
-        setup.seedSarahReady()
-        setup.vm.uiState.test(timeout = 2.seconds) {
-            awaitItem() // Ready
-            setup.vm.onCall(contactId = 1L)
-            setup.vm.onReturnedFromDial()
-            assertTrue(setup.vm.callPrompt.value != null, "prompt visible before mark")
-
-            setup.vm.snackbarEvents.test(timeout = 2.seconds) {
-                setup.vm.onMarkTalked()
-                val event = awaitItem()
-                assertEquals("Marked — talked to Sarah", event.message)
-                cancelAndIgnoreRemainingEvents()
-            }
-            cancelAndIgnoreRemainingEvents()
-        }
-        assertNull(setup.vm.callPrompt.value, "mark clears the prompt")
-        val mark = setup.callEventRepo.markCalledAtomicCalls.single()
-        assertEquals(1L, mark.contactId)
-        assertEquals(CallSource.MANUAL, mark.event.source)
-        assertEquals(CallDirection.OUTGOING, mark.event.direction)
-        assertEquals(0, mark.event.durationSeconds)
-        assertEquals(T0, mark.event.occurredAt)
-    }
-
-    @Test
-    fun `onDismissCallPrompt clears the prompt without recording a call`() = runTest {
+    fun `the pending dial is consumed once, a second resume does not resync`() = runTest {
         val setup = fixture()
         setup.seedSarahReady()
         setup.vm.uiState.test(timeout = 2.seconds) {
             awaitItem()
             setup.vm.onCall(contactId = 1L)
-            setup.vm.onReturnedFromDial()
-            assertTrue(setup.vm.callPrompt.value != null)
-
-            setup.vm.onDismissCallPrompt()
-            assertNull(setup.vm.callPrompt.value, "dismiss clears the prompt")
+            setup.vm.onReturnedFromDial() // consumes the pending dial -> 1 resync
+            setup.vm.onReturnedFromDial() // nothing pending -> no further resync
+            assertEquals(
+                listOf(false),
+                setup.resync.calls,
+                "the dial marker is consumed exactly once",
+            )
             cancelAndIgnoreRemainingEvents()
         }
-        assertTrue(
-            setup.callEventRepo.markCalledAtomicCalls.isEmpty(),
-            "dismiss must not record a call",
-        )
-    }
-
-    @Test
-    fun `onMarkTalked with no active prompt is a no-op`() = runTest {
-        val setup = fixture()
-        setup.seedSarahReady()
-        setup.vm.uiState.test(timeout = 2.seconds) {
-            awaitItem()
-            // No onCall/onReturnedFromDial → callPrompt is null → early return.
-            setup.vm.onMarkTalked()
-            cancelAndIgnoreRemainingEvents()
-        }
-        assertTrue(
-            setup.callEventRepo.markCalledAtomicCalls.isEmpty(),
-            "no prompt means no call recorded",
-        )
     }
 
     // ========================================================================
