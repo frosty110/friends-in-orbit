@@ -394,6 +394,14 @@ private fun HomeContent(
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         CreateListTile(label = "New list", onClick = onCreateList)
                     }
+                    // A quiet reminder of why the app exists, sitting at the
+                    // bottom of the scroll so it reads as a closing thought, not
+                    // a banner. Reflection, not instruction — full-width, muted,
+                    // centered (features/_foundations/voice.md — calm, warm, the
+                    // call is always the user's choice).
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        ReflectionFooter()
+                    }
                 }
             }
         }
@@ -551,6 +559,30 @@ private fun ListTile(
                 )
             }
         }
+    }
+}
+
+// Reflection footer — the app's one piece of wisdom, surfaced once at the foot
+// of Home. Body size (16sp), never smaller: voice.md flags reach-out copy as an
+// emotionally loaded moment, so it doesn't get the muted-micro treatment. Two
+// short sentences: reciprocity, then permission.
+@Composable
+private fun ReflectionFooter() {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = OrbitTheme.spacing.x5,
+                vertical = OrbitTheme.spacing.x5,
+            ),
+    ) {
+        Text(
+            text = "The call that makes your day can make someone else's. " +
+                "You deserve to be the one who reaches out.",
+            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
