@@ -114,8 +114,62 @@ No new code, but worth a live sanity check:
 
 ## 4. Sign-off checklist
 
-- [ ] `:app:compileDebugKotlin` passes
-- [ ] `:app:testDebugUnitTest` green (esp. the tests in §1)
-- [ ] Manual 2a reproduced: backgrounded/killed-process completed call appears on next foreground
-- [ ] Manual 2b: contacts resync runs and surfaces a new contact
-- [ ] Manual 2c: deleting a device contact does not lose Orbit history/notes
+- [x] `:app:compileDebugKotlin` passes
+- [x] `:app:testDebugUnitTest` green (esp. the tests in §1)
+- [x] Manual 2a reproduced: backgrounded/killed-process completed call appears on next foreground
+- [x] Manual 2b: contacts resync runs and surfaces a new contact
+- [x] Manual 2c: deleting a device contact does not lose Orbit history/notes
+
+## 5. Validation results — 2026-06-19 (emulator `orbit`, Android 14 / API 34)
+
+Validated on `main` (the branch merged via PR #4: commits `fd0bd85` + `4370cf9`).
+
+**§1 — build + unit tests:** `compileDebugKotlin` clean (warnings only). Full
+`testDebugUnitTest` **648 tests, 0 failures, 0 errors** (2 skipped), 97 suites.
+The §1-named tests all present and passing — `ContentObserverControllerTest`
+7/7 (incl. the three resume-sync TTL tests + `companion_constants_are_canonical`)
+and `SettingsViewModelTest` 11/11 (incl. `onManualContactsResync requires
+granted contacts permission`).
+
+**§2a — resume sync closes the process-death gap (the original bug):** PASS.
+With the process killed (`am kill`, process confirmed dead), seeded a completed
+outgoing call to a tracked contact, then foregrounded:
+```
+D/calllog  enqueued_resume_sync
+I/calllog  reconcile_complete scanned=1 inserted=1 skipped=0 propagated=1
+I/calllog  sync_complete full=false scanned=1 inserted=1 skipped=0 propagated=1
+```
+`full=false` confirms the incremental path. UI: the contact flipped from "Never
+called" → **"Last call: today"** with no manual tap. TTL gate: 4 dark-mode
+toggle cycles forced repeated activity recreation (IME + renderer churn visible
+in logcat) yet produced **0** additional `enqueued_resume_sync` — the in-memory
+TTL absorbed the ON_START churn.
+
+**§2b — manual contacts resync:** PASS. The Settings → Contacts row ("Sync now")
+fires `enqueued_contacts_ingest forced=true expedited=true` → `ingest_complete`
+(the manual path is `expedited=true`; the observer path is `expedited=false` —
+the distinguishing signature). A newly-inserted contact ("Zelda Testbird")
+produced `ingest_complete … inserted=1` and became pickable in in-app search
+("Never called / Add to list"). Revoking READ_CONTACTS disables the button
+(scoped correctly — the Call-history "Sync now" stayed enabled); re-granting via
+the in-app Allow flow restores it.
+  - Minor observation (not a blocker): re-granting READ_CONTACTS via the in-app
+    flow did not visibly re-trigger a contacts ingest in logcat ("Last synced"
+    did not reset). The enqueue-on-grant contract is covered by the unit test
+    `onPermissionResult Granted … enqueues work`; it was not observed firing
+    on device. Worth a glance next pass.
+
+**§2c — reconcile-not-overwrite (the "new phone" concern):** PASS. A contact
+with Orbit call history, hard-deleted from the device address book, was marked
+`ingest_complete … orphaned=1` (NOT removed) — it still appeared in Orbit with
+its call history intact. Re-adding the same number produced
+`ingest_complete … inserted=0 … restored=1`: the orphaned row re-linked with
+**no duplicate** (in-app search showed exactly one row, history preserved).
+  - Note: verified history survival (the relational data on the same Room rows);
+    did not separately add/verify a per-contact note.
+
+**Test-state left on the emulator:** added contact "Zelda Testbird"
+(+15550199001); the original "Matt Kinni" (account_id=3, raw_contact 5001) was
+deleted and re-added under a temporary `app.orbit.test` account (raw_contact
+5332); one seeded completed call-log row to +12035853645. Re-seed/clean if a
+pristine provider state is needed.
