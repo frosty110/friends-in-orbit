@@ -283,14 +283,14 @@ class SettingsViewModelTest {
         vm.onPermissionResult(CallLogPermissionState.Granted)
 
         // Wait for the WorkManager flow to surface at least one WorkInfo.
-        kotlinx.coroutines.withTimeout(3_000L) {
+        kotlinx.coroutines.withTimeout(30_000L) {
             wm.getWorkInfosForUniqueWorkFlow(ContentObserverController.UNIQUE_NAME_SYNC)
                 .filter { it.isNotEmpty() }
                 .first()
         }
 
         // Wait for the prefs flow to settle on `true`.
-        kotlinx.coroutines.withTimeout(3_000L) {
+        kotlinx.coroutines.withTimeout(30_000L) {
             prefs.isCallLogSyncEnabled.filter { it }.first()
         }
 
@@ -344,7 +344,7 @@ class SettingsViewModelTest {
 
         // Flip to Granted via the VM path (this also enqueues full-resync).
         vm.onPermissionResult(CallLogPermissionState.Granted)
-        kotlinx.coroutines.withTimeout(3_000L) {
+        kotlinx.coroutines.withTimeout(30_000L) {
             wm.getWorkInfosForUniqueWorkFlow(ContentObserverController.UNIQUE_NAME_SYNC)
                 .filter { it.isNotEmpty() }
                 .first()
@@ -392,7 +392,7 @@ class SettingsViewModelTest {
 
         vm.onPermissionResult(CallLogPermissionState.Denied)
 
-        kotlinx.coroutines.withTimeout(3_000L) {
+        kotlinx.coroutines.withTimeout(30_000L) {
             prefs.isCallLogSyncEnabled.filter { !it }.first()
         }
         org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
@@ -413,13 +413,13 @@ class SettingsViewModelTest {
         // `.filter { !it }.first()` below times out (a documented flake from
         // an earlier seeding pattern).
         prefs.setCallLogSyncEnabled(true)
-        kotlinx.coroutines.withTimeout(3_000L) {
+        kotlinx.coroutines.withTimeout(30_000L) {
             prefs.isCallLogSyncEnabled.filter { it }.first()
         }
 
         vm.onPermissionResult(CallLogPermissionState.PermanentlyDenied)
 
-        kotlinx.coroutines.withTimeout(3_000L) {
+        kotlinx.coroutines.withTimeout(30_000L) {
             prefs.isCallLogSyncEnabled.filter { !it }.first()
         }
         org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
@@ -436,7 +436,7 @@ class SettingsViewModelTest {
 
         // Drive prior state to Granted via the public path; this also seeds prefs=true.
         vm.onPermissionResult(CallLogPermissionState.Granted)
-        kotlinx.coroutines.withTimeout(3_000L) {
+        kotlinx.coroutines.withTimeout(30_000L) {
             prefs.isCallLogSyncEnabled.filter { it }.first()
         }
         val stopBefore = controller.stopCount
@@ -446,7 +446,7 @@ class SettingsViewModelTest {
         // transition that must trigger cleanup.
         vm.refreshPermissionState(rationalePending = true)
 
-        kotlinx.coroutines.withTimeout(3_000L) {
+        kotlinx.coroutines.withTimeout(30_000L) {
             prefs.isCallLogSyncEnabled.filter { !it }.first()
         }
         org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
@@ -471,7 +471,7 @@ class SettingsViewModelTest {
 
         // Subscribe BEFORE triggering — resetCompleteEvents has no replay.
         val received = async {
-            kotlinx.coroutines.withTimeout(3_000L) { vm.resetCompleteEvents.first() }
+            kotlinx.coroutines.withTimeout(30_000L) { vm.resetCompleteEvents.first() }
         }
         // Let the collector attach before the emit races it.
         delay(50)

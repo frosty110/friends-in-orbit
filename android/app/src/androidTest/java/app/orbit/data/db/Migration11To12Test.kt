@@ -41,10 +41,12 @@ class Migration11To12Test {
     @Test
     fun migrate_11_to_12_seeds_nudgeScheduleJson_on_existing_lists() {
         helper.createDatabase(TEST_DB, 11).use { db ->
-            // Seed a list row with no nudgeScheduleJson column (v11 schema)
+            // Seed a list row with no nudgeScheduleJson column (v11 schema).
+            // dueCount is NOT NULL with no default from v9 onward, so it must be
+            // supplied explicitly (0 = no due members) or the INSERT fails.
             db.execSQL(
-                "INSERT INTO lists (name, sortOrder, isArchived, type, notificationsEnabled) " +
-                    "VALUES ('Inner orbit', 0, 0, 'STATIC', 1)",
+                "INSERT INTO lists (name, sortOrder, isArchived, type, notificationsEnabled, dueCount) " +
+                    "VALUES ('Inner orbit', 0, 0, 'STATIC', 1, 0)",
             )
         }
 

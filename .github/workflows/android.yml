@@ -10,6 +10,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Needed by the Kover PR-comment step to post/update a comment.
+    permissions:
+      contents: read
+      pull-requests: write
+
     defaults:
       run:
         working-directory: android
@@ -37,6 +42,8 @@ jobs:
       # yet fully conform (many findings, including some not auto-correctable).
       # ktlint still runs and reports here, but does not block the build — the
       # enforced gates are the unit tests, coverage, and assemble steps below.
+      # Formatting can be auto-applied locally via the pre-commit hook
+      # (git config core.hooksPath .githooks).
       - name: ktlint (advisory)
         continue-on-error: true
         run: ./gradlew :app:ktlintCheck --no-daemon
@@ -54,6 +61,45 @@ jobs:
           path: android/app/build/reports/kover
           if-no-files-found: warn
 
+      # Per-layer + per-package breakdown into the log, plus a markdown summary
+      # for the PR comment. Pure-Python parse of the Kover XML; never fails here.
+      - name: Coverage by layer
+        if: always()
+        continue-on-error: true
+        run: python3 scripts/coverage-summary.py --markdown app/build/reports/kover/coverage-summary.md
+
+      # Post the honest per-layer breakdown as a sticky PR comment (leads with the
+      # domain figure, not the diluted total). Updates in place; reuses the prior
+      # comment slot if present. Self-contained — no third-party action. Runs
+      # before the gate so a regression still shows the breakdown on the PR.
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'android/app/build/reports/kover/coverage-summary.md';
+            if (!fs.existsSync(path)) { core.warning('no coverage summary to post'); return; }
+            const body = fs.readFileSync(path, 'utf8');
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find(c =>
+              c.body.includes('<!-- orbit-coverage -->') || c.body.includes('Total Project Coverage'));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      # GATE: fail the build if the domain (business-logic) layer regresses below
+      # the floor. domain sits at ~97%; 90 leaves headroom for normal churn while
+      # catching a real drop. This is the enforced coverage signal — the total is
+      # only advisory (it's diluted by UI/nav/DI and on-device-tested data).
+      - name: Enforce domain coverage floor
+        run: python3 scripts/coverage-summary.py --min-domain 90
+
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug --no-daemon
 
@@ -63,3 +109,77 @@ jobs:
           name: orbit-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  # Instrumented (androidTest) tests on an emulator, reporting their on-device
+  # coverage via AGP's native JaCoCo report (Kover does not consume AGP
+  # instrumented coverage). This surfaces a separate data/ui "instrumented
+  # coverage" figure alongside the unit number from the build job. Non-blocking.
+  instrumented:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # KVM hardware acceleration — required for a usable x86_64 emulator on
+      # GitHub-hosted Linux runners.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # Run the instrumented suite, then AGP's native coverage report. The two
+      # commands are separate so a flaky test can't block report generation; the
+      # report reuses whatever .ec coverage the (cached) test run produced.
+      # NOTE: each command must be one physical line — the action passes
+      # backslash line-continuations through literally (Gradle saw '\' as a task).
+      - name: Instrumented tests + AGP coverage report
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          working-directory: android
+          script: |
+            ./gradlew -PinstrumentedCoverage :app:connectedDebugAndroidTest --no-daemon || echo "::warning::instrumented tests had failures — continuing"
+            ./gradlew -PinstrumentedCoverage :app:createDebugAndroidTestCoverageReport --no-daemon || echo "::warning::coverage report task failed — continuing"
+
+      # Locate AGP's JaCoCo XML (path varies by AGP version) and summarise it by
+      # layer. Self-diagnosing: lists the coverage files it finds.
+      - name: Instrumented coverage by layer
+        if: always()
+        continue-on-error: true
+        run: |
+          echo "== coverage outputs =="
+          find app/build/reports/coverage app/build/outputs/code_coverage -type f 2>/dev/null | head -50 || true
+          REPORT=$(find app/build/reports/coverage -name '*.xml' 2>/dev/null | head -1)
+          if [ -n "$REPORT" ]; then
+            echo "== Parsing $REPORT =="
+            python3 scripts/coverage-summary.py "$REPORT"
+          else
+            echo "No instrumented coverage XML found (see listing above)."
+          fi
+
+      - name: Upload instrumented coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: orbit-coverage-instrumented
+          path: android/app/build/reports/coverage
+          if-no-files-found: warn

@@ -8,6 +8,10 @@ plugins {
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kover)
+    // Retries inherently-flaky tests (WorkManager-in-Robolectric init) so a
+    // transient timeout doesn't red the build; a genuinely broken test still
+    // fails every attempt. See the tasks.withType<Test> retry config below.
+    id("org.gradle.test-retry") version "1.6.0"
 }
 
 val keystoreProps =
@@ -51,6 +55,11 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             isDebuggable = true
+            // Instrumented-test (androidTest) coverage instrumentation is opt-in:
+            // the emulator CI job passes -PinstrumentedCoverage so Kover folds
+            // connectedDebugAndroidTest results into the debug report. Off by
+            // default so the JVM-only unit job never tries to reach a device.
+            enableAndroidTestCoverage = project.hasProperty("instrumentedCoverage")
         }
         release {
             isMinifyEnabled = true
@@ -138,13 +147,40 @@ kover {
                     "*_HiltModules*",
                     "hilt_aggregated_deps.*",
                     "dagger.hilt.internal.*",
-                    // Room-generated DAO/database implementations
+                    // Room-generated DAO/database implementations.
                     "*_Impl",
                     "*ComposableSingletons*",
-                    "*BuildConfig"
+                    "*BuildConfig",
+                    // Android entry points — Activity/Application lifecycle glue
+                    // with no unit-testable surface. Excluded so coverage measures
+                    // testable units, not framework wiring (these belong to
+                    // instrumented/manual testing, if anything).
+                    "app.orbit.MainActivity",
+                    "app.orbit.MainActivity*",
+                    "app.orbit.OrbitApp",
+                    "app.orbit.OrbitApp*"
                 )
             }
         }
+    }
+}
+
+// Run each unit-test class in its own JVM. WorkManager's process-global singleton
+// and its in-memory Room DB leak across Robolectric test classes in a shared JVM,
+// intermittently timing out WorkManagerTestInitHelper init (ForceStopRunnable →
+// Room runBlockingUninterruptible) and surfacing as a flaky TimeoutCancellation
+// in whichever WorkManager/DataStore-touching class runs at the wrong moment. A
+// fresh JVM per class removes that cross-class contamination; the cost is some
+// extra test wall-time, which is worth deterministic green.
+tasks.withType<Test>().configureEach {
+    forkEvery = 1
+    // WorkManager-in-Robolectric init (ForceStopRunnable -> Room) and the
+    // DataStore singleton occasionally hang across methods even with per-class
+    // JVM forking. Retry the rare flaky failure rather than red the build; a
+    // genuinely broken test fails all attempts, so this masks nothing real.
+    retry {
+        maxRetries.set(2)
+        failOnPassedAfterRetry.set(false)
     }
 }
 

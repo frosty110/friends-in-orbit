@@ -267,6 +267,50 @@ class ListPickerViewModelTest {
         }
     }
 
+    @Test
+    fun `onClearSelection empties the selection`() = runTest {
+        val s = fixture(contactIdArg = "c-12")
+        seedReadyFor(s, contactId = 12L)
+        s.vm.onToggleListSelect(1L)
+        s.vm.onToggleListSelect(2L)
+        s.vm.onClearSelection()
+
+        s.vm.uiState.test(timeout = 2.seconds) {
+            while (true) {
+                val ready = awaitReady(this)
+                if (ready.selectedListIds.isEmpty()) {
+                    assertFalse("cleared selection -> canCommit false", ready.canCommit)
+                    break
+                }
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `selection persists into SavedStateHandle for process-death restore`() = runTest {
+        val savedState = SavedStateHandle(mapOf("contactId" to "c-12"))
+        val vm = ListPickerViewModel(
+            listRepo = FakeListRepository(),
+            contactRepo = FakeContactRepository(),
+            listMembershipDao = RecordingListMembershipDao(),
+            undoStack = UndoStack(),
+            clock = TestClock(),
+            commitBus = PickerCommitBus(),
+            ruleTemplateRepo = FakeRuleTemplateRepository(),
+            appScope = CoroutineScope(SupervisorJob() + mainDispatcherRule.testDispatcher),
+            savedStateHandle = savedState,
+        )
+        vm.onToggleListSelect(1L)
+        vm.onToggleListSelect(2L)
+
+        assertEquals(
+            "the init collector mirrors the selection into the bundle",
+            setOf(1L, 2L),
+            savedState.get<LongArray>("selectedListIds")?.toSet().orEmpty(),
+        )
+    }
+
     // ─── Inline create (dead-end fix) ──────────────────────────────────────
 
     @Test
@@ -394,6 +438,36 @@ class ListPickerViewModelTest {
             assertEquals("Undo", event.actionLabel)
         }
         assertEquals(1, s.membershipDao.insertCalls.size)
+    }
+
+    @Test
+    fun `single-list commit uses the singular Added to 1 list copy`() = runTest {
+        val s = fixture(contactIdArg = "c-12")
+        seedReadyFor(s, contactId = 12L)
+        s.vm.onToggleListSelect(1L)
+
+        s.commitBus.events.test {
+            s.vm.onCommit()
+            val event = awaitItem()
+            assertEquals("Added to 1 list", event.message)
+            assertEquals("Undo", event.actionLabel)
+        }
+        val inserted = s.membershipDao.insertCalls.single().memberships
+        assertEquals(listOf(1L), inserted.map { it.listId })
+        assertEquals(listOf(12L), inserted.map { it.contactId })
+    }
+
+    @Test
+    fun `empty-selection commit is a no-op`() = runTest {
+        val s = fixture(contactIdArg = "c-12")
+        seedReadyFor(s, contactId = 12L)
+
+        s.commitBus.events.test {
+            s.vm.onCommit()
+            expectNoEvents()
+        }
+        assertTrue("no insert without a selection", s.membershipDao.insertCalls.isEmpty())
+        assertNull("no undo for an empty commit", s.undoStack.peek())
     }
 
     @Test

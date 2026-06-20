@@ -1,14 +1,22 @@
 package app.orbit.ui.screens.onboarding
 
+import android.Manifest
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import app.orbit.data.AppPrefs
 import app.orbit.testutil.MainDispatcherRule
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -95,5 +103,52 @@ class OnboardingPermissionsViewModelTest {
             )
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // ============================================================================
+    // Test 3 — onLauncherFired(READ_CONTACTS) flips the per-permission
+    // `hasAsked` flag through AppPrefs and the next Ready emission reflects it
+    // (F-2 — disambiguates first-launch from "don't ask again"). This arm is
+    // host-independent: the asked flag is driven by our own write, not by the
+    // Robolectric host's permission grants.
+    //
+    // `runBlocking` (real time) — DataStore writes hop to a real IO dispatcher
+    // that does not cooperate with `runTest`'s virtual clock (same rationale as
+    // SettingsViewModelTest's DataStore tests).
+    // ============================================================================
+
+    @Test
+    fun `onLauncherFired flips hasAsked flag in Ready state`() = runBlocking {
+        val context: Application = ApplicationProvider.getApplicationContext()
+        val vm = OnboardingPermissionsViewModel(context = context, appPrefs = AppPrefs(context))
+
+        // Fresh prefs: the contacts asked flag starts false.
+        val before = withTimeout(30_000L) {
+            vm.uiState.filterIsInstance<OnboardingPermissionsUiState.Ready>().first()
+        }
+        assertFalse(before.hasAskedContacts, "fresh prefs must start hasAskedContacts = false")
+
+        vm.onLauncherFired(Manifest.permission.READ_CONTACTS)
+
+        val after = withTimeout(30_000L) {
+            vm.uiState
+                .filterIsInstance<OnboardingPermissionsUiState.Ready>()
+                .filter { it.hasAskedContacts }
+                .first()
+        }
+        assertTrue(after.hasAskedContacts, "onLauncherFired must flip hasAskedContacts = true")
+        // The other permission flags are untouched by a contacts-only launch.
+        assertFalse(after.hasAskedCallLog, "call-log asked flag must remain false")
+        assertFalse(after.hasAskedNotifications, "notifications asked flag must remain false")
+    }
+
+    @After
+    fun clearDataStore() {
+        // Test 3 writes the hasAskedContacts flag to the process-wide DataStore
+        // singleton; wipe it so neighbouring test classes see fresh defaults
+        // regardless of runner ordering (same pattern as SettingsViewModelTest).
+        val context: Application = ApplicationProvider.getApplicationContext()
+        val prefsDir = java.io.File(context.filesDir.parentFile, "datastore")
+        if (prefsDir.exists()) prefsDir.deleteRecursively()
     }
 }

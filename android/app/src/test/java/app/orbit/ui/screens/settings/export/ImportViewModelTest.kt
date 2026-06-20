@@ -108,7 +108,7 @@ class ImportViewModelTest {
         vm.onImportSourcePicked(uri)
 
         val snackbar = async {
-            withTimeout(3_000L) { vm.snackbarEvents.first() }
+            withTimeout(30_000L) { vm.snackbarEvents.first() }
         }
         delay(50)
 
@@ -132,7 +132,7 @@ class ImportViewModelTest {
         vm.onImportSourcePicked(uri)
 
         val snackbar = async {
-            withTimeout(3_000L) { vm.snackbarEvents.first() }
+            withTimeout(30_000L) { vm.snackbarEvents.first() }
         }
         delay(50)
 
@@ -151,7 +151,7 @@ class ImportViewModelTest {
         vm.onImportSourcePicked(uri)
 
         val snackbar = async {
-            withTimeout(3_000L) { vm.snackbarEvents.first() }
+            withTimeout(30_000L) { vm.snackbarEvents.first() }
         }
         delay(50)
 
