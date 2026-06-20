@@ -4,14 +4,17 @@ An Android app for calling the people you keep meaning to call.
 
 Orbit organizes your contacts into mood and context-based lists and surfaces one person at a time with a simple yes-or-no decision — removing the "who should I call right now?" friction so reaching out happens more often.
 
+> The call that makes your day can make someone else's. You deserve to be the one who reaches out.
+
 ## Download the app
 
 Grab the latest sideloadable APK from the project's **[Releases page](https://github.com/frosty110/friends-in-orbit/releases)**.
 
 On your phone, open the most recent release, tap the `.apk` asset, and allow installation from unknown sources once. No laptop, adb, or USB cable needed — release assets download without a login. These are unsigned debug builds (`app.orbit.debug`) intended for testing, not the Play Store build.
 
-Maintainers can publish a fresh build by running the **Release APK** workflow from
-GitHub → Actions → "Release APK" → Run workflow.
+A fresh build is published automatically on every merge to `main` (the **Release APK**
+workflow), so the newest release is always the latest code. Maintainers can also cut an
+off-cycle build by hand from GitHub → Actions → "Release APK" → Run workflow.
 
 ## What it does
 

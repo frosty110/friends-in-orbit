@@ -1,14 +1,18 @@
 name: Release APK
 
-# Manually-triggered build that publishes a sideloadable debug APK to a GitHub
-# Release. Run it from your phone (GitHub mobile app or the website → Actions →
-# "Release APK" → Run workflow), wait for it to finish, then open the new
-# release and tap the .apk to download + install. No laptop / adb / USB needed.
+# Builds a sideloadable debug APK and publishes it to a GitHub Release.
+#
+# Runs automatically on every merge to `main`, so the Releases page always
+# carries the latest build — open the newest release on your phone and tap the
+# .apk to download + install. No laptop / adb / USB needed. You can also trigger
+# it by hand (Actions → "Release APK" → Run workflow) to cut a build off-cycle.
 #
 # The repo is public, so release assets download without a login — the tap-to-
 # install flow works in plain mobile Chrome. The published APK is therefore
 # publicly downloadable; that is an accepted trade-off of this approach.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       note:
