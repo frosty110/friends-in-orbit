@@ -73,6 +73,12 @@ open class ContentObserverController @Inject constructor(
     @Volatile private var callLogRegistered: Boolean = false
     @Volatile private var contactsRegistered: Boolean = false
 
+    // Process-scoped guard for [enqueueResumeSyncIfStale]. Survives Activity
+    // recreation (this controller is @Singleton, app-scoped) so config-change
+    // ON_START churn (rotation, theme switch) does not re-enqueue; a fresh
+    // process resets it to 0 so the first foreground always syncs.
+    @Volatile private var lastResumeSyncAtMs: Long = 0L
+
     // WR-05 — distinct lock objects per observer so registration of one cannot
     // serialise behind the other. `start()` is called from OrbitApp.onCreate
     // AND from Settings on a permission grant; concurrent dispatches can race
@@ -178,16 +184,67 @@ open class ContentObserverController @Inject constructor(
      * worker's 24h TTL (which exists only for cold-start/grant dedup).
      * Without it, a newly added phone contact stayed invisible to the app
      * for up to a day.
+     *
+     * [expedited] is set only by the user-tapped manual path
+     * ([enqueueImmediateContactsIngest]) so a "Sync contacts now" tap runs
+     * promptly; the observer path stays non-expedited (background coalescing).
      */
-    private fun enqueueContactsIngest() {
+    private fun enqueueContactsIngest(expedited: Boolean = false) {
+        val builder = OneTimeWorkRequestBuilder<ContactsIngestWorker>()
+            .setInputData(workDataOf(ContactsIngestWorker.KEY_FORCE to true))
+        if (expedited) {
+            builder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+        }
         WorkManager.getInstance(context).enqueueUniqueWork(
             ContactsIngestWorker.UNIQUE_NAME,
             ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequestBuilder<ContactsIngestWorker>()
-                .setInputData(workDataOf(ContactsIngestWorker.KEY_FORCE to true))
-                .build(),
+            builder.build(),
         )
-        Timber.tag(TAG).d("enqueued_contacts_ingest forced=true")
+        Timber.tag(TAG).d("enqueued_contacts_ingest forced=true expedited=%b", expedited)
+    }
+
+    /**
+     * Public manual "Sync contacts now" entry (Settings → Contacts). Forces a
+     * ContactsIngestWorker run that bypasses the 24h TTL and runs expedited.
+     * Reconcile-not-overwrite: the worker delegates to
+     * [app.orbit.domain.usecase.IngestPhoneContactsUseCase], which inserts new
+     * device contacts, refreshes drifted mirror fields, and flags vanished
+     * contacts as orphaned — it NEVER deletes a contact, so call history,
+     * notes, and ignore/pause flags survive an address-book change (e.g. a new
+     * phone whose address book has not finished restoring yet).
+     */
+    fun enqueueImmediateContactsIngest() = enqueueContactsIngest(expedited = true)
+
+    /**
+     * Resume-triggered incremental call-log sync. Called from MainActivity's
+     * ON_START observer to close the process-death gap: the content observer
+     * only fires while a live process holds the registration, so a call that
+     * completes while Orbit's process is dead is never observed. Re-syncing on
+     * the next foreground catches it.
+     *
+     * Incremental (fullResync = false) — the worker reads from the last-sync
+     * cursor, so this is cheap. [ExistingWorkPolicy.KEEP] yields to any pending
+     * debounced observer sync (which runs within [DEBOUNCE_SECONDS]) rather
+     * than cancelling it; when nothing is pending, this request runs promptly.
+     *
+     * Gated by an in-memory TTL so config-change ON_START churn does not
+     * enqueue repeatedly. No-op without READ_CALL_LOG — the worker would
+     * clean-exit anyway, but gating here avoids waking WorkManager needlessly.
+     */
+    fun enqueueResumeSyncIfStale() {
+        if (!hasCallLogPermission()) return
+        val now = System.currentTimeMillis()
+        if (now - lastResumeSyncAtMs < RESUME_SYNC_TTL_MS) return
+        lastResumeSyncAtMs = now
+        val request = OneTimeWorkRequestBuilder<CallLogSyncWorker>()
+            .setInputData(workDataOf(KEY_FULL_RESYNC to false))
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            UNIQUE_NAME_SYNC,
+            ExistingWorkPolicy.KEEP,
+            request,
+        )
+        Timber.tag(TAG).d("enqueued_resume_sync")
     }
 
     /**
@@ -212,6 +269,11 @@ open class ContentObserverController @Inject constructor(
         const val UNIQUE_NAME_SYNC: String = "orbit.call_log_sync"
         const val KEY_FULL_RESYNC: String = "full_resync"
         const val DEBOUNCE_SECONDS: Long = 10L
+
+        // In-memory dedup window for [enqueueResumeSyncIfStale]: a genuine
+        // return-after-a-call (minutes/hours later) always passes; rapid
+        // ON_START churn from a rotation / theme switch is absorbed.
+        const val RESUME_SYNC_TTL_MS: Long = 60_000L
         private const val TAG: String = "calllog"
     }
 }

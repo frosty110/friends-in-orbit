@@ -24,7 +24,9 @@ As a user, I grant CALL_LOG permission during onboarding. From then on, the app 
 
 **Import window.** First install imports the last 90 days by default. User-configurable in Settings (see `features/settings/README.md`).
 
-**Manual sync.** Settings → "resync call log." Idempotent.
+**Manual sync.** Settings → "Sync now" (call log) and Settings → Contacts → "Sync contacts" (address book). Both idempotent — the call-log path is insert-only and the contacts path is delta-sync (insert + refresh + orphan), so neither overwrites or deletes existing data. A new phone re-links contacts by normalized number and keeps prior call history, notes, and ignore/pause flags.
+
+**Resume sync.** On every app foreground the call log is re-read incrementally (TTL-gated) so a call completed while the app was backgrounded/killed still surfaces without a manual tap. See `real-time-detection-exploration.md` for why live in-call detection is deliberately not built.
 
 **Filter.** Missed calls, declined calls, and voicemails are NOT counted — not in the domain model. Only completed calls (incoming answered, outgoing connected) get ingested.
 
@@ -65,7 +67,7 @@ As a user, I grant CALL_LOG permission during onboarding. From then on, the app 
 ### Architecture
 
 - `CallLogReader` — thin wrapper over `CallLog.Calls` ContentResolver query. Pure Android, no Room dependency.
-- `CallLogSyncWorker` (`@HiltWorker`, WorkManager per ADR 0004) — runs on app open, on manual resync, and on content-observer trigger. Reads since the last-sync cursor (DataStore key `last_call_log_sync_at_ms`), hands rows to `CallLogReconciler`.
+- `CallLogSyncWorker` (`@HiltWorker`, WorkManager per ADR 0004) — runs on four triggers, all funnelling through the `orbit.call_log_sync` unique work: (1) **app foreground** — `MainActivity` ON_START calls `ContentObserverController.enqueueResumeSyncIfStale()`, an incremental, TTL-gated re-read that closes the process-death gap (a call that completes while Orbit's process is dead is never observed live, so the next foreground catches it); (2) **content-observer trigger** (debounced); (3) **manual resync** (Settings → "Sync now", full window); (4) **first-run import**. Reads since the last-sync cursor (DataStore key `last_call_log_sync_at_ms`), hands rows to `CallLogReconciler`.
 - `CallLogReconciler` — matches call-log numbers against the `contact_phones` table (every number per contact — multi-number matching), normalized via `PhoneNumberNormalizer`; writes `CallEventEntity` rows idempotently.
 - `CallEventRepository` — UI never touches ContentResolver directly.
 - `ContentObserverController` — observes `CallLog.Calls.CONTENT_URI` for live updates and triggers a sync. There is no `PHONE_STATE` BroadcastReceiver; the incoming-call follow-up notification (`features/notifications/README.md`) is unbuilt.

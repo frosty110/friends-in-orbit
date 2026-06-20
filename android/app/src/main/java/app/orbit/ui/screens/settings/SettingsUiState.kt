@@ -46,6 +46,11 @@ sealed interface SettingsUiState {
         val contactsPermissionState: PermissionStatus = PermissionStatus.Denied,
         val notificationsPermissionState: PermissionStatus = PermissionStatus.Denied,
         val lastCallLogSyncAtMs: Long = 0L,
+        // Contacts-resync surface, parallel to the call-log fields above.
+        // `contactsSyncInFlight` drives the spinner; `lastContactsSyncAtMs` is
+        // epoch-millis of the last successful ingest (sentinel `0L` = never).
+        val contactsSyncInFlight: Boolean = false,
+        val lastContactsSyncAtMs: Long = 0L,
         val pickerThresholds: PickerThresholds = PickerThresholds.DEFAULT,
         // Drives Settings "Ignored" row subtitle ("{N} ignored" / "No ignored
         // contacts"). Default-valued so existing test fixtures keep compiling
