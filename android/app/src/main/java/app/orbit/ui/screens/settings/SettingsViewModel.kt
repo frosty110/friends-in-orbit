@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import app.orbit.calllog.CallLogPermissionState
+import app.orbit.calllog.ContactsIngestWorker
 import app.orbit.calllog.ContentObserverController
 import app.orbit.data.AppPrefs
 import app.orbit.data.PickerThresholds
@@ -62,13 +63,13 @@ import kotlinx.coroutines.launch
  * observable synchronously before DataStore emits — once the first read settles,
  * the flow is always `Ready`.
  *
- * Type-safety note: the multi-flow composition is
- * implemented as TWO staged combines — a 4-arg `combine(...) { ... }` builds a
- * typed [SettingsSnapshot] data class, and the outer 5-arg `combine(snapshot,
- * callLogSyncInFlight, pickerThresholds, ignoredContactCount, lastCallLogSyncAt)
- * { ... }` stitches the rest. Both stages use Kotlin's type-safe overloads
- * (max arity 5), avoiding the fragile `vararg` + `args[N] as T` unchecked-cast
- * pattern entirely.
+ * Type-safety note: the multi-flow composition is implemented as staged
+ * 4-arg `combine(...) { ... }` calls — one builds the [SettingsSnapshot]
+ * (permissions + import window), one builds the [SyncStatus] (call-log +
+ * contacts in-flight flags and last-synced timestamps), and the outer
+ * `combine(snapshot, syncStatus, pickerThresholds, ignoredContactCount) { ... }`
+ * stitches them. Every stage uses Kotlin's type-safe overloads (max arity 5),
+ * avoiding the fragile `vararg` + `args[N] as T` unchecked-cast pattern.
  */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -113,10 +114,27 @@ class SettingsViewModel @Inject constructor(
             }
 
     /**
-     * Intermediate 4-tuple of the first 4 flows — uses Kotlin's type-safe
-     * `combine(a, b, c, d) { ... }` overload to avoid `vararg` + unchecked
-     * casts. The remaining 4 flows are folded in by the outer `combine`,
-     * preserving type inference end-to-end.
+     * Whether the contacts-ingest unique work is in `ENQUEUED` or `RUNNING`
+     * state. Drives the spinner next to the "Sync contacts" button — mirrors
+     * [callLogSyncInFlight] for the call-log path.
+     */
+    private val contactsSyncInFlight: Flow<Boolean> =
+        workManager.getWorkInfosForUniqueWorkFlow(ContactsIngestWorker.UNIQUE_NAME)
+            .map { infos ->
+                infos.any {
+                    it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING
+                }
+            }
+
+    /** Last successful contacts ingest as epoch-millis; `0L` = never synced. */
+    private val lastContactsSyncAtMs: Flow<Long> =
+        appPrefs.lastContactsIngestedAt.map { it?.toEpochMilli() ?: 0L }
+
+    /**
+     * Intermediate 4-tuple of the permission + import-window flows — uses
+     * Kotlin's type-safe `combine(a, b, c, d) { ... }` overload to avoid
+     * `vararg` + unchecked casts. Folded into the outer `uiState` combine
+     * alongside [syncStatus], thresholds, and the ignored count.
      */
     private data class SettingsSnapshot(
         val callLogPerm: CallLogPermissionState,
@@ -136,6 +154,29 @@ class SettingsViewModel @Inject constructor(
         }
 
     /**
+     * The four sync-status signals (call-log + contacts, each an in-flight
+     * flag and a last-synced timestamp) folded into one value so the outer
+     * `uiState` combine stays within Kotlin's type-safe arity-5 ceiling
+     * instead of reaching for the `vararg` + unchecked-cast overload.
+     */
+    private data class SyncStatus(
+        val callLogInFlight: Boolean,
+        val lastCallLogSyncAtMs: Long,
+        val contactsInFlight: Boolean,
+        val lastContactsSyncAtMs: Long,
+    )
+
+    private val syncStatus: Flow<SyncStatus> =
+        combine(
+            callLogSyncInFlight,
+            appPrefs.lastCallLogSyncAt,
+            contactsSyncInFlight,
+            lastContactsSyncAtMs,
+        ) { callLogInFlight, lastCallLog, contactsInFlight, lastContacts ->
+            SyncStatus(callLogInFlight, lastCallLog, contactsInFlight, lastContacts)
+        }
+
+    /**
      * Count of currently-ignored contacts. Drives the
      * Settings "Ignored" row subtitle ("{N} ignored" / "No ignored contacts").
      * Note: this counts ALL `isIgnored = true` rows including any that are also
@@ -150,20 +191,21 @@ class SettingsViewModel @Inject constructor(
     val uiState: StateFlow<SettingsUiState> =
         combine(
             snapshot,
-            callLogSyncInFlight,
+            syncStatus,
             appPrefs.pickerThresholds,
             ignoredContactCountFlow,
-            appPrefs.lastCallLogSyncAt,
-        ) { snap, inFlight, thresholds, ignoredCount, lastSyncAtMs ->
+        ) { snap, sync, thresholds, ignoredCount ->
             SettingsUiState.Ready(
                 callLogPermissionState = snap.callLogPerm,
                 callLogImportDays = snap.importDays,
-                callLogSyncInFlight = inFlight,
+                callLogSyncInFlight = sync.callLogInFlight,
                 contactsPermissionState = snap.contactsPerm,
                 notificationsPermissionState = snap.notifsPerm,
                 pickerThresholds = thresholds,
                 ignoredContactCount = ignoredCount,
-                lastCallLogSyncAtMs = lastSyncAtMs,
+                lastCallLogSyncAtMs = sync.lastCallLogSyncAtMs,
+                contactsSyncInFlight = sync.contactsInFlight,
+                lastContactsSyncAtMs = sync.lastContactsSyncAtMs,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -300,6 +342,20 @@ class SettingsViewModel @Inject constructor(
     fun onManualResync() {
         if (_permissionState.value !is CallLogPermissionState.Granted) return
         contentObserverController.enqueueImmediateSync(fullResync = true)
+    }
+
+    /**
+     * Settings → Contacts "Sync contacts" button. Enqueues a forced, expedited
+     * [ContactsIngestWorker] run via [ContentObserverController]. No-ops when
+     * READ_CONTACTS is not granted (the worker reads an empty cursor and exits
+     * cleanly, but gating here avoids waking WorkManager pointlessly).
+     *
+     * The ingest path is delta-sync / reconcile (insert + refresh + orphan),
+     * never a destructive overwrite — see [ContentObserverController.enqueueImmediateContactsIngest].
+     */
+    fun onManualContactsResync() {
+        if (_contactsPermissionState.value != PermissionStatus.Granted) return
+        contentObserverController.enqueueImmediateContactsIngest()
     }
 
     /**

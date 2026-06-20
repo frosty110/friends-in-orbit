@@ -17,6 +17,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
+import app.orbit.calllog.ContentObserverController
 import app.orbit.data.AppPrefs
 import app.orbit.data.feed.HomeFeed
 import app.orbit.data.repository.ListRepository
@@ -40,6 +41,18 @@ class MainActivity : ComponentActivity() {
      * is free.
      */
     @Inject lateinit var homeFeed: HomeFeed
+
+    /**
+     * Call-detection backbone. Injected here so the [Lifecycle.Event.ON_START]
+     * observer can trigger an incremental call-log re-sync on every foreground
+     * ([ContentObserverController.enqueueResumeSyncIfStale]). This closes the
+     * process-death gap: the content observer only fires while a live process
+     * holds the registration, so a call that completes while Orbit's process is
+     * dead (common during a long call with the app backgrounded) is otherwise
+     * never picked up until the next call. Hilt resolves the same app-scoped
+     * singleton OrbitApp registered at cold start.
+     */
+    @Inject lateinit var contentObserverController: ContentObserverController
 
     /**
      * ONB-19 / ONB-09 — threaded into [OrbitNavHost] so the onboarding nav
@@ -140,6 +153,11 @@ class MainActivity : ComponentActivity() {
                     Lifecycle.Event.ON_STOP  -> appViewModel.onForegroundChanged(false)
                     Lifecycle.Event.ON_START -> {
                         appViewModel.onForegroundChanged(true)
+                        // Re-sync the call log on every foreground (TTL-gated
+                        // inside the controller so rotation/theme churn is a
+                        // no-op). Catches calls that completed while the process
+                        // was dead and the content observer was unregistered.
+                        runCatching { contentObserverController.enqueueResumeSyncIfStale() }
                         lifecycleScope.launch {
                             runCatching { homeFeed.refreshDueCountsIfStale() }
                         }

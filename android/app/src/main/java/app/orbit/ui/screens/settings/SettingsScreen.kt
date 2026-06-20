@@ -353,6 +353,7 @@ fun SettingsScreen(
                 }
             },
             onManualResync = vm::onManualResync,
+            onManualContactsResync = vm::onManualContactsResync,
             onImportDaysChanged = vm::onImportDaysChanged,
             onCommitThresholds = vm::onCommitThresholds,
             onExport = { showExportSheet = true },
@@ -413,6 +414,7 @@ private fun SettingsContent(
     onRequestCallLogPermission: () -> Unit,
     onRequestNotificationsPermission: () -> Unit,
     onManualResync: () -> Unit,
+    onManualContactsResync: () -> Unit,
     onImportDaysChanged: (Int) -> Unit,
     onCommitThresholds: (PickerThresholds) -> Unit,
     onExport: () -> Unit,
@@ -427,6 +429,8 @@ private fun SettingsContent(
     val callLogImportDays = ready?.callLogImportDays ?: 90
     val callLogSyncInFlight = ready?.callLogSyncInFlight ?: false
     val lastSyncedAtMs = ready?.lastCallLogSyncAtMs ?: 0L
+    val contactsSyncInFlight = ready?.contactsSyncInFlight ?: false
+    val lastContactsSyncAtMs = ready?.lastContactsSyncAtMs ?: 0L
     val pickerThresholds = ready?.pickerThresholds ?: PickerThresholds.DEFAULT
     val ignoredContactCount = ready?.ignoredContactCount ?: 0
 
@@ -471,6 +475,15 @@ private fun SettingsContent(
                     status = notificationsPermission,
                     onRequestPermission = onRequestNotificationsPermission,
                     onOpenAndroidSettings = onOpenAndroidSettings,
+                )
+            }
+
+            SettingGroup(title = "Contacts") {
+                ContactsSyncRow(
+                    lastSyncedAtMs = lastContactsSyncAtMs,
+                    inFlight = contactsSyncInFlight,
+                    enabled = contactsPermission == PermissionStatus.Granted,
+                    onSyncNow = onManualContactsResync,
                 )
             }
 
@@ -758,6 +771,7 @@ private fun SettingsContentPreview() {
             onRequestCallLogPermission = {},
             onRequestNotificationsPermission = {},
             onManualResync = {},
+            onManualContactsResync = {},
             onImportDaysChanged = {},
             onCommitThresholds = {},
             onExport = {},

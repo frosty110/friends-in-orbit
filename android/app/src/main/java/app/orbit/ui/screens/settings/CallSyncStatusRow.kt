@@ -20,15 +20,52 @@ import app.orbit.ui.theme.OrbitTheme
 /**
  * SET-04 — Call history section row. Renders 'Last synced …' or
  * 'Never synced.' plus a 'Sync now' primary button (with inline spinner
- * when [inFlight]).
+ * when [inFlight]). Thin wrapper over [SyncStatusRow].
+ */
+@Composable
+fun CallSyncStatusRow(
+    lastSyncedAtMs: Long,
+    inFlight: Boolean,
+    enabled: Boolean,
+    onSyncNow: () -> Unit,
+) = SyncStatusRow(
+    lastSyncedAtMs = lastSyncedAtMs,
+    inFlight = inFlight,
+    enabled = enabled,
+    onSyncNow = onSyncNow,
+)
+
+/**
+ * Contacts section sync row — manual "Sync contacts" trigger. Same shape as
+ * [CallSyncStatusRow] (the only difference is which worker the tap drives, and
+ * the section it lives in), so it shares [SyncStatusRow]. The button is
+ * disabled without READ_CONTACTS ([enabled] = false) or while a sync is in
+ * flight.
+ */
+@Composable
+fun ContactsSyncRow(
+    lastSyncedAtMs: Long,
+    inFlight: Boolean,
+    enabled: Boolean,
+    onSyncNow: () -> Unit,
+) = SyncStatusRow(
+    lastSyncedAtMs = lastSyncedAtMs,
+    inFlight = inFlight,
+    enabled = enabled,
+    onSyncNow = onSyncNow,
+)
+
+/**
+ * Shared sync-status row: a 'Last synced …' / 'Never synced.' meta line over a
+ * 'Sync now' primary button with an inline spinner when [inFlight].
  *
- * The button is disabled when [enabled] is false (call-log permission not
+ * The button is disabled when [enabled] is false (the backing permission is not
  * granted) or when [inFlight] is true (a sync is already running). The
  * relative-time line is normalized to sentence case for voice consistency
  * (project voice guidelines: "no exclamation marks, sentence case").
  */
 @Composable
-fun CallSyncStatusRow(
+private fun SyncStatusRow(
     lastSyncedAtMs: Long,
     inFlight: Boolean,
     enabled: Boolean,

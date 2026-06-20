@@ -373,6 +373,42 @@ class SettingsViewModelTest {
         }
     }
 
+    // Test 8b — onManualContactsResync no-ops without READ_CONTACTS, and
+    // enqueues forced contacts-ingest work once the permission is held. The
+    // VM reads contacts-permission state from the OS at construction, so the
+    // grant is applied before buildVm. See Test 6 for the runBlocking rationale.
+    @Test
+    fun `onManualContactsResync requires granted contacts permission`() = runBlocking {
+        val wm = WorkManager.getInstance(context)
+
+        // Default (denied) — VM built without the grant should no-op.
+        val deniedVm = buildVm()
+        deniedVm.onManualContactsResync()
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        val before = wm
+            .getWorkInfosForUniqueWork(app.orbit.calllog.ContactsIngestWorker.UNIQUE_NAME)
+            .get()
+        assertTrue(
+            before.isEmpty(),
+            "contacts resync must not enqueue without permission; got=${before.map { it.state }}",
+        )
+
+        // Grant READ_CONTACTS, then a freshly-built VM resolves Granted and enqueues.
+        org.robolectric.Shadows.shadowOf(context as android.app.Application)
+            .grantPermissions(android.Manifest.permission.READ_CONTACTS)
+        val grantedVm = buildVm()
+        grantedVm.onManualContactsResync()
+        kotlinx.coroutines.withTimeout(30_000L) {
+            wm.getWorkInfosForUniqueWorkFlow(app.orbit.calllog.ContactsIngestWorker.UNIQUE_NAME)
+                .filter { it.isNotEmpty() }
+                .first()
+        }
+        val after = wm
+            .getWorkInfosForUniqueWork(app.orbit.calllog.ContactsIngestWorker.UNIQUE_NAME)
+            .get()
+        assertTrue(after.isNotEmpty(), "expected contacts ingest to enqueue when Granted")
+    }
+
     // ============================================================================
     // Permission revocation cleanup. The grant path was already covered
     // by Test 6; these tests lock in the inverse contract: any Denied or
