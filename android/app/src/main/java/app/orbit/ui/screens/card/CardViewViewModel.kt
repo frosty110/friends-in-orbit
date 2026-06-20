@@ -15,6 +15,7 @@ import app.orbit.data.mappers.toUiContact
 import app.orbit.data.mappers.withCallPatterns
 import app.orbit.data.mappers.withCallStats
 import app.orbit.data.repository.ListRepository
+import app.orbit.domain.CallLogResyncTrigger
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.MarkCalledUseCase
@@ -84,6 +85,7 @@ class CardViewViewModel @Inject constructor(
     private val surfaceSooner: SurfaceSoonerUseCase,
     private val listRepo: ListRepository,
     private val undoStack: UndoStack,
+    private val callLogResync: CallLogResyncTrigger,
     private val clock: Clock,
     private val zoneId: ZoneId,
     savedStateHandle: SavedStateHandle,
@@ -171,11 +173,23 @@ class CardViewViewModel @Inject constructor(
      * Screen-side ON_RESUME hook. The first resume after a dial promotes the
      * pending marker to a visible prompt; resumes with nothing pending are
      * no-ops (including the screen's very first composition).
+     *
+     * CORE-04 (call-detection latency) — returning here means the user just
+     * left for the dialer and came back, the single most likely moment a new
+     * completed call exists. Kick an immediate INCREMENTAL call-log sync
+     * (expedited, no debounce) so the deck advances within ~1-2s rather than
+     * waiting on the 10s-debounced content observer or the TTL-gated resume
+     * sync — the latter is suppressed precisely in this flow (foreground →
+     * dial → return all happen inside its 60s window). The sync is cheap (reads
+     * only rows since the last-sync watermark) and idempotent; if the call is
+     * still in progress (no call-log row yet) it is a no-op and the observer
+     * picks it up on hang-up. The "Mark it" prompt remains as the manual path.
      */
     fun onReturnedFromDial() {
         pendingDial?.let {
             _callPrompt.value = it
             pendingDial = null
+            callLogResync.enqueueImmediateSync(fullResync = false)
         }
     }
 

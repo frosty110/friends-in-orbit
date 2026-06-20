@@ -5,6 +5,7 @@ import app.cash.turbine.test
 import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.CallSource
 import app.orbit.data.feed.CardFeed
+import app.orbit.domain.CallLogResyncTrigger
 import app.orbit.domain.FakeCallEventRepository
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
@@ -67,7 +68,16 @@ class CardViewViewModelInteractionTest {
         val listRepo: FakeListRepository,
         val callEventRepo: FakeCallEventRepository,
         val undoStack: UndoStack,
+        val resync: RecordingResync,
     )
+
+    /** Records [CallLogResyncTrigger] calls so return-from-dial sync is assertable. */
+    private class RecordingResync : CallLogResyncTrigger {
+        val calls = mutableListOf<Boolean>()
+        override fun enqueueImmediateSync(fullResync: Boolean) {
+            calls += fullResync
+        }
+    }
 
     private fun fixture(savedStateListId: String? = "1"): Setup {
         val contactRepo = FakeContactRepository()
@@ -133,6 +143,7 @@ class CardViewViewModelInteractionTest {
             scope = CoroutineScope(UnconfinedTestDispatcher()),
         )
         val undoStack = UndoStack()
+        val resync = RecordingResync()
         val vm = CardViewViewModel(
             cardFeed = cardFeed,
             markCalled = markCalled,
@@ -140,11 +151,12 @@ class CardViewViewModelInteractionTest {
             surfaceSooner = surfaceSooner,
             listRepo = listRepo,
             undoStack = undoStack,
+            callLogResync = resync,
             clock = clock,
             zoneId = ZoneId.of("UTC"),
             savedStateHandle = savedState,
         )
-        return Setup(vm, contactRepo, listRepo, callEventRepo, undoStack)
+        return Setup(vm, contactRepo, listRepo, callEventRepo, undoStack, resync)
     }
 
     /** Seeds one cold-start member ("Sarah", id=1) on list 1 so the card surfaces. */
@@ -343,6 +355,14 @@ class CardViewViewModelInteractionTest {
             assertTrue(prompt != null, "resume promotes the pending dial")
             assertEquals(1L, prompt.contactId)
             assertEquals("Sarah", prompt.firstName) // substringBefore(' ')
+            // CORE-04 — return-from-dial kicks exactly one incremental resync so
+            // a just-completed call advances the deck without waiting on the
+            // debounced observer / TTL-gated resume sync.
+            assertEquals(
+                listOf(false),
+                setup.resync.calls,
+                "one incremental (non-full) resync on return-from-dial",
+            )
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -356,6 +376,7 @@ class CardViewViewModelInteractionTest {
             setup.vm.onCall(contactId = 999L) // not the head
             setup.vm.onReturnedFromDial()
             assertNull(setup.vm.callPrompt.value, "mismatched dial never promotes")
+            assertTrue(setup.resync.calls.isEmpty(), "no pending dial → no resync")
             cancelAndIgnoreRemainingEvents()
         }
     }

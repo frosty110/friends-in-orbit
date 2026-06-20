@@ -156,6 +156,9 @@ class CardViewViewModelTest {
             // on the depth-1 UndoStack.
             listRepo = listRepo,
             undoStack = UndoStack(),
+            // CORE-04 — return-from-dial resync seam; state-contract tests don't
+            // exercise the dial path, so a no-op SAM suffices.
+            callLogResync = { },
             clock = clock,
             // WR-02 — CardViewViewModel now takes ZoneId so the per-emission
             // nowHour snapshot reads from the injected binding instead of

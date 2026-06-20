@@ -14,6 +14,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import app.orbit.domain.CallLogResyncTrigger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -54,7 +55,7 @@ import timber.log.Timber
 @Singleton
 open class ContentObserverController @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : CallLogResyncTrigger {
 
     private val handler = Handler(Looper.getMainLooper())
     private val callLogObserver: ContentObserver = object : ContentObserver(handler) {
@@ -251,8 +252,14 @@ open class ContentObserverController @Inject constructor(
      * Public helper used by SettingsViewModel for the "Resync now"
      * button AND by the first-run import path. REPLACE cancels any pending
      * debounced work.
+     *
+     * Also the production binding for [CallLogResyncTrigger]: the card view
+     * calls this on return-from-dial (CORE-04) so a just-completed call advances
+     * the deck immediately rather than waiting on the debounced observer / the
+     * TTL-gated resume sync. Expedited + no debounce = runs now; incremental
+     * (`fullResync = false`) so it only reads rows since the last-sync watermark.
      */
-    fun enqueueImmediateSync(fullResync: Boolean) {
+    override fun enqueueImmediateSync(fullResync: Boolean) {
         val request = OneTimeWorkRequestBuilder<CallLogSyncWorker>()
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .setInputData(workDataOf(KEY_FULL_RESYNC to fullResync))
