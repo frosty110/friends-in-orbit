@@ -1,0 +1,94 @@
+name: Release APK
+
+# Manually-triggered build that publishes a sideloadable debug APK to a GitHub
+# Release. Run it from your phone (GitHub mobile app or the website → Actions →
+# "Release APK" → Run workflow), wait for it to finish, then open the new
+# release and tap the .apk to download + install. No laptop / adb / USB needed.
+#
+# The repo is public, so release assets download without a login — the tap-to-
+# install flow works in plain mobile Chrome. The published APK is therefore
+# publicly downloadable; that is an accepted trade-off of this approach.
+on:
+  workflow_dispatch:
+    inputs:
+      note:
+        description: "Optional note to show in the release body"
+        required: false
+        default: ""
+
+# Needed to create the release and push its tag.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platforms;android-35 build-tools;35.0.0
+
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      # Give the asset a distinguishable name so multiple downloads in the
+      # browser don't all collide on "app-debug.apk".
+      - name: Stage APK
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          cp app/build/outputs/apk/debug/app-debug.apk \
+            "${RUNNER_TEMP}/orbit-${{ github.run_number }}-${SHORT_SHA}-debug.apk"
+          echo "APK_PATH=${RUNNER_TEMP}/orbit-${{ github.run_number }}-${SHORT_SHA}-debug.apk" >> "$GITHUB_ENV"
+          echo "SHORT_SHA=${SHORT_SHA}" >> "$GITHUB_ENV"
+
+      # Publish via the official gh CLI (preinstalled on the runner) — no
+      # third-party action. Tag is the run number, so every run is unique and
+      # re-runnable. Marked prerelease so these dev builds never become "latest".
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="dev-${{ github.run_number }}"
+          gh release create "$TAG" "$APK_PATH" \
+            --target "$GITHUB_SHA" \
+            --title "Dev build #${{ github.run_number }} (${SHORT_SHA})" \
+            --prerelease \
+            --notes "Debug APK built from \`${{ github.ref_name }}\` @ \`${SHORT_SHA}\`.
+
+          Install: open this release on your phone and tap the \`.apk\` (allow install from unknown sources once).
+
+          ${{ inputs.note }}"
+
+      # Best-effort cleanup so the Releases list doesn't grow forever: keep the
+      # newest 10 dev-* releases, delete older ones (and their tags). Never fails
+      # the build.
+      - name: Prune old dev releases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release list --limit 200 --json tagName,createdAt \
+            | jq -r '[.[] | select(.tagName | startswith("dev-"))]
+                     | sort_by(.createdAt) | reverse | .[10:] | .[].tagName' \
+            | while read -r tag; do
+                [ -n "$tag" ] || continue
+                echo "Pruning old release $tag"
+                gh release delete "$tag" --cleanup-tag --yes || true
+              done
