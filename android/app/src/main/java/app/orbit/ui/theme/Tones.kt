@@ -97,33 +97,36 @@ object OrbitHeatRamp {
 }
 
 /**
- * Per-list tonal families for the Home redesign (vision HOME-5 / HOME-6). Each
- * list gets a stable warm color from its id hash; the card renders a soft header
- * band ([band]) over a lighter graph wash ([wash]), with [nameFg] for the list
- * name. Mode-aware (band/wash differ light vs dark), so this is a function, not a
- * plain enumeration (cf. [OrbitHeatRamp]). Shades ported from the approved
- * `vision/00-home/prototype` (two-tone).
+ * Tonal card treatments for the Home redesign (vision HOME-5 / HOME-6).
+ *
+ * Two tones only — both inside Orbit's single-accent identity (warm cream +
+ * terracotta), deliberately NO cool colours:
+ *   - **A** — soft terracotta: a tinted header [band] over a lighter terracotta
+ *     [wash].
+ *   - **B** — warm neutral: a cream-deep band over a near-white wash, with
+ *     terracotta left to do its job as the lone accent (chevron, today marker).
+ *
+ * Cards alternate A/B **by position** ([forKey] with the row index) so adjacent
+ * cards separate without painting the screen in arbitrary per-list colours. The
+ * earlier 5-family per-id palette read as a generic dashboard and buried the
+ * terracotta accent under sage/slate; this keeps Home unmistakably Orbit.
+ * Mode-aware (band/wash differ light vs dark), so this is a function, not a
+ * plain enumeration (cf. [OrbitHeatRamp]).
  */
 object OrbitListTones {
     @Immutable
     data class ListTone(val band: Color, val wash: Color, val nameFg: Color)
 
     private val light = listOf(
-        ListTone(Color(0xFFEDD6CE), Color(0xFFF7EDE7), Color(0xFF9B4A32)), // terracotta
-        ListTone(Color(0xFFD8E3D6), Color(0xFFEBF1E9), Color(0xFF4F6A4B)), // sage
-        ListTone(Color(0xFFEEE3B8), Color(0xFFF7F0D9), Color(0xFF6F5E1C)), // olive
-        ListTone(Color(0xFFDCE1DE), Color(0xFFEDF0EE), Color(0xFF46504B)), // slate
-        ListTone(Color(0xFFECE4DA), Color(0xFFF6F0E8), Color(0xFF5C554E)), // stone
+        ListTone(band = Color(0xFFEDD6CE), wash = Color(0xFFF7EDE7), nameFg = Color(0xFF9B4A32)), // A terracotta
+        ListTone(band = Color(0xFFF2ECE2), wash = Color(0xFFFFFFFF), nameFg = Color(0xFF211E1C)), // B neutral
     )
     private val dark = listOf(
-        ListTone(Color(0xFF4A2D24), Color(0xFF382722), Color(0xFFEDC3B4)),
-        ListTone(Color(0xFF344035), Color(0xFF2C3329), Color(0xFFC6D8C2)),
-        ListTone(Color(0xFF4A3E25), Color(0xFF38301F), Color(0xFFE6D69A)),
-        ListTone(Color(0xFF353C39), Color(0xFF2B302D), Color(0xFFC7D0CB)),
-        ListTone(Color(0xFF393430), Color(0xFF2F2B27), Color(0xFFCFC7BD)),
+        ListTone(band = Color(0xFF4A2D24), wash = Color(0xFF382722), nameFg = Color(0xFFEDC3B4)), // A terracotta
+        ListTone(band = Color(0xFF35302C), wash = Color(0xFF2B2724), nameFg = Color(0xFFF0EBE4)), // B neutral
     )
 
-    /** Stable family for a list, keyed by its (rename-proof) id. */
+    /** Alternating A/B tone, keyed by the card's row position. */
     fun forKey(key: Long, isDark: Boolean): ListTone {
         val palette = if (isDark) dark else light
         val idx = ((key % palette.size + palette.size) % palette.size).toInt()

@@ -23,7 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
@@ -325,9 +325,10 @@ private fun HomeContent(
                 // Loading contributes no items — the list stays a quiet surface
                 // until the database answers (never the first-install CTA).
                 if (!isLoading) {
-                    items(tiles, key = { it.id }) { tile ->
+                    itemsIndexed(tiles, key = { _, tile -> tile.id }) { index, tile ->
                         ListTile(
                             tile = tile,
+                            toneIndex = index,
                             menuOpen = menuAnchorListId == tile.id,
                             onClick = { onOpenList(tile.id.toString()) },
                             onLongPress = { menuAnchorListId = tile.id },
@@ -369,6 +370,7 @@ private fun HomeContent(
 @Composable
 private fun ListTile(
     tile: ListTileState,
+    toneIndex: Int,
     onClick: () -> Unit,
     menuOpen: Boolean = false,
     onLongPress: () -> Unit = {},
@@ -381,7 +383,8 @@ private fun ListTile(
 ) {
     val curtain = LocalPrivacyCurtain.current
     val isDark = OrbitTheme.colors.isDark
-    val tone = OrbitListTones.forKey(tile.id, isDark)
+    // Alternate A/B by row position (not list id) so adjacent cards separate.
+    val tone = OrbitListTones.forKey(toneIndex.toLong(), isDark)
     // List names stay masked under the curtain (user-authored, relationship-
     // revealing); the neutral noun for a list is "List".
     val displayName = if (curtain) "List" else tile.name
