@@ -67,6 +67,48 @@ class ContactMapperTest {
     }
 
     @Test
+    fun `attempt does not count as a connection in the stats`() {
+        val base = contactFixture(id = 1L).toUiContact()
+        val events = listOf(
+            // One real 10-minute connection today …
+            callEventFixture(
+                id = 1L, contactId = 1L,
+                occurredAt = now, durationSeconds = 600,
+                source = CallSource.CALL_LOG,
+            ),
+            // … and an attempt (voicemail) today: must not move stats.
+            callEventFixture(
+                id = 2L, contactId = 1L,
+                occurredAt = now, durationSeconds = 0,
+                source = CallSource.ATTEMPT,
+            ),
+        )
+        val hydrated = base.withCallStats(events, now)
+        assertEquals("10 min", hydrated.avgLengthLabel)
+        // The attempt is excluded — one connection only.
+        assertEquals(1, hydrated.totalCalls)
+        assertEquals("today", hydrated.lastCalledLabel)
+    }
+
+    @Test
+    fun `attempt-only history reads as never connected`() {
+        val base = contactFixture(id = 1L).toUiContact()
+        val events = listOf(
+            callEventFixture(
+                id = 1L, contactId = 1L,
+                occurredAt = now, durationSeconds = 0,
+                source = CallSource.ATTEMPT,
+            ),
+        )
+        val hydrated = base.withCallStats(events, now)
+        // No connection ever → blank "last contacted" (screen renders
+        // "Never called"), zero call count, dash average.
+        assertEquals("", hydrated.lastCalledLabel)
+        assertEquals(0, hydrated.totalCalls)
+        assertEquals("—", hydrated.avgLengthLabel)
+    }
+
+    @Test
     fun `empty event list leaves the contact untouched`() {
         // assertSame, not assertEquals — Contact.equals compares id only.
         val base = contactFixture(id = 1L).toUiContact()
