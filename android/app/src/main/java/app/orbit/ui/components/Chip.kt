@@ -15,18 +15,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import app.orbit.data.ChipTone
-import app.orbit.ui.theme.OrbitChipTones
 import app.orbit.ui.theme.OrbitTheme
 
 private data class ToneTriple(val bg: Color, val fg: Color, val dot: Color)
 
 @Composable
-private fun toneTriple(tone: ChipTone): ToneTriple = when (tone) {
-    ChipTone.Terracotta -> ToneTriple(OrbitChipTones.Terracotta.bg, OrbitChipTones.Terracotta.fg, OrbitChipTones.Terracotta.dot)
-    ChipTone.Sage       -> ToneTriple(OrbitChipTones.Sage.bg,       OrbitChipTones.Sage.fg,       OrbitChipTones.Sage.dot)
-    ChipTone.Amber      -> ToneTriple(OrbitChipTones.Amber.bg,      OrbitChipTones.Amber.fg,      OrbitChipTones.Amber.dot)
-    ChipTone.Brick      -> ToneTriple(OrbitChipTones.Brick.bg,      OrbitChipTones.Brick.fg,      OrbitChipTones.Brick.dot)
-    ChipTone.Stone      -> ToneTriple(OrbitChipTones.Stone.bg,      OrbitChipTones.Stone.fg,      OrbitChipTones.Stone.dot)
+private fun toneTriple(tone: ChipTone): ToneTriple {
+    val chip = OrbitTheme.tones.chip
+    val t = when (tone) {
+        ChipTone.Terracotta -> chip.terracotta
+        ChipTone.Sage -> chip.sage
+        ChipTone.Amber -> chip.amber
+        ChipTone.Brick -> chip.brick
+        ChipTone.Stone -> chip.stone
+    }
+    return ToneTriple(t.bg, t.fg, t.dot)
 }
 
 @Composable

@@ -1,156 +1,147 @@
 // android/app/src/main/java/app/orbit/ui/theme/Tones.kt
 //
-// Tonal families promoted from inline literals in ui/components/Chip.kt:24-28,
-// ui/components/Avatar.kt:22-26, and ui/screens/card/CardViewScreen.kt:413-418
-// (see RESEARCH §Pattern 3, PATTERNS §"Tones.kt"). Per D-04 these are plain
-// `object`s, not `staticCompositionLocalOf` — design enumerations don't vary
-// between light and dark mode (Pitfall 7).
+// Tonal families — avatar palettes, the 7-day rhythm bars, list-chip tones, the
+// Home card A/B treatments, and the Card View heat ramp.
+//
+// THEMING (2026-06-22): these were five hardcoded warm `object`s
+// (OrbitChipTones / OrbitAvatarTones / OrbitHeatRamp / OrbitListTones /
+// OrbitRhythmTones). They are now a single per-theme, per-mode [OrbitTones]
+// instance provided through [LocalOrbitTones] and read as `OrbitTheme.tones`.
+// Each curated theme derives its tones from a small set of personality hues +
+// its accent (see [deriveOrbitTones] and ThemeRegistry.kt), so the avatars,
+// rhythm bars, and Home cards stay coherent with the chosen accent instead of
+// being locked to terracotta. Mirrors the `OrbitTheme.colors` pattern exactly.
 //
 // SPLASH BOUNDARY (D-09): res/values/colors.xml carries cream/charcoal/terracotta
-// for the pre-Compose splash. Do NOT consolidate those into OrbitPrimitives —
-// the Android framework reads them before Compose exists.
+// for the pre-Compose splash. Do NOT consolidate those here — the Android
+// framework reads them before Compose exists.
 package app.orbit.ui.theme
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-
-object OrbitChipTones {
-    // Each tone exposes (bg, fg, dot). Sourced from Chip.kt:24-28 verbatim;
-    // cross-referenced to OrbitPrimitives where a primitive matches.
-    object Terracotta {
-        val bg  = OrbitPrimitives.TerracottaTint   // 0xFFEDD6CE
-        val fg  = OrbitPrimitives.TerracottaDark   // 0xFF9B4A32
-        val dot = OrbitPrimitives.Terracotta       // 0xFFC8654A
-    }
-    object Sage {
-        val bg  = OrbitPrimitives.SageTint         // 0xFFD8E3D6
-        val fg  = Color(0xFF4E6A4B)                // no OrbitPrimitives entry — documented here
-        val dot = OrbitPrimitives.Sage             // 0xFF87A383
-    }
-    object Amber {
-        val bg  = OrbitPrimitives.AmberTint        // 0xFFF2E2BF
-        val fg  = Color(0xFF8B6821)                // no OrbitPrimitives entry
-        val dot = OrbitPrimitives.Amber            // 0xFFD4A144
-    }
-    object Brick {
-        val bg  = Color(0xFFF5E0DC)                // no OrbitPrimitives entry
-        val fg  = Color(0xFFA04838)                // no OrbitPrimitives entry
-        val dot = Color(0xFFA04838)                // intentional: same as fg per Chip.kt:27
-    }
-    object Stone {
-        val bg  = OrbitPrimitives.CreamDeep        // 0xFFF2ECE2
-        val fg  = OrbitPrimitives.Stone            // 0xFF6B6560
-        val dot = OrbitPrimitives.StoneSoft        // 0xFF9A928B
-    }
-}
-
-object OrbitAvatarTones {
-    // Deterministic warm palette keyed off name hash. Each pair is (bg, fg).
-    // Verbatim from Avatar.kt:21-27; cross-referenced to OrbitPrimitives where possible.
-    val palettes: List<Pair<Color, Color>> = listOf(
-        OrbitPrimitives.TerracottaTint to OrbitPrimitives.TerracottaDark,
-        OrbitPrimitives.SageTint       to Color(0xFF4E6A4B),
-        OrbitPrimitives.AmberTint      to Color(0xFF8B6821),
-        Color(0xFFF5E0DC)              to Color(0xFFA04838),
-        Color(0xFFE8DDD1)              to OrbitPrimitives.Stone,
-    )
-
-    // Shared name→palette hash (the loop was inline in Avatar.kt). Exposed so the
-    // rhythm strip ([OrbitRhythmTones]) can pick the SAME index for a person, so
-    // their avatar and their rhythm bars read as one color.
-    fun indexFor(name: String): Int {
-        var hash = 0
-        for (c in name) hash = hash * 31 + c.code
-        return (hash and Int.MAX_VALUE) % palettes.size
-    }
-}
-
-object OrbitHeatRamp {
-    // 7-stop warmth ramp keyed by float v in [0, 1]. Used by HeatStrip in
-    // CardViewScreen. Two ramps (2026-06-09 dark-mode sweep): the original
-    // light ramp starts near-cream, which on the dark card inverted the
-    // visual emphasis — empty hours glowed brighter than active ones. The
-    // dark ramp starts at a quiet warm charcoal and rises to the same
-    // terracotta family, so density reads identically in both themes.
-    fun colorFor(v: Float, isDark: Boolean = false): Color =
-        if (isDark) darkRamp(v) else lightRamp(v)
-
-    private fun lightRamp(v: Float): Color = when {
-        v < 0.08f -> Color(0xFFEFE8DC)
-        v < 0.20f -> Color(0xFFE8DCCA)
-        v < 0.35f -> Color(0xFFDDC9AE)
-        v < 0.50f -> Color(0xFFD5B992)
-        v < 0.65f -> Color(0xFFCE9F62)
-        v < 0.80f -> Color(0xFFC8854A)
-        else      -> Color(0xFFA76337)
-    }
-
-    private fun darkRamp(v: Float): Color = when {
-        v < 0.08f -> Color(0xFF383330)
-        v < 0.20f -> Color(0xFF453B32)
-        v < 0.35f -> Color(0xFF584736)
-        v < 0.50f -> Color(0xFF6F563A)
-        v < 0.65f -> Color(0xFF8A663F)
-        v < 0.80f -> Color(0xFFA87844)
-        else      -> Color(0xFFC8854A)
-    }
-}
+import androidx.compose.ui.graphics.lerp
 
 /**
- * Tonal card treatments for the Home redesign (vision HOME-5 / HOME-6).
+ * The full set of tonal treatments for one theme in one mode (light or dark).
  *
- * Two tones only — both inside Orbit's single-accent identity (warm cream +
- * terracotta), deliberately NO cool colours:
- *   - **A** — soft terracotta: a tinted header [band] over a lighter terracotta
- *     [wash].
- *   - **B** — warm neutral: a cream-deep band over a near-white wash, with
- *     terracotta left to do its job as the lone accent (chevron, today marker).
- *
- * Cards alternate A/B **by position** ([forKey] with the row index) so adjacent
- * cards separate without painting the screen in arbitrary per-list colours. The
- * earlier 5-family per-id palette read as a generic dashboard and buried the
- * terracotta accent under sage/slate; this keeps Home unmistakably Orbit.
- * Mode-aware (band/wash differ light vs dark), so this is a function, not a
- * plain enumeration (cf. [OrbitHeatRamp]).
+ * Authored per theme as a list of five [ToneTriple] "personality hues"; the
+ * avatar palettes, rhythm bars, list chips, and heat ramp all derive from those
+ * plus the theme's accent. See [deriveOrbitTones].
  */
-object OrbitListTones {
+@Immutable
+data class OrbitTones(
+    val chip: ChipTones,
+    /** (bg, fg) avatar background/initials pairs, indexed by a name hash. */
+    val avatarPalettes: List<Pair<Color, Color>>,
+    /** Saturated per-person rhythm-strip bar colors. */
+    val rhythmBars: List<Color>,
+    /** 7-stop warmth ramp, low -> high density, for the Card View HeatStrip. */
+    val heatRamp: List<Color>,
+    /** Alternating Home card treatments (A accent-tinted, B neutral). */
+    val listTones: List<ListTone>,
+) {
+    @Immutable
+    data class ToneTriple(val bg: Color, val fg: Color, val dot: Color)
+
+    /** The five named chip slots. Names are historical (data.ChipTone); the
+     *  colors are whatever the active theme assigns to each slot. */
+    @Immutable
+    data class ChipTones(
+        val terracotta: ToneTriple,
+        val sage: ToneTriple,
+        val amber: ToneTriple,
+        val brick: ToneTriple,
+        val stone: ToneTriple,
+    )
+
     @Immutable
     data class ListTone(val band: Color, val wash: Color, val nameFg: Color)
 
-    private val light = listOf(
-        ListTone(band = Color(0xFFEDD6CE), wash = Color(0xFFF7EDE7), nameFg = Color(0xFF9B4A32)), // A terracotta
-        ListTone(band = Color(0xFFF2ECE2), wash = Color(0xFFFFFFFF), nameFg = Color(0xFF211E1C)), // B neutral
-    )
-    private val dark = listOf(
-        ListTone(band = Color(0xFF4A2D24), wash = Color(0xFF382722), nameFg = Color(0xFFEDC3B4)), // A terracotta
-        ListTone(band = Color(0xFF35302C), wash = Color(0xFF2B2724), nameFg = Color(0xFFF0EBE4)), // B neutral
-    )
+    /** Deterministic name -> avatar-palette index (same hash the old
+     *  OrbitAvatarTones used, so existing avatar colors are preserved). */
+    fun indexForName(name: String): Int {
+        var hash = 0
+        for (c in name) hash = hash * 31 + c.code
+        return (hash and Int.MAX_VALUE) % avatarPalettes.size
+    }
 
-    /** Alternating A/B tone, keyed by the card's row position. */
-    fun forKey(key: Long, isDark: Boolean): ListTone {
-        val palette = if (isDark) dark else light
-        val idx = ((key % palette.size + palette.size) % palette.size).toInt()
-        return palette[idx]
+    fun avatarPalette(name: String): Pair<Color, Color> = avatarPalettes[indexForName(name)]
+
+    /** Stable per-person rhythm bar keyed by contactId (the rhythm carries ids). */
+    fun rhythmBarForId(id: Long): Color =
+        rhythmBars[((id % rhythmBars.size + rhythmBars.size) % rhythmBars.size).toInt()]
+
+    /** Bucket a density value in [0,1] into the 7-stop heat ramp. Thresholds
+     *  match the pre-theming ramp so HeatStrip emphasis is unchanged. */
+    fun heatColor(v: Float): Color = when {
+        v < 0.08f -> heatRamp[0]
+        v < 0.20f -> heatRamp[1]
+        v < 0.35f -> heatRamp[2]
+        v < 0.50f -> heatRamp[3]
+        v < 0.65f -> heatRamp[4]
+        v < 0.80f -> heatRamp[5]
+        else -> heatRamp[6]
+    }
+
+    /** Alternating A/B tone keyed by the card's row position. */
+    fun listTone(key: Long): ListTone {
+        val idx = ((key % listTones.size + listTones.size) % listTones.size).toInt()
+        return listTones[idx]
     }
 }
 
 /**
- * Saturated per-person bar colors for the Home 7-day rhythm strip (HOME-7).
- * Indexed by the same name hash as [OrbitAvatarTones] (length matches), so a
- * person's rhythm bars read as the same colour as their avatar. Warm family
- * only — no rainbow.
+ * Build a theme's [OrbitTones] from its personality hues + accent + neutral
+ * anchors. Centralizing this keeps every curated theme structurally identical:
+ * authors supply five [OrbitTones.ToneTriple]s and the accent/neutral anchors,
+ * and the rhythm bars / avatar palettes / list tones / heat ramp all derive.
+ *
+ * @param toneTriples the five personality slots (terracotta/sage/amber/brick/stone order)
+ * @param accentTint  selected-state wash, used as Home card A band
+ * @param accentDeep  the accent's pressed/deep value, used as Home card A name color + heat-ramp top
+ * @param heatLow     low-density end of the heat ramp (a quiet near-background tone)
+ * @param neutralBand Home card B band (a subtle surface zone)
+ * @param neutralWash Home card B wash (the base surface)
+ * @param neutralName Home card B name color (primary fg)
  */
-object OrbitRhythmTones {
-    private val bars = listOf(
-        OrbitPrimitives.Terracotta, // 0
-        OrbitPrimitives.Sage,       // 1
-        OrbitPrimitives.Amber,      // 2
-        Color(0xFFA04838),          // 3 — brick (matches avatar palette 3)
-        OrbitPrimitives.StoneSoft,  // 4
+internal fun deriveOrbitTones(
+    toneTriples: List<OrbitTones.ToneTriple>,
+    accentTint: Color,
+    accentDeep: Color,
+    heatLow: Color,
+    neutralBand: Color,
+    neutralWash: Color,
+    neutralName: Color,
+): OrbitTones {
+    require(toneTriples.size == 5) { "OrbitTones needs exactly 5 personality hues" }
+    val ease = listOf(0.06f, 0.18f, 0.33f, 0.49f, 0.65f, 0.82f, 1.0f)
+    return OrbitTones(
+        chip = OrbitTones.ChipTones(
+            terracotta = toneTriples[0],
+            sage = toneTriples[1],
+            amber = toneTriples[2],
+            brick = toneTriples[3],
+            stone = toneTriples[4],
+        ),
+        avatarPalettes = toneTriples.map { it.bg to it.fg },
+        rhythmBars = toneTriples.map { it.dot },
+        heatRamp = ease.map { t -> lerp(heatLow, accentDeep, t) },
+        listTones = listOf(
+            // A — accent-tinted
+            OrbitTones.ListTone(
+                band = accentTint,
+                wash = lerp(accentTint, neutralWash, 0.55f),
+                nameFg = accentDeep,
+            ),
+            // B — neutral
+            OrbitTones.ListTone(
+                band = neutralBand,
+                wash = neutralWash,
+                nameFg = neutralName,
+            ),
+        ),
     )
-
-    fun barFor(name: String): Color = bars[OrbitAvatarTones.indexFor(name)]
-
-    /** Stable per-person bar colour keyed by contactId (the rhythm carries ids, not names). */
-    fun barForId(id: Long): Color = bars[((id % bars.size + bars.size) % bars.size).toInt()]
 }
+
+internal val LocalOrbitTones = staticCompositionLocalOf { WarmTones }

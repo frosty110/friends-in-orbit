@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.em
-import app.orbit.ui.theme.OrbitAvatarTones
+import app.orbit.ui.theme.OrbitTheme
 
 @Composable
 fun Avatar(
@@ -26,11 +26,13 @@ fun Avatar(
     // 15-05b L6 — cache the deterministic palette pick + initials derivation
     // per name so recomposition skips the hash loop and split when name is
     // unchanged. The local `var hash` lives inside the remember lambda and
-    // runs only when `name` changes.
-    val (bg, fg, initials) = remember(name) {
+    // runs only when `name` changes. Keyed on `palettes` too so a theme switch
+    // re-picks the avatar color (THEMING 2026-06-22).
+    val palettes = OrbitTheme.tones.avatarPalettes
+    val (bg, fg, initials) = remember(name, palettes) {
         var hash = 0
         for (c in name) hash = (hash * 31 + c.code)
-        val (palBg, palFg) = OrbitAvatarTones.palettes[(hash and Int.MAX_VALUE) % OrbitAvatarTones.palettes.size]
+        val (palBg, palFg) = palettes[(hash and Int.MAX_VALUE) % palettes.size]
         val rendered = name.split(' ')
             .filter { it.isNotBlank() }
             .take(2)

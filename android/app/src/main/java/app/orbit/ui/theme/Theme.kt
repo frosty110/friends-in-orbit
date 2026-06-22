@@ -16,6 +16,8 @@ import androidx.compose.runtime.ReadOnlyComposable
 object OrbitTheme {
     val colors: OrbitColors
         @Composable @ReadOnlyComposable get() = LocalOrbitColors.current
+    val tones: OrbitTones
+        @Composable @ReadOnlyComposable get() = LocalOrbitTones.current
     val type: OrbitTypography
         @Composable @ReadOnlyComposable get() = LocalOrbitTypography.current
     val shapes: OrbitShapes
@@ -24,12 +26,23 @@ object OrbitTheme {
         @Composable @ReadOnlyComposable get() = LocalOrbitSpacing.current
 }
 
+/**
+ * Root theme. [settings] carries the user's chosen theme / dark mode / accent
+ * dial (defaults to Warm + system). [darkTheme] is derived from those settings
+ * but kept as an explicit parameter so previews can force a mode with
+ * `OrbitTheme(darkTheme = true)`. The final palette + tonal families are
+ * resolved through [OrbitThemes] and provided via [LocalOrbitColors] /
+ * [LocalOrbitTones]; every screen reads them as `OrbitTheme.colors` /
+ * `OrbitTheme.tones`, so swapping the theme never touches a screen.
+ */
 @Composable
 fun OrbitTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    settings: ThemeSettings = ThemeSettings.DEFAULT,
+    darkTheme: Boolean = OrbitThemes.effectiveDark(settings, isSystemInDarkTheme()),
     content: @Composable () -> Unit,
 ) {
-    val colors = if (darkTheme) DarkColors else LightColors
+    val resolved = OrbitThemes.resolve(settings, darkTheme)
+    val colors = resolved.colors
 
     // Material3 color scheme — we mostly bypass it, but Material components (Switch,
     // TextField, etc.) still read from it, so align the slots that show through.
@@ -63,6 +76,7 @@ fun OrbitTheme(
 
     CompositionLocalProvider(
         LocalOrbitColors provides colors,
+        LocalOrbitTones provides resolved.tones,
         LocalOrbitTypography provides OrbitType,
         LocalOrbitShapes provides OrbitShapeSet,
         LocalOrbitSpacing provides OrbitSpacing(),

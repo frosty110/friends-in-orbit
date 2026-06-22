@@ -70,9 +70,7 @@ import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.PostCallBanner
 import app.orbit.ui.screens.lists.DeleteListDialog
-import app.orbit.ui.theme.OrbitListTones
 import app.orbit.ui.theme.OrbitMotion
-import app.orbit.ui.theme.OrbitRhythmTones
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
 import coil.compose.SubcomposeAsyncImage
@@ -92,7 +90,7 @@ import kotlinx.coroutines.flow.collectLatest
  *   - HOME-6: no "due / N ready / caught up" framing. The header is a calm date,
  *     never a count or a completion state.
  *   - HOME-5: full-width, single-column tonal cards — a tinted header band over a
- *     lighter graph wash, both shades of the list's own [OrbitListTones] colour.
+ *     lighter graph wash, both shades of the list's own [OrbitTones] colour.
  *   - HOME-3: each card shows "Next up" — the head of that list's queue (reused
  *     from `SurfaceNextUseCase` via `HomeFeed.enrichment`) — with a warm recency
  *     line. The whole card taps through to Card View; there is no call button.
@@ -384,7 +382,7 @@ private fun ListTile(
     val curtain = LocalPrivacyCurtain.current
     val isDark = OrbitTheme.colors.isDark
     // Alternate A/B by row position (not list id) so adjacent cards separate.
-    val tone = OrbitListTones.forKey(toneIndex.toLong(), isDark)
+    val tone = OrbitTheme.tones.listTone(toneIndex.toLong())
     // List names stay masked under the curtain (user-authored, relationship-
     // revealing); the neutral noun for a list is "List".
     val displayName = if (curtain) "List" else tile.name
@@ -624,7 +622,7 @@ private fun DayColumn(
                                 .height(h)
                                 .width(RHYTHM_BAR_WIDTH)
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(OrbitRhythmTones.barForId(call.contactId)),
+                                .background(OrbitTheme.tones.rhythmBarForId(call.contactId)),
                         )
                     }
                 }

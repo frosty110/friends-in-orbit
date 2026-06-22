@@ -77,7 +77,6 @@ import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.picker.SnackbarEvent
-import app.orbit.ui.theme.OrbitHeatRamp
 import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
@@ -809,7 +808,7 @@ private fun HeatStrip(heat: FloatArray, nowHour: Int) {
                     .weight(1f)
                     .fillMaxSize()
                     .clip(OrbitTheme.shapes.xs)
-                    .background(OrbitHeatRamp.colorFor(v, OrbitTheme.colors.isDark))
+                    .background(OrbitTheme.tones.heatColor(v))
                     .then(if (i == nowHour) Modifier.border(1.5.dp, OrbitTheme.colors.fg, OrbitTheme.shapes.xs) else Modifier),
             )
         }
