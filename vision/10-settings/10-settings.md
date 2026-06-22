@@ -8,7 +8,7 @@
 
 ## Today
 
-<img src="./_assets/settings.png" width="300" alt="Settings — Permissions (Contacts / Call log / Notifications all 'Allowed'), Contacts sync, Call history sync with import range 30/90/180/365, Picker thresholds, Ignored" />
+<img src="./actual-settings.png" width="300" alt="Settings — Permissions (Contacts / Call log / Notifications all 'Allowed'), Contacts sync, Call history sync with import range 30/90/180/365, Picker thresholds, Ignored" />
 
 - **Permissions** — Contacts / Call log / Notifications, each showing **Allowed** (green) or a tap-to-grant state.
 - **Contacts** — "Last synced 5 hours ago" + **Sync now**.

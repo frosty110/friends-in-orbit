@@ -142,6 +142,38 @@ class KeepInTouchEngineTest {
         assertEquals(expected, due)
     }
 
+    @Test
+    fun `ATTEMPT source surfaces a flat short cooldown regardless of template math`() {
+        val clock = TestClock(T0)
+        val due = engine.nextDue(
+            snapshot(),
+            ctx(
+                lastCall = T0,
+                durationSec = 0,                            // no-answer / voicemail
+                direction = CallDirection.OUTGOING,
+                source = CallSource.ATTEMPT,
+                skipCount = 5,                              // skip escalation must NOT apply
+            ),
+            clock,
+        )
+        // Flat AttemptCooldown.DURATION (3 days) after the attempt — not the
+        // multi-week Keep-in-touch cadence, and unaffected by skipCount.
+        assertEquals(T0.plus(AttemptCooldown.DURATION), due)
+    }
+
+    @Test
+    fun `paused contact takes precedence over an ATTEMPT`() {
+        val clock = TestClock(T0)
+        val pausedUntil = T0.plus(Duration.ofDays(7))
+        val due = engine.nextDue(
+            snapshot(pausedUntil = pausedUntil),
+            ctx(lastCall = T0, source = CallSource.ATTEMPT),
+            clock,
+        )
+        // An attempt must not pull a paused contact back into rotation early.
+        assertEquals(pausedUntil, due)
+    }
+
     // ────────────────────────────────────────────────────────────────────────
     // Rule-correctness fix — "aim for every N days" must hold end to end.
     // Params built via withIntervalHours (the slider's commit path) so these

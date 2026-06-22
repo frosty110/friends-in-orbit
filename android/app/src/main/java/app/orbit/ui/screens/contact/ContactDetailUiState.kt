@@ -85,6 +85,11 @@ sealed interface ContactDetailUiState {
         // user-logged connection (CallSource.MANUAL) rather than the carrier
         // call log. Same parallel-list rationale as [recentCallEventIds].
         val recentCallIsManual: List<Boolean> = emptyList(),
+        // Attempt surface — parallel-indexed with [recentCalls]:
+        // `recentCallIsAttempt[i]` is true when `recentCalls[i]` was a reach-out
+        // that didn't connect (CallSource.ATTEMPT — voicemail / no answer); the
+        // row renders "Attempted" + a phone-slash icon.
+        val recentCallIsAttempt: List<Boolean> = emptyList(),
     ) : ContactDetailUiState
 
     /** CONTACT-06 — phone contact removed; surfaces with a re-link/archive affordance. */
@@ -96,6 +101,8 @@ sealed interface ContactDetailUiState {
         val longestGapLabel: String,
         // Parallel-indexed MANUAL flags — see [Ready.recentCallIsManual].
         val recentCallIsManual: List<Boolean> = emptyList(),
+        // Parallel-indexed ATTEMPT flags — see [Ready.recentCallIsAttempt].
+        val recentCallIsAttempt: List<Boolean> = emptyList(),
     ) : ContactDetailUiState
 
     @Immutable data object NotFound : ContactDetailUiState

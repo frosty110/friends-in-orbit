@@ -2,6 +2,7 @@ package app.orbit.data.mappers
 
 import app.orbit.data.Contact
 import app.orbit.data.entity.CallEventEntity
+import app.orbit.data.entity.CallSource
 import app.orbit.data.entity.ContactEntity
 import app.orbit.ui.util.formatDuration
 import app.orbit.ui.util.formatRelative
@@ -46,11 +47,13 @@ fun ContactEntity.toUiContact(): Contact = Contact(
 /**
  * Overlay the call-derived stats on a [Contact] using its raw event list.
  * Computes:
- *   - `lastCalledLabel` — relative-time formatting of the most recent event
- *     (e.g. "today", "7 days ago"). Empty when the events list is empty so
- *     [ContactDetailScreen] falls through to the "Never called" rendering.
- *   - `totalCalls` — `events.size` (no direction or duration filter — every
- *     row imported from the device call log counts, including MANUAL marks).
+ *   - `lastCalledLabel` — relative-time formatting of the most recent
+ *     CONNECTION (e.g. "today", "7 days ago"). ATTEMPT events (reach-outs
+ *     that didn't connect — voicemail / no answer) are excluded: a voicemail
+ *     must never read as "you talked today". Empty when there is no connection
+ *     so [ContactDetailScreen] falls through to the "Never called" rendering.
+ *   - `totalCalls` — count of CONNECTIONS (CALL_LOG + MANUAL; ATTEMPT excluded —
+ *     an attempt is not a call that happened).
  *   - `avgLengthLabel` — mean of `durationSeconds` over MEASURED calls only
  *     (`durationSeconds > 0`), formatted via [formatDuration]. Zero-duration
  *     events are unverified manual marks, not measured calls — averaging
@@ -68,15 +71,20 @@ fun ContactEntity.toUiContact(): Contact = Contact(
  */
 fun Contact.withCallStats(events: List<CallEventEntity>, now: Instant): Contact {
     if (events.isEmpty()) return this
-    val mostRecent = events.maxByOrNull { it.occurredAt } ?: return this
+    // Connections only — ATTEMPT events (reach-outs that didn't connect) must
+    // not set "last contacted", inflate the call count, or feed the average.
+    // They still surface in the history list with their own "Attempted"
+    // treatment; they just don't masquerade as connections in the stats.
+    val connections = events.filter { it.source != CallSource.ATTEMPT }
+    val mostRecent = connections.maxByOrNull { it.occurredAt }
     // Zero-duration events (MANUAL marks) are excluded from the
     // average; they still count toward totalCalls and lastCalledLabel.
-    val measured = events.filter { it.durationSeconds > 0 }
+    val measured = connections.filter { it.durationSeconds > 0 }
     val avgSeconds =
         if (measured.isEmpty()) 0 else measured.map { it.durationSeconds }.average().toInt()
     return copy(
-        lastCalledLabel = formatRelative(mostRecent.occurredAt, now),
-        totalCalls = events.size,
+        lastCalledLabel = mostRecent?.let { formatRelative(it.occurredAt, now) } ?: "",
+        totalCalls = connections.size,
         avgLengthLabel = formatDuration(avgSeconds),
     )
 }

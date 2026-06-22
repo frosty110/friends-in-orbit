@@ -30,6 +30,12 @@ class EnergizeEngine(private val params: RuleParams.Energize) : RuleEngine {
 
         val lastCall = ctx.lastCallAt ?: return now
 
+        // Attempt — reach-out that didn't connect. Flat short cooldown, never the
+        // full cadence (see KeepInTouchEngine step 3b; bodies stay in lockstep).
+        if (ctx.lastCallSource == CallSource.ATTEMPT) {
+            return lastCall.plus(AttemptCooldown.DURATION)
+        }
+
         val baseCooldownHours = params.cooldownMinHours.toLong()
         val skipExtension = params.skipPenaltyHours.toLong() * ctx.skipCount
         // Cap bounds skip escalation only — never the user's base cadence

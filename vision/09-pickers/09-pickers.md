@@ -8,8 +8,8 @@
 
 ## Today
 
-<img src="./_assets/picker-contacts.png" width="300" alt="Contact Picker — 'Add contacts', search by name or number, a Sort control, filter chips (Starred / Commonly called / Rarely called / Never...), an alphabetical list with checkboxes, and an A–Z rail" />
-<img src="./_assets/picker-lists.png" width="300" alt="List Picker — 'Add Kai Nakamura to lists', a checkbox row for the 'In touch' list with an 'added' badge" />
+<img src="./actual-picker-contacts.png" width="300" alt="Contact Picker — 'Add contacts', search by name or number, a Sort control, filter chips (Starred / Commonly called / Rarely called / Never...), an alphabetical list with checkboxes, and an A–Z rail" />
+<img src="./actual-picker-lists.png" width="300" alt="List Picker — 'Add Kai Nakamura to lists', a checkbox row for the 'In touch' list with an 'added' badge" />
 
 **Contact Picker** (left): search by **name or number**, a **Sort** control (Alphabetical / Most called / Recently called / Recently saved), **filter chips** with live counts, **A–Z sticky headers + fast-scroll rail**, per-row **checkboxes**, an **"added"** badge for existing members, a **Select all N matches** affordance, and a docked **batch counter** ("N selected · Add to X"). Thoughtful detail: when you select a contact at the bottom, the list auto-scrolls so the appearing batch bar doesn't hide it. *(Shown on a full address book — captured before the device was reseeded — to show the A–Z rail and populated list; the live seed has only a handful of contacts.)*
 

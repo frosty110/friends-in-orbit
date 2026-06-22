@@ -134,14 +134,17 @@ class CallLogViewModel @Inject constructor(
                 val listId = mostRecentListByContactId[ev.contactId]
                 val listName = listId?.let { listById[it]?.name } ?: ""
                 // Manual-log surface — user-logged connections (source =
-                // MANUAL, durationSeconds = 0) render "Logged" + a
-                // check-circle instead of duration + direction; the blank
-                // durationLabel is skipped by the row's subtitle builder.
+                // MANUAL, durationSeconds = 0) render "Logged" + a check-circle.
+                // Attempt surface — reach-outs that didn't connect (source =
+                // ATTEMPT, durationSeconds = 0) render "Attempted" + phone-slash.
+                // Both carry a blank durationLabel, skipped by the row's
+                // subtitle builder.
                 val isManual = ev.source == CallSource.MANUAL
-                val (directionWord, directionIcon) = if (isManual) {
-                    "Logged" to "check-circle"
-                } else {
-                    when (ev.direction) {
+                val isAttempt = ev.source == CallSource.ATTEMPT
+                val (directionWord, directionIcon) = when {
+                    isAttempt -> "Attempted" to "phone-slash"
+                    isManual -> "Logged" to "check-circle"
+                    else -> when (ev.direction) {
                         CallDirection.OUTGOING -> "Outgoing" to "phone-outgoing"
                         CallDirection.INCOMING -> "Incoming" to "phone-incoming"
                     }
@@ -157,7 +160,7 @@ class CallLogViewModel @Inject constructor(
                         phone = contact.phoneNumber,
                         photoUri = contact.photoUri,
                         listContext = if (listName.isBlank()) "" else "from $listName",
-                        durationLabel = if (isManual) "" else formatDuration(ev.durationSeconds),
+                        durationLabel = if (isManual || isAttempt) "" else formatDuration(ev.durationSeconds),
                         directionWord = directionWord,
                         directionIconName = directionIcon,
                         timeLabel = formatWallClock(ev.occurredAt, zone),

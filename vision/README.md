@@ -20,31 +20,42 @@ The through-line across most suggestions here: **today the app gives you logisti
 
 ```
 vision/
-├── README.md            ← you are here: how to use this, the index, the guardrails
-├── _assets/             ← curated screenshots referenced by the section files
-├── 00-home.md
-├── 01-card-view.md      ← the core loop. start here.
-├── 02-contact-detail.md
-├── 03-browse-list.md
-├── 04-search.md
-├── 05-call-log.md
-├── 06-lists-manager.md
-├── 07-list-config.md
-├── 08-create-list.md
-├── 09-pickers.md
-├── 10-settings.md
-├── 11-onboarding.md
-├── 12-widgets.md
-└── 99-cross-cutting.md  ← system-wide moves that aren't tied to one screen
+├── README.md            ← you are here: how to use this, the index, the conventions
+├── _sidebar.md          ← docsify nav
+├── _prototype/
+│   └── theme.css        ← shared design tokens, imported by every page prototype
+├── 00-home/             ← one folder per page view
+│   ├── 00-home.md       ← the section file (references its actual-* images)
+│   ├── actual-home.png          ← screenshot of the SHIPPED app
+│   ├── actual-home-postcall.png
+│   ├── design-twotone.png       ← screenshot of the PROTOTYPE (where it's going)
+│   ├── design-twotone-dark.png
+│   ├── design-chip.png
+│   └── prototype/
+│       └── index.html   ← the interactive design prototype the design-* shots come from
+├── 01-card-view/        ← the core loop. start here.
+│   ├── 01-card-view.md
+│   └── actual-card-view.png …
+├── …                    ← 02-contact-detail … 12-widgets, same shape
+└── 99-cross-cutting/    ← system-wide moves that aren't tied to one screen
+    └── 99-cross-cutting.md
 ```
+
+### Folder & image conventions
+
+- **One folder per page view**, numbered to fix ordering (`00-home/`, `01-card-view/`, …). The section file keeps the folder's name (`00-home/00-home.md`).
+- **Images are prefixed by what they show:**
+  - `actual-<name>.png` — a screenshot of the **shipped app** today. These are the ones the section file's **Today** block references.
+  - `design-<name>.png` — a screenshot of a **prototype** (where the page is going). Surfaced under **Where it's going**, never presented as the current state.
+- **`prototype/index.html`** — an optional, self-contained interactive mockup for the page. It imports the shared `_prototype/theme.css` (the same tokens as `design/colors_and_type.css`) so every prototype stays visually consistent; the `design-*` images are just screenshots of it. This is where `.planning/sketches/` explorations land once they're worth keeping.
 
 ### Anatomy of a section file
 
 Every section file follows the same three-part shape:
 
 1. **Intent** — what this surface is *for*. One short paragraph. The purpose it serves in the product, independent of how it's currently built.
-2. **Today** — what it actually is right now, with a screenshot. Honest and concrete.
-3. **Where it's going** — the suggestions. Each is a discrete, ID'd move with a status and a short rationale tying it back to the mission and the voice.
+2. **Today** — what it actually is right now, shown with the folder's `actual-*` screenshots. Honest and concrete.
+3. **Where it's going** — the suggestions. Each is a discrete, ID'd move with a status and a short rationale tying it back to the mission and the voice. When a redesign has been prototyped, this is where the folder's `design-*` shots (and a link to its `prototype/`) live.
 
 ### Reading a suggestion
 
@@ -67,20 +78,20 @@ Status is about *sequencing and confidence*, not priority ranking. A "Later" can
 
 | # | Surface | Intent in one line | Headline move | Status |
 |---|---------|--------------------|---------------|--------|
-| 00 | [Home](./00-home.md) | The front door — orient, then launch into the loop | Add "Surprise me" one-tap serendipity | Now |
-| 01 | [Card View](./01-card-view.md) | Hand you one name with enough context to say yes | Put the last note/topic on the card face | Now |
-| 02 | [Contact Detail](./02-contact-detail.md) | The full picture of one person, and where you act + remember | Show "comes up again in ~X" | Now |
-| 03 | [Browse List](./03-browse-list.md) | See a whole list as a queue; find and bulk-manage | Make the numbered queue legible | Next |
-| 04 | [Search](./04-search.md) | Jump straight to a person from anywhere | Useful empty state (people not on any list) | Next |
-| 05 | [Call Log](./05-call-log.md) | An honest, calm record of real calls | Inline "add a note" on a call | Next |
-| 06 | [Lists Manager](./06-lists-manager.md) | Shape your orbits; order, archive, prioritise | Remove redundant create + fix menu theming | Now |
-| 07 | [List Config](./07-list-config.md) | Define a list's rhythm and membership in plain terms | One plain-language rhythm summary line | Now |
-| 08 | [Create List](./08-create-list.md) | Start a new orbit from an intention, not a blank form | Show each template's resulting rhythm | Next |
-| 09 | [Pickers](./09-pickers.md) | Add the right people fast; file a person into lists | Smart "people you call but haven't filed" | Next |
-| 10 | [Settings](./10-settings.md) | Trust and control — permissions, sync, privacy | Say the privacy promise out loud | Next |
-| 11 | [Onboarding](./11-onboarding.md) | Earn trust, get permissions, leave with one real list | Carry "context" into the preview | Next |
-| 12 | [Widgets](./12-widgets.md) | The loop without opening the app | Act (call / later / sooner) from the widget | Next |
-| 99 | [Cross-cutting](./99-cross-cutting.md) | System-wide moves | Warm-theme dropdowns; nickname overrides | Now |
+| 00 | [Home](./00-home/00-home.md) | The front door — always hand you someone to call | "Next up" on every card; retire the "due/caught up" framing | Now |
+| 01 | [Card View](./01-card-view/01-card-view.md) | Hand you one name with enough context to say yes | Put the last note/topic on the card face | Now |
+| 02 | [Contact Detail](./02-contact-detail/02-contact-detail.md) | The full picture of one person, and where you act + remember | Show "comes up again in ~X" | Now |
+| 03 | [Browse List](./03-browse-list/03-browse-list.md) | See a whole list as a queue; find and bulk-manage | Make the numbered queue legible | Next |
+| 04 | [Search](./04-search/04-search.md) | Jump straight to a person from anywhere | Useful empty state (people not on any list) | Next |
+| 05 | [Call Log](./05-call-log/05-call-log.md) | An honest, calm record of real calls | Inline "add a note" on a call | Next |
+| 06 | [Lists Manager](./06-lists-manager/06-lists-manager.md) | Shape your orbits; order, archive, prioritise | Remove redundant create + fix menu theming | Now |
+| 07 | [List Config](./07-list-config/07-list-config.md) | Define a list's rhythm and membership in plain terms | One plain-language rhythm summary line | Now |
+| 08 | [Create List](./08-create-list/08-create-list.md) | Start a new orbit from an intention, not a blank form | Show each template's resulting rhythm | Next |
+| 09 | [Pickers](./09-pickers/09-pickers.md) | Add the right people fast; file a person into lists | Smart "people you call but haven't filed" | Next |
+| 10 | [Settings](./10-settings/10-settings.md) | Trust and control — permissions, sync, privacy | Say the privacy promise out loud | Next |
+| 11 | [Onboarding](./11-onboarding/11-onboarding.md) | Earn trust, get permissions, leave with one real list | Carry "context" into the preview | Next |
+| 12 | [Widgets](./12-widgets/12-widgets.md) | The loop without opening the app | Act (call / later / sooner) from the widget | Next |
+| 99 | [Cross-cutting](./99-cross-cutting/99-cross-cutting.md) | System-wide moves | Warm-theme dropdowns; nickname overrides | Now |
 
 ---
 
@@ -116,7 +127,8 @@ Keep the suggestion's ID through that journey so the lineage stays traceable (`C
 - **No real data.** Every screenshot is synthetic by construction: the device is seeded with 12 fictional personas and `+1…555…` numbers via `android/scripts/seed-avd.py` (pristine wipe). A couple of pre-reseed shots were additionally pixel-edited to scrub names/numbers. Nothing here surfaces a real contact.
 - **This is a living document.** When a screen changes materially, refresh its screenshot and its **Today** section, and move any shipped suggestion out of "Where it's going" (note the commit). Stale "today" is worse than no doc.
 - **Relationship to other dirs:**
-  - `.review/` — the dated screenshot timeline + design-compliance scoring. Operational, partly gitignored. `vision/_assets/` is a *curated, durable* subset, not a mirror.
+  - `.review/` — the dated screenshot timeline + design-compliance scoring. Operational, partly gitignored. Each page folder's `actual-*` images are a *curated, durable* subset of that, not a mirror.
+  - `.planning/sketches/` — ephemeral GSD sketch scratch (gitignored). A prototype graduates out of there into the relevant `vision/<page>/prototype/` once it's worth keeping; the `design-*` screenshots are captured from it.
   - `design/` — how the app looks (tokens, system). Vision defers to it.
   - `features/INDEX.md` — what's specified to build. Vision feeds it.
 

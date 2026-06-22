@@ -8,10 +8,10 @@
 
 ## Today
 
-<img src="./_assets/onboarding-welcome.png" width="220" alt="Onboarding welcome — 'Orbit', 'Call the people you keep meaning to call', three value beats, 'Let's go'" />
-<img src="./_assets/onboarding-permission.png" width="220" alt="Onboarding contacts permission (1 of 5) — 'Build lists from your people' with a 'Stays on your device' promise card and 'Allow access'" />
-<img src="./_assets/onboarding-preview.png" width="220" alt="Onboarding preview (5 of 5) — 'Here are 5 to 10 people you've been in touch with', a pre-checked list, 'Make this my first list'" />
-<img src="./_assets/onboarding-done.png" width="220" alt="Onboarding done — 'You're set up', a mini card teaching 'Later ←' / '→ Sooner', 'Open Orbit'" />
+<img src="./actual-onboarding-welcome.png" width="220" alt="Onboarding welcome — 'Orbit', 'Call the people you keep meaning to call', three value beats, 'Let's go'" />
+<img src="./actual-onboarding-permission.png" width="220" alt="Onboarding contacts permission (1 of 5) — 'Build lists from your people' with a 'Stays on your device' promise card and 'Allow access'" />
+<img src="./actual-onboarding-preview.png" width="220" alt="Onboarding preview (5 of 5) — 'Here are 5 to 10 people you've been in touch with', a pre-checked list, 'Make this my first list'" />
+<img src="./actual-onboarding-done.png" width="220" alt="Onboarding done — 'You're set up', a mini card teaching 'Later ←' / '→ Sooner', 'Open Orbit'" />
 
 The flow: **Welcome** → **Contacts** permission → **Call log** permission → **Notifications** permission → **Sync** ("Reading your call history…") → **Preview** (a recency-based list of "people you've been in touch with," all pre-checked, untick to exclude) → **First list** (reuses the production List Config) → **Done**.
 
