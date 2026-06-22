@@ -8,8 +8,8 @@
 
 ## Today
 
-<img src="./_assets/lists-manager.png" width="300" alt="Lists Manager — a list row with drag handle, name, count, add and overflow icons; 'Archived (0)'; a 'New list' FAB" />
-<img src="./_assets/lists-overflow.png" width="300" alt="List overflow menu — Rename, Archive, List settings, Move up, Move down — on a lavender Material surface" />
+<img src="./actual-lists-manager.png" width="300" alt="Lists Manager — a list row with drag handle, name, count, add and overflow icons; 'Archived (0)'; a 'New list' FAB" />
+<img src="./actual-lists-overflow.png" width="300" alt="List overflow menu — Rename, Archive, List settings, Move up, Move down — on a lavender Material surface" />
 
 - One row per list: **drag handle**, name, **member count** badge, a **+** (add contacts), and an **overflow ⋯**.
 - An **Archived (N)** collapsible section.

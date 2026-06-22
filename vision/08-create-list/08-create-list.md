@@ -8,7 +8,7 @@
 
 ## Today
 
-<img src="./_assets/new-list-sheet.png" width="300" alt="New list bottom sheet — 'Choose a template' grid: Inner orbit, Family, Mentors, Drifted, Recently added, Start from blank; a 'Name your list' field; Cancel / Create" />
+<img src="./actual-new-list-sheet.png" width="300" alt="New list bottom sheet — 'Choose a template' grid: Inner orbit, Family, Mentors, Drifted, Recently added, Start from blank; a 'Name your list' field; Cancel / Create" />
 
 - A bottom sheet titled **Choose a template**.
 - A 2×3 grid of templates, each with an icon, name, and a one-line description:

@@ -8,8 +8,8 @@
 
 ## Today
 
-<img src="./_assets/card-view.png" width="300" alt="Card View — colored 'KN' avatar, 'due today', 'Kai Nakamura', 'It's been 3 weeks', a 24-hour 'usually answers / Mornings' heatmap with 'Good time to call', stats row, and Call/Later/Sooner controls" />
-<img src="./_assets/card-list-actions.png" width="300" alt="Card View list-actions menu — Browse people, Add contacts, Edit list — on a lavender Material surface" />
+<img src="./actual-card-view.png" width="300" alt="Card View — colored 'KN' avatar, 'due today', 'Kai Nakamura', 'It's been 3 weeks', a 24-hour 'usually answers / Mornings' heatmap with 'Good time to call', stats row, and Call/Later/Sooner controls" />
+<img src="./actual-card-list-actions.png" width="300" alt="Card View list-actions menu — Browse people, Add contacts, Edit list — on a lavender Material surface" />
 
 - A hero card: deterministic colour avatar, a **due eyebrow** ("due today" / "ahead of today"), the **name**, a **why-now** line ("It's been 2 months."), then either a **24-hour "usually answers" heatmap** (when history exists) or a **"No call history yet"** pill.
 - A **stats row** at the card's foot: *Last called · Avg length · Calls*.

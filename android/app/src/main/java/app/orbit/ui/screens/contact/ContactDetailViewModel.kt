@@ -257,6 +257,9 @@ class ContactDetailViewModel @Inject constructor(
             // widening the CallEntry shape (same rationale as
             // recentCallEventIds above).
             val recentCallIsManual = tuple.events.map { it.source == CallSource.MANUAL }
+            // Attempt surface — parallel-indexed with recentCalls; reach-outs
+            // that didn't connect render "Attempted" + a phone-slash icon.
+            val recentCallIsAttempt = tuple.events.map { it.source == CallSource.ATTEMPT }
             val longestGapLabel = computeLongestGap(tuple.events)
             val noteRows = tuple.noteEntities.map { it.toNoteRow(now) }
 
@@ -303,6 +306,7 @@ class ContactDetailViewModel @Inject constructor(
                     recentCalls = recentCalls,
                     longestGapLabel = longestGapLabel,
                     recentCallIsManual = recentCallIsManual,
+                    recentCallIsAttempt = recentCallIsAttempt,
                 )
             } else {
                 ContactDetailUiState.Ready(
@@ -328,6 +332,7 @@ class ContactDetailViewModel @Inject constructor(
                     retroNoteAffordanceFor = scrollToCallEventId,
                     recentCallEventIds = recentCallEventIds,
                     recentCallIsManual = recentCallIsManual,
+                    recentCallIsAttempt = recentCallIsAttempt,
                 )
             }
         }.stateIn(
@@ -469,9 +474,15 @@ class ContactDetailViewModel @Inject constructor(
     }
 
     /**
-     * Manual connection log — records a connection Orbit's call-log sync can't
-     * see (another app, in person) as a [CallEventEntity] with
-     * `source = MANUAL` and `durationSeconds = 0`.
+     * Manual connection / attempt log — records something Orbit's call-log sync
+     * can't see as a [CallEventEntity] with `durationSeconds = 0`.
+     *
+     * When [isAttempt] is false the event is a connection (`source = MANUAL`) —
+     * another app, in person — and resets the full template cadence. When true
+     * it is a reach-out that didn't connect (`source = ATTEMPT` — voicemail / no
+     * answer) and advances the rotation by only the flat [app.orbit.domain.rule.AttemptCooldown]
+     * window, without claiming you actually talked (it never sets "last
+     * contacted" or feeds heat — see ContactMapper.withCallStats).
      *
      * Routes through [MarkCalledUseCase] — the same atomic path the call-log
      * reconciler uses — so per-list `nextDueAt` recomputes for every list the
@@ -493,7 +504,7 @@ class ContactDetailViewModel @Inject constructor(
      * The screen's state refreshes by itself — [recentEventsSource] is a Room
      * flow that re-emits on insert.
      */
-    fun onLogConnection(whenChoice: LogConnectionWhen, note: String) {
+    fun onLogConnection(whenChoice: LogConnectionWhen, note: String, isAttempt: Boolean = false) {
         val cid = contactId ?: return
         viewModelScope.launch {
             runMutation("Couldn't log that") {
@@ -514,17 +525,17 @@ class ContactDetailViewModel @Inject constructor(
                     contactId = cid,
                     occurredAt = occurredAt,
                     // OUTGOING is the closest fit — the user reached out (or
-                    // met up). Engines ignore direction for MANUAL anyway
-                    // (isRealCall gate in all three engines).
+                    // met up). Engines ignore direction for MANUAL/ATTEMPT
+                    // anyway (isRealCall gate / attempt short-circuit).
                     direction = app.orbit.data.entity.CallDirection.OUTGOING,
                     durationSeconds = 0,
-                    source = CallSource.MANUAL,
+                    source = if (isAttempt) CallSource.ATTEMPT else CallSource.MANUAL,
                 )
                 markCalledUseCase(cid, event)
                 if (note.isNotBlank()) {
                     addRetroactiveNoteUseCase(cid, note.trim(), occurredAt)
                 }
-                _snackbarEvents.tryEmit(SnackbarEvent("Logged."))
+                _snackbarEvents.tryEmit(SnackbarEvent(if (isAttempt) "Attempt logged." else "Logged."))
             }
         }
     }

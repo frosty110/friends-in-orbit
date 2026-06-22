@@ -1,0 +1,121 @@
+/* ============================================================
+   Orbit sketch theme — ported from design/colors_and_type.css
+   Warm, earthy, low-saturation. Single terracotta accent.
+   CSS variables only — no component styles.
+   ============================================================ */
+
+:root {
+  /* Brand primitives */
+  --orbit-terracotta:      #C8654A;
+  --orbit-terracotta-dark: #9B4A32;
+  --orbit-terracotta-tint: #EDD6CE;
+  --orbit-sage:            #87A383;
+  --orbit-sage-tint:       #D8E3D6;
+  --orbit-olive:           #B49A3A;
+  --orbit-olive-tint:      #EEE3B8;
+  --orbit-slate:           #6B7570;
+  --orbit-slate-tint:      #DCE1DE;
+  --orbit-clay:            #8E5141;
+
+  /* Warm neutrals */
+  --orbit-cream:        #FAF6F0;
+  --orbit-cream-deep:   #F2ECE2;
+  --orbit-paper:        #FFFFFF;
+  --orbit-ink:          #211E1C;
+  --orbit-ink-soft:     #3A3531;
+  --orbit-stone:        #6B6560;
+  --orbit-stone-soft:   #9A928B;
+  --orbit-line:         #E5DDD1;
+  --orbit-line-soft:    #EFE8DC;
+
+  /* Semantic (light) */
+  --bg:          var(--orbit-cream);
+  --bg-subtle:   var(--orbit-cream-deep);
+  --surface:     var(--orbit-paper);
+  --surface-alt: var(--orbit-cream-deep);
+  --fg:          var(--orbit-ink);
+  --fg-soft:     var(--orbit-ink-soft);
+  --fg-muted:    var(--orbit-stone);
+  --fg-subtle:   var(--orbit-stone-soft);
+  --line:        var(--orbit-line);
+  --line-soft:   var(--orbit-line-soft);
+
+  --accent:       var(--orbit-terracotta);
+  --accent-press: var(--orbit-terracotta-dark);
+  --accent-tint:  var(--orbit-terracotta-tint);
+  --accent-fg:    #FFFFFF;
+
+  /* Avatar / rhythm palette — restrained warm family, NOT a rainbow.
+     Each "person tint" pairs a soft bg, a darker fg, and a bar fill. */
+  --p-terracotta-bg: #EDD6CE; --p-terracotta-fg: #9B4A32; --p-terracotta-bar: #C8654A; --p-terracotta-head: #E6BBAC; --p-terracotta-wash: #F7EDE7;
+  --p-sage-bg:       #D8E3D6; --p-sage-fg:       #4F6A4B; --p-sage-bar:       #87A383; --p-sage-head:       #BFD3BA; --p-sage-wash:       #EBF1E9;
+  --p-olive-bg:      #EEE3B8; --p-olive-fg:      #6F5E1C; --p-olive-bar:      #B49A3A; --p-olive-head:      #E2D399; --p-olive-wash:      #F7F0D9;
+  --p-slate-bg:      #DCE1DE; --p-slate-fg:      #46504B; --p-slate-bar:      #6B7570; --p-slate-head:      #C2CCC7; --p-slate-wash:      #EDF0EE;
+  --p-stone-bg:      #ECE4DA; --p-stone-fg:      #5C554E; --p-stone-bar:      #9A928B; --p-stone-head:      #DCD0C2; --p-stone-wash:      #F6F0E8;
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --fs-hero:  32px;
+  --fs-title: 24px;
+  --fs-h2:    20px;
+  --fs-h3:    18px;
+  --fs-body:  16px;
+  --fs-meta:  14px;
+  --fs-micro: 12px;
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semi:    600;
+  --fw-bold:    700;
+  --lh-tight: 1.15;
+  --lh-snug:  1.3;
+  --lh-body:  1.5;
+  --tracking-caps: 0.08em;
+
+  /* Shape */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 999px;
+
+  /* Spacing (4px base) */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-7: 32px; --space-8: 40px;
+  --tap-min: 48px;
+
+  /* Elevation */
+  --shadow-card: 0 2px 12px rgba(33,30,28,0.05), 0 1px 2px rgba(33,30,28,0.03);
+  --shadow-md:   0 2px 8px rgba(33,30,28,0.06), 0 1px 2px rgba(33,30,28,0.04);
+
+  /* Motion */
+  --dur-fast: 150ms;
+  --dur-base: 250ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-theme="dark"] {
+  --bg:          #1F1C1A;
+  --bg-subtle:   #25211F;
+  --surface:     #2B2724;
+  --surface-alt: #35302C;
+  --fg:          #F0EBE4;
+  --fg-soft:     #DDD5CC;
+  --fg-muted:    #C9C2B9;
+  --fg-subtle:   #8F887F;
+  --line:        #3D3631;
+  --line-soft:   #332E2A;
+
+  --accent:      #D87560;
+  --accent-press:#9B4A32;
+  --accent-tint: #4A2D24;
+
+  --p-terracotta-bg: #4A2D24; --p-terracotta-fg: #EDC3B4; --p-terracotta-bar: #D87560; --p-terracotta-head: #5E382B; --p-terracotta-wash: #382722;
+  --p-sage-bg:       #344035; --p-sage-fg:       #C6D8C2; --p-sage-bar:       #87A383; --p-sage-head:       #3F4F3A; --p-sage-wash:       #2C3329;
+  --p-olive-bg:      #4A3E25; --p-olive-fg:      #E6D69A; --p-olive-bar:      #B49A3A; --p-olive-head:      #5A4A2A; --p-olive-wash:      #38301F;
+  --p-slate-bg:      #353C39; --p-slate-fg:      #C7D0CB; --p-slate-bar:      #8A938E; --p-slate-head:      #414A45; --p-slate-wash:      #2B302D;
+  --p-stone-bg:      #393430; --p-stone-fg:      #CFC7BD; --p-stone-bar:      #9A928B; --p-stone-head:      #463F39; --p-stone-wash:      #2F2B27;
+
+  --shadow-card: 0 2px 12px rgba(0,0,0,0.3);
+  --shadow-md:   0 2px 8px rgba(0,0,0,0.35);
+}

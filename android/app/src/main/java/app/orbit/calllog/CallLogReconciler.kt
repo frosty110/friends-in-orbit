@@ -31,8 +31,12 @@ private const val INCOMING_RECENCY_MS = 10L * 60 * 1_000 // 10 minutes (D-11)
  *
  * Per-row pipeline:
  * 1. `whenMs < sinceMs` → skip (incremental-sync guard).
- * 2. Type ∈ {MISSED, REJECTED, VOICEMAIL, BLOCKED} or `durationSec < 1` → skip
- *    (CALL-05 — these are not "calls happened" in the user's mental model).
+ * 2. Filter ([isIngestable]): inbound non-events — MISSED / REJECTED /
+ *    VOICEMAIL / BLOCKED, and INCOMING / ANSWERED_EXTERNALLY with
+ *    `durationSec < 1` — are skipped (the user didn't reach out). OUTGOING
+ *    always ingests: `>=1s` is a connected CALL_LOG call, `<1s` is a no-answer
+ *    the user placed and lands as an ATTEMPT ([toCallSource]) carrying a flat
+ *    short cooldown instead of the full cadence.
  * 3. Re-normalize `row.normalizedPhone` via [PhoneNumberNormalizer] (idempotent
  *    on already-E.164 input; corrects locale-dependent output from the legacy
  *    `ContactsReader.normalizeForMatch`).
@@ -136,7 +140,7 @@ open class CallLogReconciler @Inject constructor(
                 occurredAt = occurredAt,
                 direction = row.toDirection(),
                 durationSeconds = row.durationSec,
-                source = CallSource.CALL_LOG,
+                source = row.toCallSource(),
             )
 
             if (contact.isIgnored) {
@@ -189,12 +193,17 @@ open class CallLogReconciler @Inject constructor(
     // ------------------------------------------------------------------
 
     private fun CallRow.isIngestable(): Boolean = when (type) {
+        // Connected calls (either direction) need a real duration.
         CallLog.Calls.INCOMING_TYPE,
-        CallLog.Calls.OUTGOING_TYPE,
         CallLog.Calls.ANSWERED_EXTERNALLY_TYPE -> durationSec >= 1
 
-        // Missed / declined / voicemail / blocked are never counted
-        // (they are not "calls happened" in the user's mental model).
+        // Outgoing is ingestable regardless of duration: >=1s is a connected
+        // call (CALL_LOG); <1s is a no-answer the USER placed — a reach-out
+        // attempt (ATTEMPT, see toCallSource). Either way the user reached out.
+        CallLog.Calls.OUTGOING_TYPE -> true
+
+        // Missed / declined / voicemail / blocked are inbound non-events — the
+        // user did not reach out, so they are never counted.
         CallLog.Calls.MISSED_TYPE,
         CallLog.Calls.REJECTED_TYPE,
         CallLog.Calls.VOICEMAIL_TYPE,
@@ -202,6 +211,18 @@ open class CallLogReconciler @Inject constructor(
 
         else -> false
     }
+
+    /**
+     * An OUTGOING call that didn't connect (`durationSec < 1`) is a reach-out
+     * the user placed that nobody picked up — a voicemail / no-answer ATTEMPT.
+     * Everything else ingestable here is a real CALL_LOG event.
+     */
+    private fun CallRow.toCallSource(): CallSource =
+        if (type == CallLog.Calls.OUTGOING_TYPE && durationSec < 1) {
+            CallSource.ATTEMPT
+        } else {
+            CallSource.CALL_LOG
+        }
 
     private fun CallRow.toDirection(): CallDirection = when (type) {
         CallLog.Calls.OUTGOING_TYPE -> CallDirection.OUTGOING

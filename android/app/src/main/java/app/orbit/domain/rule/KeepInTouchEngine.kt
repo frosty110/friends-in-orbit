@@ -18,6 +18,8 @@ import java.time.Instant
  *   1. Contact is ignored            -> null (never due)
  *   2. Contact is paused in the future -> return pausedUntil
  *   3. No call history               -> due now (cold start)
+ *   3b. Latest event is an ATTEMPT   -> lastCallAt + AttemptCooldown.DURATION
+ *       (reach-out that didn't connect; flat short cooldown, no adjustments)
  *   4. Otherwise                     -> lastCallAt + adjusted cooldown
  *
  * Manual-source calls (CallSource.MANUAL) and zero-duration events are ignored for
@@ -39,6 +41,14 @@ class KeepInTouchEngine(private val params: RuleParams.KeepInTouch) : RuleEngine
 
         // 3. Cold start — due immediately
         val lastCall = ctx.lastCallAt ?: return now
+
+        // 3b. Attempt — a reach-out that didn't connect. Flat short cooldown
+        //     regardless of template; never the full cadence (the user hasn't
+        //     actually talked to this person). Sits after ignore/pause/cold-start
+        //     so those still take precedence.
+        if (ctx.lastCallSource == CallSource.ATTEMPT) {
+            return lastCall.plus(AttemptCooldown.DURATION)
+        }
 
         // 4. Compute base cooldown, scaled by skipCount via skipPenaltyHours,
         //    clamped to cooldownMaxHours. Long arithmetic — int-overflow-safe
