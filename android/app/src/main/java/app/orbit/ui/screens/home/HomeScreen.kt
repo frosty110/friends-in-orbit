@@ -493,9 +493,12 @@ private fun NextUpRow(nextUp: NextUp?, curtain: Boolean, modifier: Modifier = Mo
             )
             return@Row
         }
-        // Contact names mask under the curtain (PRIV-03).
-        val name = if (curtain) "Someone" else nextUp.name
-        NextUpAvatar(photoUri = if (curtain) null else nextUp.photoUri, name = name, size = 44.dp)
+        // Contact names mask under the curtain (PRIV-03). The avatar keeps the
+        // full name (initials / photo); the line shows just the first name — the
+        // warm "one name" feel (HOME-3).
+        val avatarName = if (curtain) "Someone" else nextUp.name
+        val firstName = if (curtain) "Someone" else nextUp.name.substringBefore(' ').ifBlank { nextUp.name }
+        NextUpAvatar(photoUri = if (curtain) null else nextUp.photoUri, name = avatarName, size = 44.dp)
         Spacer(Modifier.width(OrbitTheme.spacing.x3))
         Column(Modifier.weight(1f)) {
             Text(
@@ -503,7 +506,7 @@ private fun NextUpRow(nextUp: NextUp?, curtain: Boolean, modifier: Modifier = Mo
                 style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgSubtle),
             )
             Text(
-                text = name,
+                text = firstName,
                 style = OrbitTheme.type.listTile.copy(color = OrbitTheme.colors.fg),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
