@@ -10,7 +10,7 @@ Orbit organizes your contacts into mood and context-based lists and surfaces one
 
 Grab the latest sideloadable APK from the project's **[Releases page](https://github.com/frosty110/friends-in-orbit/releases)**.
 
-On your phone, open the most recent release, tap the `.apk` asset, and allow installation from unknown sources once. No laptop, adb, or USB cable needed — release assets download without a login. These are unsigned debug builds (`app.orbit.debug`) intended for testing, not the Play Store build.
+On your phone, open the most recent release, tap the `.apk` asset, and allow installation from unknown sources once. No laptop, adb, or USB cable needed — release assets download without a login. These are unsigned debug builds (`io.github.frosty110.orbit.debug`) intended for testing, not the Play Store build.
 
 A fresh build is published automatically on every merge to `main` (the **Release APK**
 workflow), so the newest release is always the latest code. Maintainers can also cut an

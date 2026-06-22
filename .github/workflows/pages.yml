@@ -1,0 +1,51 @@
+name: Deploy privacy policy (GitHub Pages)
+
+# Publishes ONLY docs/privacy/index.html to GitHub Pages so the Play Console
+# privacy-policy field has a stable public URL. The app (AboutSection.kt) points
+# at https://frosty110.github.io/friends-in-orbit/privacy — this workflow lays the
+# page out under /privacy/ so that URL resolves.
+#
+# One-time enablement (cannot be done from a commit): repo Settings → Pages →
+# "Build and deployment" → Source: "GitHub Actions". After that, every push to
+# main that touches the privacy page (or this workflow) redeploys automatically.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/privacy/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; don't cancel an in-flight publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble site (privacy page only)
+        run: |
+          mkdir -p _site/privacy
+          cp docs/privacy/index.html _site/privacy/index.html
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

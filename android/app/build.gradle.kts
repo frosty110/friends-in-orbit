@@ -25,7 +25,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.orbit"
+        applicationId = "io.github.frosty110.orbit"
         minSdk = 31
         targetSdk = 35
         versionCode = 1

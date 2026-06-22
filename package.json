@@ -1,17 +1,17 @@
 {
   "name": "my-orbit-scripts",
   "private": true,
-  "description": "Convenience scripts for the Orbit Android project. The real project is android/ (Gradle). This package.json exists only so `yarn <script>` is available as a developer shortcut.",
+  "description": "Convenience scripts for the Orbit Android project. The real project is android/ (Gradle). This package.json exists only so `yarn <script>` is available as a developer shortcut. Install id: io.github.frosty110.orbit (debug suffix .debug); code namespace stays app.orbit.",
   "scripts": {
     "phone:build": "cd android && ./gradlew assembleDebug",
     "phone:install": "cd android && ./gradlew assembleDebug && adb -d install -r app/build/outputs/apk/debug/app-debug.apk",
-    "phone:run": "yarn phone:install && adb -d shell am start -n app.orbit.debug/app.orbit.MainActivity",
-    "phone:uninstall": "adb -d uninstall app.orbit.debug",
+    "phone:run": "yarn phone:install && adb -d shell am start -n io.github.frosty110.orbit.debug/app.orbit.MainActivity",
+    "phone:uninstall": "adb -d uninstall io.github.frosty110.orbit.debug",
     "phone:logcat": "adb -d logcat -s app.orbit:V AndroidRuntime:E",
-    "phone:logcat:all": "adb -d logcat --pid=$(adb -d shell pidof app.orbit.debug)",
-    "phone:clear": "adb -d shell pm clear app.orbit.debug",
+    "phone:logcat:all": "adb -d logcat --pid=$(adb -d shell pidof io.github.frosty110.orbit.debug)",
+    "phone:clear": "adb -d shell pm clear io.github.frosty110.orbit.debug",
     "emu:install": "cd android && ./gradlew assembleDebug && adb -e install -r app/build/outputs/apk/debug/app-debug.apk",
-    "emu:run": "yarn emu:install && adb -e shell am start -n app.orbit.debug/app.orbit.MainActivity",
+    "emu:run": "yarn emu:install && adb -e shell am start -n io.github.frosty110.orbit.debug/app.orbit.MainActivity",
     "emu:start": "nohup \"$HOME/Library/Android/sdk/emulator/emulator\" -avd orbit -no-snapshot-save -no-boot-anim > /tmp/emulator.log 2>&1 & echo 'emulator booting — adb devices will show it in ~30s'",
     "devices": "adb devices -l"
   },

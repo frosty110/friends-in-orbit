@@ -71,8 +71,8 @@ Useful log tags (Timber): `calllog` and `contacts_ingest`.
 
 1. Grant Contacts + Call log permissions; let the first import finish.
 2. Background Orbit. Kill its process to simulate the OS reclaiming it during a
-   long call: `adb shell am kill app.orbit.debug` (or swipe it from recents,
-   then `adb shell am force-stop app.orbit.debug`).
+   long call: `adb shell am kill io.github.frosty110.orbit.debug` (or swipe it from recents,
+   then `adb shell am force-stop io.github.frosty110.orbit.debug`).
 3. Place a real **completed** call to a tracked contact from the **system
    dialer** (must connect; missed/declined are intentionally ignored). Hang up.
 4. Foreground Orbit. **Expected:** logcat shows `enqueued_resume_sync` then a
