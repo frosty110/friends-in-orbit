@@ -67,7 +67,7 @@ Status is about *sequencing and confidence*, not priority ranking. A "Later" can
 
 | # | Surface | Intent in one line | Headline move | Status |
 |---|---------|--------------------|---------------|--------|
-| 00 | [Home](./00-home.md) | The front door — orient, then launch into the loop | Add "Surprise me" one-tap serendipity | Now |
+| 00 | [Home](./00-home.md) | The front door — always hand you someone to call | "Next up" on every card; retire the "due/caught up" framing | Now |
 | 01 | [Card View](./01-card-view.md) | Hand you one name with enough context to say yes | Put the last note/topic on the card face | Now |
 | 02 | [Contact Detail](./02-contact-detail.md) | The full picture of one person, and where you act + remember | Show "comes up again in ~X" | Now |
 | 03 | [Browse List](./03-browse-list.md) | See a whole list as a queue; find and bulk-manage | Make the numbered queue legible | Next |
