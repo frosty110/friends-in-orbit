@@ -14,14 +14,14 @@ fun Modifier.orbitCardShadow(shape: Shape = RoundedCornerShape(16.dp), isDark: B
     this.shadow(
         elevation = 6.dp,
         shape = shape,
-        ambientColor = if (isDark) Color.Black else Color(0xFF211E1C),
-        spotColor = if (isDark) Color.Black else Color(0xFF211E1C),
+        ambientColor = if (isDark) Color.Black else OrbitPrimitives.Ink,
+        spotColor = if (isDark) Color.Black else OrbitPrimitives.Ink,
     )
 
 fun Modifier.orbitHeroShadow(shape: Shape = RoundedCornerShape(24.dp), isDark: Boolean = false): Modifier =
     this.shadow(
         elevation = 18.dp,
         shape = shape,
-        ambientColor = if (isDark) Color.Black else Color(0xFF211E1C),
-        spotColor = if (isDark) Color.Black else Color(0xFF211E1C),
+        ambientColor = if (isDark) Color.Black else OrbitPrimitives.Ink,
+        spotColor = if (isDark) Color.Black else OrbitPrimitives.Ink,
     )

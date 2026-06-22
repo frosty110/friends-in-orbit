@@ -8,8 +8,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
-// Inter is the spec. Until TTF copies are bundled in res/font, we fall back to
-// SansSerif (Roboto). Swap by setting FontFamily(Font(R.font.inter_regular, ...), ...).
+// Inter is the spec, but the app currently renders in SansSerif (Roboto).
+// MANUAL STEP (see DESIGN.md "Known gaps"): the bundled fonts in design/fonts/
+// are .woff2, which Android's res/font does not accept. Convert them to .ttf
+// (woff2_decompress, or fontTools+brotli) into res/font/ as inter_regular.ttf /
+// inter_medium.ttf / inter_semibold.ttf / inter_bold.ttf, then swap this to:
+//   FontFamily(
+//     Font(R.font.inter_regular, FontWeight.Normal),
+//     Font(R.font.inter_medium, FontWeight.Medium),
+//     Font(R.font.inter_semibold, FontWeight.SemiBold),
+//     Font(R.font.inter_bold, FontWeight.Bold),
+//   )
+// This is the single highest-leverage visual upgrade in the design system.
 private val OrbitFont: FontFamily = FontFamily.SansSerif
 
 @Immutable
