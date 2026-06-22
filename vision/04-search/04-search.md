@@ -8,7 +8,7 @@
 
 ## Today
 
-<img src="./_assets/search.png" width="300" alt="Search — 'Search people' field with results showing name, call status, list chip / 'Not on any list', and an 'Add to list' action" />
+<img src="./actual-search.png" width="300" alt="Search — 'Search people' field with results showing name, call status, list chip / 'Not on any list', and an 'Add to list' action" />
 
 - A focused **Search people** field with the keyboard up and an empty prompt ("Search people by name.").
 - Results are clean rows: avatar, name, call status ("Never called"), a list-membership chip or **"Not on any list,"** a trailing **call** icon, and an **Add to list** action.

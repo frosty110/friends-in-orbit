@@ -8,9 +8,9 @@
 
 ## Today
 
-<img src="./_assets/list-config-cadence.png" width="300" alt="List Config top — Name field, Cadence templates (Keep in touch / Late night / Energize), and an interval slider 'Aim for every 2 days'" />
-<img src="./_assets/list-config-schedule.png" width="300" alt="List Config middle — Active hours with a day-bar, Notifications toggle, and Nudges with seven day circles and a 10am time" />
-<img src="./_assets/list-config-members.png" width="300" alt="List Config members preview — '27 people' with avatars and remove buttons" />
+<img src="./actual-list-config-cadence.png" width="300" alt="List Config top — Name field, Cadence templates (Keep in touch / Late night / Energize), and an interval slider 'Aim for every 2 days'" />
+<img src="./actual-list-config-schedule.png" width="300" alt="List Config middle — Active hours with a day-bar, Notifications toggle, and Nudges with seven day circles and a 10am time" />
+<img src="./actual-list-config-members.png" width="300" alt="List Config members preview — '27 people' with avatars and remove buttons" />
 
 - **Name** field.
 - **Cadence** templates (Keep in touch / Late night / Energize), each with a plain-language description.

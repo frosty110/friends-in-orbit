@@ -8,7 +8,7 @@
 
 ## Today
 
-<img src="./_assets/call-log.png" width="300" alt="Call history — All / Incoming / Outgoing filter chips, sticky day headers (Friday 19 June, Tuesday 16 June…), rows with avatar, name, 'from In touch · 11 min · Incoming', and a trailing direction icon + wall-clock time" />
+<img src="./actual-call-log.png" width="300" alt="Call history — All / Incoming / Outgoing filter chips, sticky day headers (Friday 19 June, Tuesday 16 June…), rows with avatar, name, 'from In touch · 11 min · Incoming', and a trailing direction icon + wall-clock time" />
 
 - App bar **Call history**; three direction filter chips (**All / Incoming / Outgoing**).
 - A `LazyColumn` with **sticky day headers** ("Today" / "Yesterday" / "Wednesday 3 June").

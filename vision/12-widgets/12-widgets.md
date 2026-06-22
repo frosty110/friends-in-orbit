@@ -8,7 +8,7 @@
 
 ## Today
 
-<img src="./_assets/widgets.png" width="300" alt="Android launcher home screen with two Orbit widgets — a 2×2 (top-left) and a 4×2 (centre), each surfacing one person ('Kai Nakamura') with an avatar initial and a terracotta call icon" />
+<img src="./actual-widgets.png" width="300" alt="Android launcher home screen with two Orbit widgets — a 2×2 (top-left) and a 4×2 (centre), each surfacing one person ('Kai Nakamura') with an avatar initial and a terracotta call icon" />
 
 - A **2×2** and a **4×2** widget exist, each surfacing a single person with name, avatar, and a **call** affordance.
 - They reflect the same one-person-at-a-time philosophy as Card View, on the home screen.

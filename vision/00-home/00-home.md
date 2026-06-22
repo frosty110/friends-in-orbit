@@ -8,8 +8,8 @@
 
 ## Today
 
-<img src="./_assets/home.png" width="300" alt="Home screen — Orbit title, search/lists/settings, 'Today / 23 people ready', a list card, and New list" />
-<img src="./_assets/home-postcall.png" width="300" alt="Home with a post-call banner: 'You just called Cameron — Add a note while it's fresh' with Add a note / Dismiss" />
+<img src="./actual-home.png" width="300" alt="Home screen — Orbit title, search/lists/settings, 'Today / 23 people ready', a list card, and New list" />
+<img src="./actual-home-postcall.png" width="300" alt="Home with a post-call banner: 'You just called Cameron — Add a note while it's fresh' with Add a note / Dismiss" />
 
 - App bar: wordmark **Orbit**, plus **Search**, **Lists**, **Settings** icons.
 - A quiet date eyebrow (**Today**) over a **count headline** (**23 people ready**) — *this is the framing we're moving away from; see `HOME-6`.*
@@ -24,6 +24,16 @@ What's missing, in priority order: Home doesn't show *who* a tap will give you (
 ---
 
 ## Where it's going
+
+### Design prototype
+
+The moves below cohere into one redesigned Home — full-width cards, "Next up" on every card, no "due / caught up" language, and a per-card 7-day rhythm strip. Prototyped in [`prototype/`](./prototype/index.html) (open it in a browser; toggle variants + light/dark):
+
+<img src="./design-twotone.png" width="300" alt="Home redesign prototype (light) — full-width list cards, each with a tinted name block, a 'Next up' person, and a 7-day rhythm strip; calm 'Today' header, no due-count" />
+<img src="./design-twotone-dark.png" width="300" alt="Home redesign prototype (dark) — same full-width cards and rhythm strips on a dark warm surface" />
+<img src="./design-chip.png" width="300" alt="Home redesign prototype variant — per-list color name blocks" />
+
+These are *design* (where it's going), not the shipped app — contrast with the `actual-*` shots under **Today** above.
 
 ### `HOME-3` · "Next up" on every list card · **Now**
 Tapping a card today is a blind jump — you don't know who you're about to get. Show the head of that list's queue on the card face: first name + avatar (**"Next: Kai"**). It turns the tap into a *known* choice — lower friction, higher follow-through — and previews the payoff. The data already exists: `SurfaceNextUseCase` computes exactly this head for Card View, and `CardFeed.upNextFor` already carries an `UpNextHint`; Home just surfaces it one level up. Keep it to one name — a peek, not a list. Names mask under the privacy curtain (PRIV-03), like list names already do. **This is the headline move**, and together with `HOME-6` it's what makes Home an always-on recommender.

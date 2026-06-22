@@ -8,7 +8,7 @@
 
 ## Today
 
-<img src="./_assets/browse.png" width="300" alt="Browse List — search, 'Called recently' / 'Not called yet' filter chips, and a numbered queue of people with colored avatars, due dots, and last-call times" />
+<img src="./actual-browse.png" width="300" alt="Browse List — search, 'Called recently' / 'Not called yet' filter chips, and a numbered queue of people with colored avatars, due dots, and last-call times" />
 
 - **Search** ("Search your people") with debounce.
 - Two filter chips: **Called recently** / **Not called yet** (union logic).

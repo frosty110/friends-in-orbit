@@ -8,8 +8,8 @@
 
 ## Today
 
-<img src="./_assets/contact-detail-top.png" width="300" alt="Contact Detail top — avatar, name, number, Call + Log a connection, On these lists, Stats" />
-<img src="./_assets/contact-detail-bottom.png" width="300" alt="Contact Detail bottom — Add to lists, Notes (empty), Recent calls with direction icons" />
+<img src="./actual-contact-detail-top.png" width="300" alt="Contact Detail top — avatar, name, number, Call + Log a connection, On these lists, Stats" />
+<img src="./actual-contact-detail-bottom.png" width="300" alt="Contact Detail bottom — Add to lists, Notes (empty), Recent calls with direction icons" />
 
 - Header: large avatar, **name**, **phone number**, and two actions — **Call** (primary) and **Log a connection** (secondary).
 - **On these lists** — the list-membership chips.
