@@ -3,6 +3,8 @@ package app.orbit.ui.screens.settings
 import androidx.compose.runtime.Immutable
 import app.orbit.calllog.CallLogPermissionState
 import app.orbit.data.PickerThresholds
+import app.orbit.ui.theme.OrbitDarkMode
+import app.orbit.ui.theme.OrbitThemeId
 
 /**
  * Settings screen state contract (ARCH-02). Carries the call-log fields
@@ -56,6 +58,11 @@ sealed interface SettingsUiState {
         // contacts"). Default-valued so existing test fixtures keep compiling
         // unchanged.
         val ignoredContactCount: Int = 0,
+        // THEMING 2026-06-22 — Appearance section. Default-valued for fixture
+        // stability; the live VM always supplies them from AppPrefs.
+        val colorTheme: OrbitThemeId = OrbitThemeId.DEFAULT,
+        val darkMode: OrbitDarkMode = OrbitDarkMode.DEFAULT,
+        val accentHue: Int? = null,
     ) : SettingsUiState {
         companion object {
             /**

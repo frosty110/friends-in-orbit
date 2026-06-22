@@ -360,6 +360,9 @@ fun SettingsScreen(
             onImport = importVm::onImportRequested,
             onResetConfirmed = vm::onResetConfirmed,
             onSourceCode = openSourceCode,
+            onSelectTheme = vm::onSelectTheme,
+            onSelectDarkMode = vm::onSelectDarkMode,
+            onAccentHue = vm::onAccentHue,
         )
         SnackbarHost(
             hostState = snackbarHostState,
@@ -421,6 +424,9 @@ private fun SettingsContent(
     onImport: () -> Unit,
     onResetConfirmed: () -> Unit,
     onSourceCode: () -> Unit,
+    onSelectTheme: (app.orbit.ui.theme.OrbitThemeId) -> Unit,
+    onSelectDarkMode: (app.orbit.ui.theme.OrbitDarkMode) -> Unit,
+    onAccentHue: (Int?) -> Unit,
 ) {
     val ready = state as? SettingsUiState.Ready
     val callLogPermission = ready?.callLogPermissionState ?: CallLogPermissionState.Denied
@@ -433,6 +439,9 @@ private fun SettingsContent(
     val lastContactsSyncAtMs = ready?.lastContactsSyncAtMs ?: 0L
     val pickerThresholds = ready?.pickerThresholds ?: PickerThresholds.DEFAULT
     val ignoredContactCount = ready?.ignoredContactCount ?: 0
+    val colorTheme = ready?.colorTheme ?: app.orbit.ui.theme.OrbitThemeId.DEFAULT
+    val darkMode = ready?.darkMode ?: app.orbit.ui.theme.OrbitDarkMode.DEFAULT
+    val accentHue = ready?.accentHue
 
     // PICK-07 — dialog visibility hoisted at the screen
     // level so dismissals route through onDismiss without unwinding parent state.
@@ -455,6 +464,17 @@ private fun SettingsContent(
                 .padding(horizontal = 16.dp, vertical = 4.dp)
                 .padding(bottom = 32.dp),
         ) {
+            SettingGroup(title = "Appearance") {
+                AppearanceSection(
+                    themeId = colorTheme,
+                    darkMode = darkMode,
+                    accentHue = accentHue,
+                    onSelectTheme = onSelectTheme,
+                    onSelectDarkMode = onSelectDarkMode,
+                    onAccentHue = onAccentHue,
+                )
+            }
+
             SettingGroup(title = "Permissions") {
                 PermissionsRow(
                     label = "Contacts",
@@ -778,6 +798,9 @@ private fun SettingsContentPreview() {
             onImport = {},
             onResetConfirmed = {},
             onSourceCode = {},
+            onSelectTheme = {},
+            onSelectDarkMode = {},
+            onAccentHue = {},
         )
     }
 }

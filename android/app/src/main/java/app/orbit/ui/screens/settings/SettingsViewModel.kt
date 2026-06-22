@@ -16,6 +16,8 @@ import app.orbit.data.AppPrefs
 import app.orbit.data.PickerThresholds
 import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ResetService
+import app.orbit.ui.theme.OrbitDarkMode
+import app.orbit.ui.theme.OrbitThemeId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -188,13 +190,38 @@ class SettingsViewModel @Inject constructor(
     private val ignoredContactCountFlow: Flow<Int> =
         contactRepo.observeIgnored().map { it.size }
 
+    /**
+     * THEMING 2026-06-22 — Appearance selection, mapped from the raw AppPrefs
+     * primitives. Bundled into one flow so the outer `uiState` combine stays
+     * within Kotlin's type-safe arity-5 ceiling.
+     */
+    private data class AppearanceState(
+        val themeId: OrbitThemeId,
+        val darkMode: OrbitDarkMode,
+        val accentHue: Int?,
+    )
+
+    private val appearance: Flow<AppearanceState> =
+        combine(
+            appPrefs.colorTheme,
+            appPrefs.darkMode,
+            appPrefs.accentHue,
+        ) { themeKey, darkKey, hue ->
+            AppearanceState(
+                themeId = OrbitThemeId.fromKey(themeKey),
+                darkMode = OrbitDarkMode.fromKey(darkKey),
+                accentHue = if (hue < 0) null else hue,
+            )
+        }
+
     val uiState: StateFlow<SettingsUiState> =
         combine(
             snapshot,
             syncStatus,
             appPrefs.pickerThresholds,
             ignoredContactCountFlow,
-        ) { snap, sync, thresholds, ignoredCount ->
+            appearance,
+        ) { snap, sync, thresholds, ignoredCount, appr ->
             SettingsUiState.Ready(
                 callLogPermissionState = snap.callLogPerm,
                 callLogImportDays = snap.importDays,
@@ -206,6 +233,9 @@ class SettingsViewModel @Inject constructor(
                 lastCallLogSyncAtMs = sync.lastCallLogSyncAtMs,
                 contactsSyncInFlight = sync.contactsInFlight,
                 lastContactsSyncAtMs = sync.lastContactsSyncAtMs,
+                colorTheme = appr.themeId,
+                darkMode = appr.darkMode,
+                accentHue = appr.accentHue,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -405,5 +435,21 @@ class SettingsViewModel @Inject constructor(
             resetService.resetAll()
             _resetCompleteEvents.emit(Unit)
         }
+    }
+
+    // ---- THEMING 2026-06-22 — Appearance write-throughs. Each persists to
+    // AppPrefs; AppViewModel's themeSettings collector retints the whole app. ----
+
+    fun onSelectTheme(id: OrbitThemeId) {
+        viewModelScope.launch { appPrefs.setColorTheme(id.key) }
+    }
+
+    fun onSelectDarkMode(mode: OrbitDarkMode) {
+        viewModelScope.launch { appPrefs.setDarkMode(mode.key) }
+    }
+
+    /** Accent-dial commit; null clears the override back to the theme's accent. */
+    fun onAccentHue(hue: Int?) {
+        viewModelScope.launch { appPrefs.setAccentHue(hue) }
     }
 }

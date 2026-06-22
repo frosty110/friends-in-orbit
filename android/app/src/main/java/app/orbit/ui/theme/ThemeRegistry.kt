@@ -238,6 +238,10 @@ object OrbitThemes {
     /** Hue that seeds the dial when a theme is first opened (its own accent). */
     fun defaultHueFor(id: OrbitThemeId): Int = def(id).light.accent.hueDegrees().toInt()
 
+    /** Public live-preview of the dial accent for a hue — used by the Settings
+     *  Appearance UI (which can't see the internal [accentForHue]). */
+    fun previewAccent(hue: Int, isDark: Boolean): Color = accentForHue(hue.toFloat(), isDark).accent
+
     private val heatEase = listOf(0.06f, 0.18f, 0.33f, 0.49f, 0.65f, 0.82f, 1.0f)
 
     /** Fold [OrbitDarkMode] + the system dark flag into a final boolean. */
