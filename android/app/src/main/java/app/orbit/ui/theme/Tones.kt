@@ -147,4 +147,7 @@ object OrbitRhythmTones {
     )
 
     fun barFor(name: String): Color = bars[OrbitAvatarTones.indexFor(name)]
+
+    /** Stable per-person bar colour keyed by contactId (the rhythm carries ids, not names). */
+    fun barForId(id: Long): Color = bars[((id % bars.size + bars.size) % bars.size).toInt()]
 }
