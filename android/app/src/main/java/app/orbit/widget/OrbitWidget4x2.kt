@@ -25,7 +25,11 @@ import androidx.glance.appwidget.provideContent
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.first
+import app.orbit.ui.theme.OrbitDarkMode
+import app.orbit.ui.theme.OrbitThemeId
 import app.orbit.ui.theme.OrbitWidgetTheme
+import app.orbit.ui.theme.ThemeSettings
+import app.orbit.ui.theme.orbitWidgetColorProviders
 
 class OrbitWidget4x2 : GlanceAppWidget() {
 
@@ -38,12 +42,19 @@ class OrbitWidget4x2 : GlanceAppWidget() {
         )
         // One-shot snapshot — never keep a live Flow open in provideGlance.
         val data = entry.widgetSurfaceUseCase().invoke()
-        // Read minimal mode before provideContent — one-shot, not observed inside
-        // the composable (WIDGET-04).
-        val minimalMode = entry.appPrefs().minimalModeEnabled.first()
+        // Read minimal mode + appearance before provideContent — one-shot, not
+        // observed inside the composable (WIDGET-04 / THEMING).
+        val prefs = entry.appPrefs()
+        val minimalMode = prefs.minimalModeEnabled.first()
+        val themeSettings = ThemeSettings(
+            themeId = OrbitThemeId.fromKey(prefs.colorTheme.first()),
+            darkMode = OrbitDarkMode.fromKey(prefs.darkMode.first()),
+            accentHue = prefs.accentHue.first().let { if (it < 0) null else it },
+        )
+        val widgetColors = orbitWidgetColorProviders(themeSettings)
 
         provideContent {
-            OrbitWidgetTheme {
+            OrbitWidgetTheme(colors = widgetColors) {
                 WidgetBody4x2(
                     data = data,
                     minimalMode = minimalMode,

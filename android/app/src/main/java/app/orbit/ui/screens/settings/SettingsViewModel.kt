@@ -18,6 +18,7 @@ import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ResetService
 import app.orbit.ui.theme.OrbitDarkMode
 import app.orbit.ui.theme.OrbitThemeId
+import app.orbit.widget.WidgetUpdateScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -441,15 +442,24 @@ class SettingsViewModel @Inject constructor(
     // AppPrefs; AppViewModel's themeSettings collector retints the whole app. ----
 
     fun onSelectTheme(id: OrbitThemeId) {
-        viewModelScope.launch { appPrefs.setColorTheme(id.key) }
+        viewModelScope.launch {
+            appPrefs.setColorTheme(id.key)
+            WidgetUpdateScheduler.scheduleImmediate(context)
+        }
     }
 
     fun onSelectDarkMode(mode: OrbitDarkMode) {
-        viewModelScope.launch { appPrefs.setDarkMode(mode.key) }
+        viewModelScope.launch {
+            appPrefs.setDarkMode(mode.key)
+            WidgetUpdateScheduler.scheduleImmediate(context)
+        }
     }
 
     /** Accent-dial commit; null clears the override back to the theme's accent. */
     fun onAccentHue(hue: Int?) {
-        viewModelScope.launch { appPrefs.setAccentHue(hue) }
+        viewModelScope.launch {
+            appPrefs.setAccentHue(hue)
+            WidgetUpdateScheduler.scheduleImmediate(context)
+        }
     }
 }

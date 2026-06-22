@@ -15,12 +15,21 @@ package app.orbit.ui.theme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceTheme
+import androidx.glance.color.ColorProviders
 import androidx.glance.text.FontWeight
 import androidx.glance.text.TextStyle
 
+/**
+ * Widget theme root. [colors] defaults to the static Warm providers; the
+ * widgets pass [orbitWidgetColorProviders] built from the user's chosen theme
+ * so a placed widget matches the in-app appearance (THEMING 2026-06-22).
+ */
 @Composable
-fun OrbitWidgetTheme(content: @Composable () -> Unit) {
-    GlanceTheme(colors = OrbitWidgetColorProviders, content = content)
+fun OrbitWidgetTheme(
+    colors: ColorProviders = OrbitWidgetColorProviders,
+    content: @Composable () -> Unit,
+) {
+    GlanceTheme(colors = colors, content = content)
 }
 
 // Top-level text style vals. Note: this TextStyle is `androidx.glance.text.TextStyle`,

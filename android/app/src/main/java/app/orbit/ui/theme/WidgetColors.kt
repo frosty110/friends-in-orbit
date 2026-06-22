@@ -76,3 +76,25 @@ val OrbitWidgetColorProviders: ColorProviders by lazy {
         WidgetDarkScheme,
     )
 }
+
+/**
+ * THEMING 2026-06-22 — build widget ColorProviders for the user's chosen theme,
+ * accent dial, and light/dark mode, so a placed widget matches the in-app
+ * appearance. Honors the mode override: SYSTEM keeps light=light / dark=dark
+ * (Glance picks per system); LIGHT / DARK force both schemes to the chosen mode.
+ *
+ * Runtime-only (called from provideGlance) — D-11: the two-arg M3 factory
+ * touches android.graphics.Color, which is not mocked on the JVM, so the test
+ * path uses the static [OrbitWidgetColorProviders] above instead.
+ */
+fun orbitWidgetColorProviders(settings: ThemeSettings): ColorProviders {
+    val lightColors = OrbitThemes.resolve(
+        settings,
+        isDark = settings.darkMode == OrbitDarkMode.DARK,
+    ).colors
+    val darkColors = OrbitThemes.resolve(
+        settings,
+        isDark = settings.darkMode != OrbitDarkMode.LIGHT,
+    ).colors
+    return ColorProvidersFromM3(lightColors.toM3Scheme(), darkColors.toM3Scheme())
+}
