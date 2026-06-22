@@ -4,6 +4,7 @@ import android.provider.CallLog
 import app.orbit.data.android.CallRow
 import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.CallEventEntity
+import app.orbit.data.entity.CallSource
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.ContactPhoneEntity
 import java.time.Instant
@@ -19,7 +20,7 @@ import kotlin.test.assertTrue
  *  - first-run imports the full window (CALL-02)
  *  - type mapping: OUTGOING → OUTGOING; INCOMING / ANSWERED_EXTERNALLY → INCOMING
  *  - skip set: MISSED / REJECTED / VOICEMAIL / BLOCKED never insert
- *  - duration < 1s never inserts
+ *  - outgoing duration < 1s ingests as an ATTEMPT; incoming < 1s is skipped
  *  - unmatched phone (no contact) never inserts (FK guard)
  *  - dedup on repeat sync (existsAt-based)
  *  - IGNORE-09: ignored contacts record CallEvent BUT skip MarkCalledUseCase
@@ -169,23 +170,31 @@ class CallLogReconcilerTest {
     }
 
     // ------------------------------------------------------------------
-    // duration<1s skip
+    // duration<1s — outgoing is an ATTEMPT, incoming is skipped
     // ------------------------------------------------------------------
 
     @Test
-    fun duration_under_1s_is_skipped() = runTest {
+    fun outgoing_no_answer_is_an_attempt_incoming_zero_duration_is_skipped() = runTest {
         val c = contact(1, "+14155551234")
         val (reconciler, dao, _) = buildReconciler(listOf(c))
         val rows = listOf(
-            row("+14155551234", 1_000L, durationSec = 0),
-            row("+14155551234", 2_000L, durationSec = 1), // boundary — included
+            // Outgoing no-answer (0s): the user reached out → ingests as ATTEMPT.
+            row("+14155551234", 1_000L, durationSec = 0, type = CallLog.Calls.OUTGOING_TYPE),
+            // Outgoing connected (1s boundary): a real call → CALL_LOG.
+            row("+14155551234", 2_000L, durationSec = 1, type = CallLog.Calls.OUTGOING_TYPE),
+            // Incoming 0s (missed-style): the user did NOT reach out → skipped.
+            row("+14155551234", 3_000L, durationSec = 0, type = CallLog.Calls.INCOMING_TYPE),
         )
 
         val summary = reconciler.reconcile(0L, rows)
 
-        assertEquals(1, summary.inserted)
-        assertEquals(1, summary.skipped)
-        assertEquals(1, dao.insertedCount())
+        assertEquals(2, summary.inserted)
+        assertEquals(1, summary.skipped, "incoming 0-duration is not a reach-out")
+        assertEquals(2, dao.insertedCount())
+
+        val byOccurredAt = dao.allEvents().associateBy { it.occurredAt }
+        assertEquals(CallSource.ATTEMPT, byOccurredAt[Instant.ofEpochMilli(1_000L)]!!.source)
+        assertEquals(CallSource.CALL_LOG, byOccurredAt[Instant.ofEpochMilli(2_000L)]!!.source)
     }
 
     // ------------------------------------------------------------------
