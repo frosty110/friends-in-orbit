@@ -119,7 +119,12 @@ def build_contact_insert_script() -> str:
         "set -e",
         # Sync-adapter URI so delete is a hard delete, not a tombstone.
         "U='content://com.android.contacts/raw_contacts?caller_is_syncadapter=true'",
-        f"content delete --uri \"$U\" --where \"account_type='{ACCOUNT_TYPE}'\"",
+        # Pristine wipe: remove EVERY device contact, not just prior orbit-seed
+        # rows. Emulators accumulate messy imported / Google / NULL-account
+        # contacts (real-looking names + real phone numbers) that leak into
+        # screenshots and demos. Seeding is the single source of truth for
+        # device contact data, so we start from an empty address book every run.
+        "content delete --uri \"$U\" --where \"1=1\"",
         "content delete --uri content://call_log/calls --where \"1=1\"",
     ]
     for p in PERSONAS:
