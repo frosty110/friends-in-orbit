@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orbit · Product Vision</title>
+  <meta name="description" content="Orbit product vision — per-screen intent, what it is today, and where it's going." />
+  <!-- Docsify theme (client-side render; no build step). Works locally over http and on GitHub Pages. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css" />
+  <style>
+    :root {
+      --theme-color: #C8654A;            /* terracotta accent */
+      --base-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    }
+    body { background: #FAF6F0; }                         /* cream */
+    .sidebar { background: #F2ECE2; border-right: 1px solid #E5DDD1; }
+    .sidebar .app-name-link { color: #C8654A !important; font-weight: 600; }
+    .sidebar ul li a { color: #3A3531; }
+    .sidebar ul li.active > a { color: #C8654A; font-weight: 600; }
+    .markdown-section { max-width: 880px; }
+    .markdown-section h1, .markdown-section h2 { color: #211E1C; }
+    .markdown-section blockquote { border-left: 4px solid #C8654A; background: #F2ECE2; color: #3A3531; }
+    .markdown-section img {
+      border-radius: 16px;
+      box-shadow: 0 6px 24px rgba(33, 30, 28, 0.12);
+      margin: 8px 10px 8px 0;
+      vertical-align: top;
+    }
+    .markdown-section table { display: table; width: 100%; }
+    .markdown-section code { color: #9B4A32; background: #F2ECE2; }
+  </style>
+</head>
+<body>
+  <div id="app">Loading the Orbit vision…</div>
+  <script>
+    window.$docsify = {
+      name: 'Orbit · Vision',
+      loadSidebar: true,
+      subMaxLevel: 3,
+      auto2top: true,
+      homepage: 'README.md',
+      themeColor: '#C8654A',
+      relativePath: true,
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4"></script>
+</body>
+</html>
