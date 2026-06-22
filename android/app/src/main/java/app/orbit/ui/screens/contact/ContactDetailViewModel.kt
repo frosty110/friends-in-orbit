@@ -257,6 +257,9 @@ class ContactDetailViewModel @Inject constructor(
             // widening the CallEntry shape (same rationale as
             // recentCallEventIds above).
             val recentCallIsManual = tuple.events.map { it.source == CallSource.MANUAL }
+            // Attempt surface — parallel-indexed with recentCalls; reach-outs
+            // that didn't connect render "Attempted" + a phone-slash icon.
+            val recentCallIsAttempt = tuple.events.map { it.source == CallSource.ATTEMPT }
             val longestGapLabel = computeLongestGap(tuple.events)
             val noteRows = tuple.noteEntities.map { it.toNoteRow(now) }
 
@@ -303,6 +306,7 @@ class ContactDetailViewModel @Inject constructor(
                     recentCalls = recentCalls,
                     longestGapLabel = longestGapLabel,
                     recentCallIsManual = recentCallIsManual,
+                    recentCallIsAttempt = recentCallIsAttempt,
                 )
             } else {
                 ContactDetailUiState.Ready(
@@ -328,6 +332,7 @@ class ContactDetailViewModel @Inject constructor(
                     retroNoteAffordanceFor = scrollToCallEventId,
                     recentCallEventIds = recentCallEventIds,
                     recentCallIsManual = recentCallIsManual,
+                    recentCallIsAttempt = recentCallIsAttempt,
                 )
             }
         }.stateIn(

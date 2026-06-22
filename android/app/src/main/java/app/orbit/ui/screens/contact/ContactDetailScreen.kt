@@ -341,6 +341,7 @@ private fun ContactDetailContent(
                     retroNoteAffordanceFor = state.retroNoteAffordanceFor,
                     callEventIds = state.recentCallEventIds,
                     recentCallIsManual = state.recentCallIsManual,
+                    recentCallIsAttempt = state.recentCallIsAttempt,
                     // FINDING A — Call is the screen's single terracotta
                     // element in the Ready state (rules.md design rule 5).
                     callButtonVariant = OrbitButtonVariant.Primary,
@@ -385,6 +386,7 @@ private fun ContactDetailContent(
                         retroNoteAffordanceFor = null,
                         callEventIds = emptyList(),
                         recentCallIsManual = state.recentCallIsManual,
+                        recentCallIsAttempt = state.recentCallIsAttempt,
                         // Orphan: the banner's Re-link button owns the
                         // screen's terracotta — Call demotes to Secondary.
                         // The number survives orphaning, so calling still works.
@@ -514,6 +516,10 @@ private fun ContactBodyLazyColumn(
     // user-logged connection (CallSource.MANUAL); renders "Logged" + a
     // check-circle icon instead of duration + direction.
     recentCallIsManual: List<Boolean>,
+    // Parallel-indexed with [recentCalls] — true when the row is a reach-out
+    // that didn't connect (CallSource.ATTEMPT); renders "Attempted" + a
+    // phone-slash icon.
+    recentCallIsAttempt: List<Boolean>,
     // FINDING A — Call button variant. Primary (terracotta) in the Ready
     // state; Secondary in the Orphaned state, where the banner's Re-link
     // button owns the screen's one terracotta element (rules.md design 5).
@@ -815,6 +821,7 @@ private fun ContactBodyLazyColumn(
                 CallHistoryRow(
                     call = recentCalls[idx],
                     isManual = recentCallIsManual.getOrNull(idx) ?: false,
+                    isAttempt = recentCallIsAttempt.getOrNull(idx) ?: false,
                 )
                 // LOG-03 — inline "Add note to this call" affordance. Renders
                 // below the highlighted call row (the one the CallLog deep link
@@ -977,9 +984,13 @@ internal fun OrphanBanner(
  * [isManual] rows are user-logged connections (CallSource.MANUAL,
  * durationSeconds = 0): a check-circle icon + "Logged" replaces the
  * direction icon + duration label, which would otherwise read "—".
+ *
+ * [isAttempt] rows are reach-outs that didn't connect (CallSource.ATTEMPT,
+ * durationSeconds = 0): a phone-slash icon + "Attempted" — distinct from a
+ * logged connection, because you reached out but didn't actually talk.
  */
 @Composable
-private fun CallHistoryRow(call: CallEntry, isManual: Boolean = false) {
+private fun CallHistoryRow(call: CallEntry, isManual: Boolean = false, isAttempt: Boolean = false) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -987,6 +998,7 @@ private fun CallHistoryRow(call: CallEntry, isManual: Boolean = false) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val iconName: String = when {
+            isAttempt -> "phone-slash"
             isManual -> "check-circle"
             call.direction == CallDirection.Outgoing -> "phone-outgoing"
             else -> "phone-incoming"
@@ -995,7 +1007,11 @@ private fun CallHistoryRow(call: CallEntry, isManual: Boolean = false) {
         Spacer(Modifier.width(OrbitTheme.spacing.x3))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = if (isManual) "Logged" else call.lengthLabel,
+                text = when {
+                    isAttempt -> "Attempted"
+                    isManual -> "Logged"
+                    else -> call.lengthLabel
+                },
                 style = OrbitTheme.type.body,
                 color = OrbitTheme.colors.fg,
             )
