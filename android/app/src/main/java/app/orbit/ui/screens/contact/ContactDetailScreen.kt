@@ -240,7 +240,7 @@ private fun ContactDetailContent(
     onSaveOverride: (RuleParams) -> Unit,
     onClearOverride: () -> Unit,
     onAddRetroactiveNote: (Long, String) -> Unit,
-    onLogConnection: (LogConnectionWhen, String) -> Unit,
+    onLogConnection: (LogConnectionWhen, String, Boolean) -> Unit,
     notesInputFocusRequester: FocusRequester? = null,
 ) {
     // CONTACT-04, IGNORE-02 — overflow + pause sheet
@@ -1151,7 +1151,7 @@ private fun ContactDetailContentPreview() {
             onSaveOverride = {},
             onClearOverride = {},
             onAddRetroactiveNote = { _, _ -> },
-            onLogConnection = { _, _ -> },
+            onLogConnection = { _, _, _ -> },
         )
     }
 }

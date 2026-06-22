@@ -1,6 +1,7 @@
 package app.orbit.ui.screens.contact.sections
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,17 +48,23 @@ import java.util.Locale
 import kotlinx.coroutines.launch
 
 /**
- * "Log a connection" — records a connection Orbit's call-log sync can't see
- * (another app, in person) so the contact stops surfacing as due.
+ * Log a connection — OR an attempt — Orbit's call-log sync can't see.
  *
- * ModalBottomSheet launched from the Contact Detail hero action row. Three
- * radio-style "when" options (Today / Yesterday / Pick a date via the Material
- * date picker) + an optional one-line note + a single Primary confirm.
+ * A leading two-segment toggle picks what happened:
+ *   - "We connected" → a connection (another app, in person) written as
+ *     `CallEventEntity(source = MANUAL)`; resets the full template cadence.
+ *   - "Couldn't reach them" → an attempt (voicemail / no answer) written as
+ *     `CallEventEntity(source = ATTEMPT)`; advances the rotation by a short
+ *     flat cooldown without claiming you actually talked.
+ *
+ * ModalBottomSheet launched from the Contact Detail hero action row. Below the
+ * toggle: three radio-style "when" options (Today / Yesterday / Pick a date via
+ * the Material date picker) + an optional one-line note + a single Primary
+ * confirm.
  *
  * On confirm the parent routes to `ContactDetailViewModel.onLogConnection`,
- * which writes a `CallEventEntity(source = MANUAL, durationSeconds = 0)`
- * through MarkCalledUseCase — same atomic nextDueAt-recompute path as the
- * call-log reconciler.
+ * which writes the event (durationSeconds = 0) through MarkCalledUseCase — the
+ * same atomic nextDueAt-recompute path as the call-log reconciler.
  *
  * Pitfall 1 dismissal pattern (PauseSheet convention): hide animates first,
  * then the parent visibility flag flips via [onDismiss].
@@ -70,7 +77,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogConnectionSheet(
-    onConfirm: (whenChoice: LogConnectionWhen, note: String) -> Unit,
+    onConfirm: (whenChoice: LogConnectionWhen, note: String, isAttempt: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -82,6 +89,8 @@ fun LogConnectionSheet(
     var pickedDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     var note by rememberSaveable { mutableStateOf("") }
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    // false = connection (we talked), true = attempt (couldn't reach them).
+    var isAttempt by rememberSaveable { mutableStateOf(false) }
 
     fun commitAndDismiss() {
         val choice = when (selected) {
@@ -89,7 +98,7 @@ fun LogConnectionSheet(
             1 -> LogConnectionWhen.Yesterday
             else -> LogConnectionWhen.OnDate(pickedDateMillis ?: return)
         }
-        onConfirm(choice, note.trim())
+        onConfirm(choice, note.trim(), isAttempt)
         scope.launch { sheetState.hide() }.invokeOnCompletion {
             if (!sheetState.isVisible) onDismiss()
         }
@@ -103,9 +112,11 @@ fun LogConnectionSheet(
     ) {
         LogConnectionSheetContent(
             selected = selected,
+            isAttempt = isAttempt,
             pickedDateLabel = pickedDateMillis?.let(::formatPickedDate),
             note = note,
             confirmEnabled = selected != 2 || pickedDateMillis != null,
+            onModeChange = { isAttempt = it },
             onSelect = { idx ->
                 selected = idx
                 if (idx == 2) showDatePicker = true
@@ -165,9 +176,11 @@ fun LogConnectionSheet(
 @Composable
 private fun LogConnectionSheetContent(
     selected: Int,
+    isAttempt: Boolean,
     pickedDateLabel: String?,
     note: String,
     confirmEnabled: Boolean,
+    onModeChange: (Boolean) -> Unit,
     onSelect: (Int) -> Unit,
     onNoteChange: (String) -> Unit,
     onConfirm: () -> Unit,
@@ -181,18 +194,24 @@ private fun LogConnectionSheetContent(
             ),
     ) {
         Text(
-            text = "Log a connection",
+            text = if (isAttempt) "Log an attempt" else "Log a connection",
             style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
-            text = "For the calls Orbit can't see — another app, or in person.",
+            text = if (isAttempt) {
+                "A voicemail or no answer — you reached out but didn't connect."
+            } else {
+                "For the calls Orbit can't see — another app, or in person."
+            },
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
+        Spacer(Modifier.height(OrbitTheme.spacing.x4))
+        ModeToggle(isAttempt = isAttempt, onModeChange = onModeChange)
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
         WhenOptionRow(
             label = "Today",
@@ -242,13 +261,73 @@ private fun LogConnectionSheetContent(
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
         OrbitButton(
-            text = "Log connection",
+            text = if (isAttempt) "Log attempt" else "Log connection",
             onClick = onConfirm,
             enabled = confirmEnabled,
             variant = OrbitButtonVariant.Primary,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
+    }
+}
+
+/**
+ * Two-segment "what happened" toggle — connection vs attempt. The selected
+ * segment lifts onto the surface colour against the subtle track; the
+ * unselected one stays quiet. Tab semantics so a screen reader announces the
+ * pair as a single selection.
+ */
+@Composable
+private fun ModeToggle(
+    isAttempt: Boolean,
+    onModeChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(OrbitTheme.shapes.md)
+            .background(OrbitTheme.colors.bgSubtle)
+            .padding(OrbitTheme.spacing.x1),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1),
+    ) {
+        ModeSegment(
+            label = "We connected",
+            selected = !isAttempt,
+            onClick = { onModeChange(false) },
+            modifier = Modifier.weight(1f),
+        )
+        ModeSegment(
+            label = "Couldn't reach them",
+            selected = isAttempt,
+            onClick = { onModeChange(true) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun ModeSegment(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
+            .clip(OrbitTheme.shapes.sm)
+            .background(if (selected) OrbitTheme.colors.surface else Color.Transparent)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x2),
+    ) {
+        Text(
+            text = label,
+            style = OrbitTheme.type.body.copy(
+                color = if (selected) OrbitTheme.colors.fg else OrbitTheme.colors.fgMuted,
+            ),
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -294,9 +373,11 @@ private fun LogConnectionSheetLightPreview() {
         Box(modifier = Modifier.background(OrbitTheme.colors.surface)) {
             LogConnectionSheetContent(
                 selected = 0,
+                isAttempt = false,
                 pickedDateLabel = null,
                 note = "",
                 confirmEnabled = true,
+                onModeChange = {},
                 onSelect = {},
                 onNoteChange = {},
                 onConfirm = {},
@@ -305,16 +386,18 @@ private fun LogConnectionSheetLightPreview() {
     }
 }
 
-@Preview(name = "LogConnectionSheet — dark", showBackground = true)
+@Preview(name = "LogConnectionSheet — attempt, dark", showBackground = true)
 @Composable
 private fun LogConnectionSheetDarkPreview() {
     OrbitTheme(darkTheme = true) {
         Box(modifier = Modifier.background(OrbitTheme.colors.surface)) {
             LogConnectionSheetContent(
                 selected = 2,
+                isAttempt = true,
                 pickedDateLabel = "5 Jun 2026",
-                note = "Coffee after the meeting",
+                note = "Left a voicemail",
                 confirmEnabled = true,
+                onModeChange = {},
                 onSelect = {},
                 onNoteChange = {},
                 onConfirm = {},
