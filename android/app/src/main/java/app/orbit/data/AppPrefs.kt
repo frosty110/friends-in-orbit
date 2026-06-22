@@ -181,6 +181,20 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
         longGapDays,
     ) { top, bottom, recent, gap -> PickerThresholds(top, bottom, recent, gap) }
 
+    // Appearance (THEMING 2026-06-22). Stored as raw primitives so the data
+    // layer carries no dependency on the UI theme package; the UI layer maps
+    // these into ThemeSettings via OrbitThemeId/OrbitDarkMode.fromKey(). Defaults
+    // mirror those enums' DEFAULT (warm + system). accentHue is -1 for "use the
+    // theme's own accent"; 0..359 is a dial override.
+    val colorTheme: Flow<String> =
+        context.dataStore.data.map { it[KEY_COLOR_THEME] ?: "warm" }
+
+    val darkMode: Flow<String> =
+        context.dataStore.data.map { it[KEY_DARK_MODE] ?: "system" }
+
+    val accentHue: Flow<Int> =
+        context.dataStore.data.map { it[KEY_ACCENT_HUE] ?: -1 }
+
     suspend fun setOnboardingComplete(value: Boolean) {
         context.dataStore.edit { it[KEY_ONBOARDED] = value }
     }
@@ -260,6 +274,23 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
         context.dataStore.edit { it[KEY_LONG_GAP_DAYS] = value.coerceIn(1, 3650) }
     }
 
+    /** THEMING — persist the chosen theme id key (OrbitThemeId.key). */
+    suspend fun setColorTheme(key: String) {
+        context.dataStore.edit { it[KEY_COLOR_THEME] = key }
+    }
+
+    /** THEMING — persist the dark-mode choice (OrbitDarkMode.key). */
+    suspend fun setDarkMode(key: String) {
+        context.dataStore.edit { it[KEY_DARK_MODE] = key }
+    }
+
+    /** THEMING — persist the accent-dial hue; null clears the override (-1). */
+    suspend fun setAccentHue(hue: Int?) {
+        context.dataStore.edit {
+            it[KEY_ACCENT_HUE] = hue?.let { h -> ((h % 360) + 360) % 360 } ?: -1
+        }
+    }
+
     /**
      * SET-06 — destructive wipe of every key in the DataStore. Used by
      * [app.orbit.data.repository.ResetService] in the user-confirmed Reset path.
@@ -286,6 +317,10 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
         private val KEY_RARELY_CALLED_BOTTOM_PCT = intPreferencesKey("rarely_called_bottom_pct")
         private val KEY_RECENTLY_ADDED_DAYS = intPreferencesKey("recently_added_days")
         private val KEY_LONG_GAP_DAYS = intPreferencesKey("long_gap_days")
+        // THEMING 2026-06-22 — user-selectable appearance.
+        private val KEY_COLOR_THEME = stringPreferencesKey("color_theme")
+        private val KEY_DARK_MODE = stringPreferencesKey("dark_mode")
+        private val KEY_ACCENT_HUE = intPreferencesKey("accent_hue")
         // F-2 fix (2026-04-30 hot-fix-260430-hs4) — per-permission "asked
         // at least once" flags. See [hasAskedContacts] / [setHasAsked].
         private val KEY_HAS_ASKED_CONTACTS = booleanPreferencesKey("has_asked_contacts")

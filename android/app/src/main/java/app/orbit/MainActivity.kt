@@ -24,6 +24,7 @@ import app.orbit.data.repository.ListRepository
 import app.orbit.nav.OrbitNavHost
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.theme.ThemeSettings
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.launch
@@ -115,7 +116,11 @@ class MainActivity : ComponentActivity() {
         // boot ViewModel resolves a start destination. No runBlocking, no
         // flash of the wrong route.
         val splash = installSplashScreen()
-        splash.setKeepOnScreenCondition { appViewModel.startDestination.value == null }
+        // Hold the splash until BOTH the start route and the theme are resolved,
+        // so the first painted frame is already in the user's chosen theme.
+        splash.setKeepOnScreenCondition {
+            appViewModel.startDestination.value == null || appViewModel.themeSettings.value == null
+        }
 
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -169,10 +174,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val start by appViewModel.startDestination.collectAsStateWithLifecycle()
+            val themeSettings by appViewModel.themeSettings.collectAsStateWithLifecycle()
             val curtain by appViewModel.privacyCurtainActive.collectAsStateWithLifecycle()
 
             CompositionLocalProvider(LocalPrivacyCurtain provides curtain) {
-                OrbitTheme {
+                OrbitTheme(settings = themeSettings ?: ThemeSettings.DEFAULT) {
                     val resolvedStart = start ?: return@OrbitTheme   // splash still up
                     val nav = rememberNavController()
                     OrbitNavHost(

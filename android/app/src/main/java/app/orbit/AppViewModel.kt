@@ -8,6 +8,9 @@ import app.orbit.data.repository.ContactRepository
 import app.orbit.domain.clock.Clock
 import app.orbit.nav.Routes
 import app.orbit.ui.screens.onboarding.OnboardingStep
+import app.orbit.ui.theme.OrbitDarkMode
+import app.orbit.ui.theme.OrbitThemeId
+import app.orbit.ui.theme.ThemeSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Duration
 import javax.inject.Inject
@@ -15,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -46,6 +50,16 @@ class AppViewModel @Inject constructor(
 
     private val _startDestination = MutableStateFlow<String?>(null)
     val startDestination: StateFlow<String?> = _startDestination.asStateFlow()
+
+    /**
+     * THEMING 2026-06-22 — the user's chosen appearance, mapped from the raw
+     * AppPrefs primitives into a [ThemeSettings]. Null until the first DataStore
+     * emission; MainActivity holds the splash until it loads so the first frame
+     * is already in the chosen theme (no flash). Continuously re-emits on every
+     * change, so picking a theme/accent in Settings retints the whole app live.
+     */
+    private val _themeSettings = MutableStateFlow<ThemeSettings?>(null)
+    val themeSettings: StateFlow<ThemeSettings?> = _themeSettings.asStateFlow()
 
     private val _isForeground = MutableStateFlow(true)
 
@@ -92,6 +106,21 @@ class AppViewModel @Inject constructor(
                 done -> Routes.Home
                 else -> resolveOnboardingResume()
             }
+        }
+        // THEMING — map the three raw appearance prefs into ThemeSettings and
+        // keep _themeSettings current. Long-lived collector (live theme switch).
+        viewModelScope.launch {
+            combine(
+                appPrefs.colorTheme,
+                appPrefs.darkMode,
+                appPrefs.accentHue,
+            ) { themeKey, darkKey, hue ->
+                ThemeSettings(
+                    themeId = OrbitThemeId.fromKey(themeKey),
+                    darkMode = OrbitDarkMode.fromKey(darkKey),
+                    accentHue = if (hue < 0) null else hue,
+                )
+            }.collect { _themeSettings.value = it }
         }
         // Phone-contact ingestion no longer fires on every cold launch. The
         // Main-thread cost (content-provider scan + DB transaction) is deferred
