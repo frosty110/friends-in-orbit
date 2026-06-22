@@ -7,8 +7,13 @@ import app.orbit.data.AppPrefs
 import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.entity.ListType
 import app.orbit.data.feed.HomeFeed
+import app.orbit.domain.FakeCallEventRepository
+import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
+import app.orbit.domain.FakeRuleTemplateRepository
+import app.orbit.domain.JsonProvider
 import app.orbit.domain.clock.TestClock
+import app.orbit.domain.usecase.SurfaceNextUseCase
 import app.orbit.testutil.MainDispatcherRule
 import java.time.Instant
 import kotlin.test.assertEquals
@@ -75,6 +80,18 @@ class HomeViewModelTest {
         listRepo = FakeListRepository(),
         clock = TestClock(),
         appPrefs = AppPrefs(ApplicationProvider.getApplicationContext()),
+        // Enrichment (Next up + rhythm) is never exercised in these tiles-only
+        // tests — the FakeListRepository is empty, so the enrichment flow
+        // short-circuits to emptyMap and these throwaway deps are never invoked.
+        surfaceNext = SurfaceNextUseCase(
+            contactRepo = FakeContactRepository(),
+            listRepo = FakeListRepository(),
+            callEventRepo = FakeCallEventRepository(),
+            ruleTemplateRepo = FakeRuleTemplateRepository(),
+            clock = TestClock(),
+            json = JsonProvider.json,
+        ),
+        callEventRepo = FakeCallEventRepository(),
         scope = CoroutineScope(UnconfinedTestDispatcher()),
     ) {
         private val _tiles = MutableStateFlow(initialTiles)

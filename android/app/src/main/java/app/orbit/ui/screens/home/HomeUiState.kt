@@ -65,6 +65,14 @@ data class ListTileState(
     val name: String,
     val dueCount: Int,
     val type: ListType,
+    // HOME-3 — the head of this list's queue: who tapping the card would surface.
+    // Null until the per-list enrichment (HomeFeed.enrichment) hydrates, or when
+    // the list has nobody surfaceable.
+    val nextUp: NextUp? = null,
+    // HOME-7 — the last 7 days of qualifying calls for this list's members,
+    // index 0 = six days ago, index 6 = today. Bars/colors are derived in the UI
+    // (relative scaling + per-person color); this is the raw per-day data.
+    val rhythm: List<RhythmDay> = emptyList(),
     // Drives the home tile long-press menu's "Mute prompts" vs "Unmute prompts"
     // entry. Sourced straight from `ListEntity.notificationsEnabled` in
     // `HomeFeed.toTileState`. Defaults true so preview fixtures and any future
@@ -78,3 +86,25 @@ data class ListTileState(
     // rather than showing a wrong "no one yet".
     val memberCount: Int? = null,
 )
+
+/**
+ * HOME-3 — the always-on recommendation on a list card: the head of the list's
+ * queue, with a warm, neutral [why] line (recency context, never shame framing).
+ * [photoUri] is the contact's photo when present; the renderer falls back to
+ * initials.
+ */
+@Immutable
+data class NextUp(
+    val contactId: Long,
+    val name: String,
+    val photoUri: String?,
+    val why: String,
+)
+
+/** One qualifying call in the 7-day rhythm (HOME-7). Sub-3-min calls are filtered upstream. */
+@Immutable
+data class RhythmCall(val contactId: Long, val durationSeconds: Int)
+
+/** One day of the 7-day rhythm strip — the qualifying calls placed that day. */
+@Immutable
+data class RhythmDay(val calls: List<RhythmCall>)

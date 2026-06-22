@@ -3,9 +3,12 @@ package app.orbit.ui.screens.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.orbit.data.feed.HomeFeed
+import app.orbit.data.feed.ListEnrichment
 import app.orbit.data.repository.ListRepository
 import app.orbit.domain.clock.Clock
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -143,8 +146,16 @@ class HomeViewModel @Inject constructor(
             visibleTiles,
             listRepo.observeMemberCountsByListId(),
             dueContactCount,
-        ) { tiles, memberCounts, dueContacts ->
-            val visible = tiles.map { it.copy(memberCount = memberCounts[it.id] ?: 0) }
+            homeFeed.enrichment,
+        ) { tiles, memberCounts, dueContacts, enrichment ->
+            val now = clock.now()
+            val visible = tiles.map { tile ->
+                withEnrichment(
+                    tile.copy(memberCount = memberCounts[tile.id] ?: 0),
+                    enrichment[tile.id],
+                    now,
+                )
+            }
             if (visible.isEmpty()) HomeUiState.Empty else readyState(visible, dueContacts)
         }
             .stateIn(
@@ -152,12 +163,54 @@ class HomeViewModel @Inject constructor(
                 started = SharingStarted.WhileSubscribed(5_000L),
                 // Cache-first frame approximates the header with the per-list
                 // sum (it may over-count a multi-list contact for one frame);
-                // the combine's union count corrects on its first emission.
+                // the combine's union count corrects on its first emission. The
+                // process-cached enrichment is read synchronously here too, so
+                // "Next up" is present on the very first frame (no blink).
                 initialValue = homeFeed.tiles.value
                     .takeIf { it.isNotEmpty() }
-                    ?.let { tiles -> readyState(tiles, tiles.sumOf { it.dueCount }) }
+                    ?.let { tiles ->
+                        val enrichment = homeFeed.enrichment.value
+                        val now = clock.now()
+                        readyState(
+                            tiles.map { withEnrichment(it, enrichment[it.id], now) },
+                            tiles.sumOf { it.dueCount },
+                        )
+                    }
                     ?: HomeUiState.Loading,
             )
+
+    /** Folds the per-list [ListEnrichment] (Next up + rhythm) into a tile. */
+    private fun withEnrichment(tile: ListTileState, e: ListEnrichment?, now: Instant): ListTileState =
+        tile.copy(
+            nextUp = e?.nextUp?.let { raw ->
+                NextUp(
+                    contactId = raw.contactId,
+                    name = raw.name,
+                    photoUri = raw.photoUri,
+                    why = recencyWhy(raw.lastCalledAt, now),
+                )
+            },
+            rhythm = e?.rhythm ?: emptyList(),
+        )
+
+    /**
+     * Warm, neutral recency line for the Next-up person (HOME-3) — context, not
+     * shame ("you haven't called X in N days" is forbidden; voice.md). A null
+     * last-call reads as a gentle "you haven't spoken yet".
+     */
+    private fun recencyWhy(lastCalledAt: Instant?, now: Instant): String {
+        if (lastCalledAt == null) return "you haven't spoken yet"
+        val days = ChronoUnit.DAYS.between(lastCalledAt, now)
+        return when {
+            days <= 0L -> "you spoke today"
+            days == 1L -> "1 day since you last spoke"
+            days < 7L -> "$days days since you last spoke"
+            days < 14L -> "1 week since you last spoke"
+            days < 30L -> "${days / 7L} weeks since you last spoke"
+            days < 60L -> "1 month since you last spoke"
+            else -> "${days / 30L} months since you last spoke"
+        }
+    }
 
     private fun readyState(visible: List<ListTileState>, dueContacts: Int): HomeUiState.Ready =
         HomeUiState.Ready(

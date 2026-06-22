@@ -5,8 +5,13 @@ import androidx.test.core.app.ApplicationProvider
 import app.orbit.data.AppPrefs
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListType
+import app.orbit.domain.FakeCallEventRepository
+import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
+import app.orbit.domain.FakeRuleTemplateRepository
+import app.orbit.domain.JsonProvider
 import app.orbit.domain.clock.TestClock
+import app.orbit.domain.usecase.SurfaceNextUseCase
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.assertEquals
@@ -86,6 +91,17 @@ class HomeFeedRefreshTest {
         listRepo = listRepo,
         clock = clock,
         appPrefs = appPrefs,
+        // Enrichment deps — these tests exercise the staleness gate only; the
+        // empty fakes make the per-list enrichment a no-op.
+        surfaceNext = SurfaceNextUseCase(
+            contactRepo = FakeContactRepository(),
+            listRepo = FakeListRepository(),
+            callEventRepo = FakeCallEventRepository(),
+            ruleTemplateRepo = FakeRuleTemplateRepository(),
+            clock = clock,
+            json = JsonProvider.json,
+        ),
+        callEventRepo = FakeCallEventRepository(),
         scope = CoroutineScope(UnconfinedTestDispatcher()),
     )
 
