@@ -17,6 +17,10 @@ internal object OrbitPrimitives {
     val Amber          = Color(0xFFD4A144)
     val AmberTint      = Color(0xFFF2E2BF)
     val Clay           = Color(0xFF8E5141)
+    // Dark-mode danger — the light Clay reads only 2.4:1 on the dark surface
+    // (destructive text was barely legible). Lifted to clear WCAG AA (~5.4:1),
+    // mirroring how the accent is lifted for dark. THEMING 2026-06-22.
+    val ClayDark       = Color(0xFFD9836F)
     val StoneDeep      = Color(0xFF524B45)
     val Slate          = Color(0xFF6B7570)
     val SlateTint      = Color(0xFFDCE1DE)
@@ -140,7 +144,7 @@ internal val DarkColors = OrbitColors(
     urgent = OrbitPrimitives.Amber,
     urgentTint = OrbitPrimitives.AmberTint,
     dangerSoft = OrbitPrimitives.StoneDeep,
-    danger = OrbitPrimitives.Clay,
+    danger = OrbitPrimitives.ClayDark,
     info = OrbitPrimitives.Slate,
     infoTint = OrbitPrimitives.SlateTint,
     swipeGhostDefer = OrbitPrimitives.SoftDark,   // MT-05 — dark-mode fg-soft
