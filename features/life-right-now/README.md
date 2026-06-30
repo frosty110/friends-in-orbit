@@ -28,13 +28,32 @@ As someone whose life has seasons, I can tell Orbit "things are quiet right now"
 
 **Three modes. Default is Steady.**
 
-- **Steady (default).** Normal rhythm. Lists surface and nudge exactly as configured. No change to today's behavior. This is the implicit state; the user never has to choose it.
+- **Steady (default).** The user's usual rhythm — about **three ready people a day** (adjustable), surfaced and nudged as their lists are configured. This is the implicit state; the user never has to choose it. The daily number is a *pace the app keeps*, not a score the user clears — see *Consistency without a streak* below.
 - **Quiet — stepping back.** For travel, a heavy season, depletion, grief, a busy stretch. Nudges pause (or drop to the gentlest cadence). Rule intervals stretch so fewer people read as "ready." Crucially, **nothing accrues as overdue while Quiet** — due state is frozen, not silently piling up, so returning to Steady never dumps a backlog. The app goes supportive-silent.
 - **Leaning in — wanting more.** For loneliness, a new city, a hard stretch where connection helps. Surfacing widens: more people eligible per session, longer-gap people included, warmer and slightly more frequent invitations. Never a quota — just a wider, kinder net.
 
-**Temporary by design.** A mode can carry an optional "until" (today, this week, until I turn it off) — reusing the `PauseDuration` vocabulary the app already has for per-contact pause. When the window passes, Orbit returns to Steady on its own.
+**Temporary by design.** A mode can carry an optional "until": a **duration preset** (a few days, a week, two weeks), a **specific calendar date** (e.g. "no contact until 15 March"), or **open-ended** ("until I turn it off"). Duration presets reuse the `PauseDuration` vocabulary the app already has for per-contact pause; the calendar-date picker is the one new control. When the window passes, Orbit returns to Steady on its own.
 
 **The return is the whole point.** Coming back from Quiet must never feel like punishment. No "42 waiting," no "catch up," no broken anything. The return reads like a friend, not a ledger.
+
+**Worked examples.**
+
+- *A death in the family; the user wants more people around them.* They set **Leaning in for two weeks.** For that window Orbit surfaces more names a day than their usual three, widens eligibility to include longer-gap people, and the Home banner reflects the choice warmly. After two weeks it returns to Steady on its own — no cliff, no "you fell behind."
+- *The user needs to step fully back until a fixed date.* They set **Quiet until 15 March.** Scheduled nudges stop, the daily rhythm drops toward zero, and nothing accrues as overdue meanwhile. On the 15th — or whenever they end it early from the Home banner — they return to exactly where they left, greeted by "Welcome back. Nothing piled up."
+
+**Consistency without a streak.** The user should get real encouragement for keeping this up — but a *consecutive-day streak* is the one mechanism that can't coexist with everything above. A streak's emotional engine is fear of breaking it, so a single quiet day — or a Quiet season the app itself offered — becomes a loss. That directly contradicts principle 7, and principle 5 forbids streaks outright. So the consistency signal is **retrospective and cumulative, never consecutive:**
+
+- It counts *up* over a period and never resets: "this month you reached 14 people you'd been meaning to call."
+- A quiet week just makes it grow more slowly; a Quiet season is invisible to it, never a wound.
+- It speaks rhythm, not performance: "you've stayed close to your inner orbit lately" / "it's been a quieter stretch — no rush." Pattern language over performance language.
+
+In one line: a streak measures days-without-a-gap and punishes the gap; this measures connection-that-happened and only ever celebrates it. Same encouragement, none of the loss aversion.
+
+**Resolved (2026-06-30, UX-led):**
+
+- **Three states total** — Steady (default) + Quiet + Leaning in. No "Lighter" tier in v1; clarity over granularity.
+- Set in **Settings**; while a non-Steady season is active, **Home shows a calm banner** naming the season with one-tap "end early," so muted nudges are never a surprise.
+- Quiet pauses **scheduled nudges only**; incoming-call follow-ups still fire (they respond to a real call the user just received, not a nag).
 
 **Voice.** In-app surfaces (banners, settings) may name people, unlike notifications. All copy follows `voice.md`: sentence case, no exclamation, no shame, no streaks. The framing is always the user's season and the user's choice, never performance.
 
@@ -53,20 +72,25 @@ Example copy (in-app — not the notification, where names are forbidden):
 - [ ] A mode set with an "until" reverts to Steady automatically once the window passes (verify: mode reads Steady after the timestamp on next read).
 - [ ] All new strings pass the voice gate (extend `CopyAuditTest` or an analogous audit: no exclamation, no shame patterns, no streak/level/achievement).
 - [ ] The setting is reversible in one tap and persists across app restarts (verify: `AppPrefs` round-trip).
+- [ ] The daily rhythm is never rendered as a scored fraction ("X of 3") or an empty-as-failure indicator (inspect: no "/3" denominator, no progress-against-target ring).
+- [ ] The consistency reflection only counts up — it never resets on a missed day or during a Quiet season (verify: value is non-decreasing across a simulated multi-day gap).
+- [ ] "Until" accepts a specific calendar date and reverts on it (verify: set until = a date; mode reads Steady on/after that date).
 
 ### Not in scope
 
 - Per-list seasons. v1 is app-level only; per-list override is a later move (would live on `ListEntity` beside `nudgeScheduleJson`).
 - Automatic season detection (calendar, location, "you seem busy"). The user always sets it explicitly. No inference, no surveillance.
-- A numeric weekly target or quota of any kind. Forbidden by mission principles 5 and 7.
-- Streaks, "days in Quiet," or any counter that could become a score.
+- A **scored** daily/weekly target — anything shown as "1 of 3 done", a ring that reads empty-as-failure, or "you're behind". The daily rhythm is a pace the app keeps, surfaced as "today's people", never a denominator to clear.
+- A **consecutive-day streak**, or any counter whose value drops when the user pauses or has a quiet day. Forbidden by mission principle 5 and irreconcilable with principle 7. The sanctioned consistency signal is the cumulative, never-resetting reflection under *Consistency without a streak*.
 
 ### Open product questions
 
-- Two non-default modes (Quiet / Leaning in) or three (a milder "Lighter" between Steady and Quiet)? Leaning two for v1 — clarity over granularity.
-- Does Quiet pause incoming-call follow-ups too, or only scheduled nudges? Leaning: keep follow-ups (they're reactive to a real call the user just had), pause only scheduled nudges. Verify on dogfood.
-- Where does it live — Settings only, or also a quick toggle on Home? Leaning Settings for v1, with a Home entry point as a fast-follow.
-- Default "until" for Quiet — open-ended, or nudge the user to pick a window so they don't forget they're muted? Leaning open-ended with a gentle in-app reminder banner while active.
+Modes, placement, and follow-up behavior are resolved above (*Resolved (2026-06-30)*). Still open:
+
+- A milder "Lighter" mode between Steady and Quiet — deferred; revisit only if Quiet feels too binary in dogfood.
+- For the deepest Quiet ("no contact"), offer a *fully silent* sub-option that pauses incoming-call follow-ups too? Default Quiet keeps follow-ups; fully-silent is a possible deepening. Verify on dogfood.
+- The daily-rhythm default — 3 is the starting point. Confirm it feels right against 2 on dogfood, and decide whether it lives per-person-per-day or is purely an app-wide surfacing volume.
+- What period does the consistency reflection cover — rolling 30 days, calendar month, or "since you started"? Leaning rolling 30 days so it never has a jarring month-boundary reset.
 
 ---
 
@@ -83,7 +107,8 @@ The mode introduces no new scheduler. It parameterizes the ones that exist:
 
 ### Data model
 
-- App-level: two new `AppPrefs` / DataStore keys — `life_mode` (enum name) and `life_mode_until` (epoch millis, nullable). Greenfield; `AppPrefs.resetAll()` must clear them. No Room migration needed for v1.
+- App-level: new `AppPrefs` / DataStore keys — `life_mode` (enum name); `life_mode_until` (epoch millis, nullable — a specific calendar date is just a millis value, so the date picker needs no extra storage); and `daily_rhythm_target` (int, default 3 — the Steady pace the modes flex). Greenfield; `AppPrefs.resetAll()` must clear them. No Room migration needed for v1.
+- The consistency reflection is **derived, not stored as a streak** — compute it on read from existing `CallEventEntity` rows (count of distinct contacts reached in the trailing window). No counter to persist, nothing that can "break."
 - Reuse `domain/model/PauseDuration.kt` for the "until" choices so the vocabulary matches per-contact pause.
 - Per-list (later): a `lifeModeOverride` column on `ListEntity` beside `dueCount` / `nudgeScheduleJson` — explicitly deferred.
 
