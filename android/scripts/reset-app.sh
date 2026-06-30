@@ -5,7 +5,7 @@
 
 set -eu
 
-APP_ID=app.orbit.debug
+APP_ID=io.github.frosty110.orbit.debug
 APK_PATH=app/build/outputs/apk/debug/app-debug.apk
 
 cd "$(dirname "$0")/.."
