@@ -26,6 +26,9 @@ The defer/advance language isn't consistent: Card View shows "Later"/"Sooner" on
 ### `X-6` · Hold the accessibility floor as features land · **Ongoing**
 The app already respects a 16sp body minimum, 48dp touch targets, and font-scale scrolling on the card. Every suggestion here must preserve that — new chips, labels, and controls included. Context lines and quick-chips (`CARD-1`, `CONTACT-2`) especially must not shrink below the type floor to fit. Calm includes legible.
 
+### `X-7` · Life right now — Orbit bends with your season · **Next**
+A single, reversible setting that tells Orbit how much room the user has for connection right now, and paces the whole app to match: **Quiet** (travel, a heavy stretch — nudges pause, nothing accrues as overdue, the return carries no backlog) and **Leaning in** (loneliness, a new city — surface more people, more often, including longer-gap names). The opposite of a streak: where every other tool punishes you when life gets in the way, this one adapts. It generalizes the existing per-contact **pause** primitive to the whole app and is the product form of mission principle 7. Spec promoted to `features/life-right-now/`.
+
 ---
 
 ## How these relate to the per-screen files
@@ -38,3 +41,4 @@ The app already respects a 16sp body minimum, 48dp touch targets, and font-scale
 | `X-4` Voice gate | every file |
 | `X-5` Later/Sooner vocabulary | `01-card-view` (`CARD-2`), `11-onboarding`, `12-widgets` |
 | `X-6` Accessibility floor | `01-card-view`, `02-contact-detail` |
+| `X-7` Life right now (seasons) | `10-settings`, `00-home`, `notifications` (nudge gate), `features/life-right-now/` |

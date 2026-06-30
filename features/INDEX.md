@@ -1,7 +1,7 @@
 # Features — index
 
 **Status:** active
-**Last reviewed:** 2026-06-09
+**Last reviewed:** 2026-06-30
 **Canonical for:** feature-level product and technical specification
 
 ---
@@ -41,8 +41,9 @@ Not features — shared across all work.
 | [widgets](widgets/README.md) | stub | 2x2 + 4x2 home screen widgets |
 | [privacy-and-lock](privacy-and-lock/README.md) | in-progress | Quick-hide on focus loss, encrypted-at-rest, encrypted export/import. Biometric lock + minimal mode removed 2026-04-28. |
 | [settings](settings/README.md) | in-progress | App-wide configuration page |
+| [life-right-now](life-right-now/README.md) | stub | App-level season (Quiet / Leaning in) that paces the whole app to the user's life; bends cadence instead of enforcing it |
 
-14 features. Every entry in this table points to its canonical README. When a feature is added, renamed, or removed, this table updates in the same commit.
+15 features. Every entry in this table points to its canonical README. When a feature is added, renamed, or removed, this table updates in the same commit.
 
 ---
 
