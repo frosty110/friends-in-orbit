@@ -1,10 +1,10 @@
 # notifications
 
 **Status:** shipped
-**Last reviewed:** 2026-06-10
+**Last reviewed:** 2026-06-30
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/notify/` — full notification system. `OrbitNotifications` registers `orbit.list_prompt` (DEFAULT importance) and `orbit.incoming_followup.v2` (HIGH importance) channels on startup; old `orbit.digest` and `orbit.incoming_followup` channels are deleted on every cold start. `DailyDigestWorker` was deleted. Two workers remain: `ListPromptWorker` and `IncomingFollowUpWorker`.
-- `NudgeSchedule` — `@Serializable` per-list schedule model (days of week × times of day); stored as JSON in `ListEntity.nudgeScheduleJson` (schema v12 / `MIGRATION_11_12` backfill). `NudgeScheduler` (@Singleton) enqueues self-re-enqueueing `OneTimeWork` per list via `setInitialDelay` + `ExistingWorkPolicy.REPLACE`. `ListPromptWorker` (@HiltWorker) implements a 5-gate `doWork`: notifications-enabled check, DND check, list-muted check, due-count check, active-hours check; posts with title = list name, body = "{N} due in {list name}."; re-enqueues in `finally` block.
+- `NudgeSchedule` — `@Serializable` per-list schedule model (days of week × times of day); stored as JSON in `ListEntity.nudgeScheduleJson` (schema v12 / `MIGRATION_11_12` backfill). `NudgeScheduler` (@Singleton) enqueues self-re-enqueueing `OneTimeWork` per list via `setInitialDelay` + `ExistingWorkPolicy.REPLACE`. `ListPromptWorker` (@HiltWorker) implements a 5-gate `doWork`: notifications-enabled check, DND check, list-muted check, due-count check, active-hours check; posts with title = list name, body = opportunity framing via `NotificationCopy.nudgeBody` (name-free; "Someone in {list} is ready when you are. Want to call?" / "A few people in {list} are ready when you are. Start with one?" — the exact due count is deliberately never shown); re-enqueues in `finally` block.
 - `IncomingFollowUpWorker` (@HiltWorker) — expedited; fires after `CallLogSyncWorker` detects a new tracked incoming call; 30-minute dedup via `FollowUpDedupStore` (DataStore `orbit_followup_state`); title = "{Name} called you.", body = "Want to call back?"; tap opens contact detail.
 - Tap navigation: notifications carry a `NAVIGATE_TO` extra read in `MainActivity` (cold start + `onNewIntent`); `OrbitNavHost` routes to card view (nudge) or contact detail (follow-up).
 - List lifecycle hooks: deleting or archiving a list cancels its nudge chain (`ListsManagerViewModel`); unarchiving re-enqueues. Cold-start `OrbitApp.reAnchorAll()` re-anchors all chains.

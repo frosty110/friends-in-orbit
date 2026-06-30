@@ -19,11 +19,11 @@ class CopyAuditTest {
     @Test
     fun nudgeCopy_goldenString() {
         assertEquals(
-            "3 due in Late night.",
+            "A few people in Late night are ready when you are. Start with one?",
             NotificationCopy.nudgeBody(listName = "Late night", dueCount = 3),
         )
         assertEquals(
-            "1 due in Inner orbit.",
+            "Someone in Inner orbit is ready when you are. Want to call?",
             NotificationCopy.nudgeBody(listName = "Inner orbit", dueCount = 1),
         )
     }

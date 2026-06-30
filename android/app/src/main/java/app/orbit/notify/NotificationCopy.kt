@@ -12,7 +12,7 @@ package app.orbit.notify
  *
  * ### Notification templates (D-18)
  * - List nudge title: [nudgeTitle] — raw list name, never truncated here
- * - List nudge body: [nudgeBody] — "{N} due in {list name}."
+ * - List nudge body: [nudgeBody] — opportunity framing, name-free; singular/plural by due count
  * - Follow-up title: [followUpTitle] — "{Name} called you." (the one name-bearing notification)
  * - Follow-up body: [followUpBody] — "Want to call back?"
  *
@@ -42,11 +42,19 @@ object NotificationCopy {
     /**
      * Body for a list-nudge notification.
      *
-     * Format: "{dueCount} due in {listName}." — period terminates, sentence case.
+     * Opportunity framing, never a backlog count: it surfaces that someone is ready
+     * to be reached, not that "N are due". Name-free (lock-screen safe) and sentence
+     * case. [dueCount] only selects singular vs plural phrasing — the exact number is
+     * deliberately never shown, so a large list never reads as a debt to clear. The
+     * plural form offers "start with one" to remove the all-or-nothing pressure.
      * [dueCount] should be ≥ 1; the worker is responsible for not posting at 0.
      */
     fun nudgeBody(listName: String, dueCount: Int): String =
-        "$dueCount due in $listName."
+        if (dueCount <= 1) {
+            "Someone in $listName is ready when you are. Want to call?"
+        } else {
+            "A few people in $listName are ready when you are. Start with one?"
+        }
 
     /**
      * Title for an incoming-call follow-up notification (D-14).
