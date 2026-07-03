@@ -1,12 +1,18 @@
 package app.orbit.ui.screens.onboarding
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,6 +55,7 @@ fun OnboardingSyncScreen(
         state = state,
         onContinue = onContinue,
         onRetry = vm::onRetry,
+        onImportDaysSelected = vm::onImportDaysSelected,
     )
 }
 
@@ -57,6 +64,7 @@ private fun OnboardingSyncContent(
     state: OnboardingSyncUiState,
     onContinue: () -> Unit,
     onRetry: () -> Unit,
+    onImportDaysSelected: (Int) -> Unit,
 ) {
     val ready = state as? OnboardingSyncUiState.Ready
 
@@ -96,13 +104,21 @@ private fun OnboardingSyncContent(
             text = if (skipped) {
                 "Without call history, Orbit starts from what you tell it."
             } else {
-                "Reading your last 90 days of calls — never leaves your device."
+                "Reading your last ${ready?.importDays ?: 90} days of calls — never leaves your device."
             },
             // Plain body copy reads fgMuted; `info` is reserved
             // for semantic emphasis, not paragraph text.
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x6))
+
+        if (!skipped) {
+            ImportRangeChips(
+                selectedDays = ready?.importDays ?: 90,
+                onSelect = onImportDaysSelected,
+            )
+            Spacer(Modifier.height(OrbitTheme.spacing.x4))
+        }
 
         SyncProgressCard(state = ready?.syncState ?: SyncState.InProgress, ready = ready)
 
@@ -152,7 +168,7 @@ private fun SyncProgressCard(state: SyncState, ready: OnboardingSyncUiState.Read
                 )
                 Spacer(Modifier.height(OrbitTheme.spacing.x1))
                 Text(
-                    text = "No calls found in the last 90 days. That's okay.",
+                    text = "No calls found in the last ${ready?.importDays ?: 90} days. That's okay.",
                     style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 )
             }
@@ -193,6 +209,46 @@ private fun FriendlyCount(callCount: Int, contactCount: Int) {
     )
 }
 
+/**
+ * Look-back window selector. Mirrors Settings' `ImportRangeRow` idiom
+ * (accentTint selected container, 48dp tap floor) so the two surfaces agree.
+ * Selecting a chip persists `callLogImportDays` and re-runs the import for the
+ * new window (VM.onImportDaysSelected) — the default (90) is pre-selected and
+ * already importing, so the common path stays friction-free.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ImportRangeChips(
+    selectedDays: Int,
+    onSelect: (Int) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            text = "How far back should Orbit look?",
+            style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
+        )
+        Row(
+            modifier = Modifier.padding(top = OrbitTheme.spacing.x2),
+            horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
+        ) {
+            IMPORT_DAY_OPTIONS.forEach { days ->
+                FilterChip(
+                    selected = selectedDays == days,
+                    onClick = { onSelect(days) },
+                    label = { Text("$days days") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = OrbitTheme.colors.accentTint,
+                        selectedLabelColor = OrbitTheme.colors.fg,
+                    ),
+                    modifier = Modifier.defaultMinSize(minHeight = OrbitTheme.spacing.tapMin),
+                )
+            }
+        }
+    }
+}
+
+private val IMPORT_DAY_OPTIONS: List<Int> = listOf(90, 180, 365)
+
 @Composable
 private fun SlowTipCard() {
     Box(
@@ -219,9 +275,11 @@ private fun OnboardingSyncScreenPreview() {
                 syncState = SyncState.InProgress,
                 callCount = 142,
                 contactCount = 32,
+                importDays = 90,
             ),
             onContinue = {},
             onRetry = {},
+            onImportDaysSelected = {},
         )
     }
 }

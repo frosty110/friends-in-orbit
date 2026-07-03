@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
  * ONB-16/17/18 — drives the blocking sync gate.
@@ -72,7 +73,8 @@ class OnboardingSyncViewModel @Inject constructor(
             callEventRepo.observeAggregatesAll(),
             appPrefs.lastCallLogSyncAt,
             _retryCount,
-        ) { phase, aggregate, lastSyncMs, retries ->
+            appPrefs.callLogImportDays,
+        ) { phase, aggregate, lastSyncMs, retries, importDays ->
             val totalCalls = aggregate.values.sumOf { it.count }
             val distinctContacts = aggregate.size
 
@@ -91,6 +93,7 @@ class OnboardingSyncViewModel @Inject constructor(
                 syncState = syncState,
                 callCount = totalCalls,
                 contactCount = distinctContacts,
+                importDays = importDays,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -109,6 +112,22 @@ class OnboardingSyncViewModel @Inject constructor(
         if (!hasCallLogPermission()) return
         _retryCount.value = _retryCount.value + 1
         controller.enqueueImmediateSync(fullResync = true)
+    }
+
+    /**
+     * User picked a different look-back window. Persist it first (the worker
+     * reads `callLogImportDays` at execution time), then re-run a full resync
+     * so the wider/narrower window takes effect immediately. REPLACE policy on
+     * the unique sync work means the in-flight import is superseded, not stacked.
+     * No-op without READ_CALL_LOG — there's nothing to import.
+     */
+    fun onImportDaysSelected(days: Int) {
+        viewModelScope.launch {
+            appPrefs.setCallLogImportDays(days)
+            if (hasCallLogPermission()) {
+                controller.enqueueImmediateSync(fullResync = true)
+            }
+        }
     }
 
     private fun hasCallLogPermission(): Boolean =

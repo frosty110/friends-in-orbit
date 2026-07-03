@@ -23,6 +23,10 @@ sealed interface OnboardingSyncUiState {
         val syncState: SyncState,
         val callCount: Int,
         val contactCount: Int,
+        // How far back the call-log import reads, in days. User-selectable on
+        // this screen; drives both the copy and the re-run window. Mirrors
+        // AppPrefs.callLogImportDays so Settings and onboarding agree.
+        val importDays: Int,
     ) : OnboardingSyncUiState
 }
 
