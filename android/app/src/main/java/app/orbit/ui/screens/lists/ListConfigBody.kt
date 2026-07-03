@@ -393,7 +393,7 @@ private fun IntervalSliderLocal(
     currentHours: Int,
     onCommit: (Int) -> Unit,
 ) {
-    val initialDays = (currentHours / 24f).coerceAtLeast(1f)
+    val initialDays = (currentHours / 24f).coerceAtLeast(2f)
     var days by remember(currentHours) { mutableFloatStateOf(initialDays) }
     Column(Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
@@ -402,9 +402,9 @@ private fun IntervalSliderLocal(
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                 modifier = Modifier.weight(1f),
             )
-            val rounded = days.toInt().coerceAtLeast(1)
+            val rounded = days.toInt().coerceAtLeast(2)
             Text(
-                text = "$rounded ${if (rounded == 1) "day" else "days"}",
+                text = "$rounded days",
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.accentPress),
             )
         }
@@ -412,10 +412,10 @@ private fun IntervalSliderLocal(
             value = days,
             onValueChange = { days = it },
             onValueChangeFinished = {
-                val intDays = days.toInt().coerceAtLeast(1)
+                val intDays = days.toInt().coerceAtLeast(2)
                 onCommit(intDays * 24)
             },
-            valueRange = 1f..60f,
+            valueRange = 2f..60f,
             colors = SliderDefaults.colors(
                 thumbColor = OrbitTheme.colors.accent,
                 activeTrackColor = OrbitTheme.colors.accent,
@@ -427,11 +427,11 @@ private fun IntervalSliderLocal(
     }
 }
 
-private const val INTERVAL_MIN_DAY = 1
+private const val INTERVAL_MIN_DAY = 2
 private const val INTERVAL_MAX_DAY = 60
 
 private val INTERVAL_TICKS: List<Pair<String, Int>> = listOf(
-    "1d" to 1,
+    "2d" to 2,
     "2w" to 14,
     "1m" to 30,
     "2m" to 60,
