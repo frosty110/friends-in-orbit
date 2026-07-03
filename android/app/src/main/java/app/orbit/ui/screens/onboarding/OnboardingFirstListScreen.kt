@@ -66,6 +66,7 @@ fun OnboardingFirstListScreen(
     @Suppress("UNUSED_PARAMETER") listId: String,
     onDone: () -> Unit,
     onAddAnother: () -> Unit,
+    onAddContacts: () -> Unit,
     vm: ListConfigViewModel = hiltViewModel(),
     permVm: OnboardingPermissionsViewModel = hiltViewModel(),
 ) {
@@ -185,6 +186,12 @@ fun OnboardingFirstListScreen(
                 )
             },
             onConfirmConvert = vm::confirmConvert,
+            // 2026-07-03 — the onboarding wrapper previously omitted both member
+            // callbacks, so "add contacts" and per-member remove were dead until
+            // the list was reopened from Lists Manager. Wire them to the same VM
+            // path production uses; onAddContacts navigates to the picker.
+            onRemoveMember = vm::onRemoveMember,
+            onAddContacts = onAddContacts,
         )
     }
 }

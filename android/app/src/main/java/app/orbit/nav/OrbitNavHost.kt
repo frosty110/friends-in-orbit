@@ -402,6 +402,7 @@ private fun OrbitNavGraph(
                         }
                     }
                 },
+                onAddContacts = { nav.navigate(Routes.pickContacts(listId)) },
             )
         }
         composable(Routes.OnboardDone) {
