@@ -304,6 +304,10 @@ abstract class ContactDao {
      * not orphaned. Does NOT touch `phoneNumber` / `normalizedPhone` (the
      * identity key) or any user-owned flag (ignore/archive/pause). `isStarred`
      * is device-owned like displayName.
+     *
+     * `deviceUpdatedAt` is COALESCE-frozen: set only while still NULL (the v13
+     * backfill for pre-existing rows), never overwritten — so a later rename does
+     * not bump it and make an old contact look "recently added".
      */
     @Query(
         "UPDATE contacts " +
@@ -311,6 +315,7 @@ abstract class ContactDao {
             "    photoUri = :photoUri, " +
             "    phoneContactId = :phoneContactId, " +
             "    isStarred = :isStarred, " +
+            "    deviceUpdatedAt = COALESCE(deviceUpdatedAt, :deviceUpdatedAt), " +
             "    isOrphaned = 0 " +
             "WHERE id = :id",
     )
@@ -320,6 +325,7 @@ abstract class ContactDao {
         photoUri: String?,
         phoneContactId: Long,
         isStarred: Boolean,
+        deviceUpdatedAt: Instant?,
     ): Int
 
     /**

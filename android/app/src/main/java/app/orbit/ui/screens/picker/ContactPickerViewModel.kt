@@ -724,6 +724,7 @@ class ContactPickerViewModel @Inject constructor(
                 callCount = callCount,
                 lastCallAt = lastCallAt,
                 firstSeenByAppAt = c.firstSeenByAppAt,
+                deviceUpdatedAt = c.deviceUpdatedAt,
                 listIds = contactListIds,
                 listNames = contactListNames,
                 isCommonlyCalled = isCommonly,

@@ -95,6 +95,7 @@ open class RecordingContactDao(
         photoUri: String?,
         phoneContactId: Long,
         isStarred: Boolean,
+        deviceUpdatedAt: Instant?,
     ): Int = 1
 
     open override suspend fun setOrphanedBatch(ids: List<Long>, orphaned: Boolean): Int = ids.size

@@ -49,7 +49,13 @@ sealed class PickerSort {
     /** Most-called first — highest `callCount` at the top, name as tiebreak. */
     @Immutable data object ByMostCalled : PickerSort()
 
-    /** Most recently *saved to the device* first — newest `firstSeenByAppAt` on top. */
+    /**
+     * "Recently added" — newest first by the earlier of [PickerContact.firstSeenByAppAt]
+     * and [PickerContact.deviceUpdatedAt] (the device's last-updated timestamp
+     * captured at first sight). Genuinely new contacts have a recent timestamp and
+     * float; pre-existing ones carry their older device timestamp and sink — which
+     * is what keeps this from collapsing to alphabetical after a bulk import.
+     */
     @Immutable data object ByRecentlySaved : PickerSort()
 }
 
@@ -141,8 +147,13 @@ data class ContactPickerUiState(
                 )
             PickerSort.ByRecentlySaved ->
                 filtered.sortedWith(
-                    compareByDescending<PickerContact> { it.firstSeenByAppAt }
-                        .thenBy { it.displayName },
+                    // Sort key = the earlier of first-sight and the device's
+                    // last-updated (min), so a pre-existing contact's older device
+                    // timestamp — not the uniform bulk-import instant — decides its
+                    // place. Falls back to firstSeenByAppAt when the device gave none.
+                    compareByDescending<PickerContact> { c ->
+                        c.deviceUpdatedAt?.let { minOf(c.firstSeenByAppAt, it) } ?: c.firstSeenByAppAt
+                    }.thenBy { it.displayName },
                 )
         }
         // Within the Unsorted triage view, Android favorites
@@ -353,6 +364,11 @@ data class PickerContact(
     val callCount: Int,
     val lastCallAt: Instant?,
     val firstSeenByAppAt: Instant,
+    // Device's CONTACT_LAST_UPDATED_TIMESTAMP captured at first sight and frozen.
+    // For pre-existing contacts this is older than firstSeenByAppAt (import time);
+    // the "Recently added" sort takes min(firstSeen, this) so old contacts sink.
+    // Null when the device gave no timestamp or the row predates the field.
+    val deviceUpdatedAt: Instant? = null,
     val listIds: Set<Long>,
     val listNames: List<String>,
     val isCommonlyCalled: Boolean,

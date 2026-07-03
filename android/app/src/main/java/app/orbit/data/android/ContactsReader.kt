@@ -4,6 +4,7 @@ import android.content.Context
 import android.provider.ContactsContract
 import androidx.annotation.WorkerThread
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,10 @@ data class PhoneContact(
     // Android favorites are hand-curated closest people; mirrored into
     // ContactEntity.isStarred and refreshed by the delta-sync.
     val isStarred: Boolean = false,
+    // CONTACT_LAST_UPDATED_TIMESTAMP from the joined contact row (contact-level,
+    // same across all of a contact's phone rows). Feeds ContactEntity.deviceUpdatedAt
+    // for the "Recently added" sort. Null when the device reports no timestamp.
+    val lastUpdatedAt: Instant? = null,
 )
 
 // Reads the device address book. Returns contacts that have at least one
@@ -62,6 +67,9 @@ open class ContactsReader @Inject constructor(@ApplicationContext private val co
             // ContactEntity.isStarred so the picker's "Starred" filter chip
             // and Unsorted starred-first ordering light up.
             ContactsContract.CommonDataKinds.Phone.STARRED,
+            // Contact-level last-updated timestamp (joined via the Data table);
+            // feeds ContactEntity.deviceUpdatedAt for the "Recently added" sort.
+            ContactsContract.Contacts.CONTACT_LAST_UPDATED_TIMESTAMP,
         )
         val sort = ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY +
             " COLLATE NOCASE ASC"
@@ -85,6 +93,7 @@ open class ContactsReader @Inject constructor(@ApplicationContext private val co
             val idxNorm = c.getColumnIndexOrThrow(projection[3])
             val idxPhoto = c.getColumnIndexOrThrow(projection[4])
             val idxStarred = c.getColumnIndexOrThrow(projection[5])
+            val idxUpdated = c.getColumnIndexOrThrow(projection[6])
 
             while (c.moveToNext()) {
                 val id = c.getLong(idxId)
@@ -93,7 +102,11 @@ open class ContactsReader @Inject constructor(@ApplicationContext private val co
                 val norm = c.getString(idxNorm) ?: normalizeForMatch(number)
                 val photo = c.getString(idxPhoto)
                 val starred = c.getInt(idxStarred) == 1
-                val acc = accumulators.getOrPut(id) { Accumulator(name, photo, starred) }
+                // Contact-level: identical across the contact's rows. `> 0` guards
+                // the absent/zero case (some ROMs report 0 rather than null).
+                val updatedMs = c.getLong(idxUpdated)
+                val updatedAt = if (updatedMs > 0L) Instant.ofEpochMilli(updatedMs) else null
+                val acc = accumulators.getOrPut(id) { Accumulator(name, photo, starred, updatedAt) }
                 // Dedup within the contact on the normalized form — the same
                 // number entered twice (home + mobile labels) is one row.
                 if (acc.seenNormalized.add(norm)) {
@@ -111,6 +124,7 @@ open class ContactsReader @Inject constructor(@ApplicationContext private val co
                 photoUri = acc.photoUri,
                 phones = acc.phones.toList(),
                 isStarred = acc.isStarred,
+                lastUpdatedAt = acc.lastUpdatedAt,
             )
         }
     }
@@ -120,6 +134,7 @@ open class ContactsReader @Inject constructor(@ApplicationContext private val co
         val displayName: String,
         val photoUri: String?,
         val isStarred: Boolean,
+        val lastUpdatedAt: Instant?,
     ) {
         val seenNormalized = mutableSetOf<String>()
         val phones = mutableListOf<PhoneNumberRow>()

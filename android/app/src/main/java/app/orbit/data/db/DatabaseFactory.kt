@@ -93,6 +93,10 @@ fun create(context: Context, keyProvider: DatabaseKeyProvider): OrbitDatabase {
             // v=11 → v=12 — additive lists.nudgeScheduleJson
             //              TEXT DEFAULT NULL; backfilled with DEFAULT_JSON for
             //              every existing list row (D-03/NOTIF-10/11).
+            // v=12 → v=13 — additive contacts.deviceUpdatedAt (INTEGER DEFAULT
+            //              NULL) mirroring ContactsContract
+            //              CONTACT_LAST_UPDATED_TIMESTAMP; ingest COALESCE-backfills
+            //              existing rows. Powers the "Recently added" picker sort.
             .addMigrations(
                 MIGRATION_1_2,
                 MIGRATION_2_3,
@@ -105,6 +109,7 @@ fun create(context: Context, keyProvider: DatabaseKeyProvider): OrbitDatabase {
                 MIGRATION_9_10,
                 MIGRATION_10_11,
                 MIGRATION_11_12,
+                MIGRATION_12_13,
             )
             .build()
     } finally {

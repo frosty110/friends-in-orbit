@@ -40,6 +40,14 @@ data class ContactEntity(
     // floats starred contacts first inside the Unsorted triage view.
     val isStarred: Boolean = false,
     val firstSeenByAppAt: Instant,
+    // Schema v=13 — mirrors ContactsContract CONTACT_LAST_UPDATED_TIMESTAMP,
+    // captured at first sight and then FROZEN (refreshMirrorFields uses COALESCE):
+    // a later rename must not bump it, or an old contact would read as "recently
+    // added". For pre-existing contacts this is older than firstSeenByAppAt (the
+    // import instant), which de-clusters the picker's "Recently added" sort.
+    // Nullable: rows created before v13 stay NULL until the next ingest backfills
+    // them, and some device contacts expose no timestamp.
+    val deviceUpdatedAt: Instant? = null,
     val isIgnored: Boolean = false,
     val isOrphaned: Boolean = false,
     val pausedUntil: Instant? = null,

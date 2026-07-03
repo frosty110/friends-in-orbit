@@ -87,7 +87,7 @@ import app.orbit.notify.NudgeSchedule
         NoteEntity::class,
         RuleTemplateEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = true,
 )
 @TypeConverters(OrbitTypeConverters::class)
@@ -567,6 +567,28 @@ val MIGRATION_11_12: Migration = object : Migration(11, 12) {
         db.execSQL(
             "UPDATE `lists` SET `nudgeScheduleJson` = ?",
             arrayOf<Any>(NudgeSchedule.DEFAULT_JSON),
+        )
+    }
+}
+
+/**
+ * Additive `contacts.deviceUpdatedAt` column (INTEGER, nullable) mirroring
+ * ContactsContract CONTACT_LAST_UPDATED_TIMESTAMP. `INTEGER DEFAULT NULL`
+ * satisfies SQLite's no-rewrite ALTER constraint — same shape as [MIGRATION_9_10]'s
+ * ignoredAt and [MIGRATION_10_11]'s isStarred. No in-migration backfill is possible
+ * (the device address book is not readable here); existing rows stay NULL until the
+ * next [app.orbit.domain.usecase.IngestPhoneContactsUseCase] pass COALESCE-backfills
+ * them from the device. Powers the picker's "Recently added" sort (min of first-sight
+ * and this de-clusters the bulk-import instant).
+ *
+ * Strict-migration policy preserved (no `fallbackToDestructiveMigration` in
+ * [DatabaseFactory]). Schema export 13.json must be tracked in git on first
+ * compile (KSP emits it automatically when the version bumps).
+ */
+val MIGRATION_12_13: Migration = object : Migration(12, 13) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `contacts` ADD COLUMN `deviceUpdatedAt` INTEGER DEFAULT NULL",
         )
     }
 }

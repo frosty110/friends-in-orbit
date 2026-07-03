@@ -20,7 +20,10 @@ import javax.inject.Inject
 data class IngestSummary(
     /** New ContactEntity rows created. */
     val inserted: Int,
-    /** Existing rows whose displayName / photoUri / phoneContactId / isStarred were refreshed. */
+    /**
+     * Existing rows whose displayName / photoUri / phoneContactId / isStarred
+     * drifted, or whose deviceUpdatedAt was still null and got backfilled.
+     */
     val refreshed: Int,
     /** Mirrored rows newly flagged `isOrphaned = true` (device row vanished). */
     val orphaned: Int,
@@ -143,6 +146,7 @@ open class IngestPhoneContactsUseCase @Inject constructor(
                                 photoUri = pc.photoUri,
                                 isStarred = pc.isStarred,
                                 firstSeenByAppAt = now,
+                                deviceUpdatedAt = pc.lastUpdatedAt,
                             ),
                         ),
                     ).firstOrNull() ?: -1L
@@ -163,6 +167,10 @@ open class IngestPhoneContactsUseCase @Inject constructor(
                         // Starred is device-owned; a favorite toggled on the
                         // device propagates like a rename.
                         row.isStarred != pc.isStarred ||
+                        // Backfill the frozen device timestamp for rows created
+                        // before v13 (once — refreshMirrorFields COALESCEs it, so
+                        // this fires only while the value is still missing).
+                        (row.deviceUpdatedAt == null && pc.lastUpdatedAt != null) ||
                         row.isOrphaned
                     if (needsRefresh) {
                         contactDao.refreshMirrorFields(
@@ -171,6 +179,7 @@ open class IngestPhoneContactsUseCase @Inject constructor(
                             photoUri = pc.photoUri,
                             phoneContactId = pc.contactId,
                             isStarred = pc.isStarred,
+                            deviceUpdatedAt = pc.lastUpdatedAt,
                         )
                         if (row.isOrphaned) restored++ else refreshed++
                     }

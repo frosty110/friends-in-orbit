@@ -105,6 +105,7 @@ class IngestPhoneContactsUseCaseTest {
             photoUri: String?,
             phoneContactId: Long,
             isStarred: Boolean,
+            deviceUpdatedAt: Instant?,
         ): Int {
             val idx = contacts.indexOfFirst { it.id == id }
             if (idx < 0) return 0
@@ -113,6 +114,8 @@ class IngestPhoneContactsUseCaseTest {
                 photoUri = photoUri,
                 phoneContactId = phoneContactId,
                 isStarred = isStarred,
+                // Freeze-once, mirroring the production COALESCE.
+                deviceUpdatedAt = contacts[idx].deviceUpdatedAt ?: deviceUpdatedAt,
                 isOrphaned = false,
             )
             return 1

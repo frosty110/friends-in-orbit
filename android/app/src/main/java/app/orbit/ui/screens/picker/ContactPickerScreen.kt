@@ -548,12 +548,12 @@ private fun SortControl(
         // "Recently called" — absorbs the intent of the removed "Called recently"
         // filter (surface recent callers by ordering, not by hiding others).
         PickerSort.ByRecency to "Recently called",
-        PickerSort.ByRecentlySaved to "Recently saved",
+        PickerSort.ByRecentlySaved to "Recently added",
     )
     val currentLabel = when (sortBy) {
         PickerSort.ByName -> "Alphabetical"
         PickerSort.ByMostCalled -> "Most called"
-        PickerSort.ByRecentlySaved -> "Recently saved"
+        PickerSort.ByRecentlySaved -> "Recently added"
         PickerSort.ByRecency -> "Recently called"
     }
 
