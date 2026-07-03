@@ -40,7 +40,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -66,8 +65,9 @@ import kotlinx.coroutines.launch
  *    (no PermissionSource interface, no test seam — refresh on init + on result).
  *  - Exposes [uiState] as a `StateFlow<ContactPickerUiState>` via
  *    `combine(...).stateIn(WhileSubscribed(5_000L))` — ARCH-02 invariant.
- *  - Search is VM-side debounced 150ms — VM-side debounce keeps the screen
- *    stateless wrt the debouncer.
+ *  - Search debounce lives in the screen (immediate field state, debounced
+ *    commit via onSearchChanged). The VM reacts to the already-debounced
+ *    query without re-debouncing, so the field never round-trips a stale value.
  *
  * Selection invariants:
  *  - Selection / search / filter state are backed directly by
@@ -470,7 +470,7 @@ class ContactPickerViewModel @Inject constructor(
     //   List<PickerContact>: contacts, all-memberships, call events, lists,
     //   thresholds, phone-by-contactId.
     //
-    //  Stage B: uiState — folds (pickerContactsFlow, search.debounce,
+    //  Stage B: uiState — folds (pickerContactsFlow, searchQueryFlow,
     //   filterConfigFlow, selectedIds, chromeFlow) into ContactPickerUiState
     //   in ONE construction per emission (no chained .copy() stages; see the
     //   pipeline comment above `filterConfigFlow`).
@@ -559,7 +559,11 @@ class ContactPickerViewModel @Inject constructor(
      */
     private val availableListsFlow: Flow<List<PickerListSummary>> =
         listRepo.observeAll().map { lists ->
-            lists.filter { !it.isArchived }
+            // Exclude the list being built/added-to (targetListId) and, in Move
+            // mode, the source list — filtering by the very list you're editing
+            // is meaningless (Add mode already drops its members from the
+            // candidates, so it could only ever match zero).
+            lists.filter { it.id != targetListId && it.id != sourceListId && !it.isArchived }
                 .map { PickerListSummary(id = it.id, name = it.name) }
         }
 
@@ -604,7 +608,11 @@ class ContactPickerViewModel @Inject constructor(
     val uiState: StateFlow<ContactPickerUiState> =
         combine(
             pickerContactsFlow,
-            searchQueryFlow.debounce(150L),
+            // Debounce moved to the screen (immediate field state + debounced
+            // commit). Debouncing here too would double-lag filtering, and
+            // round-tripping a debounced value back to the field is what made
+            // fast typing revert (each recomposition re-applied the stale value).
+            searchQueryFlow,
             filterConfigFlow,
             selectedIdsFlow,
             chromeFlow,

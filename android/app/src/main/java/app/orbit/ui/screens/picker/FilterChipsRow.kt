@@ -64,6 +64,9 @@ fun FilterChipsRow(
     onSelectInList: (listId: Long, listName: String) -> Unit,
     onClearInList: () -> Unit,
     modifier: Modifier = Modifier,
+    // A quiet line explaining why some chips are greyed (e.g. "long gap" needs
+    // call history). Null when nothing is disabled or no explanation applies.
+    disabledHint: String? = null,
 ) {
     // Recently-added is now a sort option, not a chip (see KDoc).
     val allChips: List<Pair<PickerFilter, String>> = listOf(
@@ -147,6 +150,21 @@ fun FilterChipsRow(
                     )
                 }
             }
+        }
+
+        // Why a chip is greyed — a disabled FilterChip can't say it itself, so
+        // the screen hands us the reason (usually: no call history yet).
+        disabledHint?.let { hint ->
+            Text(
+                text = hint,
+                style = OrbitTheme.type.meta,
+                color = OrbitTheme.colors.fgSubtle,
+                modifier = Modifier.padding(
+                    start = OrbitTheme.spacing.x4,
+                    end = OrbitTheme.spacing.x4,
+                    top = OrbitTheme.spacing.x1,
+                ),
+            )
         }
     }
 }

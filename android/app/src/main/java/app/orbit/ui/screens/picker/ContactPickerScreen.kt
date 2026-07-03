@@ -31,10 +31,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +62,7 @@ import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitSearchField
 import app.orbit.ui.theme.OrbitTheme
 import java.time.Instant
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -258,6 +261,20 @@ private fun ReadyContent(
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+
+    // Immediate, un-debounced field state. The field must NOT bind to the VM's
+    // debounced query — a recomposition mid-debounce (this screen recomposes
+    // constantly off the live Room flows) re-applies the stale value and
+    // reverts the just-typed character. We hold the raw input locally and
+    // debounce before committing to the VM.
+    var searchInput by rememberSaveable { mutableStateOf(state.searchQuery) }
+    LaunchedEffect(searchInput) {
+        if (searchInput != state.searchQuery) {
+            delay(SEARCH_DEBOUNCE_MS)
+            onSearchChanged(searchInput)
+        }
+    }
+
     // Measured height of the docked BatchCounter, and a one-shot flag set when a
     // selection tap is about to make the bar appear while the list is scrolled
     // to the bottom. In that case the appearing bar steals the bottom of the
@@ -273,10 +290,16 @@ private fun ReadyContent(
         }
     }
 
+    // Re-narrowing the visible set (filters, sort, or search) should reveal the
+    // new top matches — a stale scroll offset from the previous set hides them.
+    LaunchedEffect(state.activeFilters, state.sortBy, state.searchQuery) {
+        listState.scrollToItem(0)
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         OrbitSearchField(
-            query = state.searchQuery,
-            onQueryChange = onSearchChanged,
+            query = searchInput,
+            onQueryChange = { searchInput = it },
             // The shared matcher also searches phone digits.
             placeholder = "Search name or number",
             modifier = Modifier
@@ -308,6 +331,29 @@ private fun ReadyContent(
             }
         }
 
+        // A disabled FilterChip can't explain itself. Call-history filters
+        // ("long gap", "commonly/rarely called") read count 0 — and stay grey —
+        // until a call-log sync lands, which is invisible without a word.
+        val hasCallHistory = remember(state.allContacts) {
+            state.allContacts.any { it.lastCallAt != null }
+        }
+        val filterDisabledHint: String? = run {
+            val callDependent = listOf(
+                PickerFilter.CommonlyCalled,
+                PickerFilter.RarelyCalled,
+                PickerFilter.LongGap,
+            )
+            val anyGreyed = callDependent.any {
+                it !in state.activeFilters && it.countFor(state) == 0
+            }
+            when {
+                !anyGreyed -> null
+                !hasCallHistory ->
+                    "Filters like “long gap” wake up once Orbit has your call history."
+                else -> "Greyed filters have no matches right now."
+            }
+        }
+
         FilterChipsRow(
             activeFilters = state.activeFilters,
             onToggle = onToggleFilter,
@@ -322,6 +368,7 @@ private fun ReadyContent(
                     .filterIsInstance<PickerFilter.InList>()
                     .forEach { onToggleFilter(it) }
             },
+            disabledHint = filterDisabledHint,
             modifier = Modifier.padding(vertical = OrbitTheme.spacing.x2),
         )
 
@@ -355,6 +402,19 @@ private fun ReadyContent(
         val showSections = state.sortBy == PickerSort.ByName && state.searchQuery.isBlank()
         val sections: List<PickerSection> = remember(state.filteredContacts, showSections) {
             if (showSections) buildPickerSections(state.filteredContacts) else emptyList()
+        }
+
+        // Section currently at the top of the viewport → the rail highlights it
+        // at rest, so the letter in view is always emphasized as the user scrolls.
+        val activeSectionIndex by remember(sections) {
+            derivedStateOf {
+                if (sections.isEmpty()) {
+                    -1
+                } else {
+                    val first = listState.firstVisibleItemIndex
+                    sections.indexOfLast { it.headerItemIndex <= first }.coerceAtLeast(0)
+                }
+            }
         }
 
         // Shared row slot for the sectioned and flat branches below.
@@ -437,6 +497,7 @@ private fun ReadyContent(
                             listState.scrollToItem(sections[index].headerItemIndex)
                         }
                     },
+                    activeIndex = activeSectionIndex,
                     modifier = Modifier.align(Alignment.CenterEnd),
                 )
             }
@@ -581,6 +642,9 @@ private fun ShowIgnoredControl(
         )
     }
 }
+
+/** Debounce before committing a search keystroke to the VM (see the field). */
+private const val SEARCH_DEBOUNCE_MS = 150L
 
 /**
  * One alphabetical section of the filtered list, plus the LazyColumn item index
