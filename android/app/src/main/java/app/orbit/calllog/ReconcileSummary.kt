@@ -21,11 +21,6 @@ import androidx.compose.runtime.Immutable
  *    [app.orbit.domain.usecase.MarkCalledUseCase] was invoked (drives the
  *    cross-list `nextDueAt` recomputation surface). Ignored contacts contribute
  *    to `inserted` but never to `contactsPropagated` — IGNORE-09.
- *  - `newIncomingContactIds`: de-duplicated list of contactIds for tracked,
- *    non-ignored, non-paused contacts that had a new INCOMING call event (completed,
- *    durationSec >= 1) whose call ended within the last 10 minutes. Drives the
- *    post-reconcile follow-up enqueue in [app.orbit.calllog.CallLogSyncWorker]
- *    (D-11 / NOTIF-04). Empty list when no qualifying incoming calls were ingested.
  *
  * Invariant (when `sinceMs == 0` and no read errors): `inserted + skipped == scanned`.
  */
@@ -35,7 +30,6 @@ data class ReconcileSummary(
     val inserted: Int,
     val skipped: Int,
     val contactsPropagated: Int,
-    val newIncomingContactIds: List<Long> = emptyList(),
 ) {
     companion object {
         val EMPTY = ReconcileSummary(
@@ -43,7 +37,6 @@ data class ReconcileSummary(
             inserted = 0,
             skipped = 0,
             contactsPropagated = 0,
-            newIncomingContactIds = emptyList(),
         )
     }
 }

@@ -18,8 +18,6 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
 
-private const val INCOMING_RECENCY_MS = 10L * 60 * 1_000 // 10 minutes (D-11)
-
 /**
  * Call-log reconciliation orchestrator.
  *
@@ -115,11 +113,6 @@ open class CallLogReconciler @Inject constructor(
         var skipped = 0
         val touchedContactIds = mutableSetOf<Long>()
         val ignoredContactIdsTouched = mutableSetOf<Long>()
-        // D-11 / NOTIF-04: new INCOMING events from tracked, non-ignored, non-paused
-        // contacts whose call ended within the last 10 minutes. De-duplicated via Set.
-        // "Call ended at" = row.whenMs + row.durationSec * 1000L (whenMs is call start).
-        val newIncomingContactIds = mutableSetOf<Long>()
-        val nowMs = System.currentTimeMillis()
 
         for (row in rows) {
             scanned++
@@ -153,23 +146,13 @@ open class CallLogReconciler @Inject constructor(
                 // The non-ignored path delegates to MarkCalledUseCase, which does
                 // the CallEvent insert inside its atomic markCalledAtomic
                 // transaction (insert + per-list nextDueAt update + skipCount reset).
+                // A missed inbound call routes through MarkCalledUseCase like any
+                // other event, but the rule engine surfaces it (nextDueAt = the
+                // moment they rang) instead of resetting the cadence forward — see
+                // KeepInTouchEngine step 3c. No follow-up notification is enqueued;
+                // the miss shows up in-app, silently (2026-07-03 notification principle).
                 markCalledUseCase(contact.id, event)
                 touchedContactIds += contact.id
-
-                // D-11 / NOTIF-04: collect new INCOMING events for the follow-up enqueue.
-                // Conditions (all must hold):
-                //  1. Direction is INCOMING (INCOMING_TYPE + ANSWERED_EXTERNALLY_TYPE, per toDirection())
-                //  2. Call ended within the last 10 minutes — "ended at" = whenMs + durationSec*1000
-                //     (whenMs is the call start time; durationSec is the answered duration)
-                //  3. Contact is non-paused (pausedUntil is null or already expired)
-                val callEndedAtMs = row.whenMs + row.durationSec * 1_000L
-                val isPaused = contact.pausedUntil != null && contact.pausedUntil.toEpochMilli() > nowMs
-                if (row.toDirection() == CallDirection.INCOMING &&
-                    callEndedAtMs >= nowMs - INCOMING_RECENCY_MS &&
-                    !isPaused
-                ) {
-                    newIncomingContactIds += contact.id
-                }
             }
             inserted++
         }
@@ -184,7 +167,6 @@ open class CallLogReconciler @Inject constructor(
             inserted = inserted,
             skipped = skipped,
             contactsPropagated = touchedContactIds.size,
-            newIncomingContactIds = newIncomingContactIds.toList(),
         )
     }
 

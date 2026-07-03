@@ -20,6 +20,9 @@ import java.time.Instant
  *   3. No call history               -> due now (cold start)
  *   3b. Latest event is an ATTEMPT   -> lastCallAt + AttemptCooldown.DURATION
  *       (reach-out that didn't connect; flat short cooldown, no adjustments)
+ *   3c. Latest event is a MISSED inbound call (INCOMING, zero-duration, from
+ *       the call log) -> lastCallAt (due since they rang; a call-back rises up
+ *       the deck the longer it waits — never resets the cadence forward)
  *   4. Otherwise                     -> lastCallAt + adjusted cooldown
  *
  * Manual-source calls (CallSource.MANUAL) and zero-duration events are ignored for
@@ -48,6 +51,19 @@ class KeepInTouchEngine(private val params: RuleParams.KeepInTouch) : RuleEngine
         //     so those still take precedence.
         if (ctx.lastCallSource == CallSource.ATTEMPT) {
             return lastCall.plus(AttemptCooldown.DURATION)
+        }
+
+        // 3c. Missed / declined inbound call — THEY reached out and you didn't
+        //     connect (INCOMING, zero-duration, from the call log). It is not a
+        //     contact, so it must not reset the cadence forward the way a real
+        //     connection does. Surface them "due since they rang" so the
+        //     call-back rises up the deck the longer it waits. After pause (a
+        //     missed call never un-pauses someone you stepped back) and attempt.
+        if (ctx.lastCallSource == CallSource.CALL_LOG &&
+            ctx.lastCallDirection == CallDirection.INCOMING &&
+            ctx.lastCallDurationSec == 0
+        ) {
+            return lastCall
         }
 
         // 4. Compute base cooldown, scaled by skipCount via skipPenaltyHours,

@@ -36,6 +36,16 @@ class EnergizeEngine(private val params: RuleParams.Energize) : RuleEngine {
             return lastCall.plus(AttemptCooldown.DURATION)
         }
 
+        // Missed / declined inbound call — surface "due since they rang", never
+        // reset the cadence forward (see KeepInTouchEngine step 3c; bodies stay
+        // in lockstep).
+        if (ctx.lastCallSource == CallSource.CALL_LOG &&
+            ctx.lastCallDirection == CallDirection.INCOMING &&
+            ctx.lastCallDurationSec == 0
+        ) {
+            return lastCall
+        }
+
         val baseCooldownHours = params.cooldownMinHours.toLong()
         val skipExtension = params.skipPenaltyHours.toLong() * ctx.skipCount
         // Cap bounds skip escalation only — never the user's base cadence

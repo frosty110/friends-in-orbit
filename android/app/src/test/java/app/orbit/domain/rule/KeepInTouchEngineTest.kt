@@ -162,6 +162,26 @@ class KeepInTouchEngineTest {
     }
 
     @Test
+    fun `missed inbound call surfaces due since they rang`() {
+        val clock = TestClock(T0)
+        val due = engine.nextDue(
+            snapshot(),
+            ctx(
+                lastCall = T0,
+                durationSec = 0,                            // missed — no connection
+                direction = CallDirection.INCOMING,         // they reached out to us
+                source = CallSource.CALL_LOG,
+                skipCount = 5,                              // must not push them later
+            ),
+            clock,
+        )
+        // Due since the moment they rang — a call-back rises up the deck the longer
+        // it waits. Not lastCall + full cadence (which would bury someone who just
+        // reached out), and unaffected by skipCount.
+        assertEquals(T0, due)
+    }
+
+    @Test
     fun `paused contact takes precedence over an ATTEMPT`() {
         val clock = TestClock(T0)
         val pausedUntil = T0.plus(Duration.ofDays(7))

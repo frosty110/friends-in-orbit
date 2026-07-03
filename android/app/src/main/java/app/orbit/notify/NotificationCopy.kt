@@ -13,12 +13,9 @@ package app.orbit.notify
  * ### Notification templates (D-18)
  * - List nudge title: [nudgeTitle] — raw list name, never truncated here
  * - List nudge body: [nudgeBody] — opportunity framing, name-free; singular/plural by due count
- * - Follow-up title: [followUpTitle] — "{Name} called you." (the one name-bearing notification)
- * - Follow-up body: [followUpBody] — "Want to call back?"
  *
  * ### Channel strings (D-16)
  * - [CHANNEL_LABEL_LIST_PROMPTS] / [CHANNEL_DESC_LIST_PROMPTS] — orbit.list_prompt channel
- * - [CHANNEL_LABEL_FOLLOW_UPS] / [CHANNEL_DESC_FOLLOW_UPS] — orbit.incoming_followup.v2 channel
  *
  * ### Editor / UI copy (D-06, UI-SPEC Copywriting Contract)
  * - [LABEL_ADD_TIME], [LABEL_MUTED_BADGE], [SUMMARY_NO_DAYS], [SUMMARY_NO_TIME]
@@ -56,24 +53,6 @@ object NotificationCopy {
             "A few people in $listName are ready when you are. Start with one?"
         }
 
-    /**
-     * Title for an incoming-call follow-up notification (D-14).
-     *
-     * This is the ONE notification template that may include a contact name.
-     * Justification: the user just received a call from this person — the name
-     * is directly tied to a concrete, user-initiated event.
-     *
-     * Format: "{contactName} called you." — period terminates.
-     */
-    fun followUpTitle(contactName: String): String = "$contactName called you."
-
-    /**
-     * Body for an incoming-call follow-up notification.
-     *
-     * Returns the fixed string "Want to call back?" — question form, no exclamation.
-     */
-    fun followUpBody(): String = "Want to call back?"
-
     // -------------------------------------------------------------------------
     // Channel labels + descriptions (D-16)
     // -------------------------------------------------------------------------
@@ -83,12 +62,6 @@ object NotificationCopy {
 
     /** Channel description shown in Android system notification settings (orbit.list_prompt). */
     const val CHANNEL_DESC_LIST_PROMPTS = "A gentle nudge when you have someone to call."
-
-    /** Channel label shown in Android system notification settings (orbit.incoming_followup.v2). */
-    const val CHANNEL_LABEL_FOLLOW_UPS = "Incoming call follow-ups"
-
-    /** Channel description shown in Android system notification settings (orbit.incoming_followup.v2). */
-    const val CHANNEL_DESC_FOLLOW_UPS = "Ask to call back after an incoming call."
 
     // -------------------------------------------------------------------------
     // Editor UI copy (UI-SPEC Copywriting Contract)

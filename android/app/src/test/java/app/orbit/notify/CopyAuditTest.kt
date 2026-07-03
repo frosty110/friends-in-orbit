@@ -33,12 +33,6 @@ class CopyAuditTest {
         assertEquals("Late night", NotificationCopy.nudgeTitle(listName = "Late night"))
     }
 
-    @Test
-    fun followUpCopy_goldenString() {
-        assertEquals("Alice called you.", NotificationCopy.followUpTitle(contactName = "Alice"))
-        assertEquals("Want to call back?", NotificationCopy.followUpBody())
-    }
-
     // --- Forbidden-pattern audit ---
 
     @Test
@@ -47,14 +41,10 @@ class CopyAuditTest {
             NotificationCopy.nudgeTitle(listName = "Late night"),
             NotificationCopy.nudgeBody(listName = "Late night", dueCount = 3),
             NotificationCopy.nudgeBody(listName = "Late night", dueCount = 1),
-            NotificationCopy.followUpTitle(contactName = "Alice"),
-            NotificationCopy.followUpBody(),
             NotificationCopy.LABEL_ADD_TIME,
             NotificationCopy.LABEL_MUTED_BADGE,
             NotificationCopy.CHANNEL_LABEL_LIST_PROMPTS,
             NotificationCopy.CHANNEL_DESC_LIST_PROMPTS,
-            NotificationCopy.CHANNEL_LABEL_FOLLOW_UPS,
-            NotificationCopy.CHANNEL_DESC_FOLLOW_UPS,
             NotificationCopy.SUMMARY_NO_DAYS,
             NotificationCopy.SUMMARY_NO_TIME,
         )

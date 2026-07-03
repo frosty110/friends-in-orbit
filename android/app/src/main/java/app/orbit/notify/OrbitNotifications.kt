@@ -22,19 +22,16 @@ import androidx.core.content.getSystemService
  * ### Channel ABI
  * Channel IDs are part of the app's ABI — users can mute a channel in system
  * Settings and we must never rename or silently re-create an existing one.
- * [CHANNEL_LIST_PROMPT] and [CHANNEL_INCOMING_FOLLOWUP_V2] are new IDs (v1 ships
- * before public release, so no user has a muted version of these channels).
+ * [CHANNEL_LIST_PROMPT] is a new ID (v1 ships before public release, so no user
+ * has a muted version of this channel).
  */
 object OrbitNotifications {
 
     /** Channel ID for per-list nudge notifications (IMPORTANCE_DEFAULT). */
     const val CHANNEL_LIST_PROMPT = "orbit.list_prompt"
 
-    /** Channel ID for incoming-call follow-up notifications (IMPORTANCE_HIGH). */
-    const val CHANNEL_INCOMING_FOLLOWUP_V2 = "orbit.incoming_followup.v2"
-
     /**
-     * Ensures the current channel set exists and retires the two legacy channels.
+     * Ensures the current channel set exists and retires legacy channels.
      *
      * Safe to call on every app start (idempotent). Called from [OrbitApp.onCreate].
      */
@@ -44,6 +41,10 @@ object OrbitNotifications {
         // --- Delete retired channels (RESEARCH Pitfall 6: importance immutable) ---
         nm.deleteNotificationChannel("orbit.digest")
         nm.deleteNotificationChannel("orbit.incoming_followup")
+        // Retired 2026-07-03: incoming-call follow-up notifications were removed
+        // (Orbit only sends user-defined reminders). Delete the channel so dogfood
+        // installs stop showing it in system settings.
+        nm.deleteNotificationChannel("orbit.incoming_followup.v2")
 
         // --- Create current channels ---
         nm.createNotificationChannel(
@@ -52,13 +53,6 @@ object OrbitNotifications {
                 NotificationCopy.CHANNEL_LABEL_LIST_PROMPTS,
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply { description = NotificationCopy.CHANNEL_DESC_LIST_PROMPTS }
-        )
-        nm.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_INCOMING_FOLLOWUP_V2,
-                NotificationCopy.CHANNEL_LABEL_FOLLOW_UPS,
-                NotificationManager.IMPORTANCE_HIGH,
-            ).apply { description = NotificationCopy.CHANNEL_DESC_FOLLOW_UPS }
         )
     }
 }

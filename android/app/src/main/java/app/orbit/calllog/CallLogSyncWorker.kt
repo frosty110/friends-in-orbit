@@ -6,15 +6,9 @@ import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.OutOfQuotaPolicy
-import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import androidx.work.workDataOf
 import app.orbit.data.AppPrefs
 import app.orbit.data.android.CallLogReader
-import app.orbit.notify.IncomingFollowUpWorker
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
@@ -69,29 +63,10 @@ class CallLogSyncWorker @AssistedInject constructor(
         val summary = reconciler.reconcile(sinceMs = sinceMs, rows = rows)
         prefs.setLastCallLogSyncAt(now)
 
-        // D-11 / NOTIF-04: enqueue an expedited follow-up worker for each new incoming
-        // tracked contact reported by the reconciler. Uses setExpedited WITHOUT
-        // setInitialDelay (they are mutually exclusive).
-        // enqueueUniqueWork("follow_up_{contactId}", REPLACE) coalesces concurrent
-        // enqueues for the same contact (T-10-15); the 30-minute dedup in
-        // IncomingFollowUpWorker prevents notification spam across separate enqueues.
-        summary.newIncomingContactIds.forEach { contactId ->
-            val request = OneTimeWorkRequestBuilder<IncomingFollowUpWorker>()
-                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-                .setInputData(workDataOf(IncomingFollowUpWorker.KEY_CONTACT_ID to contactId))
-                .build()
-            WorkManager.getInstance(applicationContext).enqueueUniqueWork(
-                "follow_up_$contactId",
-                ExistingWorkPolicy.REPLACE,
-                request,
-            )
-        }
-        if (summary.newIncomingContactIds.isNotEmpty()) {
-            Timber.tag(TAG).i(
-                "follow_up_enqueued count=%d",
-                summary.newIncomingContactIds.size,
-            )
-        }
+        // A missed inbound call surfaces the contact in-app (the engine sets
+        // nextDueAt = the moment they rang; see KeepInTouchEngine step 3c). There
+        // is no follow-up notification — Orbit only sends user-defined reminders,
+        // never event-driven pings (2026-07-03 notification principle).
 
         Timber.tag(TAG).i(
             "sync_complete full=%b scanned=%d inserted=%d skipped=%d propagated=%d",

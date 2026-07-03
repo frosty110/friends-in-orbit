@@ -28,10 +28,9 @@ import timber.log.Timber
  *
  * Implements [Configuration.Provider] so WorkManager uses Hilt's
  * [HiltWorkerFactory] to instantiate @HiltWorker classes — required for
- * [app.orbit.calllog.CallLogSyncWorker], [app.orbit.notify.ListPromptWorker],
- * and [app.orbit.notify.IncomingFollowUpWorker]. The AndroidManifest
- * `tools:node="remove"` block removes the default initializer so this
- * Configuration takes effect.
+ * [app.orbit.calllog.CallLogSyncWorker] and [app.orbit.notify.ListPromptWorker].
+ * The AndroidManifest `tools:node="remove"` block removes the default
+ * initializer so this Configuration takes effect.
  *
  * ContentObserver lifecycle: [ContentObserverController.start] is idempotent
  * and called on every cold start. Safe without READ_CALL_LOG granted — the
@@ -92,8 +91,9 @@ class OrbitApp : Application(), Configuration.Provider, ImageLoaderFactory {
         // Cancel the legacy periodic work by literal name so any installed-device
         // WorkManager record is cleaned up. The string "orbit.daily_digest"
         // is byte-identical to the old worker's UNIQUE_NAME so the stale record is
-        // actually cancelled on existing installs (NOTIF-08). Two workers remain:
-        // ListPromptWorker and IncomingFollowUpWorker.
+        // actually cancelled on existing installs (NOTIF-08). One notification
+        // worker remains: ListPromptWorker (the incoming follow-up was removed
+        // 2026-07-03 — Orbit only sends user-defined reminders).
         WorkManager.getInstance(applicationContext).cancelUniqueWork("orbit.daily_digest")
 
         // Re-anchor all per-list nudge chains on every cold start so
