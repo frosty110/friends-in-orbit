@@ -1,7 +1,7 @@
 # life-right-now
 
 **Status:** stub
-**Last reviewed:** 2026-06-30
+**Last reviewed:** 2026-07-03
 **Ground truth:**
 - Code: not yet implemented
 - Tests: none yet
@@ -53,7 +53,14 @@ In one line: a streak measures days-without-a-gap and punishes the gap; this mea
 
 - **Three states total** — Steady (default) + Quiet + Leaning in. No "Lighter" tier in v1; clarity over granularity.
 - Set in **Settings**; while a non-Steady season is active, **Home shows a calm banner** naming the season with one-tap "end early," so muted nudges are never a surprise.
-- Quiet pauses **scheduled nudges only**; incoming-call follow-ups still fire (they respond to a real call the user just received, not a nag).
+- Quiet pauses **scheduled nudges**. (Superseded 2026-07-03: the incoming-call follow-up *notification* was removed entirely under the "only user-defined reminders" principle — a missed call now surfaces the contact in-app, silently, instead of notifying — so there is no event-driven notification left to fire during Quiet or otherwise.)
+
+**Resolved (2026-07-03, onboarding feedback):**
+
+- **The daily rhythm is baseline-anchored, not a fixed number.** Orbit derives a *baseline* from the call history imported at onboarding — how many distinct people the user actually reaches in a typical week over the look-back window — and expresses the rhythm relative to that. "Three a day" becomes only the fallback when there is no history to learn from. A rhythm read from the user's real life cannot shame them the way an arbitrary quota can.
+- **Onboarding is the entry point.** After the call-log import, onboarding shows the user their *recent rhythm* as a retrospective, descriptive graph — how often they have actually been reaching the people they just added — and lets them set or confirm their rhythm against it. The graph is the honest, motivating artifact: it shows reality, not a target.
+- **"Aggressive" stretches and "time apart" are the existing modes, now with a reference point.** Wanting more people around is *Leaning in* (above baseline); wanting a break is *Quiet* (below / paused). Both stay temporary via the "until" mechanic. The baseline adds no concept — it just tells the modes what "more" and "less" are relative to.
+- **Still no forward projection.** The feedback that prompted this asked for a projection to motivate ("at this pace you'll reach everyone in N days"). That is the scored-target failure mode principle 5 forbids — declined. The retrospective baseline graph does the motivating without turning relationships into throughput to clear.
 
 **Voice.** In-app surfaces (banners, settings) may name people, unlike notifications. All copy follows `voice.md`: sentence case, no exclamation, no shame, no streaks. The framing is always the user's season and the user's choice, never performance.
 
@@ -89,7 +96,7 @@ Modes, placement, and follow-up behavior are resolved above (*Resolved (2026-06-
 
 - A milder "Lighter" mode between Steady and Quiet — deferred; revisit only if Quiet feels too binary in dogfood.
 - For the deepest Quiet ("no contact"), offer a *fully silent* sub-option that pauses incoming-call follow-ups too? Default Quiet keeps follow-ups; fully-silent is a possible deepening. Verify on dogfood.
-- The daily-rhythm default — 3 is the starting point. Confirm it feels right against 2 on dogfood, and decide whether it lives per-person-per-day or is purely an app-wide surfacing volume.
+- The daily-rhythm default — resolved 2026-07-03: it is **baseline-derived** from imported call history, not a fixed number; 3 is only the no-history fallback (see *Baseline-anchored rhythm* above). Still open: whether it lives per-person-per-day or as a purely app-wide surfacing volume — leaning app-wide.
 - What period does the consistency reflection cover — rolling 30 days, calendar month, or "since you started"? Leaning rolling 30 days so it never has a jarring month-boundary reset.
 
 ---
@@ -107,7 +114,7 @@ The mode introduces no new scheduler. It parameterizes the ones that exist:
 
 ### Data model
 
-- App-level: new `AppPrefs` / DataStore keys — `life_mode` (enum name); `life_mode_until` (epoch millis, nullable — a specific calendar date is just a millis value, so the date picker needs no extra storage); and `daily_rhythm_target` (int, default 3 — the Steady pace the modes flex). Greenfield; `AppPrefs.resetAll()` must clear them. No Room migration needed for v1.
+- App-level: new `AppPrefs` / DataStore keys — `life_mode` (enum name); `life_mode_until` (epoch millis, nullable — a specific calendar date is just a millis value, so the date picker needs no extra storage); and `daily_rhythm_target` (int — the Steady pace the modes flex; **seeded from the onboarding baseline** (distinct people reached per week over the imported window), with 3 as the no-history fallback). Greenfield; `AppPrefs.resetAll()` must clear them. No Room migration needed for v1.
 - The consistency reflection is **derived, not stored as a streak** — compute it on read from existing `CallEventEntity` rows (count of distinct contacts reached in the trailing window). No counter to persist, nothing that can "break."
 - Reuse `domain/model/PauseDuration.kt` for the "until" choices so the vocabulary matches per-contact pause.
 - Per-list (later): a `lifeModeOverride` column on `ListEntity` beside `dueCount` / `nudgeScheduleJson` — explicitly deferred.
