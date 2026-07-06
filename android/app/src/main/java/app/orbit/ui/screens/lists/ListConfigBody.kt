@@ -311,6 +311,14 @@ private fun ColumnScope.ListConfigBodySections(
             value = state.notificationsEnabled,
             onChange = onNotificationsToggle,
         )
+        // Onboarding hides the full nudge editor (below) to stay lean, but the
+        // nudge is on by default — so state its schedule here, where the list is
+        // born, instead of only on the earlier permission screen. The user owns it
+        // at creation: the toggle above turns it off; retiming lives in settings.
+        // ADR 0009 — user-owned reminders, default-on, never a surprise.
+        if (isOnboarding && state.notificationsEnabled) {
+            OnboardingNudgeSummary(schedule = state.nudgeSchedule)
+        }
     }
 
     // D-05 / NOTIF-10: Nudges section is fully absent during onboarding — not

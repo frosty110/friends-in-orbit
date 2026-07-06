@@ -281,6 +281,44 @@ private fun ScheduleSummaryLine(schedule: NudgeSchedule) {
     }
 }
 
+/**
+ * Read-only nudge summary for the onboarding first-list step. Onboarding hides the
+ * full day/time editor (see `ListConfigBody`'s `if (!isOnboarding)`) to stay lean,
+ * but the nudge is on by default there — so this line makes it *legible*: the user
+ * sees exactly what "Reminders: on" means and owns it at creation. Turning it off
+ * uses the "Reminders" toggle above; retiming is deferred to list settings.
+ *
+ * ADR 0009 — notifications are user-owned reminders: default-on (mission principle
+ * 1), but never a surprise. This closes the gap where the default schedule was
+ * disclosed only on the permission screen, not at the moment the list is built.
+ */
+@Composable
+internal fun OnboardingNudgeSummary(schedule: NudgeSchedule?) {
+    // Mirror the scheduler's own fallback (NudgeScheduler.kt): a list with no
+    // stored schedule nudges on NudgeSchedule.DEFAULT — every day at 10:00.
+    val effective = (schedule ?: NudgeSchedule.DEFAULT)
+        .takeIf { it.days.isNotEmpty() && it.times.isNotEmpty() }
+        ?: NudgeSchedule.DEFAULT
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x2),
+        verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1),
+    ) {
+        Text(
+            text = NotificationCopy.scheduleSummary(
+                dayGroupLabel(effective.days),
+                effective.times.sorted().map { formatHour12(it) },
+            ),
+            style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fg),
+        )
+        Text(
+            text = "Change the days or time any time in this list's settings.",
+            style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
+        )
+    }
+}
+
 @Composable
 private fun MutedBadge() {
     Row(
@@ -389,6 +427,27 @@ private fun NudgeScheduleSectionEmptyPreview() {
             schedule = NudgeSchedule(days = emptySet(), times = emptyList()),
             notificationsEnabled = true,
             onScheduleChange = {},
+        )
+    }
+}
+
+@Preview(name = "OnboardingNudgeSummary — light, default (every day 10am)", showBackground = true)
+@Composable
+private fun OnboardingNudgeSummaryLightPreview() {
+    OrbitTheme(darkTheme = false) {
+        OnboardingNudgeSummary(schedule = null)
+    }
+}
+
+@Preview(name = "OnboardingNudgeSummary — dark, custom schedule", showBackground = true)
+@Composable
+private fun OnboardingNudgeSummaryDarkPreview() {
+    OrbitTheme(darkTheme = true) {
+        OnboardingNudgeSummary(
+            schedule = NudgeSchedule(
+                days = setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY),
+                times = listOf(LocalTime.of(9, 0)),
+            ),
         )
     }
 }
