@@ -1,0 +1,110 @@
+name: Release (signed AAB + APK)
+
+# Builds the SIGNED, R8-minified release artifacts and publishes them:
+#   - app-release.aab  → upload to Play Console (Internal testing track)
+#   - app-release.apk  → sideloadable "real" release build for smoke-testing R8
+#
+# Deliberately NOT on every push (unlike the debug workflow). Trigger it when you
+# mean to cut a release:
+#   - push a tag matching v*  (e.g. `git tag v1.1.0 && git push origin v1.1.0`), or
+#   - Actions → "Release (signed AAB + APK)" → Run workflow.
+#
+# Signing material comes from repo secrets (set once):
+#   ORBIT_KEYSTORE_BASE64    — base64 of the release .jks
+#   ORBIT_KEYSTORE_PASSWORD  — store + key password
+#   ORBIT_KEY_ALIAS          — key alias ("orbit")
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      note:
+        description: "Optional note to show in the release body"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platforms;android-35 build-tools;35.0.0
+
+      - name: Decode keystore + write keystore.properties
+        env:
+          ORBIT_KEYSTORE_BASE64: ${{ secrets.ORBIT_KEYSTORE_BASE64 }}
+          ORBIT_KEYSTORE_PASSWORD: ${{ secrets.ORBIT_KEYSTORE_PASSWORD }}
+          ORBIT_KEY_ALIAS: ${{ secrets.ORBIT_KEY_ALIAS }}
+        run: |
+          if [ -z "$ORBIT_KEYSTORE_BASE64" ]; then
+            echo "::error::ORBIT_KEYSTORE_BASE64 secret is not set — cannot sign a release."
+            exit 1
+          fi
+          KS="${RUNNER_TEMP}/orbit-release.jks"
+          echo "$ORBIT_KEYSTORE_BASE64" | base64 --decode > "$KS"
+          cat > android/keystore.properties <<EOF
+          storeFile=$KS
+          storePassword=$ORBIT_KEYSTORE_PASSWORD
+          keyAlias=$ORBIT_KEY_ALIAS
+          keyPassword=$ORBIT_KEYSTORE_PASSWORD
+          EOF
+          echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Build signed release AAB + APK
+        working-directory: android
+        # Same version-stamping as the debug workflow; keystore.properties on disk
+        # drives signing (see android/app/build.gradle.kts signingConfigs).
+        env:
+          ORBIT_VERSION_CODE: ${{ github.run_number }}
+          ORBIT_BUILD_LABEL: release ${{ github.run_number }} ${{ env.SHORT_SHA }}
+        run: ./gradlew :app:bundleRelease :app:assembleRelease --no-daemon
+
+      - name: Verify APK signature
+        run: |
+          APKSIGNER="${ANDROID_HOME}/build-tools/35.0.0/apksigner"
+          "$APKSIGNER" verify --print-certs \
+            android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Stage artifacts
+        run: |
+          OUT="${RUNNER_TEMP}/out"; mkdir -p "$OUT"
+          cp android/app/build/outputs/bundle/release/app-release.aab \
+            "$OUT/orbit-${{ github.run_number }}-${SHORT_SHA}-release.aab"
+          cp android/app/build/outputs/apk/release/app-release.apk \
+            "$OUT/orbit-${{ github.run_number }}-${SHORT_SHA}-release.apk"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            TAG="release-${{ github.run_number }}"
+          fi
+          gh release create "$TAG" "${OUT}"/* \
+            --target "$GITHUB_SHA" \
+            --title "Release ${TAG} (${SHORT_SHA})" \
+            --notes "Signed release build from \`${{ github.ref_name }}\` @ \`${SHORT_SHA}\`.
+
+          - \`.apk\` — sideload to smoke-test the R8/minified build (tap to install).
+          - \`.aab\` — upload to Play Console → Internal testing.
+
+          ${{ github.event.inputs.note }}"
