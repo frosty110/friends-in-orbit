@@ -37,7 +37,7 @@ android {
         //     requires it to strictly increase. Falls back to 1 for local builds.
         //   ORBIT_BUILD_LABEL  — human-readable build tag (e.g. "build 42 a1b2c3d").
         //     Absent locally, so local builds read "1.0.0-local".
-        val semver = "1.0.0"
+        val semver = "1.1.0"
         versionCode = providers.environmentVariable("ORBIT_VERSION_CODE").orNull?.toIntOrNull() ?: 1
         versionName = providers.environmentVariable("ORBIT_BUILD_LABEL").orNull
             ?.let { "$semver ($it)" } ?: "$semver-local"
