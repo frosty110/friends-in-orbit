@@ -28,8 +28,19 @@ android {
         applicationId = "io.github.frosty110.orbit"
         minSdk = 31
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        // Version — the semver base lives here (human-owned; bump it deliberately
+        // for a real release). CI stamps the build identity so every published APK's
+        // Settings → About shows exactly which build it came from. Env vars are read
+        // via the providers API so the configuration cache tracks them and
+        // invalidates when they change.
+        //   ORBIT_VERSION_CODE — monotonic build number (CI run number); Play
+        //     requires it to strictly increase. Falls back to 1 for local builds.
+        //   ORBIT_BUILD_LABEL  — human-readable build tag (e.g. "build 42 a1b2c3d").
+        //     Absent locally, so local builds read "1.0.0-local".
+        val semver = "1.0.0"
+        versionCode = providers.environmentVariable("ORBIT_VERSION_CODE").orNull?.toIntOrNull() ?: 1
+        versionName = providers.environmentVariable("ORBIT_BUILD_LABEL").orNull
+            ?.let { "$semver ($it)" } ?: "$semver-local"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
 

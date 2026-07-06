@@ -49,7 +49,16 @@ jobs:
         with:
           packages: platforms;android-35 build-tools;35.0.0
 
+      - name: Compute build metadata
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
       - name: Assemble debug APK
+        # CI stamps the version so the installed app's Settings → About shows this
+        # exact build (see android/app/build.gradle.kts). versionCode = run number
+        # (monotonic, Play-safe); versionName = "1.0.0 (build <run> <sha>)".
+        env:
+          ORBIT_VERSION_CODE: ${{ github.run_number }}
+          ORBIT_BUILD_LABEL: build ${{ github.run_number }} ${{ env.SHORT_SHA }}
         run: ./gradlew :app:assembleDebug --no-daemon
 
       # Give the asset a distinguishable name so multiple downloads in the
