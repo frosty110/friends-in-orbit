@@ -68,6 +68,20 @@ So if it ships, it ships **reframed as reflection, not performance**:
 
 Decision before this graduates: does a weekly-rhythm reflection actually make someone *more likely to pick up the phone* (the mission filter), or is it decoration that quietly reintroduces performance pressure? If we can't answer yes to the first, it stays in the doc, not in the app.
 
+### `HOME-8` · The rhythm strip answers "who?" and "which way?" · **Shipped**
+`HOME-7` shipped as anonymous marks: a bar told you *that* a call happened and roughly how long, but not *who*. That is the half of the strip this doc actually asked for — "a memory of **who** you connected with this week… names/faces carry it." `HOME-8` closes it.
+
+**Tap a day → who you spoke to.** A bottom sheet lists that day's calls: face, name, direction, duration, time; each row taps through to the person. The strip stays the glance; the sheet is where names live, so the card surface gains no numbers.
+
+**A direction rim on each bar.** Bar *fill* is the person (unchanged); a 2dp *rim* is the direction — one cool hue for calls you made, another for calls you received. Two channels, so neither reads as the other. The hues are semantic, not per-theme (`OrbitColors.directionOutgoing` / `directionIncoming`): a theme-derived direction colour would collide with Cool's blue and Plum's violet accents and vanish exactly where the cue is needed.
+
+**Why this doesn't reintroduce the scoreboard.** Reciprocity is the one asymmetry a relationship app can honestly surface — "am I always the one calling?" is a question about *the relationship*, not a performance metric about the user. The guards:
+- The two directions are drawn and named **symmetrically** — "You called" / "They called", same weight, same size. Never "you only made N".
+- Counts appear **only inside the sheet the user opened on purpose**, never on the card surface. The glance stays wordless.
+- **No ratio, no target, no "balance score", no streak.** The sheet counts one day, and it drops the empty half rather than printing a zero, so a one-sided day reads as a fact instead of a shortfall.
+
+Same mission filter as `HOME-7`: if seeing the split ever produces guilt rather than a nudge to pick up the phone, the rim comes out and the sheet stays.
+
 ---
 
 ## Cut

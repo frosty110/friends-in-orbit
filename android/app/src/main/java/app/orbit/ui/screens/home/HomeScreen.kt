@@ -8,6 +8,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -44,8 +45,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,6 +65,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import app.orbit.AppViewModel
+import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.ListType
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.LocalPrivacyCurtain
@@ -73,6 +79,7 @@ import app.orbit.ui.screens.lists.DeleteListDialog
 import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
+import app.orbit.ui.util.formatDayHeader
 import coil.compose.SubcomposeAsyncImage
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -171,6 +178,9 @@ fun HomeScreen(
         onListSettings = { listId -> onOpenListSettings(listId.toString()) },
         onArchive = { listId -> vm.archiveList(listId) },
         onDeleteConfirmed = { listId -> vm.requestDelete(listId) },
+        // HOME-8 — a rhythm-day sheet row taps through to the person. No note
+        // focus: this is "who was that", not a post-call prompt.
+        onOpenContact = { contactId -> onOpenContactWithFocus(contactId.toString(), false) },
         postCallPrompt = postCallPrompt,
         curtain = curtain,
         onPostCallAddNote = { prompt ->
@@ -198,6 +208,7 @@ private fun HomeContent(
     onListSettings: (Long) -> Unit = {},
     onArchive: (Long) -> Unit = {},
     onDeleteConfirmed: (Long) -> Unit = {},
+    onOpenContact: (contactId: Long) -> Unit = {},
     postCallPrompt: AppViewModel.PostCallPromptState? = null,
     curtain: Boolean = false,
     onPostCallAddNote: (AppViewModel.PostCallPromptState) -> Unit = {},
@@ -336,6 +347,7 @@ private fun HomeContent(
                             onListSettings = { onListSettings(tile.id) },
                             onArchive = { onArchive(tile.id) },
                             onDelete = { pendingDeleteId = tile.id },
+                            onOpenContact = onOpenContact,
                         )
                     }
                     item { CreateListTile(label = "New list", onClick = onCreateList) }
@@ -378,6 +390,7 @@ private fun ListTile(
     onListSettings: () -> Unit = {},
     onArchive: () -> Unit = {},
     onDelete: () -> Unit = {},
+    onOpenContact: (contactId: Long) -> Unit = {},
 ) {
     val curtain = LocalPrivacyCurtain.current
     val isDark = OrbitTheme.colors.isDark
@@ -387,6 +400,10 @@ private fun ListTile(
     // revealing); the neutral noun for a list is "List".
     val displayName = if (curtain) "List" else tile.name
     val haptic = LocalHapticFeedback.current
+    // HOME-8 — which rhythm day the user tapped open (index into tile.rhythm,
+    // 0 = six days ago). rememberSaveable so a rotation mid-sheet doesn't drop
+    // it. Held per tile: each card's strip opens its own day.
+    var openDayIndex by rememberSaveable(tile.id) { mutableStateOf<Int?>(null) }
 
     Box(
         modifier = Modifier
@@ -475,10 +492,48 @@ private fun ListTile(
                         bottom = OrbitTheme.spacing.x4,
                     ),
             ) {
-                RhythmStrip(rhythm = tile.rhythm)
+                RhythmStrip(
+                    rhythm = tile.rhythm,
+                    onDayClick = { index -> openDayIndex = index },
+                )
             }
         }
     }
+
+    // HOME-8 — the tapped day's calls. Sits outside the card's Box so the
+    // sheet's scrim is not clipped by the card shape.
+    openDayIndex?.let { index ->
+        val day = tile.rhythm.getOrNull(index)
+        if (day == null || day.calls.isEmpty()) {
+            // The rhythm re-emitted while the sheet was open (a call landed, a
+            // member left) and this day no longer has anything to show. Close
+            // it — in an effect, never as a write during composition.
+            LaunchedEffect(index) { openDayIndex = null }
+        } else {
+            RhythmDaySheet(
+                dayLabel = rhythmDayLabel(index, tile.rhythm.size),
+                calls = day.calls,
+                curtain = curtain,
+                onOpenContact = { contactId ->
+                    openDayIndex = null
+                    onOpenContact(contactId)
+                },
+                onDismiss = { openDayIndex = null },
+            )
+        }
+    }
+}
+
+/**
+ * "Today" / "Yesterday" / "Wednesday 3 June" for rhythm index [index], where
+ * the last index is today. Derived from the same trailing-7-day window the
+ * strip's weekday letters use, so the sheet title and the tapped column can
+ * never disagree about which day they mean.
+ */
+@Composable
+private fun rhythmDayLabel(index: Int, size: Int): String = remember(index, size) {
+    val today = LocalDate.now()
+    formatDayHeader(today.minusDays((size - 1 - index).toLong()), today)
 }
 
 /** HOME-3 — the recommendation half of the header band. */
@@ -552,9 +607,17 @@ private fun NextUpAvatar(photoUri: String?, name: String, size: Dp) {
  * (axis = 125% of it), so short-chat lists and long-call lists each read fully.
  * One bar segment per qualifying call, coloured per person; quiet days show a
  * faint dot. Reflection, not a dashboard: no numbers, no targets.
+ *
+ * HOME-8 layers two things on top without changing that reading:
+ *   - a **direction rim** on each bar (cool violet = you called, cool blue =
+ *     they called). Fill stays the person, rim is the direction — two channels,
+ *     never confusable, so "how much am I reaching out vs being reached" is
+ *     answerable at a glance.
+ *   - a **tap target per day**, which opens [RhythmDaySheet] with that day's
+ *     calls: who, which way, how long, when.
  */
 @Composable
-private fun RhythmStrip(rhythm: List<RhythmDay>) {
+private fun RhythmStrip(rhythm: List<RhythmDay>, onDayClick: (index: Int) -> Unit) {
     val labels = remember {
         val today = LocalDate.now()
         (0..6).map { offset ->
@@ -566,10 +629,20 @@ private fun RhythmStrip(rhythm: List<RhythmDay>) {
     val scaleMax = ((totals.maxOrNull() ?: 0).coerceAtLeast(1)) * RHYTHM_HEADROOM
 
     Column(Modifier.fillMaxWidth()) {
-        Text(
-            text = "Last 7 days",
-            style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgSubtle),
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Last 7 days",
+                style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgSubtle),
+                modifier = Modifier.weight(1f),
+            )
+            // The rim colours are meaningless without a key, and the sheet is
+            // one tap too far to serve as the only explanation. Kept to two
+            // words so it survives large font scales on a narrow card.
+            DirectionLegend()
+        }
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -581,10 +654,49 @@ private fun RhythmStrip(rhythm: List<RhythmDay>) {
                     label = labels.getOrElse(idx) { "" },
                     isToday = idx == rhythm.lastIndex,
                     scaleMax = scaleMax,
+                    onClick = { onDayClick(idx) },
                     modifier = Modifier.weight(1f),
                 )
             }
         }
+    }
+}
+
+/** Two-swatch key for the direction rims. Swatches mirror the bar mark exactly:
+ *  neutral fill, coloured rim — so the legend teaches the encoding, not a
+ *  second one. */
+@Composable
+private fun DirectionLegend() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
+        modifier = Modifier.clearAndSetSemantics {
+            contentDescription =
+                "Bar outlines show direction: one colour for calls you made, another for calls you received"
+        },
+    ) {
+        LegendSwatch(label = "You", rim = OrbitTheme.colors.directionOutgoing)
+        LegendSwatch(label = "Them", rim = OrbitTheme.colors.directionIncoming)
+    }
+}
+
+@Composable
+private fun LegendSwatch(label: String, rim: Color) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(
+            Modifier
+                .size(width = 12.dp, height = 10.dp)
+                .clip(RHYTHM_BAR_SHAPE)
+                .background(OrbitTheme.colors.fgSubtle.copy(alpha = 0.22f))
+                .border(RHYTHM_RIM, rim, RHYTHM_BAR_SHAPE),
+        )
+        Text(
+            text = label,
+            style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
+        )
     }
 }
 
@@ -594,10 +706,29 @@ private fun DayColumn(
     label: String,
     isToday: Boolean,
     scaleMax: Float,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // A quiet day has nothing to open, so it stays inert rather than presenting
+    // a tap target that leads to an empty sheet.
+    val tappable = day.calls.isNotEmpty()
     Column(
-        modifier = modifier,
+        modifier = modifier
+            .clip(OrbitTheme.shapes.sm)
+            .then(
+                if (tappable) {
+                    Modifier
+                        .clickable(onClickLabel = "See this day", onClick = onClick)
+                        // mergeDescendants so the column announces as one target
+                        // ("Monday, 2 calls…") instead of the bare weekday letter
+                        // the child Text would otherwise contribute.
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = dayA11yLabel(label, day.calls)
+                        }
+                } else {
+                    Modifier
+                },
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
@@ -613,16 +744,25 @@ private fun DayColumn(
                         .background(OrbitTheme.colors.line),
                 )
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                // Per-bar floor. The rim wants 10dp (a 6dp bar minus a 2dp rim
+                // top and bottom leaves a 2dp sliver of person-colour, and the
+                // fill stops reading) — but a busy day has to stay inside the
+                // 48dp strip, so the floor yields to an even split of whatever
+                // height the gaps leave over.
+                val n = day.calls.size
+                val budget = RHYTHM_BAR_AREA.value - RHYTHM_BAR_GAP.value * (n - 1)
+                val minBar = (budget / n).coerceIn(4f, RHYTHM_BAR_MIN.value)
+                Column(verticalArrangement = Arrangement.spacedBy(RHYTHM_BAR_GAP)) {
                     day.calls.forEach { call ->
                         val frac = (call.durationSeconds / scaleMax).coerceIn(0f, 1f)
-                        val h = (frac * RHYTHM_BAR_AREA.value).coerceAtLeast(6f).dp
+                        val h = (frac * RHYTHM_BAR_AREA.value).coerceAtLeast(minBar).dp
                         Box(
                             Modifier
                                 .height(h)
                                 .width(RHYTHM_BAR_WIDTH)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(OrbitTheme.tones.rhythmBarForId(call.contactId)),
+                                .clip(RHYTHM_BAR_SHAPE)
+                                .background(OrbitTheme.tones.rhythmBarForId(call.contactId))
+                                .border(RHYTHM_RIM, directionColor(call.direction), RHYTHM_BAR_SHAPE),
                         )
                     }
                 }
@@ -637,6 +777,15 @@ private fun DayColumn(
         )
     }
 }
+
+/**
+ * Screen-reader label for a day column. The rim colours carry the direction
+ * split visually; this is the same information in words, since a colour rim is
+ * invisible to TalkBack.
+ */
+private fun dayA11yLabel(dayLabel: String, calls: List<RhythmCall>): String =
+    "$dayLabel, ${calls.size} ${if (calls.size == 1) "call" else "calls"}. " +
+        "${directionSummary(calls)}. Tap to see who."
 
 private fun memberLabel(count: Int?): String = when (count) {
     null -> ""
@@ -691,16 +840,49 @@ private val RHYTHM_BAR_AREA: Dp = 48.dp
 private val RHYTHM_BAR_WIDTH: Dp = 26.dp
 private const val RHYTHM_HEADROOM: Float = 1.25f
 
+// HOME-8 — the direction rim. 2dp is the smallest width that still holds a
+// legible hue at this bar size; the shape is shared with the legend swatch so
+// the key and the mark are literally the same object.
+private val RHYTHM_BAR_SHAPE = RoundedCornerShape(6.dp)
+private val RHYTHM_RIM: Dp = 2.dp
+private val RHYTHM_BAR_GAP: Dp = 3.dp
+private val RHYTHM_BAR_MIN: Dp = 10.dp
+
 // ---- Previews ----
 
+private fun previewCall(
+    id: Long,
+    contactId: Long,
+    minutes: Int,
+    direction: CallDirection,
+): RhythmCall = RhythmCall(
+    callEventId = id,
+    contactId = contactId,
+    contactName = when (contactId) {
+        1L -> "Kai Mensah"
+        2L -> "Mara Ellis"
+        else -> "Sam Okafor"
+    },
+    photoUri = null,
+    durationSeconds = minutes * 60,
+    direction = direction,
+    durationLabel = "$minutes min",
+    timeLabel = "4:30pm",
+)
+
 private fun previewRhythm(seed: Int): List<RhythmDay> = listOf(
-    RhythmDay(listOf(RhythmCall(1L, 14 * 60))),
+    RhythmDay(listOf(previewCall(1L, 1L, 14, CallDirection.OUTGOING))),
     RhythmDay(emptyList()),
-    RhythmDay(listOf(RhythmCall(2L, 26 * 60), RhythmCall(1L, 6 * 60))),
+    RhythmDay(
+        listOf(
+            previewCall(2L, 2L, 26, CallDirection.INCOMING),
+            previewCall(3L, 1L, 6, CallDirection.OUTGOING),
+        ),
+    ),
     RhythmDay(emptyList()),
-    RhythmDay(listOf(RhythmCall(3L, (41 - seed) * 60))),
-    RhythmDay(listOf(RhythmCall(2L, 9 * 60))),
-    RhythmDay(listOf(RhythmCall(1L, 4 * 60))),
+    RhythmDay(listOf(previewCall(4L, 3L, 41 - seed, CallDirection.INCOMING))),
+    RhythmDay(listOf(previewCall(5L, 2L, 9, CallDirection.OUTGOING))),
+    RhythmDay(listOf(previewCall(6L, 1L, 4, CallDirection.OUTGOING))),
 )
 
 private val previewState: HomeUiState = HomeUiState.Ready(

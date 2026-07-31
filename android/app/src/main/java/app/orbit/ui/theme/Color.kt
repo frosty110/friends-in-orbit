@@ -42,6 +42,18 @@ internal object OrbitPrimitives {
     val CreamDim       = Color(0xFFC9C2B9)
     val LineDark       = Color(0xFF3D3631)
 
+    // HOME-8 — call-direction rim colors for the 7-day rhythm bars. Deliberately
+    // COOL and outside every theme's warm personality range: a bar's FILL is the
+    // person (OrbitTones.rhythmBars), its RIM is the direction, so the two
+    // channels must never be confusable. Cool-on-warm also reads as "metadata,
+    // not identity". Violet vs. cyan-blue are ~65° apart in hue AND separated in
+    // lightness, so the pair survives a colour-vision deficiency and the 2dp
+    // rim size — a same-lightness purple/blue pair would not.
+    val DirOutgoing    = Color(0xFF5E3D96)   // light — you reached out
+    val DirIncoming    = Color(0xFF2F84B8)   // light — they reached you
+    val DirOutgoingDk  = Color(0xFFB49BEA)   // dark — lifted, same hue
+    val DirIncomingDk  = Color(0xFF6FBBE0)
+
     val AccentHover    = Color(0xFFB85A40)   // light
     val AccentDark     = Color(0xFFD87560)   // dark-mode lifted terracotta
     val AccentDarkHover = Color(0xFFE18670)
@@ -85,6 +97,12 @@ data class OrbitColors(
     val infoTint: Color,
     val swipeGhostDefer: Color,     // MT-05 — "Later" drag hint; never on danger family
     val swipeGhostSooner: Color,    // MT-06 — "Sooner" drag hint; semantic alias to positive
+    // HOME-8 — rhythm-bar direction rims. Semantic (like positive/danger), not
+    // personality: every theme inherits the same pair via `.copy()`, because a
+    // per-theme direction hue would collide with that theme's own accent (Cool's
+    // blue, Plum's violet) and the cue would vanish exactly where it's needed.
+    val directionOutgoing: Color,
+    val directionIncoming: Color,
     val isDark: Boolean,
 )
 
@@ -117,6 +135,8 @@ internal val LightColors = OrbitColors(
     infoTint = OrbitPrimitives.SlateTint,
     swipeGhostDefer = OrbitPrimitives.InkSoft,    // MT-05 — muted fg, never clay/terracotta
     swipeGhostSooner = OrbitPrimitives.Sage,      // MT-06 — matches positive
+    directionOutgoing = OrbitPrimitives.DirOutgoing,
+    directionIncoming = OrbitPrimitives.DirIncoming,
     isDark = false,
 )
 
@@ -149,6 +169,8 @@ internal val DarkColors = OrbitColors(
     infoTint = OrbitPrimitives.SlateTint,
     swipeGhostDefer = OrbitPrimitives.SoftDark,   // MT-05 — dark-mode fg-soft
     swipeGhostSooner = OrbitPrimitives.Sage,      // MT-06 — same sage in dark per UI-SPEC
+    directionOutgoing = OrbitPrimitives.DirOutgoingDk,
+    directionIncoming = OrbitPrimitives.DirIncomingDk,
     isDark = true,
 )
 

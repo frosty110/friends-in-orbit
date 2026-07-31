@@ -102,6 +102,7 @@ class HomeFeedRefreshTest {
             json = JsonProvider.json,
         ),
         callEventRepo = FakeCallEventRepository(),
+        contactRepo = FakeContactRepository(),
         scope = CoroutineScope(UnconfinedTestDispatcher()),
     )
 
