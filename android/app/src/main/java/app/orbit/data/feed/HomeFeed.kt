@@ -2,8 +2,10 @@ package app.orbit.data.feed
 
 import app.orbit.data.AppPrefs
 import app.orbit.data.entity.CallEventEntity
+import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.repository.CallEventRepository
+import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ListRepository
 import app.orbit.di.ApplicationScope
 import app.orbit.domain.clock.Clock
@@ -12,6 +14,8 @@ import app.orbit.domain.usecase.SurfaceResult
 import app.orbit.ui.screens.home.ListTileState
 import app.orbit.ui.screens.home.RhythmCall
 import app.orbit.ui.screens.home.RhythmDay
+import app.orbit.ui.util.formatDuration
+import app.orbit.ui.util.formatWallClock
 import java.time.Instant
 import java.time.ZoneId
 import javax.inject.Inject
@@ -63,6 +67,7 @@ open class HomeFeed @Inject constructor(
     private val appPrefs: AppPrefs,
     private val surfaceNext: SurfaceNextUseCase,
     private val callEventRepo: CallEventRepository,
+    private val contactRepo: ContactRepository,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
 
@@ -112,7 +117,13 @@ open class HomeFeed @Inject constructor(
         combine(
             surfaceNext(listId),
             callEventRepo.observeRecentForListContacts(listId),
-        ) { surface, calls ->
+            // HOME-8 — the rhythm strip taps through to "who did I talk to that
+            // day", so each bar needs a name and a face, not just a contactId.
+            // Room shares the underlying query with SurfaceNextUseCase's own
+            // member read, so this is not an extra round trip per list.
+            contactRepo.observeForListMembers(listId),
+        ) { surface, calls, members ->
+            val byId = members.associateBy { it.id }
             val nextUp = (surface as? SurfaceResult.Found)?.let { found ->
                 val last = calls.asSequence()
                     .filter { it.contactId == found.contact.id }
@@ -124,7 +135,7 @@ open class HomeFeed @Inject constructor(
                     lastCalledAt = last?.occurredAt,
                 )
             }
-            listId to ListEnrichment(nextUp = nextUp, rhythm = buildRhythm(calls))
+            listId to ListEnrichment(nextUp = nextUp, rhythm = buildRhythm(calls, byId))
         }
 
     /**
@@ -133,7 +144,10 @@ open class HomeFeed @Inject constructor(
      * [MIN_RHYTHM_SECONDS] (HOME-7 drops sub-3-min calls). Bars/colors are the
      * UI's job; this only places each call on its day.
      */
-    private fun buildRhythm(calls: List<CallEventEntity>): List<RhythmDay> {
+    private fun buildRhythm(
+        calls: List<CallEventEntity>,
+        contactsById: Map<Long, ContactEntity>,
+    ): List<RhythmDay> {
         val zone = ZoneId.systemDefault()
         val today = clock.now().atZone(zone).toLocalDate()
         val start = today.minusDays(6)
@@ -147,9 +161,26 @@ open class HomeFeed @Inject constructor(
         return (0..6).map { offset ->
             val date = start.plusDays(offset.toLong())
             RhythmDay(
-                calls = (byDate[date] ?: emptyList()).map {
-                    RhythmCall(contactId = it.contactId, durationSeconds = it.durationSeconds)
-                },
+                // Oldest-first within the day so the stacked bars read top-down
+                // in the same order the day sheet lists them.
+                calls = (byDate[date] ?: emptyList())
+                    .sortedBy { it.occurredAt }
+                    .map { ev ->
+                        val contact = contactsById[ev.contactId]
+                        RhythmCall(
+                            callEventId = ev.id,
+                            contactId = ev.contactId,
+                            // A member removed from the list between the call
+                            // and now still has its bar; "Someone" keeps the
+                            // day honest rather than dropping the call.
+                            contactName = contact?.displayName ?: "Someone",
+                            photoUri = contact?.photoUri,
+                            durationSeconds = ev.durationSeconds,
+                            direction = ev.direction,
+                            durationLabel = formatDuration(ev.durationSeconds),
+                            timeLabel = formatWallClock(ev.occurredAt, zone),
+                        )
+                    },
             )
         }
     }

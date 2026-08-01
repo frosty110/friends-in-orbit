@@ -43,6 +43,17 @@ Long-press on a list tile opens an anchored menu of manage-this-list actions. Th
 - **"Start this list" is intentionally not an item.** A plain tap already routes to Card View scoped to the list, so a menu entry would duplicate the primary gesture. Resolved against ground truth, not assumption (`HomeScreen.kt` tile `onClick` → `Routes.card(listId)`).
 - **Delete is reachable directly here** (not gated behind archive-first as it is in Lists Manager's archived section). Removing that archive buffer is why this surface's Delete carries an Undo — see Open product questions.
 
+**7-day rhythm strip — direction + tap-through (`HOME-8`, added 2026-07-31).**
+
+The strip under each card shows the list's last 7 days, one stacked bar per qualifying call (≥ 3 min; the 3-minute floor and the per-list relative scaling are `HOME-7` and unchanged). `HOME-8` makes it answer *who* and *which way*.
+
+- **Direction rim.** Each bar keeps its per-person fill (`OrbitTones.rhythmBarForId`) and gains a 2dp rim: `OrbitColors.directionOutgoing` for a call you made, `directionIncoming` for one you received. Fill = person, rim = direction; the two encodings never share a channel. The pair is a **semantic** colour slot, not a per-theme tone — a theme-derived direction hue would collide with the Cool and Plum accents. A two-swatch key ("You" / "Them") sits on the "Last 7 days" line; the swatch is the bar mark itself (neutral fill, coloured rim), so the key can't teach a different encoding than the strip uses.
+- **Bar floor.** The rim raises the per-bar minimum from 6dp to 10dp (a 6dp bar minus a 2dp rim top and bottom leaves a 2dp sliver of person-colour). On a crowded day the floor yields to an even split of the height the 3dp gaps leave over, so a many-call day still fits the 48dp strip instead of overflowing it.
+- **Tap a day → who.** A day column with at least one call is a tap target ("See this day") and opens `RhythmDaySheet`: the day header ("Today" / "Yesterday" / "Wednesday 3 June"), a symmetric summary ("You called 2 · They called 1", empty half dropped rather than printed as a zero), then one row per call — avatar wearing the same direction rim, name, "You called"/"They called", duration, wall-clock time. A row taps through to Contact Detail (no note focus — this is "who was that", not a post-call prompt). A quiet day has nothing to open and stays inert.
+- **Privacy curtain (PRIV-03).** Sheet names mask to "Someone", photos are withheld, and initials derive from the masked literal — the `BrowseRow` / `CallLogScreen` convention. The strip itself is already name-free.
+- **Data.** `RhythmCall` now carries `callEventId`, `contactName`, `photoUri`, `direction`, and pre-formatted `durationLabel` / `timeLabel`. Names hydrate in `HomeFeed.enrichOne` from `ContactRepository.observeForListMembers(listId)` (Room shares the query with `SurfaceNextUseCase`'s own member read — no extra round trip). Labels are formatted in the data layer so composables stay free of `Instant` and the JVM clock, matching `CallLogRow`. A contact removed from the list after the call renders as "Someone" rather than dropping the call. Manual "Logged" connections are written with `durationSeconds = 0` and never clear the 3-minute floor, so `direction` here is always carrier-observed.
+- **Voice.** The two directions are drawn and named symmetrically, always same-weight; counts appear only inside the sheet the user opened deliberately, never on the card surface; no ratio, target, balance score, or streak. See `vision/00-home/00-home.md` `HOME-8` for the full brand-risk reasoning.
+
 ### Acceptance criteria
 
 - [ ] Tiles render list name, due count, and member count from live flows (`HomeFeed.tiles` + `ListRepository.observeMemberCountsByListId`).
@@ -60,6 +71,12 @@ Long-press on a list tile opens an anchored menu of manage-this-list actions. Th
 - [ ] Only one quick-actions menu is open at a time; long-pressing another tile or tapping out dismisses it.
 - [ ] Long-press carries an `onLongClickLabel` ("Quick actions") and every menu item is ≥ 48dp with a TalkBack-readable label.
 - [ ] Voice: every menu label is sentence case, no exclamation, no gamification.
+- [ ] Every rhythm bar carries a direction rim; the rim colour is the same in every theme, and the "You"/"Them" key renders on the "Last 7 days" line.
+- [ ] A day with calls opens the day sheet on tap; a quiet day is inert (no tap target, no empty sheet).
+- [ ] The day sheet's summary drops the empty half instead of printing "They called 0", and never shows a ratio, target, or streak.
+- [ ] A day column announces to TalkBack as one node ("Monday, 2 calls. You called 1 · They called 1. Tap to see who."), not as a bare weekday letter.
+- [ ] A many-call day's bars stay inside the 48dp strip.
+- [ ] Under the privacy curtain the day sheet shows "Someone" with no photo and masked initials.
 
 ### Not in scope
 

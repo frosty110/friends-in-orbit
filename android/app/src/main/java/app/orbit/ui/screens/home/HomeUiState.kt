@@ -1,6 +1,7 @@
 package app.orbit.ui.screens.home
 
 import androidx.compose.runtime.Immutable
+import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.ListType
 
 /**
@@ -101,9 +102,32 @@ data class NextUp(
     val why: String,
 )
 
-/** One qualifying call in the 7-day rhythm (HOME-7). Sub-3-min calls are filtered upstream. */
+/**
+ * One qualifying call in the 7-day rhythm (HOME-7). Sub-3-min calls are
+ * filtered upstream.
+ *
+ * HOME-8 — the strip is tappable, so a bar now carries everything the day
+ * sheet renders: who, which way, how long, when. `contactName` / `photoUri`
+ * are hydrated in `HomeFeed.enrichOne` from the list's member contacts;
+ * [durationLabel] and [timeLabel] are pre-formatted there too, so the
+ * composables stay free of `Instant` and the JVM clock (the same B3 invariant
+ * `CallLogRow` follows).
+ *
+ * Manual "Logged" connections never reach here: they're written with
+ * `durationSeconds = 0` and the 3-minute rhythm floor drops them, so
+ * [direction] is always a real carrier-observed direction.
+ */
 @Immutable
-data class RhythmCall(val contactId: Long, val durationSeconds: Int)
+data class RhythmCall(
+    val callEventId: Long,
+    val contactId: Long,
+    val contactName: String,
+    val photoUri: String?,
+    val durationSeconds: Int,
+    val direction: CallDirection,
+    val durationLabel: String,   // "14 min"
+    val timeLabel: String,       // "4:30pm"
+)
 
 /** One day of the 7-day rhythm strip — the qualifying calls placed that day. */
 @Immutable

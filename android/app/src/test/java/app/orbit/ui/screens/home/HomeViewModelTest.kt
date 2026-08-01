@@ -92,6 +92,7 @@ class HomeViewModelTest {
             json = JsonProvider.json,
         ),
         callEventRepo = FakeCallEventRepository(),
+        contactRepo = FakeContactRepository(),
         scope = CoroutineScope(UnconfinedTestDispatcher()),
     ) {
         private val _tiles = MutableStateFlow(initialTiles)
