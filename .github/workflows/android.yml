@@ -22,6 +22,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # GATE: documentation + convention checks (features/_foundations/rules.md).
+      # Dependency-free and sub-second, so it runs first — a dangling rule
+      # citation or a log call in a PII-bearing layer fails here in seconds
+      # instead of after JDK + SDK setup and a full Gradle run. The
+      # requirement-ID leg is a ratchet against scripts/conventions-baseline.json:
+      # pre-existing debt is tolerated, growing it is not.
+      - name: Conventions + docs
+        working-directory: .
+        run: python3 scripts/check-conventions.py
+
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:

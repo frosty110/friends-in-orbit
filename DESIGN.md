@@ -12,7 +12,7 @@ Orbit is warm, quiet, unhurried. The design language: a calm neutral surface (wa
 |---|---|---|
 | **Token values** (color/type/shape/spacing/elevation/motion) | `design/colors_and_type.css` | Canonical design definitions |
 | **What the app renders** | `android/app/src/main/java/app/orbit/ui/theme/*.kt` | Ground truth at runtime |
-| **Token governance + checkpoints** | `.claude/knowledge/cross-cutting/design-tokens.md` | How to change tokens without drift |
+| **Numbered design rules** (tap targets, accent budget, motion) | [`features/_foundations/rules.md`](features/_foundations/rules.md) §Design | The rules source comments cite |
 | **Rationale / voice / layout rules** | `design/README.md` §"Visual foundations" | Why the system is the way it is |
 | **Handoff prototypes** (HTML/CSS from Claude Design) | `design/HANDOFF_README.md` + `design/preview/` | Reference only — not production |
 

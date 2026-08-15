@@ -11,6 +11,8 @@
 Not features — shared across all work.
 
 - [`_foundations/mission.md`](_foundations/mission.md) — why this app exists, target user, principles
+- [`_foundations/rules.md`](_foundations/rules.md) — the numbered engineering rules source comments cite (`rules.md §Design 3`), plus the citation conventions
+- [`_foundations/development-cycle.md`](_foundations/development-cycle.md) — how a change gets made and verified; the definition of done
 - [`_foundations/voice.md`](_foundations/voice.md) — content rules, "never say" list, tone
 - [`_foundations/stack.md`](_foundations/stack.md) — technical stack summary (defers to `android/gradle/libs.versions.toml`)
 - [`_foundations/ADRs/`](_foundations/ADRs/) — architecture decision records (0001-0004 currently accepted)

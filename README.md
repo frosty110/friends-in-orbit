@@ -28,6 +28,7 @@ Targeting a **v1.0.0** Play Store release. The UI shell and rule engine are in p
 
 | Path | What lives here |
 | --- | --- |
+| [`CLAUDE.md`](CLAUDE.md) | Working contract for AI sessions — read first if you're an agent. |
 | [`android/`](android/) | The app itself — native Kotlin + Jetpack Compose. See [`android/README.md`](android/README.md). |
 | [`features/`](features/) | Canonical product + technical spec, one folder per feature. Start at [`features/INDEX.md`](features/INDEX.md). |
 | [`design/`](design/) | Design system — color/type tokens, UI kits, fonts, icons. |
@@ -47,6 +48,24 @@ Build and run instructions live in [`android/README.md`](android/README.md). Qui
 yarn phone:run      # assemble debug, install over USB, launch
 yarn phone:logcat   # tail the app's logs
 ```
+
+### How changes get made
+
+Most work here happens in AI sessions, so the process is written down rather than assumed:
+
+- [`features/_foundations/development-cycle.md`](features/_foundations/development-cycle.md) — the loop (orient → plan → change → verify → document → land) and the definition of done.
+- [`features/_foundations/rules.md`](features/_foundations/rules.md) — the numbered rules source comments cite (`rules.md §Design 3`), the citation conventions, and the tracked documentation debt.
+- [`CLAUDE.md`](CLAUDE.md) — the short working contract an agent reads first.
+
+### Conventions check
+
+Rule citations, PII-free layers, and doc links are enforced by a dependency-free script — the same one CI runs:
+
+```sh
+python3 scripts/check-conventions.py
+```
+
+It fails on a `rules.md` citation that names no rule, a logging call in a PII-bearing layer (`ui`, `domain`, `data`, `nav`), or a dangling relative link in a Markdown file. Undocumented requirement IDs are ratcheted against `scripts/conventions-baseline.json`: existing debt is tolerated, new debt is not. After documenting some, re-run with `--update-baseline` in the same PR.
 
 ### Code style (ktlint)
 

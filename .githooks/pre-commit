@@ -1,18 +1,33 @@
 #!/bin/sh
-# Auto-format staged Kotlin sources with ktlint before each commit, so
-# formatting never reaches CI as a violation.
+# Local fast feedback before a commit:
+#   1. Convention + docs checks (features/_foundations/rules.md)
+#   2. ktlint auto-format on staged Kotlin
 #
 # Enable once per clone:
 #   git config core.hooksPath .githooks
 #
-# Non-blocking by design: if ktlint can't run (no SDK, offline), the commit
-# still proceeds — CI's ktlint step is report-only anyway.
+# Non-blocking by design — this hook warns, it does not stop you committing
+# work in progress. CI is the enforcing gate for both checks
+# (.github/workflows/android.yml). The point here is to hear about a dangling
+# rule citation now rather than after pushing.
 
+repo_root=$(git rev-parse --show-toplevel)
+
+# ── 1. Conventions + docs. Runs on every commit, including docs-only ones —
+# dangling links and undefined rule citations are exactly what those touch.
+if command -v python3 >/dev/null 2>&1; then
+  if ! python3 "$repo_root/scripts/check-conventions.py" --quiet; then
+    echo "pre-commit: convention checks FAILED (above) — CI will reject this."
+    echo "pre-commit: committing anyway; fix before you push."
+  fi
+fi
+
+# ── 2. ktlint on staged Kotlin only.
 staged=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.kts?$')
 [ -z "$staged" ] && exit 0
 
 echo "pre-commit: running ktlintFormat on staged Kotlin files…"
-( cd android && ./gradlew --quiet ktlintFormat ) || {
+( cd "$repo_root/android" && ./gradlew --quiet ktlintFormat ) || {
   echo "pre-commit: ktlintFormat skipped (non-fatal); committing as-is."
   exit 0
 }
