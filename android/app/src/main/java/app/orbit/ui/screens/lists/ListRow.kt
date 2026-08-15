@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,6 +24,9 @@ import app.orbit.data.ChipTone
 import app.orbit.data.entity.ListType
 import app.orbit.ui.components.CountBadge
 import app.orbit.ui.components.OrbitChip
+import app.orbit.ui.components.OrbitDropdownMenu
+import app.orbit.ui.components.OrbitMenuAction
+import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 
@@ -35,7 +36,7 @@ import app.orbit.ui.theme.OrbitTheme
  * Layout:
  *   ⠿  name + ruleSummary?     [Smart list]   [N]   ...
  *   |                                                |
- *   |                                                +-- overflow (Rename / Archive / List settings / Move up / Move down)
+ *   |                                                +-- overflow ([listRowMenuActions])
  *   +-- drag handle (own touch region)
  *
  * The drag handle owns its own [Box] with
@@ -138,35 +139,51 @@ fun ListRow(
                 size = OrbitTheme.spacing.x5 - OrbitTheme.spacing.x1,
                 tint = OrbitTheme.colors.fgSubtle,
             )
-            DropdownMenu(
+            OrbitDropdownMenu(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false },
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Rename") },
-                    onClick = { menuExpanded = false; onRename() },
-                )
-                DropdownMenuItem(
-                    text = { Text("Archive") },
-                    onClick = { menuExpanded = false; onArchive() },
-                )
-                DropdownMenuItem(
-                    text = { Text("List settings") },
-                    onClick = { menuExpanded = false; onConfigure() },
-                )
-                // Accessibility fallback for keyboard / TalkBack reorder (UI-SPEC).
-                DropdownMenuItem(
-                    text = { Text("Move up") },
-                    onClick = { menuExpanded = false; onMoveUp() },
-                )
-                DropdownMenuItem(
-                    text = { Text("Move down") },
-                    onClick = { menuExpanded = false; onMoveDown() },
-                )
-            }
+                actions = listRowMenuActions(
+                    listName = tile.name,
+                    onRename = onRename,
+                    onConfigure = onConfigure,
+                    onMoveUp = onMoveUp,
+                    onMoveDown = onMoveDown,
+                    onArchive = onArchive,
+                ),
+            )
         }
     }
 }
+
+/**
+ * The active-row overflow menu, as data so the ordering contract is
+ * unit-testable (see `ListRowMenuOrderTest`).
+ *
+ * 2026-08-15 UAT — "Archive" used to sit second from the top in plain fg,
+ * one slip away from a tap meant for "List settings". Everyday actions now
+ * lead (rename → settings → the a11y reorder fallbacks) and Archive sinks
+ * below the divider in danger, per the [OrbitMenuTone] contract.
+ */
+internal fun listRowMenuActions(
+    listName: String,
+    onRename: () -> Unit,
+    onConfigure: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onArchive: () -> Unit,
+): List<OrbitMenuAction> = listOf(
+    OrbitMenuAction(label = "Rename", onClick = onRename),
+    OrbitMenuAction(label = "List settings", onClick = onConfigure),
+    // Accessibility fallback for keyboard / TalkBack reorder (UI-SPEC).
+    OrbitMenuAction(label = "Move up", onClick = onMoveUp),
+    OrbitMenuAction(label = "Move down", onClick = onMoveDown),
+    OrbitMenuAction(
+        label = "Archive",
+        onClick = onArchive,
+        tone = OrbitMenuTone.Destructive,
+        supporting = "Hides $listName from home. You can restore it.",
+    ),
+)
 
 @Preview(name = "ListRow — light, static")
 @Composable

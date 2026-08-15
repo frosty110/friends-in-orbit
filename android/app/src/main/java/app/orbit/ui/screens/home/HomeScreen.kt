@@ -27,9 +27,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -71,7 +68,10 @@ import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
+import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitMenuAction
+import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.PostCallBanner
@@ -422,29 +422,32 @@ private fun ListTile(
                 },
             ),
     ) {
-        DropdownMenu(expanded = menuOpen, onDismissRequest = onDismissMenu) {
-            DropdownMenuItem(
-                text = { Text("Add people") },
-                onClick = { onDismissMenu(); onAddPeople() },
-            )
-            DropdownMenuItem(
-                text = { Text(if (tile.notificationsEnabled) "Mute prompts" else "Unmute prompts") },
-                onClick = { onDismissMenu(); onToggleMute() },
-            )
-            DropdownMenuItem(
-                text = { Text("List settings") },
-                onClick = { onDismissMenu(); onListSettings() },
-            )
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text("Archive") },
-                onClick = { onDismissMenu(); onArchive() },
-            )
-            DropdownMenuItem(
-                text = { Text("Delete", color = OrbitTheme.colors.danger) },
-                onClick = { onDismissMenu(); onDelete() },
-            )
-        }
+        // Menu order + destructive tinting follow the shared contract in
+        // [OrbitDropdownMenu]: everyday actions first, archive/delete last in
+        // danger. Archive used to render in plain fg here — it is reversible,
+        // but it still takes the list off home, so it reads as destructive.
+        OrbitDropdownMenu(
+            expanded = menuOpen,
+            onDismissRequest = onDismissMenu,
+            actions = listOf(
+                OrbitMenuAction(label = "Add people", onClick = onAddPeople),
+                OrbitMenuAction(label = "List settings", onClick = onListSettings),
+                OrbitMenuAction(
+                    label = if (tile.notificationsEnabled) "Mute prompts" else "Unmute prompts",
+                    onClick = onToggleMute,
+                ),
+                OrbitMenuAction(
+                    label = "Archive",
+                    onClick = onArchive,
+                    tone = OrbitMenuTone.Destructive,
+                ),
+                OrbitMenuAction(
+                    label = "Delete",
+                    onClick = onDelete,
+                    tone = OrbitMenuTone.Destructive,
+                ),
+            ),
+        )
 
         Column(Modifier.fillMaxWidth()) {
             // Zone 1 — tinted header band: list name + Next up, in one row.

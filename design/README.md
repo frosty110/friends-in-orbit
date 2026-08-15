@@ -143,6 +143,12 @@ Never fully pill-shaped buttons; never sharp corners. Rounded corners are consis
 - **Haptics** on swipe commit (subtle buzz). No haptics on scrolling or idle taps.
 - No confetti. No springs with overshoot > 5%. No infinite animations. No attention-grabbing motion on idle surfaces.
 
+**Menus.** Every options / overflow menu is ordered the same way: the everyday actions first, roughly by how often they're reached for, then the destructive ones last, behind a hairline divider, in `--danger`. Archive, delete, ignore, "convert" — anything that removes something or takes it out of rotation — never sits at the top of a menu where a mis-tap can find it, and never renders in the same colour as "Rename". Implemented once in `OrbitDropdownMenu` (`ui/components/OrbitMenu.kt`): callers hand it a list of actions and mark the destructive ones; ordering, the divider, and the danger tint are the component's job, not each screen's.
+
+**Text input and the keyboard.** A field you are typing into is always visible above the keyboard — the text can never sit behind the IME. `OrbitScreen` pads by the system-bar **and** IME insets (the app is edge-to-edge, so `adjustResize` does nothing on its own), and any surface hosting a text field — screen body, bottom sheet, dialog — keeps a scrollable container so the focused field can move up into the visible area. Labels sit above their field, so the label stays readable while the field is focused. This matters most for multi-line notes and descriptions, which live at the bottom of their surface where the keyboard lands.
+
+**Finishing a form.** A screen that saves as you go still offers a way to say "done" — an app-bar text action, and a Done button at the foot of a long form so a user who has scrolled to the end doesn't travel back up. Done closes and returns; it never becomes the thing that saves.
+
 **Iconography.** Phosphor Regular (outlined, rounded). Consistent 1.5px stroke at 24px. One phone icon per screen max. See `ICONOGRAPHY` below.
 
 **Photography.** Contact photos only (user-provided). No stock. No illustrated people. Avatars are masked to a full circle, 1px warm outline only if against a same-color background. Empty-state illustrations, if used, are abstract and warm — a chair, a window, a cup of tea — never cartoon figures.

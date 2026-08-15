@@ -11,11 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,6 +31,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.components.OrbitDropdownMenu
+import app.orbit.ui.components.OrbitMenuAction
+import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.formatRelative
 import coil.compose.AsyncImage
@@ -218,8 +218,9 @@ fun PickerContactRow(
 /**
  * The row's long-press menu. One quiet action per row state:
  * "Ignore" with its locked supporting line, or "Unignore" for an already
- * ignored row. Anchored [DropdownMenu] (FilterChipsRow precedent) — a modal
- * sheet would be too loud for a single action.
+ * ignored row. Anchored [OrbitDropdownMenu] (FilterChipsRow precedent) — a
+ * modal sheet would be too loud for a single action. "Ignore" carries the
+ * destructive tone; "Unignore" does not.
  */
 @Composable
 private fun PickerRowActionMenu(
@@ -229,41 +230,24 @@ private fun PickerRowActionMenu(
     onDismiss: () -> Unit,
     onAction: () -> Unit,
 ) {
-    DropdownMenu(
+    OrbitDropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-    ) {
-        if (isIgnored) {
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = "Unignore",
-                        style = OrbitTheme.type.body,
-                        color = OrbitTheme.colors.fg,
-                    )
-                },
-                onClick = onAction,
-            )
-        } else {
-            DropdownMenuItem(
-                text = {
-                    Column(modifier = Modifier.widthIn(max = 260.dp)) {
-                        Text(
-                            text = "Ignore",
-                            style = OrbitTheme.type.body,
-                            color = OrbitTheme.colors.fg,
-                        )
-                        Text(
-                            text = "Hide $displayName from Orbit. They stay in your phone's contacts.",
-                            style = OrbitTheme.type.meta,
-                            color = OrbitTheme.colors.fgMuted,
-                        )
-                    }
-                },
-                onClick = onAction,
-            )
-        }
-    }
+        actions = listOf(
+            if (isIgnored) {
+                // Restoring someone is not destructive — it stays in fg.
+                OrbitMenuAction(label = "Unignore", onClick = onAction)
+            } else {
+                OrbitMenuAction(
+                    label = "Ignore",
+                    onClick = onAction,
+                    tone = OrbitMenuTone.Destructive,
+                    supporting = "Hide $displayName from Orbit. " +
+                        "They stay in your phone's contacts.",
+                )
+            },
+        ),
+    )
 }
 
 @Preview(name = "PickerContactRow — light", showBackground = true)
