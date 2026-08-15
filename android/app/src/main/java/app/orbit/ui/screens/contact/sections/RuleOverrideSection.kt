@@ -173,6 +173,10 @@ private fun OverrideEditor(params: RuleParams, onChange: (RuleParams) -> Unit) {
  * the chosen interval (same fix ListConfigBody's slider got — committing
  * `cooldownMinHours` alone let the 336h default cap lie about long
  * intervals). Internal so the unit test can assert both bounds move.
+ *
+ * Floors at 1 day per ADR 0010, matching `INTERVAL_MIN_DAY` in ListConfigBody —
+ * the two sliders must stay in lockstep, so a change here needs the same change
+ * there and an ADR to go with it.
  */
 internal fun commitOverrideInterval(
     params: RuleParams.KeepInTouch,
