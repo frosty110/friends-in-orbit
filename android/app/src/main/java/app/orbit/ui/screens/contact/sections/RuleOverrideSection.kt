@@ -177,7 +177,7 @@ private fun OverrideEditor(params: RuleParams, onChange: (RuleParams) -> Unit) {
 internal fun commitOverrideInterval(
     params: RuleParams.KeepInTouch,
     days: Int,
-): RuleParams.KeepInTouch = params.withIntervalHours(days.coerceAtLeast(2) * 24)
+): RuleParams.KeepInTouch = params.withIntervalHours(days.coerceAtLeast(1) * 24)
 
 /**
  * Interval slider — mirrors ListConfigBody's `IntervalSliderLocal` ("Aim for
@@ -189,7 +189,7 @@ private fun IntervalDaysSlider(
     currentHours: Int,
     onCommit: (days: Int) -> Unit,
 ) {
-    val initialDays = (currentHours / 24f).coerceAtLeast(2f)
+    val initialDays = (currentHours / 24f).coerceAtLeast(1f)
     var days by remember(currentHours) { mutableFloatStateOf(initialDays) }
     Column(
         Modifier
@@ -205,17 +205,17 @@ private fun IntervalDaysSlider(
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                 modifier = Modifier.weight(1f),
             )
-            val rounded = days.toInt().coerceAtLeast(2)
+            val rounded = days.toInt().coerceAtLeast(1)
             Text(
-                text = "$rounded days",
+                text = "$rounded ${if (rounded == 1) "day" else "days"}",
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.accentPress),
             )
         }
         Slider(
             value = days,
             onValueChange = { days = it },
-            onValueChangeFinished = { onCommit(days.toInt().coerceAtLeast(2)) },
-            valueRange = 2f..60f,
+            onValueChangeFinished = { onCommit(days.toInt().coerceAtLeast(1)) },
+            valueRange = 1f..60f,
             colors = SliderDefaults.colors(
                 thumbColor = OrbitTheme.colors.accent,
                 activeTrackColor = OrbitTheme.colors.accent,
@@ -228,7 +228,7 @@ private fun IntervalDaysSlider(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "2 days",
+                text = "1 day",
                 style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
             )
             Text(
