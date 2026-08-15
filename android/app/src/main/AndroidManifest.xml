@@ -15,6 +15,14 @@
             <action android:name="android.intent.action.DIAL" />
             <data android:scheme="tel" />
         </intent>
+        <!-- Package-visibility gate for the picker's "Open in Contacts" action
+             (ui/util/PhoneContacts.kt). Same rule as ACTION_DIAL above: without
+             this, resolveActivity() on an ACTION_VIEW contact intent returns
+             null even on devices that do have a contacts app. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="vnd.android.cursor.item/contact" />
+        </intent>
     </queries>
 
     <application

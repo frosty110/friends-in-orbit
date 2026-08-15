@@ -720,6 +720,7 @@ class ContactPickerViewModel @Inject constructor(
                 displayName = c.displayName,
                 phone = phone?.phone ?: c.phoneNumber,
                 photoUri = c.photoUri,
+                phoneContactId = c.phoneContactId,
                 isIgnored = c.isIgnored,
                 callCount = callCount,
                 lastCallAt = lastCallAt,
