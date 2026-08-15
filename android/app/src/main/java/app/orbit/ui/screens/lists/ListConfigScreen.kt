@@ -36,6 +36,7 @@ import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeSchedule
 import app.orbit.ui.components.OrbitAppBar
+import app.orbit.ui.components.OrbitAppBarTextAction
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitSwitch
@@ -65,16 +66,18 @@ import java.time.LocalTime
  * `listId` arrives as a String for nav-graph compatibility; the VM reads it
  * from [androidx.lifecycle.SavedStateHandle].
  *
- * The `onSave` parameter is preserved on the screen signature for
- * back-compatibility with the existing nav graph (which calls `onSave =
- * { popBackStack() }`). The screen is save-on-change, so it never
- * explicitly fires `onSave` — back-arrow + system back are the exit paths.
+ * `onSave` is the screen's "I'm finished here" exit — an app-bar **Done** and
+ * a Done button at the foot of the form, both popping back to wherever the
+ * user came from (Lists Manager for a list they just created). Nothing is
+ * committed by it: the screen is still save-on-change, so Done only closes.
+ * Before 2026-08-15 the parameter was unused and the back arrow was the only
+ * way out, which read as "no way to finish" at the end of the create flow.
  */
 @Composable
 fun ListConfigScreen(
     listId: String,
     onBack: () -> Unit,
-    @Suppress("UNUSED_PARAMETER") onSave: () -> Unit,
+    onSave: () -> Unit,
     onAddContacts: (String) -> Unit,
     vm: ListConfigViewModel = hiltViewModel(),
 ) {
@@ -119,6 +122,7 @@ fun ListConfigScreen(
         state = state,
         snackbarHostState = snackbarHostState,
         onBack = onBack,
+        onDone = onSave,
         onNameChange = vm::setName,
         onRuleTemplateChange = vm::setRuleTemplate,
         onRuleParamsChange = { params ->
@@ -152,6 +156,7 @@ private fun ListConfigContent(
     state: ListConfigUiState,
     snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
+    onDone: () -> Unit,
     onNameChange: (String) -> Unit,
     onRuleTemplateChange: (RuleKind) -> Unit,
     onRuleParamsChange: (RuleParams) -> Unit,
@@ -174,6 +179,17 @@ private fun ListConfigContent(
         OrbitAppBar(
             title = title,
             leading = { OrbitIconButton("arrow-left", onBack, contentDescription = "Back") },
+            // Only offered once there is a list to be done with — Loading and
+            // NotFound have nothing to finish.
+            trailing = if (state is ListConfigUiState.Ready) {
+                {
+                    OrbitAppBarTextAction(
+                        text = "Done",
+                        onClick = onDone,
+                        contentDescription = "Done — back to your lists",
+                    )
+                }
+            } else null,
         )
 
         // Review follow-up #3 — show centred copy in NotFound, mirroring the
@@ -207,6 +223,9 @@ private fun ListConfigContent(
             state = state,
             isOnboarding = false,
             snackbarHostState = snackbarHostState,
+            // Foot-of-form Done, so the user who has just scrolled through
+            // every setting doesn't have to travel back up to the app bar.
+            onDone = onDone,
             onNameChange = onNameChange,
             onRuleTemplateChange = onRuleTemplateChange,
             onRuleParamsChange = onRuleParamsChange,
@@ -310,6 +329,7 @@ private fun ListConfigScreenStaticReadyLightPreview() {
                 ),
                 snackbarHostState = remember { SnackbarHostState() },
                 onBack = {},
+                onDone = {},
                 onNameChange = {},
                 onRuleTemplateChange = {},
                 onRuleParamsChange = {},
@@ -351,6 +371,7 @@ private fun ListConfigScreenStaticLateNightPreview() {
                 ),
                 snackbarHostState = remember { SnackbarHostState() },
                 onBack = {},
+                onDone = {},
                 onNameChange = {},
                 onRuleTemplateChange = {},
                 onRuleParamsChange = {},
@@ -388,6 +409,7 @@ private fun ListConfigScreenSmartReadyDarkPreview() {
                 ),
                 snackbarHostState = remember { SnackbarHostState() },
                 onBack = {},
+                onDone = {},
                 onNameChange = {},
                 onRuleTemplateChange = {},
                 onRuleParamsChange = {},
@@ -430,6 +452,7 @@ private fun ListConfigContentPreview() {
             ),
             snackbarHostState = remember { SnackbarHostState() },
             onBack = {},
+            onDone = {},
             onNameChange = {},
             onRuleTemplateChange = {},
             onRuleParamsChange = {},

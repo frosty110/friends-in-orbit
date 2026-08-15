@@ -1,8 +1,10 @@
 package app.orbit.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -10,7 +12,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.orbit.ui.theme.OrbitTheme
@@ -47,5 +52,40 @@ fun OrbitAppBar(
         if (trailing != null) {
             Box { trailing() }
         }
+    }
+}
+
+/**
+ * Text action for the app bar's trailing slot — "Done", "Save", "Skip".
+ *
+ * Screens that save on every change still need a way out that reads as
+ * finished: the back arrow works, but it says "go back", not "I'm done here"
+ * (2026-08-15 UAT, list creation). Accent-coloured so it registers as the
+ * screen's exit, 48dp tap target like every other control.
+ */
+@Composable
+fun OrbitAppBarTextAction(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null,
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+            .clip(OrbitTheme.shapes.md)
+            .clickable(onClick = onClick)
+            .then(
+                if (contentDescription != null) {
+                    Modifier.semantics { this.contentDescription = contentDescription }
+                } else Modifier,
+            )
+            .padding(horizontal = 12.dp),
+    ) {
+        Text(
+            text = text,
+            style = OrbitTheme.type.button.copy(color = OrbitTheme.colors.accent),
+        )
     }
 }
