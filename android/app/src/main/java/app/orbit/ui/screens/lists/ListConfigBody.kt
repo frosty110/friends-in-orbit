@@ -401,7 +401,7 @@ private fun IntervalSliderLocal(
     currentHours: Int,
     onCommit: (Int) -> Unit,
 ) {
-    val initialDays = (currentHours / 24f).coerceAtLeast(2f)
+    val initialDays = (currentHours / 24f).coerceAtLeast(1f)
     var days by remember(currentHours) { mutableFloatStateOf(initialDays) }
     Column(Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
@@ -410,9 +410,9 @@ private fun IntervalSliderLocal(
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                 modifier = Modifier.weight(1f),
             )
-            val rounded = days.toInt().coerceAtLeast(2)
+            val rounded = days.toInt().coerceAtLeast(1)
             Text(
-                text = "$rounded days",
+                text = "$rounded ${if (rounded == 1) "day" else "days"}",
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.accentPress),
             )
         }
@@ -420,10 +420,10 @@ private fun IntervalSliderLocal(
             value = days,
             onValueChange = { days = it },
             onValueChangeFinished = {
-                val intDays = days.toInt().coerceAtLeast(2)
+                val intDays = days.toInt().coerceAtLeast(1)
                 onCommit(intDays * 24)
             },
-            valueRange = 2f..60f,
+            valueRange = 1f..60f,
             colors = SliderDefaults.colors(
                 thumbColor = OrbitTheme.colors.accent,
                 activeTrackColor = OrbitTheme.colors.accent,
@@ -435,11 +435,20 @@ private fun IntervalSliderLocal(
     }
 }
 
-private const val INTERVAL_MIN_DAY = 2
+/**
+ * 1..60 days per ADR 0010. The floor is deliberately 1, not 2: Energize already
+ * defaults to a 24h cadence, and nothing below the UI enforces a wider gap
+ * (`withIntervalHours` floors at 1 hour). Do not raise it to "fix" the default
+ * 48h list rendering its thumb at ~1.7% of the track, flush against the `1d`
+ * tick — that reads as a mismatch but is a correct state on a linear scale, and
+ * raising the floor to hide it also silently rewrote 24h rows to 48h. If the
+ * compressed low end needs fixing, change the scale, not the floor.
+ */
+private const val INTERVAL_MIN_DAY = 1
 private const val INTERVAL_MAX_DAY = 60
 
 private val INTERVAL_TICKS: List<Pair<String, Int>> = listOf(
-    "2d" to 2,
+    "1d" to 1,
     "2w" to 14,
     "1m" to 30,
     "2m" to 60,

@@ -14,7 +14,7 @@
 
 - **Name** field.
 - **Cadence** templates (Keep in touch / Late night / Energize), each with a plain-language description.
-- An **Interval** slider ("Aim for every — 2 days") on a non-linear 1d→2m scale.
+- An **Interval** slider ("Aim for every — 2 days") on a linear 1d→2m scale. The scale is linear, not the non-linear one this doc long described (ADR 0010) — so the whole 1d–1w end of the range is squeezed into the first ~10% of the track, and the 2-day default sits ~1.7% along, visually flush with the `1d` tick.
 - **Active hours**: an "Always active" toggle plus from/to time pickers and a visual day-bar.
 - **Notifications** toggle ("Notify me when I should reach out").
 - **Nudges**: seven day-of-week circles + one or more times + "Add time."
@@ -37,3 +37,6 @@ Seven filled terracotta day-circles is a heavy, busy block that dominates the se
 
 ### `CONFIG-4` · Live "who this surfaces" preview · **Later**
 The ultimate legibility move: as the user tunes the rule, show a small live preview of *which people* it would surface and roughly how often. It closes the gap between abstract settings and concrete outcome — you'd *see* your rhythm, not just describe it.
+
+### `CONFIG-5` · Give the short end of the interval scale room to breathe · **Next**
+The interval scale is linear across 1–60 days, so the intervals people actually pick most — every 1 to 7 days — live in the first ~10% of the track, and the 2-day default renders flush against the `1d` tick. It reads as a bug (it has been reported as one twice) even though the number is correct. Curve the scale — log-ish, so 1d–1w takes roughly the first third and the sparse 1m–2m end compresses instead. The tick placement already derives from one shared fraction helper (`intervalLabelFraction`), so the thumb and the labels would follow the new curve together. Decided against fixing this by raising the minimum: see ADR 0010.

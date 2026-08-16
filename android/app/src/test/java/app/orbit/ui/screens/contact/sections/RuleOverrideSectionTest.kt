@@ -24,10 +24,10 @@ class RuleOverrideSectionTest {
     }
 
     @Test
-    fun `override interval commit floors at two days`() {
+    fun `override interval commit floors at one day`() {
         val tuned = commitOverrideInterval(RuleParams.KeepInTouch(), days = 0)
-        assertEquals(48, tuned.cooldownMinHours)
-        assertEquals(48 + RuleParams.KeepInTouch.SKIP_HEADROOM_HOURS, tuned.cooldownMaxHours)
+        assertEquals(24, tuned.cooldownMinHours)
+        assertEquals(24 + RuleParams.KeepInTouch.SKIP_HEADROOM_HOURS, tuned.cooldownMaxHours)
     }
 
     @Test
