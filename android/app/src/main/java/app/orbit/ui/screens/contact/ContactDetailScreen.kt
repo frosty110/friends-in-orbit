@@ -29,8 +29,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -81,7 +79,10 @@ import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitChip
+import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitMenuAction
+import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.ContactStatsPanel
@@ -267,53 +268,32 @@ private fun ContactDetailContent(
                                 onClick = { showOverflow = true },
                                 contentDescription = "More actions for ${readyContactName ?: "contact"}",
                             )
-                            DropdownMenu(
+                            // Ordering + danger tint per the shared
+                            // [OrbitDropdownMenu] contract: the everyday reads
+                            // lead, and "Ignore" — which takes the person out
+                            // of Orbit's rotation — sits last, below the rule.
+                            OrbitDropdownMenu(
                                 expanded = showOverflow,
                                 onDismissRequest = { showOverflow = false },
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Ignore", style = OrbitTheme.type.body) },
-                                    leadingIcon = {
-                                        PhIcon(
-                                            name = "eye-slash",
-                                            size = 18.dp,
-                                            tint = OrbitTheme.colors.fgMuted,
-                                        )
-                                    },
-                                    onClick = {
-                                        showOverflow = false
-                                        readyContactName?.let { onIgnore(it) }
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Pause", style = OrbitTheme.type.body) },
-                                    leadingIcon = {
-                                        PhIcon(
-                                            name = "pause-circle",
-                                            size = 18.dp,
-                                            tint = OrbitTheme.colors.fgMuted,
-                                        )
-                                    },
-                                    onClick = {
-                                        showOverflow = false
-                                        showPauseSheet = true
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("View all calls", style = OrbitTheme.type.body) },
-                                    leadingIcon = {
-                                        PhIcon(
-                                            name = "clock-counter-clockwise",
-                                            size = 18.dp,
-                                            tint = OrbitTheme.colors.fgMuted,
-                                        )
-                                    },
-                                    onClick = {
-                                        showOverflow = false
-                                        onViewAllCalls()
-                                    },
-                                )
-                            }
+                                actions = listOf(
+                                    OrbitMenuAction(
+                                        label = "View all calls",
+                                        onClick = onViewAllCalls,
+                                        icon = "clock-counter-clockwise",
+                                    ),
+                                    OrbitMenuAction(
+                                        label = "Pause",
+                                        onClick = { showPauseSheet = true },
+                                        icon = "pause-circle",
+                                    ),
+                                    OrbitMenuAction(
+                                        label = "Ignore",
+                                        onClick = { readyContactName?.let { onIgnore(it) } },
+                                        icon = "eye-slash",
+                                        tone = OrbitMenuTone.Destructive,
+                                    ),
+                                ),
+                            )
                         }
                     }
                 } else null,

@@ -25,9 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -70,10 +67,12 @@ import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitChip
+import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitMenuAction
+import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitSearchField
-import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.contact.sections.PauseSheet
 import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
@@ -522,65 +521,21 @@ private fun BrowseContent(
                                 // entityId matches the open-menu anchor. The menu lives
                                 // inside the row so its anchor offset is correct.
                                 if (entityId != null && menuAnchorContactId == entityId) {
-                                    DropdownMenu(
-                                        expanded = true,
-                                        onDismissRequest = { menuAnchorContactId = null },
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("Call") },
-                                            leadingIcon = {
-                                                PhIcon(
-                                                    name = "phone-call",
-                                                    size = 18.dp,
-                                                    tint = OrbitTheme.colors.fg,
-                                                )
-                                            },
-                                            onClick = {
-                                                menuAnchorContactId = null
-                                                val phone = contact.phone
-                                                if (phone.isNotBlank()) {
-                                                    context.dialPhoneNumber(phone)
-                                                }
-                                            },
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Ignore") },
-                                            leadingIcon = {
-                                                PhIcon(
-                                                    name = "eye-slash",
-                                                    size = 18.dp,
-                                                    tint = OrbitTheme.colors.fg,
-                                                )
-                                            },
-                                            onClick = {
-                                                menuAnchorContactId = null
-                                                onSingleRowIgnore(entityId, contact.name)
-                                            },
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Pause") },
-                                            leadingIcon = {
-                                                PhIcon(
-                                                    name = "pause-circle",
-                                                    size = 18.dp,
-                                                    tint = OrbitTheme.colors.fg,
-                                                )
-                                            },
-                                            onClick = {
-                                                menuAnchorContactId = null
-                                                pauseSheetForContactName = contact.name
-                                                pauseSheetForContactId = entityId
-                                            },
-                                        )
-                                        HorizontalDivider()
-                                        DropdownMenuItem(
-                                            text = { Text("Select") },
-                                            onClick = {
-                                                menuAnchorContactId = null
-                                                onEnterMultiSelect(entityId)
-                                            },
-                                        )
-                                    }
+                                    BrowseRowActionMenu(
+                                        onDismiss = { menuAnchorContactId = null },
+                                        onCall = {
+                                            val phone = contact.phone
+                                            if (phone.isNotBlank()) {
+                                                context.dialPhoneNumber(phone)
+                                            }
+                                        },
+                                        onSelect = { onEnterMultiSelect(entityId) },
+                                        onPause = {
+                                            pauseSheetForContactName = contact.name
+                                            pauseSheetForContactId = entityId
+                                        },
+                                        onIgnore = { onSingleRowIgnore(entityId, contact.name) },
+                                    )
                                 }
                             }
                             Box(
@@ -679,65 +634,21 @@ private fun BrowseContent(
                                         // queuePosition = null (default) — blank column for "Other members"
                                     )
                                     if (entityId != null && menuAnchorContactId == entityId) {
-                                        DropdownMenu(
-                                            expanded = true,
-                                            onDismissRequest = { menuAnchorContactId = null },
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = { Text("Call") },
-                                                leadingIcon = {
-                                                    PhIcon(
-                                                        name = "phone-call",
-                                                        size = 18.dp,
-                                                        tint = OrbitTheme.colors.fg,
-                                                    )
-                                                },
-                                                onClick = {
-                                                    menuAnchorContactId = null
-                                                    val phone = contact.phone
-                                                    if (phone.isNotBlank()) {
-                                                        context.dialPhoneNumber(phone)
-                                                    }
-                                                },
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("Ignore") },
-                                                leadingIcon = {
-                                                    PhIcon(
-                                                        name = "eye-slash",
-                                                        size = 18.dp,
-                                                        tint = OrbitTheme.colors.fg,
-                                                    )
-                                                },
-                                                onClick = {
-                                                    menuAnchorContactId = null
-                                                    onSingleRowIgnore(entityId, contact.name)
-                                                },
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("Pause") },
-                                                leadingIcon = {
-                                                    PhIcon(
-                                                        name = "pause-circle",
-                                                        size = 18.dp,
-                                                        tint = OrbitTheme.colors.fg,
-                                                    )
-                                                },
-                                                onClick = {
-                                                    menuAnchorContactId = null
-                                                    pauseSheetForContactName = contact.name
-                                                    pauseSheetForContactId = entityId
-                                                },
-                                            )
-                                            HorizontalDivider()
-                                            DropdownMenuItem(
-                                                text = { Text("Select") },
-                                                onClick = {
-                                                    menuAnchorContactId = null
-                                                    onEnterMultiSelect(entityId)
-                                                },
-                                            )
-                                        }
+                                        BrowseRowActionMenu(
+                                            onDismiss = { menuAnchorContactId = null },
+                                            onCall = {
+                                                val phone = contact.phone
+                                                if (phone.isNotBlank()) {
+                                                    context.dialPhoneNumber(phone)
+                                                }
+                                            },
+                                            onSelect = { onEnterMultiSelect(entityId) },
+                                            onPause = {
+                                                pauseSheetForContactName = contact.name
+                                                pauseSheetForContactId = entityId
+                                            },
+                                            onIgnore = { onSingleRowIgnore(entityId, contact.name) },
+                                        )
                                     }
                                 }
                                 Box(
@@ -793,6 +704,39 @@ private fun BrowseContent(
             )
         }
     }
+}
+
+/**
+ * Long-press row menu, shared by the "queue" and "Other members" sections so
+ * both offer the same actions in the same order.
+ *
+ * Order follows the shared [OrbitDropdownMenu] contract — Call (the point of
+ * the screen) first, then Select and Pause, and Ignore last in danger, since
+ * it takes the person out of Orbit's rotation entirely.
+ */
+@Composable
+private fun BrowseRowActionMenu(
+    onDismiss: () -> Unit,
+    onCall: () -> Unit,
+    onSelect: () -> Unit,
+    onPause: () -> Unit,
+    onIgnore: () -> Unit,
+) {
+    OrbitDropdownMenu(
+        expanded = true,
+        onDismissRequest = onDismiss,
+        actions = listOf(
+            OrbitMenuAction(label = "Call", onClick = onCall, icon = "phone-call"),
+            OrbitMenuAction(label = "Select", onClick = onSelect),
+            OrbitMenuAction(label = "Pause", onClick = onPause, icon = "pause-circle"),
+            OrbitMenuAction(
+                label = "Ignore",
+                onClick = onIgnore,
+                icon = "eye-slash",
+                tone = OrbitMenuTone.Destructive,
+            ),
+        ),
+    )
 }
 
 /**

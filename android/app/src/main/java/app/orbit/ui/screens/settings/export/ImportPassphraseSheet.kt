@@ -1,6 +1,8 @@
 package app.orbit.ui.screens.settings.export
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -76,6 +78,9 @@ private fun ImportPassphraseContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            // imePadding alone only shrinks the sheet; the scroll is what lets
+            // the focused field move up into what's left of it.
+            .verticalScroll(rememberScrollState())
             .imePadding()
             .padding(
                 horizontal = OrbitTheme.spacing.x6,

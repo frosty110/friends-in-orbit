@@ -11,11 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,7 +31,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitMenuAction
+import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.formatRelative
 import coil.compose.AsyncImage
@@ -239,18 +239,10 @@ fun PickerContactRow(
                 isIgnored = contact.isIgnored,
                 displayName = displayName,
                 onDismiss = { menuExpanded = false },
-                onIgnoreAction = ignoreAction?.let { action ->
-                    {
-                        menuExpanded = false
-                        action(contact)
-                    }
-                },
-                onOpenInPhone = onOpenInPhone?.let { action ->
-                    {
-                        menuExpanded = false
-                        action(contact)
-                    }
-                },
+                // No `menuExpanded = false` here — OrbitDropdownMenu dismisses
+                // itself before firing the callback.
+                onIgnoreAction = ignoreAction?.let { action -> { action(contact) } },
+                onOpenInPhone = onOpenInPhone?.let { action -> { action(contact) } },
             )
         }
     }
@@ -258,17 +250,24 @@ fun PickerContactRow(
 
 /**
  * The row's action menu, reached by the trailing ⋮ button or a long-press.
- * Anchored [DropdownMenu] (FilterChipsRow precedent) — a modal sheet would be
- * too loud for two quiet actions.
+ * Anchored [OrbitDropdownMenu] (FilterChipsRow precedent) — a modal sheet would
+ * be too loud for two quiet actions.
  *
- * Order is deliberate: "Open in Contacts" sits first because identifying an
- * unknown number is the question that comes before deciding to hide it. The
- * ignore entry keeps its locked supporting line — the promise that ignoring
- * touches only Orbit, never the phone's address book, is the whole reason the
- * action is safe to offer inline.
+ * Actions are listed most-used-first per the menu ordering contract;
+ * [OrbitDropdownMenu] sinks the destructive one below a divider itself, so the
+ * order here is "Open in Contacts", then Ignore/Unignore:
+ *
+ *   - "Open in Contacts" is everyday and non-destructive — identifying an
+ *     unknown number is the question that comes *before* deciding to hide it.
+ *   - "Ignore" carries [OrbitMenuTone.Destructive]: it hides someone the user
+ *     would otherwise have to go find again. It keeps its locked supporting
+ *     line — the promise that ignoring touches only Orbit, never the phone's
+ *     address book, is the whole reason the action is safe to offer inline.
+ *   - "Unignore" restores, so it stays [OrbitMenuTone.Default].
  *
  * [onIgnoreAction] is null for non-curation callers, [onOpenInPhone] for rows
- * with no device contact behind them; both callers already dismiss the menu.
+ * with no device contact behind them. [OrbitDropdownMenu] dismisses itself
+ * before firing a callback, so neither needs to.
  */
 @Composable
 private fun PickerRowActionMenu(
@@ -279,64 +278,38 @@ private fun PickerRowActionMenu(
     onIgnoreAction: (() -> Unit)?,
     onOpenInPhone: (() -> Unit)?,
 ) {
-    DropdownMenu(
+    OrbitDropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-    ) {
-        if (onOpenInPhone != null) {
-            DropdownMenuItem(
-                text = {
-                    Column(modifier = Modifier.widthIn(max = 260.dp)) {
-                        Text(
-                            text = "Open in Contacts",
-                            style = OrbitTheme.type.body,
-                            color = OrbitTheme.colors.fg,
-                        )
-                        Text(
-                            text = "See their call and message history in your phone's " +
-                                "contacts app.",
-                            style = OrbitTheme.type.meta,
-                            color = OrbitTheme.colors.fgMuted,
-                        )
-                    }
-                },
-                onClick = onOpenInPhone,
-            )
-        }
-        if (onIgnoreAction != null) {
-            if (isIgnored) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = "Unignore",
-                            style = OrbitTheme.type.body,
-                            color = OrbitTheme.colors.fg,
-                        )
-                    },
-                    onClick = onIgnoreAction,
-                )
-            } else {
-                DropdownMenuItem(
-                    text = {
-                        Column(modifier = Modifier.widthIn(max = 260.dp)) {
-                            Text(
-                                text = "Ignore",
-                                style = OrbitTheme.type.body,
-                                color = OrbitTheme.colors.fg,
-                            )
-                            Text(
-                                text = "Hide $displayName from Orbit. They stay in your " +
-                                    "phone's contacts.",
-                                style = OrbitTheme.type.meta,
-                                color = OrbitTheme.colors.fgMuted,
-                            )
-                        }
-                    },
-                    onClick = onIgnoreAction,
+        actions = buildList {
+            if (onOpenInPhone != null) {
+                add(
+                    OrbitMenuAction(
+                        label = "Open in Contacts",
+                        onClick = onOpenInPhone,
+                        supporting = "See their call and message history in your " +
+                            "phone's contacts app.",
+                    ),
                 )
             }
-        }
-    }
+            if (onIgnoreAction != null) {
+                add(
+                    if (isIgnored) {
+                        // Restoring someone is not destructive — it stays in fg.
+                        OrbitMenuAction(label = "Unignore", onClick = onIgnoreAction)
+                    } else {
+                        OrbitMenuAction(
+                            label = "Ignore",
+                            onClick = onIgnoreAction,
+                            tone = OrbitMenuTone.Destructive,
+                            supporting = "Hide $displayName from Orbit. " +
+                                "They stay in your phone's contacts.",
+                        )
+                    },
+                )
+            }
+        },
+    )
 }
 
 @Preview(name = "PickerContactRow — light", showBackground = true)

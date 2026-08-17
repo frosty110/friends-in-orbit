@@ -256,8 +256,13 @@ private fun ContactPickerContent(
             } else null,
         )
 
-        // imePadding on the root content surface so BatchCounter and search
-        // field never disappear behind the soft keyboard.
+        // Keeping the soft keyboard from covering the BatchCounter and the
+        // search field is [OrbitScreen]'s job now — it pads by
+        // `systemBars.union(ime)`, and `windowInsetsPadding` CONSUMES what it
+        // applies, so this `imePadding()` sees a zero IME inset and is a no-op
+        // rather than a double pad. Kept as a belt-and-braces guard for the day
+        // this surface is hosted somewhere other than OrbitScreen; delete it if
+        // that never happens.
         Box(
             modifier = Modifier
                 .fillMaxSize()

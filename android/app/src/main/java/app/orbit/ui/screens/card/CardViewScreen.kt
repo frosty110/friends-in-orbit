@@ -27,8 +27,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.PlainTooltip
@@ -73,6 +71,8 @@ import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitChip
+import app.orbit.ui.components.OrbitDropdownMenu
+import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.PhIcon
@@ -150,8 +150,9 @@ fun CardViewScreen(
 }
 
 /**
- * List actions overflow for the Card view. The hamburger anchors a
- * [DropdownMenu] so the user chooses the action rather than being routed into one.
+ * List actions overflow for the Card view. The hamburger anchors an
+ * [OrbitDropdownMenu] so the user chooses the action rather than being routed
+ * into one. Nothing here is destructive, so the whole menu stays in fg.
  */
 @Composable
 private fun ListActionsMenu(
@@ -166,26 +167,15 @@ private fun ListActionsMenu(
             onClick = { expanded = true },
             contentDescription = "List actions",
         )
-        DropdownMenu(
+        OrbitDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-        ) {
-            DropdownMenuItem(
-                text = { Text("Browse people") },
-                leadingIcon = { PhIcon(name = "list-bullets", size = 18.dp, tint = OrbitTheme.colors.fg) },
-                onClick = { expanded = false; onBrowse() },
-            )
-            DropdownMenuItem(
-                text = { Text("Add contacts") },
-                leadingIcon = { PhIcon(name = "plus", size = 18.dp, tint = OrbitTheme.colors.fg) },
-                onClick = { expanded = false; onAddContacts() },
-            )
-            DropdownMenuItem(
-                text = { Text("Edit list") },
-                leadingIcon = { PhIcon(name = "pencil-simple", size = 18.dp, tint = OrbitTheme.colors.fg) },
-                onClick = { expanded = false; onEditList() },
-            )
-        }
+            actions = listOf(
+                OrbitMenuAction(label = "Browse people", onClick = onBrowse, icon = "list-bullets"),
+                OrbitMenuAction(label = "Add contacts", onClick = onAddContacts, icon = "plus"),
+                OrbitMenuAction(label = "Edit list", onClick = onEditList, icon = "pencil-simple"),
+            ),
+        )
     }
 }
 

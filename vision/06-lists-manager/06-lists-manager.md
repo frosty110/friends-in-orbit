@@ -15,7 +15,7 @@
 - An **Archived (N)** collapsible section.
 - Helper text: *"Drag to reorder. Lists higher up show first on home."*
 - Two ways to create: a **+** in the app bar **and** a **New list** FAB.
-- Overflow menu: *Rename · Archive · List settings · Move up · Move down*.
+- Overflow menu: *Rename · List settings · Move up · Move down* — then **Archive**, below a divider and in danger, per the shared menu contract (`design/README.md` §"Menus").
 
 Clean and functional, with two rough edges: a redundant create affordance and an off-brand menu surface.
 
