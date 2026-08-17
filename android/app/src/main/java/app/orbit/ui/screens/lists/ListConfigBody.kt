@@ -93,6 +93,9 @@ internal fun ListConfigBody(
     state: ListConfigUiState.Ready,
     isOnboarding: Boolean,
     snackbarHostState: SnackbarHostState,
+    // Non-null on the production path only: onboarding has its own
+    // "Continue" in [OnboardingScaffold] and must not grow a second exit.
+    onDone: (() -> Unit)? = null,
     onNameChange: (String) -> Unit,
     // Callers hand over the RuleKind; the VM resolves the template row via
     // RuleTemplateRepository.getByKind. The previous (Long) shape required
@@ -129,6 +132,7 @@ internal fun ListConfigBody(
             ListConfigBodySections(
                 state = state,
                 isOnboarding = true,
+                onDone = null,
                 onNameChange = onNameChange,
                 onRuleTemplateChange = onRuleTemplateChange,
                 onRuleParamsChange = onRuleParamsChange,
@@ -154,6 +158,7 @@ internal fun ListConfigBody(
                 ListConfigBodySections(
                     state = state,
                     isOnboarding = false,
+                    onDone = onDone,
                     onNameChange = onNameChange,
                     onRuleTemplateChange = onRuleTemplateChange,
                     onRuleParamsChange = onRuleParamsChange,
@@ -202,6 +207,7 @@ internal fun ListConfigBody(
 private fun ColumnScope.ListConfigBodySections(
     state: ListConfigUiState.Ready,
     isOnboarding: Boolean,
+    onDone: (() -> Unit)?,
     onNameChange: (String) -> Unit,
     onRuleTemplateChange: (RuleKind) -> Unit,
     onRuleParamsChange: (RuleParams) -> Unit,
@@ -369,6 +375,19 @@ private fun ColumnScope.ListConfigBodySections(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 10.dp, start = 20.dp, end = 20.dp),
+        )
+    }
+
+    // 2026-08-15 UAT — the create flow ended here with no way to say "done",
+    // only a back arrow. Everything above is already saved, so this closes the
+    // screen and returns to wherever the list was opened from (Lists Manager,
+    // for a list that was just created).
+    if (onDone != null) {
+        Spacer(Modifier.height(24.dp))
+        OrbitButton(
+            text = "Done",
+            onClick = onDone,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }

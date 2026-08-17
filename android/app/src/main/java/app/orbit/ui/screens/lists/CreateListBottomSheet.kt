@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
@@ -94,6 +97,14 @@ private fun CreateListContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            // Keyboard safety (2026-08-15 UAT): the sheet used to be a plain
+            // fixed Column, so raising the IME left "Name your list" — and the
+            // text being typed into it — underneath the keyboard. imePadding
+            // shrinks the sheet to the visible area and verticalScroll lets the
+            // focused field scroll up into it (Compose's TextField asks for
+            // that on focus; it needs a scrollable parent to be able to obey).
+            .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(
                 start = OrbitTheme.spacing.x6,
                 end = OrbitTheme.spacing.x6,

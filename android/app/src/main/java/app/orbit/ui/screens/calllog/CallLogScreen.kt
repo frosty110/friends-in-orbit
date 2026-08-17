@@ -21,8 +21,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -49,6 +47,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
+import app.orbit.ui.components.OrbitDropdownMenu
+import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.PhIcon
@@ -467,25 +467,14 @@ private fun CallLogRowComposable(
                 )
             }
         }
-        DropdownMenu(
+        OrbitDropdownMenu(
             expanded = menuOpen,
             onDismissRequest = { menuOpen = false },
-        ) {
-            DropdownMenuItem(
-                text = { Text("Call again") },
-                onClick = {
-                    menuOpen = false
-                    onCallAgain()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Open contact") },
-                onClick = {
-                    menuOpen = false
-                    onOpen()
-                },
-            )
-        }
+            actions = listOf(
+                OrbitMenuAction(label = "Call again", onClick = onCallAgain),
+                OrbitMenuAction(label = "Open contact", onClick = onOpen),
+            ),
+        )
     }
 }
 

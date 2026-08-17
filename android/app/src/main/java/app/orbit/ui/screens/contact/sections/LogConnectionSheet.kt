@@ -9,9 +9,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
@@ -188,6 +191,11 @@ private fun LogConnectionSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            // Keyboard safety — the note field sits at the foot of the sheet,
+            // exactly where the IME lands. Scroll + imePadding keep it (and
+            // what's being typed into it) above the keyboard.
+            .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(
                 horizontal = OrbitTheme.spacing.x6,
                 vertical = OrbitTheme.spacing.x4,
