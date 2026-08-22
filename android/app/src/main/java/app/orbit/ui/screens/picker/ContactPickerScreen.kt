@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,8 +62,11 @@ import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitSearchField
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.openPhoneContact
 import java.time.Instant
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -81,6 +85,12 @@ import kotlinx.coroutines.launch
  *   - Ready / Committing  → [ReadyContent]: search + chips + select-all + list
  *
  * Pitfalls mitigated:
+ *   - Search box that eats keystrokes: the typed text is screen-local state
+ *     owned by [ContactPickerContent] — ABOVE the phase `when`, so it survives
+ *     a phase flip, and reachable by the app bar's clear-X so there is exactly
+ *     one writer. It is debounced on the way DOWN to the VM and never read back
+ *     up. See the long note at its declaration; regression coverage lives in
+ *     `androidTest/.../OrbitSearchFieldTest`.
  *   - IME overlap: root Box carries `Modifier.imePadding()`.
  *   - Select-all over unrendered rows: the screen passes
  *     `state.filteredContacts.map { it.contactId }.toSet()` to
@@ -135,6 +145,13 @@ fun ContactPickerScreen(
         onShowIgnoredToggle = vm::onShowIgnoredToggle,
         onIgnore = { contact -> vm.onIgnore(contact.contactId, contact.displayName) },
         onUnignore = { contact -> vm.onUnignore(contact.contactId, contact.displayName) },
+        // "Who is this?" — hand the row off to the phone's own contacts app,
+        // which is where the call and message history for that number lives.
+        // Orbit never reads message content (no READ_SMS), so the system
+        // contact card is the honest answer to an unrecognised number.
+        onOpenInPhone = { contact ->
+            contact.phoneContactId?.let { context.openPhoneContact(it) }
+        },
         onCommit = {
             vm.onCommit()
             onCommit()
@@ -162,6 +179,7 @@ internal fun pickerModeTitle(mode: PickerMode, selectionCount: Int): String {
     }
 }
 
+@OptIn(FlowPreview::class)
 @Composable
 private fun ContactPickerContent(
     state: ContactPickerUiState,
@@ -175,11 +193,41 @@ private fun ContactPickerContent(
     onShowIgnoredToggle: (Boolean) -> Unit,
     onIgnore: (PickerContact) -> Unit,
     onUnignore: (PickerContact) -> Unit,
+    onOpenInPhone: (PickerContact) -> Unit,
     onCommit: () -> Unit,
     onSkip: (() -> Unit)?,
     onPermissionGrant: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
+    // ── Search box state — ONE source of truth for the typed text.
+    //
+    // Two invariants, both of which have bitten this screen before:
+    //
+    //  1. The field must NOT bind to the VM's debounced query. This screen
+    //     recomposes constantly off the live Room flows, so a recomposition
+    //     mid-debounce re-applies the stale value and reverts the keystroke —
+    //     to the user, typing does nothing at all.
+    //  2. The state must live ABOVE the `when (state.phase)` branch, not inside
+    //     [ReadyContent]. Held inside, it is torn down and re-initialised from
+    //     `state.searchQuery` every time the phase leaves the Ready/Committing
+    //     branch (a permission re-read on ON_RESUME re-writes the phase on every
+    //     foreground), which silently empties the box mid-search. It also has to
+    //     be reachable by the app bar's clear-X below — a clear that only wrote
+    //     to the VM left the typed text stranded in a box it could no longer
+    //     clear.
+    //
+    // `snapshotFlow { … }.debounce(…)` in a single `LaunchedEffect(Unit)` is the
+    // same shape [app.orbit.ui.screens.browse.GlobalSearchScreen] and
+    // [app.orbit.ui.screens.browse.BrowseListScreen] use; the VM does not
+    // re-debounce, so the field never round-trips a stale value.
+    var searchInput by rememberSaveable { mutableStateOf(state.searchQuery) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { searchInput }
+            .debounce(SEARCH_DEBOUNCE_MS)
+            .distinctUntilChanged()
+            .collect { onSearchChanged(it) }
+    }
+
     OrbitScreen {
         // App-bar title varies with mode and singularizes honestly
         // ("Move 1 contact").
@@ -193,19 +241,28 @@ private fun ContactPickerContent(
                     contentDescription = "Back",
                 )
             },
-            trailing = if (state.searchQuery.isNotBlank()) {
+            // Gated on the FIELD's text, not the VM's debounced copy, and it
+            // clears the field — the debounce carries the empty value down to
+            // the VM. Gating on `state.searchQuery` meant the X vanished the
+            // moment the VM was cleared while the box still held text.
+            trailing = if (searchInput.isNotBlank()) {
                 {
                     OrbitIconButton(
                         icon = "x",
-                        onClick = { onSearchChanged("") },
+                        onClick = { searchInput = "" },
                         contentDescription = "Clear search",
                     )
                 }
             } else null,
         )
 
-        // imePadding on the root content surface so BatchCounter and search
-        // field never disappear behind the soft keyboard.
+        // Keeping the soft keyboard from covering the BatchCounter and the
+        // search field is [OrbitScreen]'s job now — it pads by
+        // `systemBars.union(ime)`, and `windowInsetsPadding` CONSUMES what it
+        // applies, so this `imePadding()` sees a zero IME inset and is a no-op
+        // rather than a double pad. Kept as a belt-and-braces guard for the day
+        // this surface is hosted somewhere other than OrbitScreen; delete it if
+        // that never happens.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -226,7 +283,8 @@ private fun ContactPickerContent(
                 ContactPickerUiState.Phase.Ready,
                 ContactPickerUiState.Phase.Committing -> ReadyContent(
                     state = state,
-                    onSearchChanged = onSearchChanged,
+                    searchInput = searchInput,
+                    onSearchInputChange = { searchInput = it },
                     onToggleFilter = onToggleFilter,
                     onSetSort = onSetSort,
                     onToggleSelect = onToggleSelect,
@@ -235,6 +293,7 @@ private fun ContactPickerContent(
                     onShowIgnoredToggle = onShowIgnoredToggle,
                     onIgnore = onIgnore,
                     onUnignore = onUnignore,
+                    onOpenInPhone = onOpenInPhone,
                     onCommit = onCommit,
                     onSkip = onSkip,
                 )
@@ -247,7 +306,11 @@ private fun ContactPickerContent(
 @Composable
 private fun ReadyContent(
     state: ContactPickerUiState,
-    onSearchChanged: (String) -> Unit,
+    // The raw, un-debounced search text. Owned by [ContactPickerContent] so it
+    // outlives this branch of the phase `when` and is reachable by the app bar's
+    // clear-X — see the invariants documented at its declaration.
+    searchInput: String,
+    onSearchInputChange: (String) -> Unit,
     onToggleFilter: (PickerFilter) -> Unit,
     onSetSort: (PickerSort) -> Unit,
     onToggleSelect: (Long) -> Unit,
@@ -256,24 +319,12 @@ private fun ReadyContent(
     onShowIgnoredToggle: (Boolean) -> Unit,
     onIgnore: (PickerContact) -> Unit,
     onUnignore: (PickerContact) -> Unit,
+    onOpenInPhone: (PickerContact) -> Unit,
     onCommit: () -> Unit,
     onSkip: (() -> Unit)?,
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-
-    // Immediate, un-debounced field state. The field must NOT bind to the VM's
-    // debounced query — a recomposition mid-debounce (this screen recomposes
-    // constantly off the live Room flows) re-applies the stale value and
-    // reverts the just-typed character. We hold the raw input locally and
-    // debounce before committing to the VM.
-    var searchInput by rememberSaveable { mutableStateOf(state.searchQuery) }
-    LaunchedEffect(searchInput) {
-        if (searchInput != state.searchQuery) {
-            delay(SEARCH_DEBOUNCE_MS)
-            onSearchChanged(searchInput)
-        }
-    }
 
     // Measured height of the docked BatchCounter, and a one-shot flag set when a
     // selection tap is about to make the bar appear while the list is scrolled
@@ -299,7 +350,7 @@ private fun ReadyContent(
     Column(modifier = Modifier.fillMaxSize()) {
         OrbitSearchField(
             query = searchInput,
-            onQueryChange = { searchInput = it },
+            onQueryChange = onSearchInputChange,
             // The shared matcher also searches phone digits.
             placeholder = "Search name or number",
             modifier = Modifier
@@ -437,6 +488,10 @@ private fun ReadyContent(
                 },
                 onIgnore = onIgnore,
                 onUnignore = onUnignore,
+                // Only offer "Open in Contacts" for rows we can actually
+                // resolve to a device contact — a call-log-only row has no
+                // phoneContactId and the intent would dead-end.
+                onOpenInPhone = if (contact.phoneContactId != null) onOpenInPhone else null,
                 modifier = Modifier.animateItem(),
             )
         }
@@ -779,6 +834,7 @@ private fun ContactPickerReadyPreviewLight() {
             onShowIgnoredToggle = {},
             onIgnore = {},
             onUnignore = {},
+            onOpenInPhone = {},
             onCommit = {},
             onSkip = null,
             onPermissionGrant = {},
@@ -803,6 +859,7 @@ private fun ContactPickerReadyPreviewDark() {
             onShowIgnoredToggle = {},
             onIgnore = {},
             onUnignore = {},
+            onOpenInPhone = {},
             onCommit = {},
             onSkip = null,
             onPermissionGrant = {},
@@ -829,6 +886,7 @@ private fun ContactPickerRationalePreviewLight() {
             onShowIgnoredToggle = {},
             onIgnore = {},
             onUnignore = {},
+            onOpenInPhone = {},
             onCommit = {},
             onSkip = null,
             onPermissionGrant = {},
@@ -855,6 +913,7 @@ private fun ContactPickerDeniedPreviewLight() {
             onShowIgnoredToggle = {},
             onIgnore = {},
             onUnignore = {},
+            onOpenInPhone = {},
             onCommit = {},
             onSkip = null,
             onPermissionGrant = {},
@@ -946,6 +1005,7 @@ private fun ContactPickerContentPreview() {
             onShowIgnoredToggle = {},
             onIgnore = {},
             onUnignore = {},
+            onOpenInPhone = {},
             onCommit = {},
             onSkip = null,
             onPermissionGrant = {},

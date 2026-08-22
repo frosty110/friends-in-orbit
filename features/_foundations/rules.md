@@ -1,0 +1,178 @@
+# Rules
+
+**Status:** active
+**Last reviewed:** 2026-08-15
+**Canonical for:** the numbered engineering rules cited from source comments
+
+---
+
+Source comments across the app cite this file by number — `rules.md §Design 3`,
+`rules.md Code 4`. Those citations are load-bearing: a reader who hits one needs
+to land on the rule it names. **Rule numbers are permanent. Never renumber a
+rule** — retire it in place (strike it, keep the number) and add a new one at the
+end.
+
+This file holds rules that apply to *all* work. Product requirements are
+different — they are per-feature and carry their own IDs (`PICK-03`, `ONB-21`);
+see [Citing conventions](#citing-conventions) below.
+
+> **Provenance.** This file was reconstructed on 2026-08-15 after the original
+> was lost — the code cited it for months with nothing to resolve to. Rules
+> marked **[pinned]** have their numbers fixed by existing citations in source
+> and are quoted from the behaviour those call sites actually implement. The
+> rest were re-derived from [`design/README.md`](../../design/README.md)
+> §"Visual foundations" and from conventions the code states about itself. If
+> you have the original and a number disagrees, the original wins — open a PR.
+
+---
+
+## Design
+
+**Design 1 — Tokens only.** Read every colour, space, radius, type style and
+duration through `OrbitTheme.colors / spacing / shapes / type / motion`. No
+hardcoded hex, `.dp` literals for spacing, or `.sp` literals for type in screen
+code. The theme layer is the single resolution point — 562 call sites don't know
+which theme is active, and that is what makes themes swappable. See
+[`DESIGN.md`](../../DESIGN.md).
+
+**Design 2 — Body text never below 16sp**, and layouts survive system font
+scaling to 200%. Prefer `heightIn(min = …)` over a fixed `height` on anything
+containing text.
+
+**Design 3 — 48×48dp minimum tap target.** [pinned]
+Every interactive element, including quiet ones (a "show ignored" toggle is
+still a tap target). Use `Modifier.defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)`.
+Where a control genuinely cannot meet the floor — the alphabet fast-scroll rail
+is the one accepted case — say so in a comment at the call site and explain why
+the gesture is still reliable.
+
+**Design 4 — Contrast is a gate, not a hope.** WCAG AA (4.5:1) for body text.
+`ThemeContrastTest` fails the build if any theme's text/accent/chip pairs miss AA
+in either mode, or if the accent dial can generate an inaccessible accent. A new
+theme ships only when that test passes.
+
+**Design 5 — One accent element per screen.** [pinned]
+Terracotta (`colors.accent`) is the action tier and is spent once per screen — on
+the single thing you most want tapped. Cluster-tier surfaces (selected rows,
+active chips) use `colors.accentTint`, never `colors.accent`. If a screen wants a
+second accent element, one of them isn't the primary action.
+
+**Design 6 — One phone icon per screen, maximum.** Iconography is Phosphor
+Regular, 1.5px stroke; icons are drawn via `PhIcon`.
+
+**Design 7 — Every interactive element carries a `contentDescription`.**
+Decorative images pass `null` deliberately.
+
+**Design 8 — Motion stays calm.** 250–350ms (`motion.durBase` / `motion.durSlow`),
+`easeOut` for entrances, `easeInOut` for layout shifts. No spring overshoot above
+5%, no infinite animation, no motion on idle surfaces (CORE-09).
+
+---
+
+## Code
+
+**Code 1 — Comments explain *why*, not *what*.** The diff already shows what
+changed. A comment earns its place by recording the reason a non-obvious choice
+was made — the constraint, the bug it prevents, the alternative rejected. Match
+the density of the surrounding file.
+
+**Code 2 — Every `LazyColumn` / `LazyRow` item carries a stable `key`.** Use the
+domain id (`key = { it.contactId }`), never the list index. Sticky headers need
+unique keys too — a folded letter can produce two runs of the same letter.
+
+**Code 3 — No silent fallbacks.** A write that fails, or a dispatch that
+short-circuits, surfaces to the user ("Couldn't save that") rather than exiting
+quietly. A code path that *cannot* happen gets a loud guard, not a shrug.
+
+**Code 4 — PII never reaches a log line.** [pinned]
+Contact names, phone numbers, note bodies and list names are PII. Three layers
+enforce this and all three are required (CALL-07):
+1. **Call-site discipline** — files holding contact data (ViewModels, screens,
+   mappers) make no logging calls at all.
+2. **Tree-layer scrubbing** — `OrbitDebugTree` routes every line through
+   `PiiSanitizer.scrub`. Call-site discipline alone is not sufficient.
+3. **Release silence** — no Timber tree is planted in release builds, so
+   `Timber.d(...)` is a no-op.
+
+Infrastructure (workers, schedulers, observers) may log *structured, non-PII*
+events — `Timber.tag(TAG).d("gate_dnd_blocking list=%d", listId)`. An id is fine;
+a name is not.
+
+**Code 5 — `CancellationException` is rethrown, never swallowed.** A
+`catch (t: Throwable)` around suspending work rethrows cancellation before
+handling anything else, or it breaks structured concurrency.
+
+**Code 6 — Work that must outlive the screen runs on `@ApplicationScope`.**
+A commit that navigates away, a write whose confirmation must survive the pop —
+`viewModelScope` cancels those mid-flight. Screen-scoped reads stay on
+`viewModelScope`.
+
+**Code 7 — Screen-local UI state has exactly one owner.** Text fields, sheets and
+expansion state live in the composable, hoisted high enough to outlive any
+conditional branch that renders them, with a single writer. State that flows down
+to a ViewModel flows *one way* and is never read back up into the control. Two
+writers for one value is the bug, every time — see the search-box note in
+`ContactPickerScreen.kt`.
+
+---
+
+## Architecture invariants
+
+These carry `ARCH-` requirement IDs because source cites them that way.
+
+**ARCH-02 — One state contract per screen, config-change survivable.** Each
+screen exposes a single `@Immutable` UiState (a `data class`, or a sealed
+interface whose every variant is `@Immutable`), published as
+`StateFlow` via `combine(...).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), initial)`.
+The 5-second window is what carries state across rotation and dark-mode toggle
+without recomputing the upstream. Derived values are computed once at
+construction, not in a `get()` the screen reads four times per composition.
+
+**ARCH-04 — Permission state is read directly, with no indirection seam.**
+`ContextCompat.checkSelfPermission` against the `@ApplicationContext`, refreshed
+on `ON_RESUME` and after the permission launcher resolves. No `PermissionSource`
+interface, no Hilt binding, no test seam — this is a deliberate, repeated choice,
+not an omission to "fix".
+
+---
+
+## Citing conventions
+
+Cite a rule when a reader would otherwise be tempted to "simplify" the code back
+into the bug. Two citation forms, and they resolve to different places:
+
+| Form | Means | Resolves to |
+|---|---|---|
+| `rules.md §Design 3`, `rules.md Code 4` | A global rule | This file |
+| `PICK-03`, `ONB-21`, `ARCH-02` | A product/architecture requirement | The owning feature spec under [`features/`](../INDEX.md) |
+| `Pitfall 3`, `RESEARCH §Pitfall 2` | A hazard found during that feature's research | That feature's research notes |
+
+Adding a requirement ID means adding it to the owning feature's spec in the same
+PR. An ID that exists only in a code comment is a dangling citation — the next
+reader cannot tell whether the constraint is real.
+
+`scripts/check-conventions.py` checks these; see
+[the development cycle](development-cycle.md#verify) for how it runs.
+
+---
+
+## Known documentation debt
+
+Recorded honestly so nobody mistakes silence for "no rule here". These are
+tracked by the checker, which ratchets: the counts may fall, never rise.
+
+- **Requirement-ID registry is incomplete.** As of 2026-08-15 the code cites
+  **119 distinct IDs across 23 prefixes** (`ONB`, `CONTACT`, `NOTE`, `WIDGET`,
+  `LIST`, `IGNORE`, …) that no spec defines. `ARCH-02`, `ARCH-04`, `CALL-07` and
+  `CORE-09` are documented here or in feature specs; the rest are not. The
+  checker ratchets this number, so it can only fall. Retire the debt
+  opportunistically: when you touch a feature, define the IDs that feature's code
+  already cites, then run `--update-baseline` in the same PR.
+- **Per-feature research notes are missing.** `Pitfall N` citations refer to
+  research documents that were never committed. Their content survives only in
+  the code comments that cite them — do not invent a replacement; when a pitfall's
+  substance is recoverable from the call site, write it into the feature spec and
+  update the citation.
+- **`.claude/knowledge/` is not in the repo.** [`DESIGN.md`](../../DESIGN.md)
+  cited it for token governance; that pointer now goes to this file and
+  `design/README.md` instead.

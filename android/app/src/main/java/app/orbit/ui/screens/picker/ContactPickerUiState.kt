@@ -360,6 +360,16 @@ data class PickerContact(
     val displayName: String,
     val phone: String,
     val photoUri: String?,
+    /**
+     * `ContactsContract.Contacts._ID` for this row, mirrored from
+     * `ContactEntity.phoneContactId`. Drives the row's "Open in Contacts"
+     * action — the device contact card is where an unrecognised number's call
+     * and message history lives. Null for call-log-only rows that never
+     * matched an address-book entry; the row hides the action in that case
+     * rather than opening a dead URI. Defaulted so existing fixtures stay
+     * valid.
+     */
+    val phoneContactId: Long? = null,
     val isIgnored: Boolean,
     val callCount: Int,
     val lastCallAt: Instant?,

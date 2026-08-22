@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitDropdownMenu
+import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.theme.OrbitTheme
@@ -68,14 +69,26 @@ import java.time.Instant
  * "never called" lowercase first letter is a PICK-04 invariant. The
  * zero-count phrasing is forbidden everywhere in source.
  *
- * Long-press opens a small anchored action menu: "Ignore" for a
- * normal row (with the locked supporting copy "Hide {name} from Orbit. They
- * stay in your phone's contacts."), "Unignore" for an ignored row. Ignored
- * rows (visible only behind the "Show ignored" filter entry) render muted
- * with an "Ignored" tag in place of the checkbox and are NOT selectable —
+ * A trailing ⋮ button — and still a long-press anywhere on the row — opens a
+ * small anchored action menu:
+ *   - "Open in Contacts" ([onOpenInPhone]): hands the row to the device
+ *     contacts app, where the call and message history for an unrecognised
+ *     number actually lives. Hidden when the row has no
+ *     [PickerContact.phoneContactId] behind it.
+ *   - "Ignore" for a normal row (with the locked supporting copy "Hide {name}
+ *     from Orbit. They stay in your phone's contacts."), "Unignore" for an
+ *     ignored one.
+ *
+ * The ⋮ button exists because these two actions were long-press-only, and a
+ * long-press-only action is one most people never discover — yet "who is this
+ * number?" and "hide this spam caller" are the jobs users arrive at the picker
+ * with.
+ *
+ * Ignored rows (visible only behind the "Show ignored" filter entry) render
+ * muted with an "Ignored" tag in place of the checkbox and are NOT selectable —
  * tapping one opens the same menu, so the row never dead-ends. [onIgnore] /
- * [onUnignore] default to null so non-curation callers keep the plain
- * tap-to-select row.
+ * [onUnignore] / [onOpenInPhone] default to null so non-curation callers keep
+ * the plain tap-to-select row.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -86,14 +99,19 @@ fun PickerContactRow(
     modifier: Modifier = Modifier,
     onIgnore: ((PickerContact) -> Unit)? = null,
     onUnignore: ((PickerContact) -> Unit)? = null,
+    onOpenInPhone: ((PickerContact) -> Unit)? = null,
 ) {
     val curtain = LocalPrivacyCurtain.current
     val displayName = if (curtain) "Contact" else contact.displayName
     val haptics = LocalHapticFeedback.current
 
-    // The action available from the long-press menu (null = no menu at all).
-    val menuAction: ((PickerContact) -> Unit)? =
+    // The ignore-side action for this row's state (null = not a curation
+    // caller, so no ignore/unignore entry).
+    val ignoreAction: ((PickerContact) -> Unit)? =
         if (contact.isIgnored) onUnignore else onIgnore
+    // The menu exists if EITHER action is available — "Open in Contacts" alone
+    // is reason enough to offer it.
+    val hasMenu = ignoreAction != null || onOpenInPhone != null
     var menuExpanded by remember { mutableStateOf(false) }
 
     val callLine: String = if (contact.callCount == 0 || contact.lastCallAt == null) {
@@ -131,12 +149,12 @@ fun PickerContactRow(
                         if (contact.isIgnored) {
                             // No selection for ignored rows — surface the
                             // Unignore action instead of a dead tap.
-                            if (menuAction != null) menuExpanded = true
+                            if (hasMenu) menuExpanded = true
                         } else {
                             onToggle(contact.contactId)
                         }
                     },
-                    onLongClick = if (menuAction != null) {
+                    onLongClick = if (hasMenu) {
                         {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             menuExpanded = true
@@ -198,29 +216,58 @@ fun PickerContactRow(
                     onCheckedChange = null,
                 )
             }
+
+            // Visible entry to the row menu. Long-press still opens it, but a
+            // long-press-only action is an action most people never find —
+            // "ignore this spam caller" and "who IS this?" are exactly the
+            // jobs someone arrives at this screen with, so they get an
+            // affordance they can see. Quiet tint: maintenance, not a primary
+            // action.
+            if (hasMenu) {
+                OrbitIconButton(
+                    icon = "dots-three-vertical",
+                    onClick = { menuExpanded = true },
+                    tint = OrbitTheme.colors.fgMuted,
+                    contentDescription = "More actions for $displayName",
+                )
+            }
         }
 
-        if (menuAction != null) {
+        if (hasMenu) {
             PickerRowActionMenu(
                 expanded = menuExpanded,
                 isIgnored = contact.isIgnored,
                 displayName = displayName,
                 onDismiss = { menuExpanded = false },
-                onAction = {
-                    menuExpanded = false
-                    menuAction(contact)
-                },
+                // No `menuExpanded = false` here — OrbitDropdownMenu dismisses
+                // itself before firing the callback.
+                onIgnoreAction = ignoreAction?.let { action -> { action(contact) } },
+                onOpenInPhone = onOpenInPhone?.let { action -> { action(contact) } },
             )
         }
     }
 }
 
 /**
- * The row's long-press menu. One quiet action per row state:
- * "Ignore" with its locked supporting line, or "Unignore" for an already
- * ignored row. Anchored [OrbitDropdownMenu] (FilterChipsRow precedent) — a
- * modal sheet would be too loud for a single action. "Ignore" carries the
- * destructive tone; "Unignore" does not.
+ * The row's action menu, reached by the trailing ⋮ button or a long-press.
+ * Anchored [OrbitDropdownMenu] (FilterChipsRow precedent) — a modal sheet would
+ * be too loud for two quiet actions.
+ *
+ * Actions are listed most-used-first per the menu ordering contract;
+ * [OrbitDropdownMenu] sinks the destructive one below a divider itself, so the
+ * order here is "Open in Contacts", then Ignore/Unignore:
+ *
+ *   - "Open in Contacts" is everyday and non-destructive — identifying an
+ *     unknown number is the question that comes *before* deciding to hide it.
+ *   - "Ignore" carries [OrbitMenuTone.Destructive]: it hides someone the user
+ *     would otherwise have to go find again. It keeps its locked supporting
+ *     line — the promise that ignoring touches only Orbit, never the phone's
+ *     address book, is the whole reason the action is safe to offer inline.
+ *   - "Unignore" restores, so it stays [OrbitMenuTone.Default].
+ *
+ * [onIgnoreAction] is null for non-curation callers, [onOpenInPhone] for rows
+ * with no device contact behind them. [OrbitDropdownMenu] dismisses itself
+ * before firing a callback, so neither needs to.
  */
 @Composable
 private fun PickerRowActionMenu(
@@ -228,25 +275,40 @@ private fun PickerRowActionMenu(
     isIgnored: Boolean,
     displayName: String,
     onDismiss: () -> Unit,
-    onAction: () -> Unit,
+    onIgnoreAction: (() -> Unit)?,
+    onOpenInPhone: (() -> Unit)?,
 ) {
     OrbitDropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        actions = listOf(
-            if (isIgnored) {
-                // Restoring someone is not destructive — it stays in fg.
-                OrbitMenuAction(label = "Unignore", onClick = onAction)
-            } else {
-                OrbitMenuAction(
-                    label = "Ignore",
-                    onClick = onAction,
-                    tone = OrbitMenuTone.Destructive,
-                    supporting = "Hide $displayName from Orbit. " +
-                        "They stay in your phone's contacts.",
+        actions = buildList {
+            if (onOpenInPhone != null) {
+                add(
+                    OrbitMenuAction(
+                        label = "Open in Contacts",
+                        onClick = onOpenInPhone,
+                        supporting = "See their call and message history in your " +
+                            "phone's contacts app.",
+                    ),
                 )
-            },
-        ),
+            }
+            if (onIgnoreAction != null) {
+                add(
+                    if (isIgnored) {
+                        // Restoring someone is not destructive — it stays in fg.
+                        OrbitMenuAction(label = "Unignore", onClick = onIgnoreAction)
+                    } else {
+                        OrbitMenuAction(
+                            label = "Ignore",
+                            onClick = onIgnoreAction,
+                            tone = OrbitMenuTone.Destructive,
+                            supporting = "Hide $displayName from Orbit. " +
+                                "They stay in your phone's contacts.",
+                        )
+                    },
+                )
+            }
+        },
     )
 }
 
