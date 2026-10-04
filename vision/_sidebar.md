@@ -1,6 +1,7 @@
 <!-- Docsify navigation sidebar -->
 
 - [Overview](README.md)
+- [Flows: clickable prototype](flows/flows.md)
 
 - **The core loop**
   - [00 · Home](00-home/00-home.md)

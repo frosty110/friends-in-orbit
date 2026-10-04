@@ -24,6 +24,9 @@ vision/
 ├── _sidebar.md          ← docsify nav
 ├── _prototype/
 │   └── theme.css        ← shared design tokens, imported by every page prototype
+├── flows/               ← every screen and journey as one clickable prototype
+│   ├── flows.md         ← screen IDs, flow maps, journeys, docs-vs-code gaps
+│   └── prototype/index.html
 ├── 00-home/             ← one folder per page view
 │   ├── 00-home.md       ← the section file (references its actual-* images)
 │   ├── actual-home.png          ← screenshot of the SHIPPED app
@@ -75,6 +78,8 @@ Status is about *sequencing and confidence*, not priority ranking. A "Later" can
 ---
 
 ## Index
+
+**Reviewing how the app flows?** Start with [Flows](./flows/flows.md): all 24 screens and 10 journeys as a clickable prototype built from the current code, with a stable ID per screen so feedback can name exactly what it is about.
 
 | # | Surface | Intent in one line | Headline move | Status |
 |---|---------|--------------------|---------------|--------|
