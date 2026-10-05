@@ -20,14 +20,14 @@ import app.orbit.data.repository.NoteRepository
 import app.orbit.data.repository.RuleTemplateRepository
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.usecase.MutationResult
-import java.time.Instant
-import java.time.LocalTime
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.Json
+import java.time.Instant
+import java.time.LocalTime
 
 // ============================================================================
 // Argument-capture data classes
@@ -435,7 +435,16 @@ class FakeListRepository(
      * memberships see real counts. Empty-list semantic matches
      * production: lists with zero memberships are absent from the map.
      */
-    override fun observeMemberCountsByListId(): Flow<Map<Long, Int>> = memberships.map { rows ->
+    // Set to make the member-count stream fail on its next subscription, the
+    // way a database read error would; error-state tests flip it back to
+    // check that Try again recovers.
+    var failMemberCounts: Boolean = false
+
+    override fun observeMemberCountsByListId(): Flow<Map<Long, Int>> =
+        if (failMemberCounts) kotlinx.coroutines.flow.flow { throw IllegalStateException("database read failed") }
+        else observeMemberCountsByListIdOk()
+
+    private fun observeMemberCountsByListIdOk(): Flow<Map<Long, Int>> = memberships.map { rows ->
         rows.groupingBy { it.listId }.eachCount()
     }
 

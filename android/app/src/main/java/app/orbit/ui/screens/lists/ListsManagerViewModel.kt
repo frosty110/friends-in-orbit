@@ -13,8 +13,8 @@ import app.orbit.notify.NudgeScheduler
 import app.orbit.ui.screens.home.HomeSnackbarEvent
 import app.orbit.ui.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,13 +22,16 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import javax.inject.Inject
 
 /**
  * Lists Manager ViewModel (LIST-02 / LIST-07).
@@ -79,7 +82,16 @@ class ListsManagerViewModel @Inject constructor(
     private val _createdListEvents = MutableSharedFlow<Long>(extraBufferCapacity = 1)
     val createdListEvents: SharedFlow<Long> = _createdListEvents.asSharedFlow()
 
-    val uiState: StateFlow<ListsManagerUiState> =
+    // LIST-22: bumped by [onRetry] to re-subscribe after a failure.
+    private val retryCount = MutableStateFlow(0)
+
+    /** The Error state's Try again. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<ListsManagerUiState> = retryCount.flatMapLatest {
         combine(
             listRepo.observeAll(),
             listRepo.observeMemberCountsByListId(),
@@ -102,7 +114,11 @@ class ListsManagerViewModel @Inject constructor(
                     archivedExpanded = expanded
                 )
             }
+        }.catch { t ->
+            if (t is CancellationException) throw t
+            emit(ListsManagerUiState.Error)
         }
+    }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),

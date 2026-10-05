@@ -56,6 +56,7 @@ import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.home.HomeSnackbarEvent
 import app.orbit.ui.theme.OrbitTheme
@@ -180,6 +181,7 @@ fun ListsManagerScreen(
     var showSheet by rememberSaveable { mutableStateOf(openCreateOnLaunch) }
 
     ListsManagerContent(
+        onRetry = vm::onRetry,
         state = state,
         snackbarHostState = snackbarHostState,
         onBack = onBack,
@@ -230,6 +232,7 @@ fun ListsManagerScreen(
 
 @Composable
 private fun ListsManagerContent(
+    onRetry: () -> Unit = {},
     state: ListsManagerUiState,
     snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
@@ -259,6 +262,15 @@ private fun ListsManagerContent(
                 is ListsManagerUiState.Loading -> {
                     // Compose-level "still hydrating" state. Nothing to draw — the
                     // Lifecycle aware collection delivers the next emission within ms.
+                }
+                is ListsManagerUiState.Error -> {
+                    OrbitScreenMessage(
+                        icon = "warning-circle",
+                        title = stringResource(R.string.lists_error_title),
+                        body = stringResource(R.string.components_error_body),
+                        actionLabel = stringResource(R.string.components_error_retry),
+                        onAction = onRetry,
+                    )
                 }
                 is ListsManagerUiState.Empty -> {
                     EmptyState(onCreate = onCreate)

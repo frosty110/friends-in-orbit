@@ -15,11 +15,6 @@ import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeScheduler
 import app.orbit.testutil.MainDispatcherRule
 import app.orbit.ui.screens.home.HomeSnackbarEvent
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -27,6 +22,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Recording subclass of [NudgeScheduler] for [ListsManagerViewModelTest].
@@ -537,5 +537,31 @@ class ListsManagerViewModelTest {
         // NOTIF-11: nudge chain was re-enqueued via scheduleFromEntity.
         assertEquals(1, nudge.scheduleFromEntityCalls.size)
         assertEquals(3L, nudge.scheduleFromEntityCalls.single().id)
+    }
+
+    // LIST-22: a failing source shows Error instead of killing the stream,
+    // and Try again re-subscribes and recovers.
+    @Test
+    fun failing_source_shows_error_and_retry_recovers() = runTest {
+        val repo = FakeListRepository(initialLists = listOf(listFixture(id = 1L, sortOrder = 0)))
+        repo.failMemberCounts = true
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
+        vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state is ListsManagerUiState.Loading) state = awaitItem()
+            assertEquals(ListsManagerUiState.Error, state)
+
+            repo.failMemberCounts = false
+            vm.onRetry()
+            state = awaitItem()
+            while (state is ListsManagerUiState.Loading || state is ListsManagerUiState.Error) state = awaitItem()
+            assertTrue(state is ListsManagerUiState.Ready, "Try again recovers to Ready, got $state")
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }

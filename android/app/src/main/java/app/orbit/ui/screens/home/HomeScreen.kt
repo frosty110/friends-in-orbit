@@ -78,6 +78,7 @@ import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.PostCallBanner
 import app.orbit.ui.screens.lists.DeleteListDialog
@@ -175,6 +176,7 @@ fun HomeScreen(
 
     HomeContent(
         state = state,
+        onRetry = vm::onRetry,
         snackbarHostState = snackbarHostState,
         onCallNextUp = { phone -> context.dialPhoneNumber(phone) },
         onOpenList = onOpenList,
@@ -211,6 +213,7 @@ private fun HomeContent(
     onOpenSettings: () -> Unit,
     onOpenLists: () -> Unit,
     onCreateList: () -> Unit,
+    onRetry: () -> Unit = {},
     onCallNextUp: (phone: String) -> Unit = {},
     // Long-press quick-actions — Long listId so the renderer can bind per tile.
     onAddPeople: (Long) -> Unit = {},
@@ -233,11 +236,12 @@ private fun HomeContent(
         // Loading = pre-first-database-answer window (slow SQLCipher cold open).
         // Renders as quiet chrome — app bar over background, no list, never the
         // first-install CTA (ADR 0006 §Skeleton policy).
-        HomeUiState.Loading, HomeUiState.Empty -> emptyList()
+        HomeUiState.Loading, HomeUiState.Empty, HomeUiState.Error -> emptyList()
         is HomeUiState.Ready -> state.lists
     }
     val isEmpty = state is HomeUiState.Empty
     val isLoading = state is HomeUiState.Loading
+    val isError = state is HomeUiState.Error
 
     Box(modifier = Modifier.fillMaxSize()) {
       OrbitScreen {
@@ -292,7 +296,7 @@ private fun HomeContent(
         // HOME-6 — calm date orientation only. No count, no "caught up": Home is
         // an always-on recommender, not an inbox. Header shows only in Ready;
         // Loading is quiet chrome, Empty carries the first-install CTA.
-        if (!isLoading && !isEmpty) {
+        if (!isLoading && !isEmpty && !isError) {
             val datePattern = stringResource(R.string.home_date_pattern)
             val dateLabel = remember(datePattern) {
                 LocalDate.now().format(DateTimeFormatter.ofPattern(datePattern, Locale.getDefault()))
@@ -316,7 +320,16 @@ private fun HomeContent(
         // HOME-04: the genuine first-install state gets a primary-weight CTA,
         // centered, with one warm line above it. Routes to Lists Manager with
         // the create-list bottom sheet auto-opened.
-        if (isEmpty) {
+        if (isError) {
+            // HOME-10: say what happened and offer Try again.
+            OrbitScreenMessage(
+                icon = "warning-circle",
+                title = stringResource(R.string.home_error_title),
+                body = stringResource(R.string.components_error_body),
+                actionLabel = stringResource(R.string.components_error_retry),
+                onAction = onRetry,
+            )
+        } else if (isEmpty) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
@@ -996,6 +1009,21 @@ private fun HomeContentLoadingPreview() {
     OrbitTheme {
         HomeContent(
             state = HomeUiState.Loading,
+            onOpenList = {},
+            onOpenSearch = {},
+            onOpenSettings = {},
+            onOpenLists = {},
+            onCreateList = {},
+        )
+    }
+}
+
+@PreviewLightDark
+@Composable
+private fun HomeContentErrorPreview() {
+    OrbitTheme {
+        HomeContent(
+            state = HomeUiState.Error,
             onOpenList = {},
             onOpenSearch = {},
             onOpenSettings = {},

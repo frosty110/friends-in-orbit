@@ -60,6 +60,7 @@ import app.orbit.data.PickerThresholds
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.lists.SettingGroup
 import app.orbit.ui.screens.settings.export.ExportPassphraseSheet
@@ -338,6 +339,7 @@ fun SettingsScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         SettingsContent(
+        onRetry = vm::onRetry,
             state = state,
             onBack = onBack,
             onOpenIgnored = onOpenIgnored,
@@ -410,6 +412,7 @@ fun SettingsScreen(
 
 @Composable
 private fun SettingsContent(
+    onRetry: () -> Unit = {},
     state: SettingsUiState,
     onBack: () -> Unit,
     onOpenIgnored: () -> Unit,
@@ -466,6 +469,17 @@ private fun SettingsContent(
         // and then jump to the real values, so a user on Plum saw Warm
         // selected for a moment (rubric D6). Same quiet-chrome policy as Home
         // (ADR 0006).
+        if (state is SettingsUiState.Error) {
+            // SET-11: say what happened and offer Try again.
+            OrbitScreenMessage(
+                icon = "warning-circle",
+                title = stringResource(R.string.settings_error_title),
+                body = stringResource(R.string.components_error_body),
+                actionLabel = stringResource(R.string.components_error_retry),
+                onAction = onRetry,
+            )
+            return@OrbitScreen
+        }
         if (ready == null) return@OrbitScreen
 
         Column(

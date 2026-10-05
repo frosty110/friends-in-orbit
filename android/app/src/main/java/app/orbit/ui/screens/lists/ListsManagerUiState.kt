@@ -28,6 +28,9 @@ import app.orbit.ui.util.UiText
 sealed interface ListsManagerUiState {
     @Immutable data object Loading : ListsManagerUiState
 
+    /** LIST-22: the lists could not be read; shown with Try again (rubric D6). */
+    @Immutable data object Error : ListsManagerUiState
+
     @Immutable
     data class Ready(
         val active: List<ListTileState>,

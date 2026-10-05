@@ -15,10 +15,6 @@ import app.orbit.domain.JsonProvider
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.usecase.SurfaceNextUseCase
 import app.orbit.testutil.MainDispatcherRule
-import java.time.Instant
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +27,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.Instant
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Behavioral tests for [HomeViewModel] — the VM is a thin subscriber to
@@ -150,6 +150,21 @@ class HomeViewModelTest {
     // ============================================================================
     // Test 1 — empty tiles → Empty
     // ============================================================================
+
+    // HOME-10: a failing source shows Error (Home used to sit on stale chrome)
+    // and Try again re-subscribes and recovers.
+    @Test
+    fun `failing source emits Error and retry recovers`() = runTest {
+        val (vm, _, listRepo) = fixture()
+        listRepo.failMemberCounts = true
+        vm.uiState.test(timeout = 2.seconds) {
+            assertEquals(HomeUiState.Error, awaitItemMatching { it !is HomeUiState.Loading })
+            listRepo.failMemberCounts = false
+            vm.onRetry()
+            assertEquals(HomeUiState.Empty, awaitItemMatching { it !is HomeUiState.Loading && it !is HomeUiState.Error })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 
     @Test
     fun `empty tiles emits Empty`() = runTest {

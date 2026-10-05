@@ -25,7 +25,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -42,6 +41,7 @@ import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitAppBarTextAction
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSwitch
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
@@ -123,6 +123,7 @@ fun ListConfigScreen(
     }
 
     ListConfigContent(
+        onRetry = vm::onRetry,
         state = state,
         snackbarHostState = snackbarHostState,
         onBack = onBack,
@@ -157,6 +158,7 @@ fun ListConfigScreen(
 
 @Composable
 private fun ListConfigContent(
+    onRetry: () -> Unit = {},
     state: ListConfigUiState,
     snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
@@ -176,7 +178,7 @@ private fun ListConfigContent(
     val fallbackTitle = stringResource(R.string.lists_config_title_fallback)
     val title = when (state) {
         is ListConfigUiState.Ready -> state.name.ifBlank { fallbackTitle }
-        ListConfigUiState.NotFound -> fallbackTitle
+        ListConfigUiState.NotFound, ListConfigUiState.Error -> fallbackTitle
         ListConfigUiState.Loading -> ""
     }
 
@@ -214,6 +216,17 @@ private fun ListConfigContent(
                     textAlign = TextAlign.Center,
                 )
             }
+            return@OrbitScreen
+        }
+
+        if (state is ListConfigUiState.Error) {
+            OrbitScreenMessage(
+                icon = "warning-circle",
+                title = stringResource(R.string.lists_config_error_title),
+                body = stringResource(R.string.components_error_body),
+                actionLabel = stringResource(R.string.components_error_retry),
+                onAction = onRetry,
+            )
             return@OrbitScreen
         }
 

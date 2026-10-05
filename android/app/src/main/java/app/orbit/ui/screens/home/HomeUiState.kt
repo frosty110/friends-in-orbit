@@ -35,6 +35,12 @@ sealed interface HomeUiState {
      */
     @Immutable data object Loading : HomeUiState
 
+    /**
+     * HOME-10: the lists could not be read. Says so with Try again, instead of
+     * the stream dying and Home sitting on stale or empty chrome (rubric D6).
+     */
+    @Immutable data object Error : HomeUiState
+
     @Immutable
     data class Ready(
         val lists: List<ListTileState>,

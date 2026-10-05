@@ -231,4 +231,8 @@
     <string name="lists_convert_body_with_preview" translatable="false">%1$s\n\n%2$s</string>
     <string name="lists_convert_confirm">Convert</string>
 
+    <!-- The screen could not read its data; shown with Try again. -->
+    <string name="lists_error_title">Orbit couldn\'t load your lists</string>
+    <!-- The screen could not read its data; shown with Try again. -->
+    <string name="lists_config_error_title">Orbit couldn\'t load this list</string>
 </resources>

@@ -40,6 +40,9 @@ import app.orbit.ui.theme.OrbitThemeId
 sealed interface SettingsUiState {
     @Immutable data object Loading : SettingsUiState
 
+    /** SET-11: saved settings could not be read; shown with Try again (rubric D6). */
+    @Immutable data object Error : SettingsUiState
+
     @Immutable
     data class Ready(
         val callLogPermissionState: CallLogPermissionState,

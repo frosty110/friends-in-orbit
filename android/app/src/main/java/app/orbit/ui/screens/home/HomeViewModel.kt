@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -149,7 +150,16 @@ class HomeViewModel @Inject constructor(
     // Cache-first (ADR 0006): when HomeFeed already holds real tiles, the
     // initial value renders them synchronously (member counts hydrate a frame
     // later) — no Loading on steady-state re-entry.
-    val uiState: StateFlow<HomeUiState> =
+    // HOME-10: bumped by [onRetry] to re-subscribe after a failure.
+    private val retryCount = MutableStateFlow(0)
+
+    /** The Error state's Try again. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<HomeUiState> = retryCount.flatMapLatest {
         combine(
             visibleTiles,
             listRepo.observeMemberCountsByListId(),
@@ -165,7 +175,11 @@ class HomeViewModel @Inject constructor(
                 )
             }
             if (visible.isEmpty()) HomeUiState.Empty else readyState(visible, dueContacts)
+        }.catch { t ->
+            if (t is CancellationException) throw t
+            emit(HomeUiState.Error)
         }
+    }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),

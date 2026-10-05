@@ -95,4 +95,7 @@
     <!-- The one reflective line at the foot of Home. -->
     <string name="home_reflection">The call that makes your day can make someone else\'s. You deserve to be the one who reaches out.</string>
 
+
+    <!-- Home could not read the lists from the database. -->
+    <string name="home_error_title">Orbit couldn\'t load your lists</string>
 </resources>

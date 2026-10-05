@@ -21,7 +21,8 @@ import app.orbit.ui.theme.OrbitThemeId
 import app.orbit.widget.WidgetUpdateScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,10 +31,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Settings VM (ARCH-02 + ARCH-04), with the call-log sync surface (CALL-01 /
@@ -214,7 +219,16 @@ class SettingsViewModel @Inject constructor(
             )
         }
 
-    val uiState: StateFlow<SettingsUiState> =
+    // SET-11: bumped by [onRetry] to re-subscribe after a failure.
+    private val retryCount = MutableStateFlow(0)
+
+    /** The Error state's Try again. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<SettingsUiState> = retryCount.flatMapLatest {
         combine(
             snapshot,
             syncStatus,
@@ -237,7 +251,11 @@ class SettingsViewModel @Inject constructor(
                 darkMode = appr.darkMode,
                 accentHue = appr.accentHue,
             )
-        }.stateIn(
+        }.map<SettingsUiState.Ready, SettingsUiState> { it }.catch { t ->
+            if (t is CancellationException) throw t
+            emit(SettingsUiState.Error)
+        }
+    }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),
             initialValue = SettingsUiState.Loading,

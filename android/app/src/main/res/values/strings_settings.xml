@@ -181,4 +181,6 @@
     <string name="settings_import_sheet_title">Open your backup</string>
     <string name="settings_import_sheet_body">Enter the password you chose when you exported this file.</string>
 
+    <!-- The screen could not read its data; shown with Try again. -->
+    <string name="settings_error_title">Orbit couldn\'t load your settings</string>
 </resources>

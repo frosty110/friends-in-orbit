@@ -49,6 +49,9 @@ sealed interface ListConfigUiState {
     ) : ListConfigUiState
 
     @Immutable data object NotFound : ListConfigUiState
+
+    /** LIST-22: the list could not be read; shown with Try again (rubric D6). */
+    @Immutable data object Error : ListConfigUiState
 }
 
 /**
