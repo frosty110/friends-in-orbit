@@ -35,6 +35,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,12 +73,13 @@ import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
-import app.orbit.ui.components.OrbitChip
+import app.orbit.ui.components.ListContextChip
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.StatEntry
 import app.orbit.ui.screens.contact.sections.LogConnectionSheet
@@ -187,9 +189,10 @@ fun ContactDetailScreen(
         onPauseContact = vm::onPauseContact,
         onUnpauseContact = vm::onUnpauseContact,
         onUnpauseNow = vm::onUnpauseNow,
-        // LOG-01 — overflow → CallLogScreen. The NavHost-side caller forwards
-        // this through `onViewAllCalls` to nav.navigate(Routes.CallLog).
+        // LOG-04: overflow → CallLogScreen narrowed to this person. The
+        // NavHost-side caller forwards this to Routes.callLogFor(contactId).
         onViewAllCalls = onViewAllCalls,
+        onRetry = vm::onRetry,
         // CONTACT-06 — orphan flow callbacks. The actual NavHost wiring (Re-link
         // → ContactPickerScreen with mode=relink) is a NavHost-level concern;
         // the VM emits a NavEvent.RelinkPicker via [vm.navEvents] which the
@@ -232,6 +235,7 @@ private fun ContactDetailContent(
     onUnpauseContact: () -> Unit,
     onUnpauseNow: () -> Unit,
     onViewAllCalls: () -> Unit,
+    onRetry: () -> Unit,
     onRelink: () -> Unit,
     onArchive: (String) -> Unit,
     onOpenOverride: () -> Unit,
@@ -294,9 +298,22 @@ private fun ContactDetailContent(
             )
             when (state) {
                 ContactDetailUiState.Loading -> EmptyContactShell()
-                ContactDetailUiState.NotFound -> ErrorShell(
-                    message = "This contact isn't in Orbit anymore.",
-                    onBack = onBack
+                ContactDetailUiState.NotFound -> OrbitScreenMessage(
+                    icon = "user",
+                    title = "This person isn't in Orbit anymore",
+                    body = "They may have been removed from your phone's contacts.",
+                    actionLabel = "Go back",
+                    onAction = onBack
+                )
+                // CONTACT-08: a failed read says so, with Retry, instead of
+                // crashing. The only action here, so it takes the accent.
+                ContactDetailUiState.Error -> OrbitScreenMessage(
+                    icon = "warning-circle",
+                    title = "Couldn't load this person",
+                    body = "Something went wrong reading their details. Try again in a moment.",
+                    actionLabel = "Try again",
+                    onAction = onRetry,
+                    actionVariant = OrbitButtonVariant.Primary
                 )
                 is ContactDetailUiState.Ready -> ContactBodyLazyColumn(
                     contact = state.contact,
@@ -447,25 +464,6 @@ private fun EmptyContactShellPreview() {
     }
 }
 
-@Composable
-private fun ErrorShell(message: String, onBack: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(OrbitTheme.spacing.x8)
-    ) {
-        Text(
-            text = message,
-            style = OrbitTheme.type.body,
-            color = OrbitTheme.colors.fgMuted
-        )
-        Spacer(Modifier.height(OrbitTheme.spacing.x4))
-        OrbitButton(text = "Back", onClick = onBack)
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class) // function-scoped per Pitfall 8
 @Composable
 private fun ContactBodyLazyColumn(
@@ -593,7 +591,10 @@ private fun ContactBodyLazyColumn(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Avatar(name = displayName, size = 120.dp, photoUri = contact.photoUri)
+                // The photo is masked with the name under the curtain: a face
+                // identifies a person as surely as their name does. It showed
+                // through until 2026-10-05.
+                Avatar(name = displayName, size = 120.dp, photoUri = if (curtain) null else contact.photoUri)
                 Spacer(Modifier.height(OrbitTheme.spacing.x4))
                 Text(
                     text = displayName,
@@ -606,7 +607,7 @@ private fun ContactBodyLazyColumn(
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .defaultMinSize(minHeight = 48.dp)
+                        .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
                         .clip(OrbitTheme.shapes.md)
                         .clickable(enabled = hasPhone) { context.dialPhoneNumber(contact.phone) }
                         .semantics {
@@ -668,16 +669,15 @@ private fun ContactBodyLazyColumn(
                 verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2)
             ) {
                 listsOn.forEach { listName ->
-                    OrbitChip(
-                        label = if (curtain) "Contact" else listName,
-                        // ChipTone.Stone is the neutral read-only marker —
-                        // matches the curtain-on tone for visual consistency.
-                        tone = ChipTone.Stone
-                    )
+                    // ListContextChip masks the name to "List" under the
+                    // curtain, the same word every list-name surface uses (it
+                    // read "Contact" here). Stone is the neutral read-only tone.
+                    ListContextChip(listName = listName, tone = ChipTone.Stone)
                 }
                 if (listsOn.isEmpty()) {
+                    // A bare dash read as broken (vision CONTACT-3).
                     Text(
-                        text = "—",
+                        text = "Not on any list yet",
                         style = OrbitTheme.type.body,
                         color = OrbitTheme.colors.fgMuted
                     )
@@ -700,13 +700,18 @@ private fun ContactBodyLazyColumn(
                         label = "Total calls",
                         value = contact.totalCalls.toString()
                     ),
+                    // Plain words, not "Avg", and a sentence, not a bare dash,
+                    // where there isn't enough history yet: a dash read as
+                    // broken (vision CONTACT-3, rubric D7).
                     StatEntry(
-                        label = "Avg length",
-                        value = if (contact.totalCalls >= 3) contact.avgLengthLabel.ifBlank { "—" } else "—"
+                        label = "Average length",
+                        value = contact.avgLengthLabel
+                            .takeIf { contact.totalCalls >= 3 && it.isNotBlank() && it != NO_VALUE }
+                            ?: NOT_ENOUGH_CALLS
                     ),
                     StatEntry(
                         label = "Longest gap",
-                        value = longestGapLabel
+                        value = longestGapLabel.takeIf { it.isNotBlank() && it != NO_VALUE } ?: NOT_ENOUGH_CALLS
                     )
                 )
             )
@@ -714,7 +719,7 @@ private fun ContactBodyLazyColumn(
                 color = OrbitTheme.colors.line,
                 thickness = 1.dp
             )
-            UsuallyStatRow(value = contact.bestWindowLabel.ifBlank { "—" })
+            UsuallyStatRow(value = contact.bestWindowLabel.ifBlank { NOT_ENOUGH_CALLS })
         }
 
         // BULK-06 — "Add to lists" entry to the reverse picker.
@@ -769,7 +774,8 @@ private fun ContactBodyLazyColumn(
                 RuleOverrideSection(
                     listsOnSize = listsOn.size,
                     currentTemplateName = currentTemplateName,
-                    primaryListName = primaryListName,
+                    // List names are masked under the curtain (ListContextChip).
+                    primaryListName = if (curtain) "its list" else primaryListName,
                     hasOverride = hasOverride,
                     currentParams = currentParams ?: RuleParams.KeepInTouch(),
                     onOverride = onOpenOverride,
@@ -843,6 +849,16 @@ private fun SectionEyebrow(label: String) {
 
 private const val USUALLY_TOOLTIP = "Based on when you usually answer or call this contact."
 
+/** What a stat says until there is enough history to compute it. */
+private const val NOT_ENOUGH_CALLS = "Not enough calls yet"
+
+/**
+ * The placeholder the shared mapper and [ContactDetailViewModel] put in a stat
+ * they can't compute (an em dash, written as its escape). Card view still
+ * shows it; this screen swaps it for [NOT_ENOUGH_CALLS].
+ */
+private const val NO_VALUE = "\u2014"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun UsuallyStatRow(value: String) {
@@ -861,7 +877,7 @@ private fun UsuallyStatRow(value: String) {
                 style = OrbitTheme.type.eyebrow,
                 color = OrbitTheme.colors.fgMuted
             )
-            InfoTip(text = USUALLY_TOOLTIP, label = "About usually")
+            InfoTip(text = USUALLY_TOOLTIP, label = "What usually means")
         }
         Text(
             text = value,
@@ -1015,7 +1031,7 @@ private fun RetroNoteAffordance(
                             horizontal = OrbitTheme.spacing.x4,
                             vertical = OrbitTheme.spacing.x3
                         )
-                        .defaultMinSize(minHeight = 48.dp)
+                        .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
                 ) {
                     if (draft.isEmpty()) {
                         Text(
@@ -1070,19 +1086,29 @@ private val previewContact: app.orbit.data.Contact = app.orbit.data.Contact(
 
 private val previewState: ContactDetailUiState = ContactDetailUiState.Ready(
     contact = previewContact,
-    notes = emptyList(),
+    notes = listOf(
+        NoteRow(
+            id = 1L,
+            contactId = 1L,
+            body = "Starting the new job on Monday. Ask how the first week went.",
+            createdAtMs = 0L,
+            relativeTimestamp = "11 days ago",
+            absoluteTimestamp = "Sep 24 · 7:40 pm"
+        )
+    ),
     listsOn = listOf("Inner orbit"),
-    recentCalls = emptyList(),
+    recentCalls = listOf(
+        CallEntry(direction = CallDirection.Outgoing, relativeWhen = "11 days ago", lengthLabel = "14 min"),
+        CallEntry(direction = CallDirection.Incoming, relativeWhen = "1 month ago", lengthLabel = "32 min")
+    ),
     longestGapLabel = "21 days"
 )
 
-@PreviewLightDark
-@PreviewFontScale
 @Composable
-private fun ContactDetailContentPreview() {
+private fun ContactDetailPreviewHost(state: ContactDetailUiState) {
     OrbitTheme {
         ContactDetailContent(
-            state = previewState,
+            state = state,
             snackbarHostState = SnackbarHostState(),
             onBack = {},
             onAddToLists = {},
@@ -1095,6 +1121,7 @@ private fun ContactDetailContentPreview() {
             onUnpauseContact = {},
             onUnpauseNow = {},
             onViewAllCalls = {},
+            onRetry = {},
             onRelink = {},
             onArchive = {},
             onOpenOverride = {},
@@ -1104,6 +1131,49 @@ private fun ContactDetailContentPreview() {
             onLogConnection = { _, _, _ -> }
         )
     }
+}
+
+@PreviewLightDark
+@PreviewFontScale
+@Composable
+private fun ContactDetailContentPreview() {
+    ContactDetailPreviewHost(previewState)
+}
+
+/** A person with no history: every stat says so in words, not a dash. */
+@PreviewLightDark
+@Composable
+private fun ContactDetailNewPersonPreview() {
+    ContactDetailPreviewHost(
+        ContactDetailUiState.Ready(
+            contact = previewContact.copy(lastCalledLabel = "", totalCalls = 0, avgLengthLabel = "", bestWindowLabel = ""),
+            notes = emptyList(),
+            listsOn = emptyList(),
+            recentCalls = emptyList(),
+            longestGapLabel = NO_VALUE
+        )
+    )
+}
+
+/** Under the privacy curtain: no name, face, list name or note body shows. */
+@PreviewLightDark
+@Composable
+private fun ContactDetailCurtainPreview() {
+    CompositionLocalProvider(LocalPrivacyCurtain provides true) {
+        ContactDetailPreviewHost(previewState)
+    }
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactDetailErrorPreview() {
+    ContactDetailPreviewHost(ContactDetailUiState.Error)
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactDetailNotFoundPreview() {
+    ContactDetailPreviewHost(ContactDetailUiState.NotFound)
 }
 
 /**

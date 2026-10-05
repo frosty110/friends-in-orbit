@@ -15,6 +15,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -83,16 +84,25 @@ open class BrowseFeed @Inject constructor(
                 surfaceQueueUseCase(id).map { ordered -> ordered.map(ContactEntity::id) },
             ) { memberships, allContacts, callEvents, queueOrder ->
                 BrowseFeedSnapshot(memberships, allContacts, callEvents, queueOrder)
-            }.stateIn(
-                scope = scope,
-                started = SharingStarted.Eagerly,
-                initialValue = BrowseFeedSnapshot(
-                    memberships = emptyList(),
-                    allContacts = emptyList(),
-                    callEvents = emptyList(),
-                    queueOrder = emptyList(),
-                ),
-            )
+            }
+                // BROWSE-06: a failed source becomes a snapshot that says so.
+                // Uncaught, it escaped the @ApplicationScope (no handler) and
+                // crashed the app. The entry is evicted so the next forList
+                // call (Browse's Retry) builds a fresh subscription; no
+                // logging here, the snapshot is the report (rules.md Code 4).
+                .catch {
+                    perListCache.remove(id)
+                    emit(BrowseFeedSnapshot.Failed)
+                }
+                .stateIn(
+                    scope = scope,
+                    started = SharingStarted.Eagerly,
+                    // BROWSE-06: "not loaded yet", which Browse renders as a
+                    // skeleton. It used to be a snapshot with no members,
+                    // indistinguishable from an empty list, so a full list
+                    // flashed "No one here yet" before its first emission.
+                    initialValue = BrowseFeedSnapshot.NotLoaded,
+                )
         }
 }
 
@@ -112,4 +122,13 @@ data class BrowseFeedSnapshot(
     val allContacts: List<ContactEntity>,
     val callEvents: List<CallEventEntity>,
     val queueOrder: List<Long>,
-)
+    /** False only for [NotLoaded], the placeholder before the first emission. */
+    val loaded: Boolean = true,
+    /** True only for [Failed]: a source flow threw (BROWSE-06). */
+    val failed: Boolean = false,
+) {
+    companion object {
+        val NotLoaded = BrowseFeedSnapshot(emptyList(), emptyList(), emptyList(), emptyList(), loaded = false)
+        val Failed = BrowseFeedSnapshot(emptyList(), emptyList(), emptyList(), emptyList(), failed = true)
+    }
+}

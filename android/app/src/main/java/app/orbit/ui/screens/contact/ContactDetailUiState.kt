@@ -111,4 +111,11 @@ sealed interface ContactDetailUiState {
     ) : ContactDetailUiState
 
     @Immutable data object NotFound : ContactDetailUiState
+
+    /**
+     * CONTACT-08: a data stream failed. The screen says so and offers Retry;
+     * before 2026-10-05 the exception escaped viewModelScope and crashed the
+     * app (rubric 3.5, gate G5).
+     */
+    @Immutable data object Error : ContactDetailUiState
 }

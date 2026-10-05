@@ -24,8 +24,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import app.orbit.data.entity.RuleKind
 import app.orbit.domain.rule.RuleParams
 import app.orbit.ui.components.OrbitButton
@@ -42,8 +45,9 @@ import app.orbit.ui.theme.OrbitTheme
  * section in/out as the contact's membership count crosses the threshold.
  *
  * **No-override branch (`hasOverride == false`):** shows eyebrow "Custom
- * schedule" + body "Inherits {currentTemplateName} from {primaryListName}" +
- * Primary "Override" button.
+ * schedule" + body "Follows the {template} rhythm from {primaryListName}." +
+ * Secondary "Set a schedule for this person" button (2026-10-05: it was a
+ * Primary "Override", a second accent element and engineering vocabulary).
  *
  * **Override branch (`hasOverride == true`):** REUSES the List Configuration
  * [RuleTemplatePicker] to switch between [RuleKind] templates, plus — for
@@ -103,14 +107,17 @@ fun RuleOverrideSection(
 
             if (!hasOverride) {
                 Text(
-                    text = "Inherits $currentTemplateName from $primaryListName",
+                    text = "Follows the ${currentTemplateName.lowercase()} rhythm from $primaryListName.",
                     style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
                 )
                 Spacer(Modifier.height(OrbitTheme.spacing.x3))
+                // Secondary, in plain words: the hero Call button is this
+                // screen's one accent element (rules.md §Design 5), and
+                // "Override" was engineering vocabulary (rubric D7).
                 OrbitButton(
-                    text = "Override",
+                    text = "Set a schedule for this person",
                     onClick = onOverride,
-                    variant = OrbitButtonVariant.Primary,
+                    variant = OrbitButtonVariant.Secondary,
                 )
             } else {
                 OverrideEditor(params = currentParams, onChange = onParamsChange)
@@ -198,6 +205,8 @@ private fun IntervalDaysSlider(
             .fillMaxWidth()
             .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4),
     ) {
+        val rounded = days.toInt().coerceAtLeast(1)
+        val everyLabel = "Every $rounded ${if (rounded == 1) "day" else "days"}"
         Row(
             verticalAlignment = Alignment.Bottom,
             modifier = Modifier.fillMaxWidth(),
@@ -207,10 +216,10 @@ private fun IntervalDaysSlider(
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                 modifier = Modifier.weight(1f),
             )
-            val rounded = days.toInt().coerceAtLeast(1)
+            // Ink, not accentPress: the Call button is the screen's accent.
             Text(
                 text = "$rounded ${if (rounded == 1) "day" else "days"}",
-                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.accentPress),
+                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         }
         Slider(
@@ -218,15 +227,27 @@ private fun IntervalDaysSlider(
             onValueChange = { days = it },
             onValueChangeFinished = { onCommit(days.toInt().coerceAtLeast(1)) },
             valueRange = 1f..60f,
+            // One step per day, so the thumb lands on whole days and TalkBack's
+            // adjust gesture moves a day at a time.
+            steps = 58,
             colors = SliderDefaults.colors(
-                thumbColor = OrbitTheme.colors.accent,
-                activeTrackColor = OrbitTheme.colors.accent,
+                thumbColor = OrbitTheme.colors.fg,
+                activeTrackColor = OrbitTheme.colors.fgSoft,
                 inactiveTrackColor = OrbitTheme.colors.line,
+                activeTickColor = Color.Transparent,
+                inactiveTickColor = Color.Transparent,
             ),
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier
+                .padding(top = OrbitTheme.spacing.x1)
+                // TalkBack read "10 percent"; it now says what the value means
+                // (rubric D8: sliders announce meaningful values).
+                .semantics {
+                    contentDescription = "Aim for every"
+                    stateDescription = everyLabel
+                },
         )
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = OrbitTheme.spacing.x1),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
@@ -256,8 +277,8 @@ private fun RuleParams.toRuleKind(): RuleKind = when (this) {
  */
 private fun rhythmNoteFor(kind: RuleKind): String? = when (kind) {
     RuleKind.KEEP_IN_TOUCH -> null
-    RuleKind.LATE_NIGHT -> "The late night rhythm runs on its own — slower and more patient, with nothing to set."
-    RuleKind.ENERGIZE -> "The energize rhythm runs on its own — quicker, with nothing to set."
+    RuleKind.LATE_NIGHT -> "The late night rhythm runs on its own: slower and more patient, with nothing to set."
+    RuleKind.ENERGIZE -> "The energize rhythm runs on its own: quicker, with nothing to set."
 }
 
 private fun defaultParamsFor(kind: RuleKind): RuleParams = when (kind) {
@@ -272,7 +293,7 @@ private fun defaultParamsFor(kind: RuleKind): RuleParams = when (kind) {
 @Composable
 private fun PreviewNoOverrideLight() {
     OrbitTheme(darkTheme = false) {
-        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(16.dp)) {
+        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x4)) {
             RuleOverrideSection(
                 listsOnSize = 2,
                 currentTemplateName = "Keep in touch",
@@ -291,7 +312,7 @@ private fun PreviewNoOverrideLight() {
 @Composable
 private fun PreviewWithOverrideDark() {
     OrbitTheme(darkTheme = true) {
-        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(16.dp)) {
+        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x4)) {
             RuleOverrideSection(
                 listsOnSize = 2,
                 currentTemplateName = "Keep in touch",
@@ -312,7 +333,7 @@ private fun PreviewWithOverrideDark() {
 @Composable
 private fun PreviewGatedOff() {
     OrbitTheme(darkTheme = false) {
-        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(16.dp)) {
+        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x4)) {
             RuleOverrideSection(
                 listsOnSize = 1,
                 currentTemplateName = "Keep in touch",

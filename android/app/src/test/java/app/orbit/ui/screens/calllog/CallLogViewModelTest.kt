@@ -1,5 +1,7 @@
 package app.orbit.ui.screens.calllog
 
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.viewModelScope
 import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import app.orbit.data.dao.RecordingListMembershipDao
@@ -7,6 +9,7 @@ import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.CallSource
 import app.orbit.data.entity.ContactEntity
+import app.orbit.data.repository.CallEventRepository
 import app.orbit.domain.FakeCallEventRepository
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
@@ -14,6 +17,7 @@ import app.orbit.domain.callEventFixture
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.contactFixture
 import app.orbit.testutil.MainDispatcherRule
+import java.io.IOException
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -23,6 +27,11 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.job
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -65,24 +74,66 @@ class CallLogViewModelTest {
         Locale.setDefault(savedLocale)
     }
 
+    // Every VM a test builds, so [runVmTest] can end their coroutines.
+    private val created = mutableListOf<CallLogViewModel>()
+
+    /**
+     * `runTest` that cancels and joins each VM's scope before returning, while
+     * the test Main dispatcher is still installed. The VM joins on
+     * Dispatchers.Default; left running, its upstream is stopped later by
+     * WhileSubscribed's timeout, and that background completion resumes on a
+     * Main that no longer exists on the plain JVM, failing whichever test
+     * runs next ("uncaught exceptions before the test started").
+     */
+    private fun runVmTest(block: suspend TestScope.() -> Unit) = runTest {
+        try {
+            block()
+        } finally {
+            created.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
+            created.clear()
+        }
+    }
+
+    /**
+     * [callLogDenied] = null leaves the permission unreported (the state the VM
+     * is in before the screen's first resume); every other value is pushed the
+     * way the screen pushes it.
+     */
     private fun vm(
         events: List<CallEventEntity>,
         contacts: List<ContactEntity> = listOf(contactFixture(id = 1L, displayName = "Sarah")),
+        contactIdArg: String? = null,
+        callLogDenied: Boolean? = false,
+        callEventRepo: CallEventRepository = FakeCallEventRepository(events),
     ): CallLogViewModel = CallLogViewModel(
-        callEventRepo = FakeCallEventRepository(events),
+        callEventRepo = callEventRepo,
         contactRepo = FakeContactRepository().apply { seed(contacts) },
         listMembershipDao = RecordingListMembershipDao(),
         listRepo = FakeListRepository(),
         clock = TestClock(now),
-    )
+        savedStateHandle = SavedStateHandle(
+            if (contactIdArg == null) emptyMap() else mapOf(CallLogViewModel.ARG_CONTACT_ID to contactIdArg),
+        ),
+    ).also { vm ->
+        created += vm
+        callLogDenied?.let(vm::onCallLogPermissionChanged)
+    }
 
     private suspend fun ReceiveTurbine<CallLogUiState>.awaitReady(): CallLogUiState.Ready {
         while (true) {
             when (val item = awaitItem()) {
                 is CallLogUiState.Ready -> return item
-                CallLogUiState.Loading -> continue
-                CallLogUiState.Empty -> fail("expected Ready, got Empty")
+                is CallLogUiState.Loading -> continue
+                else -> fail("expected Ready, got $item")
             }
+        }
+    }
+
+    /** The first state that is not Loading. */
+    private suspend fun ReceiveTurbine<CallLogUiState>.awaitSettled(): CallLogUiState {
+        while (true) {
+            val item = awaitItem()
+            if (item !is CallLogUiState.Loading) return item
         }
     }
 
@@ -93,7 +144,7 @@ class CallLogViewModelTest {
     // ============================================================================
 
     @Test
-    fun `groups by local calendar day not 24h windows`() = runTest {
+    fun `groups by local calendar day not 24h windows`() = runVmTest {
         val vm = vm(
             events = listOf(
                 callEventFixture(id = 1L, contactId = 1L, occurredAt = at("2026-06-09", "08:00")),
@@ -115,7 +166,7 @@ class CallLogViewModelTest {
     // ============================================================================
 
     @Test
-    fun `rows carry the wall-clock time of the call`() = runTest {
+    fun `rows carry the wall-clock time of the call`() = runVmTest {
         val vm = vm(
             events = listOf(
                 callEventFixture(id = 1L, contactId = 1L, occurredAt = at("2026-06-09", "04:30")),
@@ -133,7 +184,7 @@ class CallLogViewModelTest {
     // ============================================================================
 
     @Test
-    fun `manual events stay visible under All and Outgoing and hide under Incoming`() = runTest {
+    fun `manual events stay visible under All and Outgoing and hide under Incoming`() = runVmTest {
         val vm = vm(
             events = listOf(
                 callEventFixture(
@@ -168,7 +219,7 @@ class CallLogViewModelTest {
     }
 
     @Test
-    fun `narrowing filter with no matches keeps Ready with empty sections`() = runTest {
+    fun `narrowing filter with no matches keeps Ready with empty sections`() = runVmTest {
         val vm = vm(
             events = listOf(
                 callEventFixture(
@@ -192,7 +243,7 @@ class CallLogViewModelTest {
     // ============================================================================
 
     @Test
-    fun `pagination reveals true increments and reports the real remainder`() = runTest {
+    fun `pagination reveals true increments and reports the real remainder`() = runVmTest {
         // 450 events, all on the reference day (08:00 going back one minute
         // per event keeps every instant inside 2026-06-09).
         val events = (0 until 450).map { i ->
@@ -222,7 +273,7 @@ class CallLogViewModelTest {
     }
 
     @Test
-    fun `filter change resets pagination to one page`() = runTest {
+    fun `filter change resets pagination to one page`() = runVmTest {
         // 250 outgoing + 10 incoming. After expanding to everything, switching
         // the filter re-opens bounded — without the reset the remainder would
         // read 0 instead of 50.
@@ -264,16 +315,158 @@ class CallLogViewModelTest {
     // ============================================================================
 
     @Test
-    fun `no events emits Empty`() = runTest {
+    fun `no events emits Empty`() = runVmTest {
         val vm = vm(events = emptyList())
         vm.uiState.test(timeout = 5.seconds) {
-            while (true) {
-                when (val item = awaitItem()) {
-                    CallLogUiState.Empty -> break
-                    CallLogUiState.Loading -> continue
-                    is CallLogUiState.Ready -> fail("expected Empty, got Ready")
+            assertEquals(CallLogUiState.Empty(), awaitSettled())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ============================================================================
+    // LOG-04: "View all calls" narrows the log to one person
+    // ============================================================================
+
+    @Test
+    fun `contactId route arg shows only that person's calls and names them`() = runVmTest {
+        val vm = vm(
+            events = listOf(
+                callEventFixture(id = 1L, contactId = 1L, occurredAt = at("2026-06-09", "08:00")),
+                callEventFixture(id = 2L, contactId = 2L, occurredAt = at("2026-06-09", "07:00")),
+                callEventFixture(id = 3L, contactId = 1L, occurredAt = at("2026-06-08", "12:00")),
+            ),
+            contacts = listOf(
+                contactFixture(id = 1L, displayName = "Sarah Levin"),
+                contactFixture(id = 2L, displayName = "Marcus Reid"),
+            ),
+            contactIdArg = "1",
+        )
+        vm.uiState.test(timeout = 5.seconds) {
+            val ready = awaitReady()
+            assertEquals(listOf(1L, 3L), ready.sections.flatMap { s -> s.rows.map { it.callEventId } })
+            assertEquals(CallLogScope.Person(contactId = 1L, name = "Sarah Levin"), ready.scope)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `contactId route arg accepts the ui id form`() = runVmTest {
+        val vm = vm(
+            events = listOf(
+                callEventFixture(id = 1L, contactId = 1L, occurredAt = at("2026-06-09", "08:00")),
+                callEventFixture(id = 2L, contactId = 2L, occurredAt = at("2026-06-09", "07:00")),
+            ),
+            contacts = listOf(contactFixture(id = 1L), contactFixture(id = 2L)),
+            contactIdArg = "c-2",
+        )
+        vm.uiState.test(timeout = 5.seconds) {
+            assertEquals(listOf(2L), awaitReady().sections.flatMap { s -> s.rows.map { it.callEventId } })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `without a contactId the log is everyone's`() = runVmTest {
+        val vm = vm(
+            events = listOf(
+                callEventFixture(id = 1L, contactId = 1L, occurredAt = at("2026-06-09", "08:00")),
+                callEventFixture(id = 2L, contactId = 2L, occurredAt = at("2026-06-09", "07:00")),
+            ),
+            contacts = listOf(contactFixture(id = 1L), contactFixture(id = 2L)),
+        )
+        vm.uiState.test(timeout = 5.seconds) {
+            val ready = awaitReady()
+            assertEquals(2, ready.rowCount())
+            assertEquals(CallLogScope.Everyone, ready.scope)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a person with no calls is Empty and still named`() = runVmTest {
+        val vm = vm(
+            events = listOf(callEventFixture(id = 2L, contactId = 2L, occurredAt = at("2026-06-09", "07:00"))),
+            contacts = listOf(contactFixture(id = 1L, displayName = "Sarah"), contactFixture(id = 2L)),
+            contactIdArg = "1",
+        )
+        vm.uiState.test(timeout = 5.seconds) {
+            assertEquals(CallLogUiState.Empty(CallLogScope.Person(1L, "Sarah")), awaitSettled())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ============================================================================
+    // LOG-05: honest states: unknown permission, denied, data failure
+    // ============================================================================
+
+    @Test
+    fun `stays Loading until the permission is known, never a false Empty`() = runVmTest {
+        val vm = vm(events = emptyList(), callLogDenied = null)
+        vm.uiState.test(timeout = 5.seconds) {
+            assertTrue(awaitItem() is CallLogUiState.Loading)
+            expectNoEvents()
+            vm.onCallLogPermissionChanged(denied = true)
+            assertEquals(CallLogUiState.PermissionDenied(), awaitSettled())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `denied with no history is PermissionDenied, not Empty`() = runVmTest {
+        val vm = vm(events = emptyList(), callLogDenied = true)
+        vm.uiState.test(timeout = 5.seconds) {
+            assertEquals(CallLogUiState.PermissionDenied(), awaitSettled())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `denied with history keeps the rows and flags the notice`() = runVmTest {
+        val vm = vm(
+            events = listOf(callEventFixture(id = 1L, contactId = 1L, occurredAt = at("2026-06-09", "08:00"))),
+            callLogDenied = true,
+        )
+        vm.uiState.test(timeout = 5.seconds) {
+            val ready = awaitReady()
+            assertEquals(1, ready.rowCount())
+            assertTrue(ready.callLogDenied)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `granting access on resume replaces the denied state`() = runVmTest {
+        val vm = vm(events = emptyList(), callLogDenied = true)
+        vm.uiState.test(timeout = 5.seconds) {
+            assertEquals(CallLogUiState.PermissionDenied(), awaitSettled())
+            vm.onCallLogPermissionChanged(denied = false)
+            assertEquals(CallLogUiState.Empty(), awaitSettled())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a failing stream shows Error, and Retry recovers`() = runVmTest {
+        var attempts = 0
+        val healthy = FakeCallEventRepository(
+            listOf(callEventFixture(id = 1L, contactId = 1L, occurredAt = at("2026-06-09", "08:00"))),
+        )
+        // Fails on the first subscription only, like a transient read error.
+        val flaky = object : CallEventRepository by healthy {
+            override fun observeForLog(limit: Int): Flow<List<CallEventEntity>> {
+                attempts += 1
+                return if (attempts == 1) {
+                    flow { throw IOException("disk") }
+                } else {
+                    healthy.observeForLog(limit)
                 }
             }
+        }
+        val vm = vm(events = emptyList(), callEventRepo = flaky)
+        vm.uiState.test(timeout = 5.seconds) {
+            assertEquals(CallLogUiState.Error(), awaitSettled())
+            vm.onRetry()
+            assertEquals(1, awaitReady().rowCount())
             cancelAndIgnoreRemainingEvents()
         }
     }

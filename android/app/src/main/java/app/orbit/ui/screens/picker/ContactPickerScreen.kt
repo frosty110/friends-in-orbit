@@ -7,7 +7,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -23,8 +22,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,12 +38,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
@@ -59,10 +54,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.orbit.domain.search.ContactSearch
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
+import app.orbit.ui.components.OrbitButtonVariant
+import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSearchField
 import app.orbit.ui.components.PhIcon
+import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.openPhoneContact
 import java.time.Instant
@@ -84,13 +84,13 @@ import kotlinx.coroutines.launch
  *   - PermissionRationale → [RationaleCard]
  *   - PermissionDenied    → [PermissionDeniedEmpty]
  *   - EmptyDevice         → [EmptyDeviceContacts]
+ *   - Error (PICK-09)     → the shared message with Retry
  *   - Ready / Committing  → [ReadyContent]: search + chips + select-all + list
  *
  * Pitfalls mitigated:
  *   - Search box that eats keystrokes: the typed text is screen-local state
  *     owned by [ContactPickerContent] — ABOVE the phase `when`, so it survives
- *     a phase flip, and reachable by the app bar's clear-X so there is exactly
- *     one writer. It is debounced on the way DOWN to the VM and never read back
+ *     a phase flip, with exactly one writer (the field and its own clear-X). It is debounced on the way DOWN to the VM and never read back
  *     up. See the long note at its declaration; regression coverage lives in
  *     `androidTest/.../OrbitSearchFieldTest`.
  *   - IME overlap: root Box carries `Modifier.imePadding()`.
@@ -138,6 +138,7 @@ fun ContactPickerScreen(
     ContactPickerContent(
         state = state,
         onBack = onBack,
+        onRetry = vm::onRetry,
         onSearchChanged = vm::onSearchChanged,
         onToggleFilter = vm::onToggleFilter,
         onSetSort = vm::setSortBy,
@@ -188,6 +189,7 @@ internal fun pickerModeTitle(mode: PickerMode, selectionCount: Int): String {
 private fun ContactPickerContent(
     state: ContactPickerUiState,
     onBack: () -> Unit,
+    onRetry: () -> Unit,
     onSearchChanged: (String) -> Unit,
     onToggleFilter: (PickerFilter) -> Unit,
     onSetSort: (PickerSort) -> Unit,
@@ -215,9 +217,9 @@ private fun ContactPickerContent(
     //     [ReadyContent]. Held inside, it is torn down and re-initialised from
     //     `state.searchQuery` every time the phase leaves the Ready/Committing
     //     branch (a permission re-read on ON_RESUME re-writes the phase on every
-    //     foreground), which silently empties the box mid-search. It also has to
-    //     be reachable by the app bar's clear-X below — a clear that only wrote
-    //     to the VM left the typed text stranded in a box it could no longer
+    //     foreground), which silently empties the box mid-search. Its clear-X
+    //     (inside the field) writes here too; a clear that only wrote to the
+    //     VM once left the typed text stranded in a box it could no longer
     //     clear.
     //
     // `snapshotFlow { … }.debounce(…)` in a single `LaunchedEffect(Unit)` is the
@@ -245,21 +247,9 @@ private fun ContactPickerContent(
                     contentDescription = "Back"
                 )
             },
-            // Gated on the FIELD's text, not the VM's debounced copy, and it
-            // clears the field — the debounce carries the empty value down to
-            // the VM. Gating on `state.searchQuery` meant the X vanished the
-            // moment the VM was cleared while the box still held text.
-            trailing = if (searchInput.isNotBlank()) {
-                {
-                    OrbitIconButton(
-                        icon = "x",
-                        onClick = { searchInput = "" },
-                        contentDescription = "Clear search"
-                    )
-                }
-            } else {
-                null
-            }
+            // No clear-X here: the search field carries its own, gated on the
+            // field's text. Two "Clear search" controls for one field was one
+            // job with two entry points (rubric D2).
         )
 
         // Keeping the soft keyboard from covering the BatchCounter and the
@@ -286,6 +276,14 @@ private fun ContactPickerContent(
                     EmptyDeviceContacts()
                 ContactPickerUiState.Phase.NotFound ->
                     NotFoundEmpty(state.mode)
+                ContactPickerUiState.Phase.Error -> OrbitScreenMessage(
+                    icon = "warning-circle",
+                    title = "Couldn't load your contacts",
+                    body = "Something went wrong reading them. Try again in a moment.",
+                    actionLabel = "Try again",
+                    onAction = onRetry,
+                    actionVariant = OrbitButtonVariant.Primary
+                )
                 ContactPickerUiState.Phase.Ready,
                 ContactPickerUiState.Phase.Committing -> ReadyContent(
                     state = state,
@@ -507,16 +505,19 @@ private fun ReadyContent(
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
                 state.allContacts.isEmpty() -> EmptyDeviceContacts()
-                state.filteredContacts.isEmpty() -> EmptyState(
-                    heading = if (state.searchQuery.isNotBlank()) {
-                        "Nothing matches \"${state.searchQuery}\""
+                state.filteredContacts.isEmpty() -> OrbitScreenMessage(
+                    icon = "magnifying-glass",
+                    title = if (state.searchQuery.isNotBlank()) {
+                        "Nothing matches \u201C${state.searchQuery}\u201D"
                     } else {
                         "Nothing matches these filters"
                     },
+                    // Plain words: "chip" and "thresholds" were developer
+                    // vocabulary on a user-facing line (rubric D7).
                     body = if (state.searchQuery.isNotBlank()) {
-                        "Try a shorter name or remove a filter."
+                        "Try a shorter name, part of a number, or one filter fewer."
                     } else {
-                        "Try removing a chip or widening your thresholds in Settings."
+                        "Try removing a filter."
                     }
                 )
                 else -> LazyColumn(
@@ -591,8 +592,14 @@ private fun ReadyContent(
 }
 
 /**
- * Sort control for the picker. A compact pill that opens a [DropdownMenu] with
- * the available sort modes. Default is alphabetical.
+ * Sort control for the picker: a quiet pill that opens the shared
+ * [OrbitDropdownMenu] with the sort modes, the current one ticked. Default is
+ * alphabetical.
+ *
+ * 2026-10-05: the pill was about 36dp tall, under the 48dp floor
+ * (rules.md §Design 3), and opened a stock Material menu whose tick was in the
+ * accent; it now has the floor, a button role with a spoken purpose, and the
+ * Orbit menu with an ink tick (the screen's accent is the commit button).
  */
 @Composable
 private fun SortControl(
@@ -622,8 +629,9 @@ private fun SortControl(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
+                .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
                 .clip(OrbitTheme.shapes.full)
-                .clickable { expanded = true }
+                .clickable(role = Role.Button, onClickLabel = "Change the order") { expanded = true }
                 .padding(
                     horizontal = OrbitTheme.spacing.x3,
                     vertical = OrbitTheme.spacing.x2
@@ -647,25 +655,17 @@ private fun SortControl(
                 tint = OrbitTheme.colors.fgMuted
             )
         }
-        DropdownMenu(
+        OrbitDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            options.forEach { (sort, label) ->
-                DropdownMenuItem(
-                    text = { Text(label) },
-                    trailingIcon = if (sort == sortBy) {
-                        { PhIcon(name = "check", size = 16.dp, tint = OrbitTheme.colors.accent) }
-                    } else {
-                        null
-                    },
-                    onClick = {
-                        onSetSort(sort)
-                        expanded = false
-                    }
+            onDismissRequest = { expanded = false },
+            actions = options.map { (sort, label) ->
+                OrbitMenuAction(
+                    label = label,
+                    onClick = { onSetSort(sort) },
+                    selected = sort == sortBy
                 )
             }
-        }
+        )
     }
 }
 
@@ -686,7 +686,7 @@ private fun ShowIgnoredControl(
             // rules.md Design 3 — 48dp tap floor, even for quiet controls.
             .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
             .clip(OrbitTheme.shapes.full)
-            .clickable { onToggle(!showIgnored) }
+            .clickable(role = Role.Button) { onToggle(!showIgnored) }
             .padding(
                 horizontal = OrbitTheme.spacing.x3,
                 vertical = OrbitTheme.spacing.x2
@@ -757,17 +757,15 @@ private fun buildPickerSections(contacts: List<PickerContact>): List<PickerSecti
 }
 
 /**
- * Sticky alphabetical header. Opaque [OrbitTheme.colors.bg] (the OrbitScreen
- * surface) so rows scrolling beneath never bleed through.
+ * Sticky alphabetical header: the shared [SectionLabel] (a heading for
+ * TalkBack) on an opaque [OrbitTheme.colors.bg] (the OrbitScreen surface) so
+ * rows scrolling beneath never bleed through.
  */
 @Composable
 private fun SectionHeader(letter: String) {
-    Text(
+    SectionLabel(
         text = letter,
-        style = OrbitTheme.type.eyebrow,
-        color = OrbitTheme.colors.fgMuted,
         modifier = Modifier
-            .semantics { heading() }
             .fillMaxWidth()
             .background(OrbitTheme.colors.bg)
             .padding(
@@ -777,53 +775,18 @@ private fun SectionHeader(letter: String) {
     )
 }
 
-@Composable
-private fun EmptyState(heading: String, body: String) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
-            modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x6)
-        ) {
-            Text(
-                text = heading,
-                style = OrbitTheme.type.h3,
-                color = OrbitTheme.colors.fg,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = body,
-                style = OrbitTheme.type.body,
-                color = OrbitTheme.colors.fgMuted,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
 /**
  * C6 — terminal empty state when the `targetListId` nav arg is missing or
- * unparseable. Same shape as [PermissionDeniedEmpty] (centred text, no
- * actions). Keeps copy terse and sentence-case per voice rules.
+ * unparseable. The shared message (OrbitScreenMessage), with no action: back
+ * is the way out. Keeps copy terse and sentence-case per voice rules.
  */
 @Composable
 private fun NotFoundEmpty(mode: PickerMode) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            // Re-link routes carry a contact, not a list.
-            text = if (mode == PickerMode.Relink) "Contact not found" else "List not found",
-            style = OrbitTheme.type.h3,
-            color = OrbitTheme.colors.fg,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x6)
-        )
-    }
+    OrbitScreenMessage(
+        // Re-link routes carry a contact, not a list.
+        title = if (mode == PickerMode.Relink) "Contact not found" else "List not found",
+        body = "It may have been removed. Go back and try again."
+    )
 }
 
 // ─── Previews ──────────────────────────────────────────────────────────────────
@@ -835,6 +798,7 @@ private fun ContactPickerReadyPreviewLight() {
         ContactPickerContent(
             state = previewReadyState(darkSelectionDemo = false),
             onBack = {},
+            onRetry = {},
             onSearchChanged = {},
             onToggleFilter = {},
             onSetSort = {},
@@ -860,6 +824,7 @@ private fun ContactPickerReadyPreviewDark() {
         ContactPickerContent(
             state = previewReadyState(darkSelectionDemo = true),
             onBack = {},
+            onRetry = {},
             onSearchChanged = {},
             onToggleFilter = {},
             onSetSort = {},
@@ -887,6 +852,7 @@ private fun ContactPickerRationalePreviewLight() {
                 phase = ContactPickerUiState.Phase.PermissionRationale
             ),
             onBack = {},
+            onRetry = {},
             onSearchChanged = {},
             onToggleFilter = {},
             onSetSort = {},
@@ -914,6 +880,7 @@ private fun ContactPickerDeniedPreviewLight() {
                 phase = ContactPickerUiState.Phase.PermissionDenied
             ),
             onBack = {},
+            onRetry = {},
             onSearchChanged = {},
             onToggleFilter = {},
             onSetSort = {},
@@ -1006,6 +973,7 @@ private fun ContactPickerContentPreview() {
         ContactPickerContent(
             state = previewReadyState(),
             onBack = {},
+            onRetry = {},
             onSearchChanged = {},
             onToggleFilter = {},
             onSetSort = {},

@@ -15,7 +15,9 @@ import app.orbit.ui.theme.OrbitTheme
  * (ContactPickerScreen) places this BETWEEN the filter chips row and the
  * LazyColumn.
  *
- * Copy: "Select all matching ($matchingCount)"
+ * Copy: "Select all $matchingCount matches" ("Select the 1 match" for one).
+ * It read "Select all matching (14)", a parenthesised count that read like a
+ * developer label (rubric D7).
  */
 @Composable
 fun SelectAllMatchingChip(
@@ -24,7 +26,7 @@ fun SelectAllMatchingChip(
     modifier: Modifier = Modifier,
 ) {
     OrbitButton(
-        text = "Select all matching ($matchingCount)",
+        text = if (matchingCount == 1) "Select the 1 match" else "Select all $matchingCount matches",
         onClick = onClick,
         variant = OrbitButtonVariant.Ghost,
         modifier = modifier.fillMaxWidth(),

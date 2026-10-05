@@ -230,17 +230,18 @@ private fun OrbitNavGraph(
                 }
             )
         ) { entry ->
+            val contactIdArg = entry.arguments?.getString("contactId") ?: "c-sarah"
             ContactDetailScreen(
                 vm = hiltViewModel<ContactDetailViewModel>(),
-                contactId = entry.arguments?.getString("contactId") ?: "c-sarah",
+                contactId = contactIdArg,
                 onBack = { nav.popBackStack() },
                 onAddToLists = { contactId -> nav.navigate(Routes.pickLists(contactId)) },
                 // CONTACT-06 / CONTACT-07: Re-link opens the picker in Relink
                 // mode for this orphan; the commit merges and pops back here.
                 onRelink = { cid -> nav.navigate(Routes.relinkContact(cid.toString())) },
-                // LOG-01 — overflow → CallLogScreen, wired through the dedicated
-                // call-log nav destination.
-                onViewAllCalls = { nav.navigate(Routes.CallLog) }
+                // LOG-04: "View all calls" means this person's calls; back
+                // pops to this screen.
+                onViewAllCalls = { nav.navigate(Routes.callLogFor(contactIdArg)) }
             )
         }
         composable(
@@ -287,11 +288,32 @@ private fun OrbitNavGraph(
                 onBack = { nav.popBackStack() }
             )
         }
-        // LOG-01 — chronological in-app call log.
-        composable(Routes.CallLog) {
+        // LOG-01: chronological in-app call log. LOG-04: optionally one
+        // person's (the CallLogViewModel reads `contactId` from SavedStateHandle).
+        composable(
+            Routes.CallLogPattern,
+            arguments = listOf(
+                navArgument("contactId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) {
             CallLogScreen(
                 vm = hiltViewModel<CallLogViewModel>(),
                 onBack = { nav.popBackStack() },
+                // LOG-05: the denied state hands off to Settings, which owns
+                // the grant and the resync it needs (Card view precedent).
+                // Opened from Settings, it goes back rather than stacking a
+                // second Settings on top.
+                onOpenSettings = {
+                    if (nav.previousBackStackEntry?.destination?.route == Routes.Settings) {
+                        nav.popBackStack()
+                    } else {
+                        nav.navigate(Routes.Settings)
+                    }
+                },
                 onOpenContact = { contactId, callEventId ->
                     // I2 — named-arg `focusNote = true` for clarity; the
                     // helper produces "contact/{id}?focusNote=1&scrollToCallEventId={...}"

@@ -9,6 +9,7 @@ import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListType
 import app.orbit.data.feed.BrowseFeed
+import app.orbit.data.feed.BrowseFeedSnapshot
 import app.orbit.domain.FakeCallEventRepository
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
@@ -36,6 +37,8 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -107,9 +110,14 @@ class BrowseViewModelTest {
         override suspend fun dueCountForList(id: Long): Int? = null
     }
 
+    /**
+     * [scriptedForList], when set, replaces the real feed's per-list stream so
+     * a test can hold the feed before its first emission or make it fail.
+     */
     private fun makeVm(
         savedStateListId: String? = "1",
-        ruleTemplateRepo: FakeRuleTemplateRepository = FakeRuleTemplateRepository()
+        ruleTemplateRepo: FakeRuleTemplateRepository = FakeRuleTemplateRepository(),
+        scriptedForList: ((Long) -> StateFlow<BrowseFeedSnapshot>)? = null
     ): Setup {
         val contactRepo = FakeContactRepository()
         val listRepo = FakeListRepository()
@@ -142,13 +150,26 @@ class BrowseViewModelTest {
             clock = clock,
             json = JsonProvider.json
         )
-        val browseFeed = BrowseFeed(
-            listRepo = listRepo,
-            contactRepo = contactRepo,
-            callEventRepo = callEventRepo,
-            surfaceQueueUseCase = surfaceQueueUseCase,
-            scope = CoroutineScope(UnconfinedTestDispatcher())
-        )
+        val browseFeed = if (scriptedForList == null) {
+            BrowseFeed(
+                listRepo = listRepo,
+                contactRepo = contactRepo,
+                callEventRepo = callEventRepo,
+                surfaceQueueUseCase = surfaceQueueUseCase,
+                scope = CoroutineScope(UnconfinedTestDispatcher())
+            )
+        } else {
+            object : BrowseFeed(
+                listRepo = listRepo,
+                contactRepo = contactRepo,
+                callEventRepo = callEventRepo,
+                surfaceQueueUseCase = surfaceQueueUseCase,
+                scope = CoroutineScope(UnconfinedTestDispatcher())
+            ) {
+                override fun forList(listId: Long): StateFlow<BrowseFeedSnapshot> =
+                    scriptedForList(listId)
+            }
+        }
         val vm = BrowseViewModel(
             contactRepo = contactRepo,
             listRepo = listRepo,
@@ -220,7 +241,58 @@ class BrowseViewModelTest {
     fun `empty repo and empty query emits Empty`() = runTest {
         val (vm, _, _) = makeVm()
         vm.uiState.test(timeout = 2.seconds) {
+            var item = awaitItem()
+            while (item == BrowseUiState.Loading) item = awaitItem()
+            assertEquals(BrowseUiState.Empty, item)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ============================================================================
+    // BROWSE-06: honest loading and error states
+    // ============================================================================
+
+    @Test
+    fun `before the feed's first snapshot the state is Loading, never Empty`() = runTest {
+        // Regression: the VM started at Empty and the feed's placeholder had no
+        // members, so a full list said "No one here yet" until data arrived.
+        val feed = MutableStateFlow(BrowseFeedSnapshot.NotLoaded)
+        val (vm, _, _) = makeVm(scriptedForList = { feed })
+        vm.uiState.test(timeout = 2.seconds) {
+            assertEquals(BrowseUiState.Loading, awaitItem())
+            expectNoEvents()
+            feed.value = BrowseFeedSnapshot(emptyList(), emptyList(), emptyList(), emptyList())
             assertEquals(BrowseUiState.Empty, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a failed feed is Error, and Retry subscribes again`() = runTest {
+        var calls = 0
+        val (vm, _, _) = makeVm(
+            scriptedForList = {
+                calls += 1
+                MutableStateFlow(
+                    if (calls == 1) {
+                        BrowseFeedSnapshot.Failed
+                    } else {
+                        BrowseFeedSnapshot(
+                            memberships = listOf(membershipFixture(contactId = 1L, listId = 1L)),
+                            allContacts = listOf(contactFixture(id = 1L, displayName = "Alex")),
+                            callEvents = emptyList(),
+                            queueOrder = emptyList()
+                        )
+                    }
+                )
+            }
+        )
+        vm.uiState.test(timeout = 2.seconds) {
+            var item = awaitItem()
+            while (item == BrowseUiState.Loading) item = awaitItem()
+            assertEquals(BrowseUiState.Error, item)
+            vm.onRetry()
+            assertEquals(listOf("Alex"), awaitReady(this).contacts.map { it.name })
             cancelAndIgnoreRemainingEvents()
         }
     }

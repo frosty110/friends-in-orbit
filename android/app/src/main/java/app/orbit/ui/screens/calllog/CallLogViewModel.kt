@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.calllog
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.orbit.data.dao.ListMembershipDao
@@ -17,10 +18,14 @@ import java.time.Instant
 import java.time.ZoneId
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -60,11 +65,28 @@ import kotlinx.coroutines.flow.update
  * threaded into the day-header labelling; the composable layer never
  * reads the JVM time API.
  *
+ * **One person (LOG-04).** When the route carries `contactId` ("View all
+ * calls" on Contact detail), the events come from
+ * `observeForContact(id, Int.MAX_VALUE)` instead of `observeForLog`, and every
+ * state carries [CallLogScope.Person] so the app bar can name them. Before
+ * 2026-10-05 the route had no argument, so "View all calls" opened everyone's
+ * calls.
+ *
+ * **Honest states (LOG-05).** The screen pushes READ_CALL_LOG on every resume
+ * ([onCallLogPermissionChanged], the Browse precedent; ARCH-04 keeps the check
+ * itself in the screen). Until that first push the state stays Loading, so a
+ * user who denied access never sees a flash of "No calls yet". No events plus
+ * no access is [CallLogUiState.PermissionDenied], not Empty. A failing data
+ * stream becomes [CallLogUiState.Error] instead of an uncaught exception in
+ * viewModelScope (which crashed the app), and [onRetry] re-subscribes from
+ * scratch.
+ *
  * **Pitfall (orphaned event):** an event whose contactId no longer maps
  * to a contact (FK cascade window, fake repo race) is dropped via
  * `mapNotNull` — defensive against the DAO returning a stale row that the
  * contact observer hasn't propagated yet.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class CallLogViewModel @Inject constructor(
     private val callEventRepo: CallEventRepository,
@@ -72,9 +94,42 @@ class CallLogViewModel @Inject constructor(
     private val listMembershipDao: ListMembershipDao,
     private val listRepo: ListRepository,
     private val clock: Clock,
+    savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     private val zone: ZoneId = ZoneId.systemDefault()
+
+    // LOG-04: the person the log is narrowed to, from the optional route arg.
+    // Accepts the UI id form ("c-12") as well as the bare id, like
+    // ContactDetailViewModel; a missing or unparseable arg means everyone.
+    private val personId: Long? = savedStateHandle.get<String>(ARG_CONTACT_ID)
+        ?.removePrefix("c-")
+        ?.toLongOrNull()
+
+    private val initialScope: CallLogScope =
+        personId?.let { CallLogScope.Person(contactId = it) } ?: CallLogScope.Everyone
+
+    // The newest scope a successful emission produced, so an Error state
+    // still names the person once their row has loaded.
+    @Volatile private var lastScope: CallLogScope = initialScope
+
+    // LOG-05: null until the screen's first resume reports the permission.
+    // Null holds the state at Loading: defaulting to "granted" would flash
+    // "No calls yet" at a user who denied access.
+    private val callLogDenied = MutableStateFlow<Boolean?>(null)
+
+    /** Pushed from the screen on every ON_RESUME (ARCH-04: the screen reads it). */
+    fun onCallLogPermissionChanged(denied: Boolean) {
+        callLogDenied.value = denied
+    }
+
+    // Bumped by [onRetry]; flatMapLatest then re-subscribes every source.
+    private val retryCount = MutableStateFlow(0)
+
+    /** The Error state's Retry. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
 
     /**
      * The user's view query. Filter and visible-count live in
@@ -108,12 +163,19 @@ class CallLogViewModel @Inject constructor(
         val row: CallLogRow,
     )
 
-    // Native typed 4-arity combine for the data flows; filter and
-    // visible-count lifted in via chained typed .combine. Chained
-    // .flowOn(Dispatchers.Default) keeps the join + grouping off Main.
-    val uiState: StateFlow<CallLogUiState> =
+    /** The joined rows plus the scope (with the person's name) they belong to. */
+    private data class Joined(val items: List<LogItem>, val scope: CallLogScope)
+
+    // Native typed 4-arity combine for the data flows; filter, visible-count
+    // and the permission lifted in via chained typed .combine. The
+    // .flowOn(Dispatchers.Default) on [uiState] keeps the join + grouping off Main.
+    private fun stateFlow(): Flow<CallLogUiState> =
         combine(
-            callEventRepo.observeForLog(Int.MAX_VALUE),
+            if (personId != null) {
+                callEventRepo.observeForContact(personId, Int.MAX_VALUE)
+            } else {
+                callEventRepo.observeForLog(Int.MAX_VALUE)
+            },
             contactRepo.observeAll(),
             listMembershipDao.observeAll(),
             listRepo.observeAll(),
@@ -129,7 +191,7 @@ class CallLogViewModel @Inject constructor(
                 .mapValues { (_, ms) -> ms.maxByOrNull { it.addedAt }?.listId ?: 0L }
             val listById = lists.associateBy { it.id }
 
-            events.mapNotNull { ev ->
+            val items = events.mapNotNull { ev ->
                 val contact = byContactId[ev.contactId] ?: return@mapNotNull null
                 val listId = mostRecentListByContactId[ev.contactId]
                 val listName = listId?.let { listById[it]?.name } ?: ""
@@ -141,13 +203,17 @@ class CallLogViewModel @Inject constructor(
                 // subtitle builder.
                 val isManual = ev.source == CallSource.MANUAL
                 val isAttempt = ev.source == CallSource.ATTEMPT
-                val (directionWord, directionIcon) = when {
-                    isAttempt -> "Attempted" to "phone-slash"
-                    isManual -> "Logged" to "check-circle"
-                    else -> when (ev.direction) {
-                        CallDirection.OUTGOING -> "Outgoing" to "phone-outgoing"
-                        CallDirection.INCOMING -> "Incoming" to "phone-incoming"
-                    }
+                val kind = when {
+                    isAttempt -> CallLogKind.Attempted
+                    isManual -> CallLogKind.Logged
+                    ev.direction == CallDirection.OUTGOING -> CallLogKind.Outgoing
+                    else -> CallLogKind.Incoming
+                }
+                val (directionWord, directionIcon) = when (kind) {
+                    CallLogKind.Attempted -> "Attempted" to "phone-slash"
+                    CallLogKind.Logged -> "Logged" to "check-circle"
+                    CallLogKind.Outgoing -> "Outgoing" to "phone-outgoing"
+                    CallLogKind.Incoming -> "Incoming" to "phone-incoming"
                 }
                 LogItem(
                     occurredAt = ev.occurredAt,
@@ -165,26 +231,62 @@ class CallLogViewModel @Inject constructor(
                         directionIconName = directionIcon,
                         timeLabel = formatWallClock(ev.occurredAt, zone),
                         isIgnored = contact.isIgnored,
+                        kind = kind,
                     ),
                 )
             }
-        }
-            .combine(queryFlow) { items, query ->
-                buildState(items, query.filter, query.visibleCount)
+            val scope = when (val s = initialScope) {
+                CallLogScope.Everyone -> s
+                is CallLogScope.Person -> s.copy(name = byContactId[s.contactId]?.displayName.orEmpty())
             }
+            Joined(items, scope)
+        }
+            .combine(queryFlow) { joined, query -> joined to query }
+            .combine(callLogDenied) { (joined, query), denied ->
+                lastScope = joined.scope
+                if (denied == null) {
+                    CallLogUiState.Loading(joined.scope)
+                } else {
+                    buildState(joined.items, query.filter, query.visibleCount, denied, joined.scope)
+                }
+            }
+            // No logging here (rules.md Code 4): the state is the report. No
+            // Loading is emitted on (re)start either: WhileSubscribed restarts
+            // this flow whenever the screen comes back after 5s, and a
+            // skeleton over rows the user was just reading would be a flash
+            // of wrong content. A retry keeps the Error up for the moment the
+            // new read takes, then replaces it.
+            .catch { emit(CallLogUiState.Error(lastScope)) }
+
+    val uiState: StateFlow<CallLogUiState> =
+        retryCount
+            .flatMapLatest { stateFlow() }
+            // One Default hop for the whole join + grouping, directly under
+            // stateIn (the shape this VM always had). A flowOn inside the
+            // flatMapLatest added a second producer whose cancellation
+            // resumed on Main from a background thread.
             .flowOn(Dispatchers.Default)
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = CallLogUiState.Loading,
+                initialValue = CallLogUiState.Loading(initialScope),
             )
 
     private fun buildState(
         items: List<LogItem>,
         filter: CallLogDirectionFilter,
         visibleCount: Int,
+        callLogDenied: Boolean,
+        scope: CallLogScope,
     ): CallLogUiState {
-        if (items.isEmpty()) return CallLogUiState.Empty
+        // LOG-05: without access, an empty log means "can't see", not "none".
+        if (items.isEmpty()) {
+            return if (callLogDenied) {
+                CallLogUiState.PermissionDenied(scope)
+            } else {
+                CallLogUiState.Empty(scope)
+            }
+        }
 
         val filtered = items.filter { item ->
             when (filter) {
@@ -215,10 +317,15 @@ class CallLogViewModel @Inject constructor(
             sections = sections,
             filter = filter,
             remainingCount = filtered.size - visible.size,
+            callLogDenied = callLogDenied,
+            scope = scope,
         )
     }
 
     companion object {
+        /** LOG-04: the optional route argument naming the one person to show. */
+        const val ARG_CONTACT_ID: String = "contactId"
+
         /**
          * True pagination increment. Each "Show n more" tap
          * reveals at most this many additional rows; the footer label shows

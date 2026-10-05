@@ -47,6 +47,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,9 +56,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 
@@ -235,7 +239,28 @@ class ContactDetailViewModel @Inject constructor(
         val overrideEditorOpen: Boolean = false
     )
 
-    val uiState: StateFlow<ContactDetailUiState> =
+    // CONTACT-08: bumped by [onRetry]; flatMapLatest re-subscribes every source.
+    private val retryCount = MutableStateFlow(0)
+
+    /** The Error state's Retry. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
+
+    /**
+     * CONTACT-08: a failure in any source becomes [ContactDetailUiState.Error]
+     * (with Retry) instead of an uncaught exception in viewModelScope, which
+     * took the whole app down. No logging here (rules.md Code 4).
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<ContactDetailUiState> = retryCount.flatMapLatest { detailState() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000L),
+            initialValue = ContactDetailUiState.Loading
+        )
+
+    private fun detailState(): Flow<ContactDetailUiState> =
         combine(
             contactSource,
             membershipsSource,
@@ -364,11 +389,7 @@ class ContactDetailViewModel @Inject constructor(
                     recentCallIsAttempt = recentCallIsAttempt
                 )
             }
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000L),
-            initialValue = ContactDetailUiState.Loading
-        )
+        }.catch { emit(ContactDetailUiState.Error) }
 
     /**
      * CONTACT-03 — resolves the (template-name, RuleParams) pair driving the

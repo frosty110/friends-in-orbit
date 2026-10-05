@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -23,12 +22,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.components.OrbitCheckbox
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitMenuAction
@@ -41,9 +43,10 @@ import java.time.Instant
  * Single picker contact row (PICK-04).
  *
  * Layout: avatar (44dp) leading + Column(name h3 + 1-2 metadata lines) +
- * trailing Material3 Checkbox. Tap on the row toggles selection — the checkbox
- * itself is non-interactive ([androidx.compose.material3.Checkbox.onCheckedChange]
- * = null) so the row is the single tap target.
+ * trailing [OrbitCheckbox]. Tap on the row toggles selection; the mark is
+ * display-only, so the row is the single tap target, and the row itself is the
+ * checkbox for TalkBack ("Sarah Levin, checkbox, checked"). It was a stock
+ * Material checkbox until 2026-10-05 (rubric D4).
  *
  * Selected-row tint: [OrbitTheme.colors.accentTint] background — cluster-tier
  * accent, NOT the action-tier `accent` (per the per-screen accent budget).
@@ -55,16 +58,19 @@ import java.time.Instant
  * Metadata format:
  *   Line 1 (call line):
  *     - callCount > 0  → "Last called {relative} · {N} {call|calls}"
- *     - callCount == 0 → literal "never called" (lowercase per PICK-04)
+ *     - callCount == 0 → "Never called", in sentence case like every other
+ *       line (it was lowercase until 2026-10-05; voice.md wins), and the
+ *       same words Browse and Search use
  *     - both absent    → "—" in fgSubtle (covered by callCount == 0 branch since
  *                         lastCallAt is null when callCount == 0)
  *   Line 2 (memberships, optional):
- *     - listNames.size in 1..3   → "In: ${listNames.joinToString(", ")}"
- *     - listNames.size > 3       → "In: A, B, C + N more"
- *     - empty                    → omit line entirely (no "In: none")
+ *     - listNames.size in 1..3   → "On A, B"
+ *     - listNames.size > 3       → "On A, B, C and N more"
+ *     - empty                    → omit line entirely (no "On none")
+ *     - under the privacy curtain → "On 2 lists": list names are masked
+ *       everywhere (ListContextChip) and showed here until 2026-10-05.
  *
- * "never called" lowercase first letter is a PICK-04 invariant. The
- * zero-count phrasing is forbidden everywhere in source.
+ * The zero-count phrasing ("0 calls") is forbidden everywhere in source.
  *
  * A trailing ⋮ button — and still a long-press anywhere on the row — opens a
  * small anchored action menu:
@@ -112,7 +118,7 @@ fun PickerContactRow(
     var menuExpanded by remember { mutableStateOf(false) }
 
     val callLine: String = if (contact.callCount == 0 || contact.lastCallAt == null) {
-        "never called"
+        "Never called"
     } else {
         val rel = formatRelative(contact.lastCallAt)
         val callsWord = if (contact.callCount == 1) "call" else "calls"
@@ -121,11 +127,12 @@ fun PickerContactRow(
 
     val membershipLine: String? = when {
         contact.listNames.isEmpty() -> null
-        contact.listNames.size <= 3 -> "In: ${contact.listNames.joinToString(", ")}"
+        curtain -> if (contact.listNames.size == 1) "On 1 list" else "On ${contact.listNames.size} lists"
+        contact.listNames.size <= 3 -> "On ${contact.listNames.joinToString(", ")}"
         else -> {
             val head = contact.listNames.take(3).joinToString(", ")
             val rest = contact.listNames.size - 3
-            "In: $head + $rest more"
+            "On $head and $rest more"
         }
     }
 
@@ -159,12 +166,16 @@ fun PickerContactRow(
                     } else {
                         null
                     },
+                    onLongClickLabel = if (hasMenu) "More actions" else null,
+                    role = if (contact.isIgnored) Role.Button else Role.Checkbox,
                 )
                 .padding(
                     horizontal = OrbitTheme.spacing.x4,
                     vertical = OrbitTheme.spacing.x3,
                 )
-                .semantics { selected = isSelected },
+                .semantics {
+                    if (!contact.isIgnored) toggleableState = ToggleableState(isSelected)
+                },
         ) {
             // The photo is PII just like the name: under the
             // curtain the row falls back to initials derived from the masked
@@ -198,10 +209,7 @@ fun PickerContactRow(
                     color = OrbitTheme.colors.fgSubtle,
                 )
             } else {
-                Checkbox(
-                    checked = isSelected,
-                    onCheckedChange = null,
-                )
+                OrbitCheckbox(checked = isSelected)
             }
 
             // Visible entry to the row menu. Long-press still opens it, but a

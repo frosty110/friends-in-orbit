@@ -40,8 +40,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -50,6 +52,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -197,6 +200,15 @@ class ContactPickerViewModel @Inject constructor(
     private val _permissionPhase =
         MutableStateFlow<ContactPickerUiState.Phase>(ContactPickerUiState.Phase.LoadingPermission)
     private val _isCommitting = MutableStateFlow(false)
+
+    // PICK-09: bumped by [onRetry]; re-reads the address book and
+    // re-subscribes every Room source.
+    private val retryCount = MutableStateFlow(0)
+
+    /** PICK-09: the Error state's Retry. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
 
     // ONB-21 — UI-side sort mode. Default ByName matches DAO order;
     // onboarding flips to ByRecency via [setSortBy]. Persists across process
@@ -538,12 +550,12 @@ class ContactPickerViewModel @Inject constructor(
     //
     // Two staged combines because Kotlin stdlib `combine` arity caps at 5:
     //
-    //  Stage A: pickerContactsFlow — folds the 5 reactive data sources + the
+    //  Stage A: pickerContacts(generation) folds the 5 reactive data sources + the
     //   cached address-book read (`phoneByContactIdFlow`) into a domain
     //   List<PickerContact>: contacts, all-memberships, call events, lists,
     //   thresholds, phone-by-contactId.
     //
-    //  Stage B: uiState — folds (pickerContactsFlow, searchQueryFlow,
+    //  Stage B: uiState folds (pickerContacts(generation), searchQueryFlow,
     //   filterConfigFlow, selectedIds, chromeFlow) into ContactPickerUiState
     //   in ONE construction per emission (no chained .copy() stages; see the
     //   pipeline comment above `filterConfigFlow`).
@@ -561,19 +573,46 @@ class ContactPickerViewModel @Inject constructor(
     // so without `flatMapLatest` here, a denied-then-granted flow would keep
     // serving an empty cached map for the VM's lifetime.
 
-    private val phoneByContactIdFlow: SharedFlow<Map<Long, app.orbit.data.android.PhoneContact>> =
-        _permissionPhase
-            .map { it == ContactPickerUiState.Phase.Ready }
-            .distinctUntilChanged()
-            .flatMapLatest { granted ->
+    //
+    // PICK-09: the read is wrapped in a Result. A failed read (the permission
+    // revoked mid-read, a provider crash) used to throw inside this shareIn,
+    // which fails its viewModelScope coroutine and takes the app down; now the
+    // failure reaches the picker, which shows Retry. Retry re-keys the read,
+    // and each read carries the retry generation it belongs to: the share
+    // replays its last value, so without the tag a retry's fresh pipeline
+    // would first see the old failure and fail again before the new read
+    // landed (see [pickerContacts]).
+    private val phoneByContactIdFlow: SharedFlow<PhoneRead> =
+        combine(
+            _permissionPhase
+                .map { it == ContactPickerUiState.Phase.Ready }
+                .distinctUntilChanged(),
+            retryCount
+        ) { granted, generation -> granted to generation }
+            .flatMapLatest { (granted, generation) ->
                 if (granted) {
-                    flow { emit(contactsReader.readAll().associateBy { it.contactId }) }
+                    flow {
+                        val read = try {
+                            Result.success(contactsReader.readAll().associateBy { it.contactId })
+                        } catch (e: CancellationException) {
+                            throw e // rules.md Code 5
+                        } catch (e: Exception) {
+                            Result.failure(e)
+                        }
+                        emit(PhoneRead(generation, read))
+                    }
                         .flowOn(Dispatchers.IO)
                 } else {
-                    flowOf(emptyMap())
+                    flowOf(PhoneRead(generation, Result.success(emptyMap())))
                 }
             }
             .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), replay = 1)
+
+    /** One address-book read and the retry generation it was made for. */
+    private data class PhoneRead(
+        val generation: Int,
+        val result: Result<Map<Long, app.orbit.data.android.PhoneContact>>
+    )
 
     // Push the per-contact COUNT + lastAt down into SQL via
     // `observeAggregatesForContacts(ids)`. The id set is derived from the
@@ -603,8 +642,15 @@ class ContactPickerViewModel @Inject constructor(
         RawPickerSources(contacts, memberships, callAggregates, lists, thresholds)
     }
 
-    private val pickerContactsFlow: Flow<List<PickerContact>> =
-        rawSourcesFlow.combine(phoneByContactIdFlow) { raw, phoneById ->
+    // [generation] is the retry generation this pipeline serves; reads from
+    // an earlier generation (the share's replayed value) are skipped.
+    private fun pickerContacts(generation: Int): Flow<List<PickerContact>> =
+        rawSourcesFlow.combine(
+            phoneByContactIdFlow.filter { it.generation >= generation }
+        ) { raw, phoneRead ->
+            // A failed address-book read throws here, inside the cold
+            // pipeline, so [uiState]'s catch turns it into Phase.Error.
+            val phoneById = phoneRead.result.getOrThrow()
             buildPickerContacts(
                 contacts = raw.contacts,
                 memberships = raw.memberships,
@@ -674,7 +720,8 @@ class ContactPickerViewModel @Inject constructor(
     // contact list always describe the same device snapshot.
     private val deviceEmptyFlow: Flow<Boolean?> =
         phoneByContactIdFlow
-            .map<Map<Long, app.orbit.data.android.PhoneContact>, Boolean?> { it.isEmpty() }
+            // A failed read is "unknown" (null), never "empty".
+            .map<PhoneRead, Boolean?> { it.result.getOrNull()?.isEmpty() }
             .onStart { emit(null) }
             .distinctUntilChanged()
 
@@ -689,9 +736,33 @@ class ContactPickerViewModel @Inject constructor(
             PickerChrome(phase, committing, name, lists, deviceEmpty)
         }
 
+    /**
+     * PICK-09: a failure anywhere upstream (Room, the address-book read)
+     * becomes [ContactPickerUiState.Phase.Error] with Retry, instead of an
+     * uncaught exception in viewModelScope. The selection survives it. No
+     * logging here (rules.md Code 4).
+     */
     val uiState: StateFlow<ContactPickerUiState> =
+        retryCount.flatMapLatest { generation -> pickerState(generation) }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000L),
+                initialValue = ContactPickerUiState(
+                    phase = ContactPickerUiState.Phase.LoadingPermission,
+                    mode = mode,
+                    targetListName = "",
+                    searchQuery = "",
+                    activeFilters = emptySet(),
+                    showIgnored = false,
+                    allContacts = emptyList(),
+                    selectedIds = emptySet(),
+                    availableLists = emptyList()
+                )
+            )
+
+    private fun pickerState(generation: Int): Flow<ContactPickerUiState> =
         combine(
-            pickerContactsFlow,
+            pickerContacts(generation),
             // Debounce moved to the screen (immediate field state + debounced
             // commit). Debouncing here too would double-lag filtering, and
             // round-tripping a debounced value back to the field is what made
@@ -719,21 +790,21 @@ class ContactPickerViewModel @Inject constructor(
                 sortBy = config.sortBy
             )
         }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = ContactPickerUiState(
-                    phase = ContactPickerUiState.Phase.LoadingPermission,
-                    mode = mode,
-                    targetListName = "",
-                    searchQuery = "",
-                    activeFilters = emptySet(),
-                    showIgnored = false,
-                    allContacts = emptyList(),
-                    selectedIds = emptySet(),
-                    availableLists = emptyList()
+            .catch {
+                emit(
+                    ContactPickerUiState(
+                        phase = ContactPickerUiState.Phase.Error,
+                        mode = mode,
+                        targetListName = "",
+                        searchQuery = "",
+                        activeFilters = emptySet(),
+                        showIgnored = false,
+                        allContacts = emptyList(),
+                        selectedIds = selectedIdsFlow.value,
+                        availableLists = emptyList()
+                    )
                 )
-            )
+            }
 
     // ─── Domain projection ─────────────────────────────────────────────────────────────
 
@@ -882,7 +953,7 @@ class ContactPickerViewModel @Inject constructor(
      * Internal tuple for the staged combine — Kotlin stdlib `combine` arity
      * caps at 5 so the 5 reactive sources are first folded into this record,
      * which is then `.combine`'d with [phoneByContactIdFlow] to produce the
-     * final [pickerContactsFlow]. Lets us keep the address-book read cached
+     * final [pickerContacts]. Lets us keep the address-book read cached
      * (LOW polish, Group 5) without exceeding combine's arity.
      */
     private data class RawPickerSources(

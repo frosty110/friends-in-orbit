@@ -30,6 +30,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import javax.inject.Inject
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -38,9 +39,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -183,15 +186,30 @@ class BrowseViewModel @Inject constructor(
      */
     val lists: StateFlow<List<ListEntity>> = browseFeed.lists
 
+    // BROWSE-06: bumped by [onRetry]; the feed evicts a failed list, so
+    // re-calling forList subscribes afresh.
+    private val retryCount = MutableStateFlow(0)
+
+    /** The Error state's Retry. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
+
     /**
      * Browse VM is a thin subscriber to [BrowseFeed].
      *
      * The combine chain over `observeMembersOfList × observeAll × observeRecent`
      * lives in the singleton; the VM combines that singleton snapshot with
      * screen-ephemeral state (search query, filter chips, multi-select flags).
-     * Initial value flips from `BrowseUiState.Loading` to `BrowseUiState.Empty`
-     * so the screen never renders the retired Loading shell.
+     *
+     * BROWSE-06: the initial value is `Loading`, and stays so until the feed's
+     * first real snapshot, so the screen never claims "No one here yet" for a
+     * list whose members simply haven't arrived. (It started at `Empty` from
+     * the feed-singleton refactor until 2026-10-05; the feed's placeholder
+     * snapshot had no members, so Empty is what the first frame said.) A failed
+     * feed is `Error`, with Retry.
      */
+    @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<BrowseUiState> =
         if (listId == null) {
             flowOf<BrowseUiState>(BrowseUiState.Empty)
@@ -202,11 +220,13 @@ class BrowseViewModel @Inject constructor(
                 )
         } else {
             combine(
-                browseFeed.forList(listId),
+                retryCount.flatMapLatest { browseFeed.forList(listId) },
                 searchQuery,
                 _activeFilters,
                 _callLogDenied
             ) { snapshot, query, filters, callLogDenied ->
+                if (snapshot.failed) return@combine BrowseUiState.Error
+                if (!snapshot.loaded) return@combine BrowseUiState.Loading
                 buildState(
                     snapshot.memberships,
                     snapshot.allContacts,
@@ -236,7 +256,7 @@ class BrowseViewModel @Inject constructor(
                 .stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5_000L),
-                    initialValue = BrowseUiState.Empty
+                    initialValue = BrowseUiState.Loading
                 )
         }
 
