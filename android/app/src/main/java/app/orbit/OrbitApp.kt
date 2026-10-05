@@ -12,6 +12,7 @@ import app.orbit.data.keystore.DatabaseKeyProvider
 import app.orbit.logging.OrbitDebugTree
 import app.orbit.notify.NudgeScheduler
 import app.orbit.notify.OrbitNotifications
+import app.orbit.ui.util.TimeStyle
 import app.orbit.widget.WidgetUpdateScheduler
 import coil.ImageLoader
 import coil.ImageLoaderFactory
@@ -76,6 +77,9 @@ class OrbitApp : Application(), Configuration.Provider, ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        // Clock times follow the phone's 12/24-hour setting (voice.md glossary).
+        // Set here for widgets and workers; MainActivity refreshes it on start.
+        TimeStyle.refresh(this)
 
         // Plant the PII-scrubbing tree BEFORE any code path that could log
         // call-log data. Release builds stay silent — no Tree planted,

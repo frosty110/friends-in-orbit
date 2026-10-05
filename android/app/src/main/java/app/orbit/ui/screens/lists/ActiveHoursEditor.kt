@@ -37,6 +37,7 @@ import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitSwitch
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.formatClockTime
 import java.time.LocalTime
 
 /**
@@ -336,15 +337,12 @@ internal fun activeHoursReadout(start: LocalTime?, end: LocalTime?): String {
     return if (spansMidnight(start, end)) "$s – $e (overnight)" else "$s – $e"
 }
 
-internal fun formatHour12(t: LocalTime): String {
-    val h12 = when {
-        t.hour == 0 -> 12
-        t.hour > 12 -> t.hour - 12
-        else -> t.hour
-    }
-    val ampm = if (t.hour >= 12) "pm" else "am"
-    return if (t.minute == 0) "$h12$ampm" else String.format("%d:%02d%s", h12, t.minute, ampm)
-}
+/**
+ * A time of day in the phone's 12/24-hour style. Delegates to the app's one
+ * clock formatter ([formatClockTime]); the name is kept for its callers and
+ * tests, which pin the 12-hour form (JVM tests default to 12-hour).
+ */
+internal fun formatHour12(t: LocalTime): String = formatClockTime(t)
 
 private fun hourFraction(t: LocalTime): Float =
     (t.hour + t.minute / 60f) / 24f

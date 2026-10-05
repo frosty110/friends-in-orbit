@@ -21,6 +21,7 @@ import app.orbit.domain.usecase.SurfaceResult
 import app.orbit.domain.usecase.SurfaceSoonerUseCase
 import app.orbit.ui.util.formatAbsolute
 import app.orbit.ui.util.formatRelative
+import app.orbit.ui.util.formatSpan
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -347,12 +348,10 @@ class CardViewViewModel @Inject constructor(
             ?.occurredAt
             ?: return ""
         val days = Duration.between(lastCallAt, now).toDays().coerceAtLeast(0L)
-        val since = when {
-            days == 0L -> "You talked today."
-            days == 1L -> "You talked yesterday."
-            days < 14L -> "It's been $days days."
-            days < 60L -> "It's been ${days / 7} weeks."
-            else -> "It's been ${days / 30} months."
+        val since = when (days) {
+            0L -> "You talked today."
+            1L -> "You talked yesterday."
+            else -> "It's been ${formatSpan(days)}."
         }
         // Two short lines read better than one that wraps mid-phrase.
         return listOfNotNull(since, rhythmSentence(recentCalls)).joinToString("\n")
@@ -393,9 +392,7 @@ class CardViewViewModel @Inject constructor(
             days == 1L -> "tomorrow"
             days < 7L -> "on " + due.atZone(zoneId).dayOfWeek
                 .getDisplayName(TextStyle.FULL, Locale.getDefault())
-            days < 14L -> "in $days days"
-            days < 60L -> "in ${days / 7} weeks"
-            else -> "in ${days / 30} months"
+            else -> "in ${formatSpan(days)}"
         }
     }
 

@@ -33,6 +33,7 @@ import app.orbit.ui.theme.OrbitDarkMode
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.OrbitThemes
 import app.orbit.ui.theme.ThemeSettings
+import app.orbit.ui.util.TimeStyle
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -166,6 +167,9 @@ class MainActivity : ComponentActivity() {
                     Lifecycle.Event.ON_STOP  -> appViewModel.onForegroundChanged(false)
                     Lifecycle.Event.ON_START -> {
                         appViewModel.onForegroundChanged(true)
+                        // The phone's 12/24-hour setting may have changed while
+                        // the app was in the background.
+                        TimeStyle.refresh(this@MainActivity)
                         // Re-sync the call log on every foreground (TTL-gated
                         // inside the controller so rotation/theme churn is a
                         // no-op). Catches calls that completed while the process

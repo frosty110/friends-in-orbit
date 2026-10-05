@@ -75,11 +75,14 @@ class RelativeTimeTest {
 
     // ── formatRelative — pluralization ──────────────────────────────────────
 
+    // Buckets come from formatSpan (voice.md glossary): days below 14, weeks
+    // below 60, months below a year. "27 days ago" beside "3 weeks" on
+    // another screen was the inconsistency this replaced.
     @Test
-    fun `35 days back is 1 month ago singular`() {
+    fun `35 days back is 5 weeks ago`() {
         val now = at("2026-06-09", "12:00")
         val call = at("2026-05-05", "12:00") // 35 calendar days
-        assertEquals("1 month ago", formatRelative(call, now, zone))
+        assertEquals("5 weeks ago", formatRelative(call, now, zone))
     }
 
     @Test
@@ -90,18 +93,40 @@ class RelativeTimeTest {
     }
 
     @Test
-    fun `29 days back stays in the days band`() {
+    fun `29 days back is 4 weeks ago`() {
         val now = at("2026-06-09", "12:00")
         val call = at("2026-05-11", "12:00") // 29 calendar days
-        assertEquals("29 days ago", formatRelative(call, now, zone))
+        assertEquals("4 weeks ago", formatRelative(call, now, zone))
+    }
+
+    @Test
+    fun `formatSpan buckets and singular forms`() {
+        assertEquals("1 day", formatSpan(1))
+        assertEquals("13 days", formatSpan(13))
+        assertEquals("2 weeks", formatSpan(14))
+        assertEquals("8 weeks", formatSpan(59))
+        assertEquals("2 months", formatSpan(60))
+        assertEquals("12 months", formatSpan(364))
+        assertEquals("1 year", formatSpan(365))
+        assertEquals("2 years", formatSpan(800))
+        assertEquals("0 days", formatSpan(-3))
     }
 
     // ── formatWallClock ─────────────────────────────────────────────────────
 
     @Test
     fun `wall clock label is lowercase with no space`() {
-        assertEquals("4:30pm", formatWallClock(at("2026-06-09", "16:30"), zone))
-        assertEquals("9:05am", formatWallClock(at("2026-06-09", "09:05"), zone))
+        assertEquals("4:30pm", formatWallClock(at("2026-06-09", "16:30"), zone, use24Hour = false))
+        assertEquals("9:05am", formatWallClock(at("2026-06-09", "09:05"), zone, use24Hour = false))
+        assertEquals("4pm", formatWallClock(at("2026-06-09", "16:00"), zone, use24Hour = false))
+    }
+
+    @Test
+    fun `clock times follow the phone's 24-hour setting`() {
+        assertEquals("16:30", formatWallClock(at("2026-06-09", "16:30"), zone, use24Hour = true))
+        assertEquals("09:05", formatWallClock(at("2026-06-09", "09:05"), zone, use24Hour = true))
+        assertEquals("00:00", formatClockTime(java.time.LocalTime.MIDNIGHT, use24Hour = true))
+        assertEquals("12am", formatClockTime(java.time.LocalTime.MIDNIGHT, use24Hour = false))
     }
 
     // ── formatDayHeader ─────────────────────────────────────────────────────

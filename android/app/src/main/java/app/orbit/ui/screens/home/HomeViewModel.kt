@@ -6,6 +6,7 @@ import app.orbit.data.feed.HomeFeed
 import app.orbit.data.feed.ListEnrichment
 import app.orbit.data.repository.ListRepository
 import app.orbit.domain.clock.Clock
+import app.orbit.ui.util.formatSpan
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -208,14 +209,12 @@ class HomeViewModel @Inject constructor(
     private fun recencyWhy(lastCalledAt: Instant?, now: Instant): String {
         if (lastCalledAt == null) return "you haven't spoken yet"
         val days = ChronoUnit.DAYS.between(lastCalledAt, now)
+        // The app's one span formatter (voice.md glossary), so Home and the
+        // card never word the same gap two ways.
         return when {
             days <= 0L -> "you spoke today"
-            days == 1L -> "1 day since you last spoke"
-            days < 7L -> "$days days since you last spoke"
-            days < 14L -> "1 week since you last spoke"
-            days < 30L -> "${days / 7L} weeks since you last spoke"
-            days < 60L -> "1 month since you last spoke"
-            else -> "${days / 30L} months since you last spoke"
+            days == 1L -> "you spoke yesterday"
+            else -> "${formatSpan(days)} since you last spoke"
         }
     }
 
