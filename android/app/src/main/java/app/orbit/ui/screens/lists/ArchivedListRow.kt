@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import app.orbit.R
 import app.orbit.data.entity.ListType
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.PhIcon
@@ -43,9 +44,12 @@ fun ArchivedListRow(
     onDelete: () -> Unit,
     onConfigure: () -> Unit,
 ) {
+    // PRIV-03: the list's name, text and TalkBack labels alike, reads "List"
+    // under the privacy curtain (it showed through on Lists until 2026-10-05).
+    val shownName = if (LocalPrivacyCurtain.current) stringResource(R.string.components_curtain_list) else tile.name
     // Resolved here: the semantics blocks below are not composable.
-    val deleteDescription = stringResource(R.string.lists_archived_delete, tile.name)
-    val settingsDescription = stringResource(R.string.lists_archived_settings, tile.name)
+    val deleteDescription = stringResource(R.string.lists_archived_delete, shownName)
+    val settingsDescription = stringResource(R.string.lists_archived_settings, shownName)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
@@ -54,7 +58,7 @@ fun ArchivedListRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = tile.name,
+                text = shownName,
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             )
             if (tile.ruleSummary != null) {

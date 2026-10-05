@@ -10,6 +10,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import app.orbit.R
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -62,7 +63,8 @@ fun ConvertToStaticDialog(
             } else {
                 pluralStringResource(R.plurals.lists_convert_body, memberCount, memberCount)
             }
-            val previewLine = buildPreviewLine(memberCount, firstNames)?.asString()
+            // PRIV-03: the names are left out under the curtain; the count stays.
+            val previewLine = if (LocalPrivacyCurtain.current) null else buildPreviewLine(memberCount, firstNames)?.asString()
             val body = if (previewLine != null) {
                 stringResource(R.string.lists_convert_body_with_preview, sentence, previewLine)
             } else {

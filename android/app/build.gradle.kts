@@ -219,6 +219,9 @@ tasks.withType<Test>().configureEach {
         systemProperty("orbit.screenshots.dir", layout.buildDirectory.dir("screenshots").get().asFile.absolutePath)
         (project.findProperty("orbit.screenshots.only") as String?)?.let { systemProperty("orbit.screenshots.only", it) }
         (project.findProperty("orbit.screenshots.qualifiers") as String?)?.let { systemProperty("orbit.screenshots.qualifiers", it) }
+        // -Porbit.screenshots.curtain renders every preview with the privacy
+        // curtain down and reports any name that still shows (PRIV-03).
+        if (project.hasProperty("orbit.screenshots.curtain")) systemProperty("orbit.screenshots.curtain", "true")
         // -Porbit.a11y.strict fails a preview on any accessibility finding.
         if (project.hasProperty("orbit.a11y.strict")) systemProperty("orbit.a11y.strict", "true")
         retry { maxRetries.set(0) }

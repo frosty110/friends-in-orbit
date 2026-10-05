@@ -2,6 +2,10 @@ package app.orbit.ui.components
 
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 
 /**
  * True when list / contact names should be replaced with a neutral noun.
@@ -24,3 +28,20 @@ import androidx.compose.runtime.staticCompositionLocalOf
  */
 val LocalPrivacyCurtain: ProvidableCompositionLocal<Boolean> =
     staticCompositionLocalOf { false }
+
+/**
+ * Shows [mask] in a text field under the curtain without touching what the
+ * field holds: the user's buffer stays as typed and is never saved as the
+ * mask. Replacing the field's value instead would risk exactly that, since
+ * List settings saves its name on focus loss.
+ */
+class CurtainMask(private val mask: String) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText =
+        TransformedText(
+            AnnotatedString(mask),
+            object : OffsetMapping {
+                override fun originalToTransformed(offset: Int): Int = offset.coerceAtMost(mask.length)
+                override fun transformedToOriginal(offset: Int): Int = offset.coerceAtMost(text.length)
+            },
+        )
+}

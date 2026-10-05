@@ -11,6 +11,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
+import app.orbit.ui.components.LocalPrivacyCurtain
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import org.junit.AfterClass
 import org.junit.Rule
@@ -71,6 +72,7 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
             CompositionLocalProvider(
                 LocalConfiguration provides config,
                 LocalDensity provides Density(density.density, fontScale),
+                LocalPrivacyCurtain provides (curtainMode || LocalPrivacyCurtain.current),
             ) {
                 preview()
             }
@@ -81,6 +83,39 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
         val name = fileName(preview, night, fontScale)
         captureScreenRoboImage(File(outputDir, name).path)
         auditAccessibility(name.removeSuffix(".png"))
+        if (curtainMode) auditCurtain(name.removeSuffix(".png"))
+    }
+
+    /**
+     * PRIV-03 over every preview (-Porbit.screenshots.curtain): with the
+     * privacy curtain down, no preview person's name or list name may reach
+     * any text, field or TalkBack label. Every screen has to opt in to the
+     * curtain, and three surfaces were found leaking one at a time
+     * (2026-10-05), so this checks them all at once. Findings go to
+     * build/screenshots/curtain-report.md; with -Porbit.a11y.strict they fail.
+     */
+    private fun auditCurtain(preview: String) {
+        val owner = preview.substringBefore('.')
+        val leaks = if (owner in CURTAIN_EXEMPT) {
+            emptyList()
+        } else {
+            compose.onAllNodes(SemanticsMatcher("any node") { true }, useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .flatMap { node ->
+                    val c = node.config
+                    c.getOrNull(SemanticsProperties.ContentDescription).orEmpty() +
+                        c.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text } +
+                        listOfNotNull(c.getOrNull(SemanticsProperties.EditableText)?.text) +
+                        listOfNotNull(c.getOrNull(SemanticsProperties.PaneTitle))
+                }
+                .filter { text -> FIXTURE_NAMES.any { it.containsMatchIn(text) } }
+                .distinct()
+        }
+        // One finding per line: a text with a line break would read as two.
+        File(curtainDir, "$preview.txt").writeText(leaks.joinToString("\n") { it.replace('\n', ' ') })
+        if (leaks.isNotEmpty() && System.getProperty("orbit.a11y.strict") == "true") {
+            throw AssertionError("Names under the curtain in $preview:\n" + leaks.joinToString("\n"))
+        }
     }
 
     /**
@@ -127,6 +162,32 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
 
     companion object {
         private const val SETTLE_MS = 2_000L
+        private val curtainMode: Boolean = System.getProperty("orbit.screenshots.curtain") == "true"
+        private val curtainDir: File by lazy { File(outputDir, "curtain").apply { mkdirs() } }
+
+        // The people and list names the previews use. Whole words and case
+        // sensitive, so "Sam" never matches "Same" and copy such as "the late
+        // night rhythm" is not a name. "Late night" itself is left out: it is
+        // also a smart-list rule's name, which is copy, not anyone's data.
+        // Extend this when a preview adds a new name.
+        private val FIXTURE_NAMES = listOf(
+            "Avery", "Alex", "Sarah", "Priya", "Marcus", "Kai", "Mara", "Sam", "Jordan", "Bartholomew",
+            "Inner orbit", "People who ground me", "climbing gym",
+        ).map { Regex("\\b${Regex.escape(it)}\\b") }
+
+        // Previews exempt from the curtain check, each for a reason:
+        // - copy, not anyone's data: the template and rule pickers offer
+        //   "Inner orbit" and "Late night" by name;
+        // - components that take an already-masked label, or the curtain as a
+        //   parameter, from their screen (the screens are checked): Chip;
+        //   PostCallBanner and RhythmDaySheet (whose previews pass
+        //   curtain = false on purpose; Home passes the real value);
+        //   UnpauseBanner and RuleOverrideSection (Contact detail passes the
+        //   curtain and a masked list name; its own curtain previews are clean).
+        private val CURTAIN_EXEMPT = setOf(
+            "RuleTemplatePicker", "SmartRuleEditor", "CreateListBottomSheet",
+            "Chip", "PostCallBanner", "RhythmDaySheet", "UnpauseBanner", "RuleOverrideSection",
+        )
         private val qualifiers: String? = System.getProperty("orbit.screenshots.qualifiers")?.takeIf { it.isNotBlank() }
         private const val TAP_MIN_DP = 48f
 
@@ -159,6 +220,28 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
                 }
             }
             File(outputDir, "a11y-report.md").writeText(report)
+            if (curtainMode) writeCurtainReport()
+        }
+
+        private fun writeCurtainReport() {
+            val files = curtainDir.listFiles { f -> f.extension == "txt" }.orEmpty().sortedBy { it.name }
+            val leaks = files.associate { it.nameWithoutExtension to it.readText().lines().filter(String::isNotBlank) }
+                .filterValues { it.isNotEmpty() }
+            val report = buildString {
+                appendLine("# Privacy curtain findings")
+                appendLine()
+                appendLine("Generated by PreviewGalleryTest with the curtain down (PRIV-03): preview names that still reach text, fields or TalkBack labels.")
+                appendLine()
+                appendLine("Checked ${files.size} previews.")
+                appendLine()
+                if (leaks.isEmpty()) appendLine("None.")
+                leaks.forEach { (preview, items) ->
+                    appendLine("## $preview")
+                    items.forEach { appendLine("- $it") }
+                    appendLine()
+                }
+            }
+            File(outputDir, "curtain-report.md").writeText(report)
         }
 
         // Dialogs whose text field takes focus on open. Under Robolectric
@@ -181,7 +264,8 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
             val scale = if (fontScale != 1f) "-font${fontScale.toString().replace('.', '_')}" else ""
             val index = p.previewIndex?.takeIf { it > 0 }?.let { "-$it" }.orEmpty()
             val size = qualifiers?.let { "-" + it.replace(Regex("[^A-Za-z0-9]+"), "_") }.orEmpty()
-            return "$owner.${p.methodName}$index-$mode$scale$size.png"
+            val curtain = if (curtainMode) "-curtain" else ""
+            return "$owner.${p.methodName}$index-$mode$scale$size$curtain.png"
         }
 
         @JvmStatic

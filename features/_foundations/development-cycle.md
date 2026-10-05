@@ -74,7 +74,32 @@ python3 ../scripts/check-conventions.py # docs/citation + PII-logging gates
 CI additionally enforces a **90% coverage floor on the `domain` layer**
 (`scripts/coverage-summary.py --min-domain 90`) and runs the instrumented suite
 on an emulator (non-blocking). Compose UI changes belong in `androidTest`; pure
-logic belongs in `test` where it runs on every push.
+logic belongs in `test` where it runs on every push. The exception is a check
+that only reads the semantics tree (labels, text, what TalkBack would hear):
+it can run on the JVM under Robolectric with `@Config(sdk = [33], application =
+Application::class)`, so it gates every push instead of waiting for an emulator
+(`ContactDetailCurtainTest`, `PreviewGalleryTest`). Gestures, focus and real
+windows stay in `androidTest`.
+
+### The preview gallery
+
+`PreviewGalleryTest` renders every `@Preview` on the JVM, in light and dark and
+at font scales 0.85 to 2.0, to `android/app/build/screenshots/`, and audits each
+one as it goes. It runs only on request:
+
+```sh
+./gradlew :app:testDebugUnitTest -Pscreenshots                    # everything (about an hour)
+  -Porbit.screenshots.only='HomeScreenKt|CardViewScreenKt'       # a subset, by "FileKt.method"
+  -Porbit.screenshots.qualifiers=w360dp-h740dp-xhdpi             # another size; landscape: w740dp-h360dp-land-xhdpi
+  -Porbit.screenshots.curtain                                    # privacy curtain down (PRIV-03)
+  -Porbit.a11y.strict                                            # fail on any finding
+```
+
+`a11y-report.md` lists every enabled control without a TalkBack label or under
+48dp (gate G2). With `-Porbit.screenshots.curtain`, `curtain-report.md` lists
+any preview person or list name that still reaches text, a field or a label.
+Use it for any UI change: look at the screens you touched at 200% and 360dp,
+and keep both reports at "None."
 
 **New behaviour ships with a test.** A bug fix ships with a test that fails
 without the fix — for a regression that has now happened twice, that test is the

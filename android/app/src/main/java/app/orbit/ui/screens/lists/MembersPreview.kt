@@ -27,6 +27,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.orbit.R
 import app.orbit.ui.components.Avatar
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 
@@ -158,18 +159,22 @@ private fun MemberRow(
     showRemove: Boolean,
     onRemove: () -> Unit,
 ) {
+    // PRIV-03: the member's name, initials and face are masked under the
+    // curtain like every other person (they showed through on List settings).
+    val curtain = LocalPrivacyCurtain.current
+    val shownName = if (curtain) stringResource(R.string.components_curtain_contact) else snapshot.displayName
     // Resolved here: the semantics block below is not composable.
-    val removeDescription = stringResource(R.string.lists_members_remove, snapshot.displayName)
+    val removeDescription = stringResource(R.string.lists_members_remove, shownName)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
-            .semantics { contentDescription = snapshot.displayName },
+            .semantics { contentDescription = shownName },
     ) {
-        Avatar(name = snapshot.displayName, size = 32.dp, photoUri = snapshot.photoUri)
+        Avatar(name = shownName, size = 32.dp, photoUri = if (curtain) null else snapshot.photoUri)
         Text(
-            text = snapshot.displayName,
+            text = shownName,
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             modifier = Modifier.weight(1f),
         )
@@ -210,7 +215,7 @@ private fun AddContactsRow(
             .fillMaxWidth()
             .heightIn(min = OrbitTheme.spacing.tapMin)
             .clickable(role = Role.Button, onClick = onAddContacts)
-            .padding(top = if (hasMembers) 14.dp else 12.dp, bottom = 4.dp)
+            .padding(top = if (hasMembers) OrbitTheme.spacing.rowY else OrbitTheme.spacing.x3, bottom = OrbitTheme.spacing.x1)
             .semantics { contentDescription = addDescription },
     ) {
         Box(

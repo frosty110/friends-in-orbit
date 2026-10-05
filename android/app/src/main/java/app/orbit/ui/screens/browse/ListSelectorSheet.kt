@@ -20,6 +20,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.orbit.R
 import app.orbit.data.entity.ListEntity
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -117,7 +118,8 @@ private fun ListSelectorRow(name: String, onPick: () -> Unit) {
             ),
     ) {
         Text(
-            text = name,
+            // PRIV-03: list names read "List" under the curtain.
+            text = if (LocalPrivacyCurtain.current) stringResource(R.string.components_curtain_list) else name,
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
         )
     }

@@ -44,6 +44,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import app.orbit.R
 import app.orbit.data.entity.ListType
@@ -51,6 +52,8 @@ import app.orbit.data.entity.RuleKind
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeSchedule
+import app.orbit.ui.components.CurtainMask
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitSlider
@@ -238,12 +241,16 @@ private fun ColumnScope.ListConfigBodySections(
             // the next IME event, and Compose's value= prop overwrites
             // the live buffer with the stale state.name).
             var nameText by rememberSaveable { mutableStateOf(state.name) }
+            // PRIV-03: under the curtain the field draws "List" over the
+            // user's buffer, which it leaves alone (CurtainMask).
+            val curtainList = stringResource(R.string.components_curtain_list)
             OutlinedTextField(
                 value = nameText,
                 onValueChange = {
                     nameText = it
                     onNameChange(it)
                 },
+                visualTransformation = if (LocalPrivacyCurtain.current) CurtainMask(curtainList) else VisualTransformation.None,
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -566,6 +573,8 @@ private fun rhythmNoteFor(kind: RuleKind): Int? = when (kind) {
  */
 @Composable
 private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
+    val curtain = LocalPrivacyCurtain.current
+    val curtainList = stringResource(R.string.components_curtain_list)
     var editing by rememberSaveable { mutableStateOf(false) }
     // Guards the focus-loss commit below. onFocusChanged fires once with
     // isFocused=false the moment the field enters composition — before the
@@ -604,6 +613,9 @@ private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
         OutlinedTextField(
             value = nameText,
             onValueChange = { nameText = it },
+            // PRIV-03: drawn as "List" under the curtain; the buffer, which
+            // saves on focus loss, is untouched (CurtainMask).
+            visualTransformation = if (curtain) CurtainMask(curtainList) else VisualTransformation.None,
             singleLine = true,
             textStyle = LocalTextStyle.current.merge(OrbitTheme.type.body),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -650,7 +662,7 @@ private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
                 .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY)
         ) {
             Text(
-                text = currentName.ifBlank { stringResource(R.string.lists_name_unnamed) },
+                text = if (curtain) curtainList else currentName.ifBlank { stringResource(R.string.lists_name_unnamed) },
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                 modifier = Modifier.weight(1f)
             )

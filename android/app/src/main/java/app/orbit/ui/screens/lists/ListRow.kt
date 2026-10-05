@@ -27,6 +27,7 @@ import app.orbit.R
 import app.orbit.data.ChipTone
 import app.orbit.data.entity.ListType
 import app.orbit.ui.components.CountBadge
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitChip
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitMenuAction
@@ -70,10 +71,13 @@ fun ListRow(
 ) {
     @Suppress("UNUSED_VARIABLE") val draggingHint = isDragging // reserved for elevation hook
     var menuExpanded by remember { mutableStateOf(false) }
+    // PRIV-03: the list's name, text and TalkBack labels alike, reads "List"
+    // under the privacy curtain (it showed through on Lists until 2026-10-05).
+    val shownName = if (LocalPrivacyCurtain.current) stringResource(R.string.components_curtain_list) else tile.name
     // Resolved here: the semantics blocks below are not composable.
     val reorderDescription = stringResource(R.string.lists_row_reorder)
-    val addContactsDescription = stringResource(R.string.lists_row_add_people, tile.name)
-    val moreActionsDescription = stringResource(R.string.lists_row_more_actions, tile.name)
+    val addContactsDescription = stringResource(R.string.lists_row_add_people, shownName)
+    val moreActionsDescription = stringResource(R.string.lists_row_more_actions, shownName)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
@@ -97,7 +101,7 @@ fun ListRow(
         Spacer(Modifier.width(OrbitTheme.spacing.x2))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = tile.name,
+                text = shownName,
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             if (tile.ruleSummary != null) {
@@ -154,7 +158,7 @@ fun ListRow(
                 onDismissRequest = { menuExpanded = false },
                 actions = listRowMenuActions(
                     resources = LocalContext.current.resources,
-                    listName = tile.name,
+                    listName = shownName,
                     onRename = onRename,
                     onConfigure = onConfigure,
                     onMoveUp = onMoveUp,

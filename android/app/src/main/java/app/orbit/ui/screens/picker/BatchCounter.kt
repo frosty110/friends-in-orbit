@@ -17,6 +17,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.orbit.R
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.theme.OrbitTheme
 
@@ -55,11 +56,13 @@ fun BatchCounter(
 ) {
     if (selectionCount == 0) return
 
+    // PRIV-03: the list's name in "Add 3 to {list}" reads "List" under the curtain.
+    val listName = if (LocalPrivacyCurtain.current) stringResource(R.string.components_curtain_list) else targetListName
     val ctaCopy: String = when (mode) {
-        PickerMode.Add -> pluralStringResource(R.plurals.picker_commit_add, selectionCount, selectionCount, targetListName)
-        PickerMode.Move -> pluralStringResource(R.plurals.picker_commit_move, selectionCount, selectionCount, targetListName)
-        PickerMode.Copy -> pluralStringResource(R.plurals.picker_commit_copy, selectionCount, selectionCount, targetListName)
-        PickerMode.Relink -> stringResource(R.string.picker_commit_relink, targetListName)
+        PickerMode.Add -> pluralStringResource(R.plurals.picker_commit_add, selectionCount, selectionCount, listName)
+        PickerMode.Move -> pluralStringResource(R.plurals.picker_commit_move, selectionCount, selectionCount, listName)
+        PickerMode.Copy -> pluralStringResource(R.plurals.picker_commit_copy, selectionCount, selectionCount, listName)
+        PickerMode.Relink -> stringResource(R.string.picker_commit_relink, listName)
     }
 
     Column(

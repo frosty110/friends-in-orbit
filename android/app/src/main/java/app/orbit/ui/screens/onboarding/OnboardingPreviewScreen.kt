@@ -33,6 +33,7 @@ import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.orbit.R
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -209,7 +210,8 @@ private fun PreviewRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = candidate.displayName,
+                // PRIV-03: masked under the curtain like every other name.
+                text = if (LocalPrivacyCurtain.current) stringResource(R.string.components_curtain_contact) else candidate.displayName,
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             Text(

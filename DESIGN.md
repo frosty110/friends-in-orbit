@@ -88,6 +88,7 @@ Reach for these before building a one-off; each exists because one-offs drifted.
 | `InfoTip` | "What does this mean?" | Tappable (not long-press only), 48dp, Phosphor "info" |
 | `OrbitMark` | Brand moments | Drawn from tokens, settles once, static with animations off |
 | `OrbitScreen` | Every full screen | Insets (bars, cutouts, keyboard) and the 640dp content cap for wide windows |
+| `LocalPrivacyCurtain`, `CurtainMask` | Any name of a person or list: text, fields, titles, TalkBack labels | Read the curtain and show "Contact" or "List"; a text field draws the mask over its buffer (`CurtainMask`) and never saves it. The gallery's curtain mode checks every preview (PRIV-03) |
 | `UiText` (`ui/util`) | Text a ViewModel or worker produces | Copy lives in resources; only user data is plain |
 | `formatSpan` / `formatRelative` / `formatClockTime` (`ui/util`) | Any duration or time | One wording for "time since", the phone's 12/24-hour setting |
 

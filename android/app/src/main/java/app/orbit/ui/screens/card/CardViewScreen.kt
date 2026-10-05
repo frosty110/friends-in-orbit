@@ -208,7 +208,9 @@ private fun CardViewContent(
     val curtain = LocalPrivacyCurtain.current
     val context = LocalContext.current
     val appBarTitle = when (state) {
-        is CardViewUiState.Ready -> if (curtain) stringResource(R.string.components_curtain_contact) else state.listContext
+        // PRIV-03: the title is the list's name, so it masks as "List" (it
+        // read "Contact", the noun for a person).
+        is CardViewUiState.Ready -> if (curtain) stringResource(R.string.components_curtain_list) else state.listContext
         else -> ""
     }
 

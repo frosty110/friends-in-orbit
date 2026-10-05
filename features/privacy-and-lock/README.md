@@ -47,7 +47,7 @@ Outside the app, a list name appears only in that list's nudge: in the shade, an
 
 **Requirements** (2026-10-05; these record what the code already cites):
 
-- **PRIV-03: The privacy curtain.** When Orbit loses focus, contact names render as "Contact" and list names as "List" everywhere they appear, TalkBack labels included (a label is spoken aloud; `ContactDetailCurtainTest` checks Contact detail's whole semantics tree), avatar initials derive from the masked name and photos are withheld; restored on focus. Always on.
+- **PRIV-03: The privacy curtain.** When Orbit loses focus, contact names render as "Contact" and list names as "List" everywhere they appear, TalkBack labels, text fields and screen titles included (a label is spoken aloud; `ContactDetailCurtainTest` checks Contact detail's whole semantics tree, and the preview gallery run with `-Porbit.screenshots.curtain` checks every preview and writes `build/screenshots/curtain-report.md`), avatar initials derive from the masked name and photos are withheld; restored on focus. Always on.
 - **PRIV-04: No thumbnail in the app switcher.** `FLAG_SECURE` on `MainActivity` in release builds, so recents and screen recordings cannot capture names. Debug builds keep screenshots for review.
 - **PRIV-05: Orbit never places a call itself.** Every dial is `ACTION_DIAL`, which opens the dialer with the number filled in; the user places the call. Orbit holds no `CALL_PHONE` permission.
 

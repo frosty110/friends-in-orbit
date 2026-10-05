@@ -38,6 +38,7 @@ import app.orbit.domain.JsonProvider
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeSchedule
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitAppBarTextAction
 import app.orbit.ui.components.OrbitIconButton
@@ -180,8 +181,11 @@ private fun ListConfigContent(
     onAddContacts: () -> Unit,
 ) {
     val fallbackTitle = stringResource(R.string.lists_config_title_fallback)
+    val curtain = LocalPrivacyCurtain.current
+    val curtainList = stringResource(R.string.components_curtain_list)
     val title = when (state) {
-        is ListConfigUiState.Ready -> state.name.ifBlank { fallbackTitle }
+        // PRIV-03: the list's name masks as "List" under the curtain.
+        is ListConfigUiState.Ready -> if (curtain) curtainList else state.name.ifBlank { fallbackTitle }
         ListConfigUiState.NotFound, ListConfigUiState.Error -> fallbackTitle
         ListConfigUiState.Loading -> ""
     }
