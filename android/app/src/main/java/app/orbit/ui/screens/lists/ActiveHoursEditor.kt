@@ -39,7 +39,9 @@ import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitSwitch
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.TimeStyle
 import app.orbit.ui.util.UiText
+import app.orbit.ui.util.axisTickLabels
 import app.orbit.ui.util.formatClockTime
 import java.time.LocalTime
 
@@ -105,7 +107,7 @@ fun ActiveHoursEditor(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    TIME_AXIS_TICKS.forEach { tick ->
+                    axisTickLabels().forEach { tick ->
                         Text(
                             text = stringResource(tick),
                             style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
@@ -234,10 +236,12 @@ fun TimePickerDialogOrbit(
     onConfirm: (LocalTime) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // The dial follows the phone's 12 or 24 hour setting, like every clock
+    // time beside it (it was always 12-hour until 2026-10-05).
     val state = rememberTimePickerState(
         initialHour = initial.hour,
         initialMinute = initial.minute,
-        is24Hour = false,
+        is24Hour = TimeStyle.is24Hour,
     )
     Dialog(onDismissRequest = onDismiss) {
         Card(shape = OrbitTheme.shapes.lg) {
@@ -343,18 +347,6 @@ internal fun activeHoursReadout(start: LocalTime?, end: LocalTime?): UiText {
         UiText.res(R.string.lists_hours_readout_range, s, e)
     }
 }
-
-/**
- * Midnight, 6am, noon, 6pm, midnight under the 24-hour bar. The words live in
- * strings_time.xml, shared with Card view's heat strip.
- */
-private val TIME_AXIS_TICKS: List<Int> = listOf(
-    R.string.time_axis_midnight,
-    R.string.time_axis_6am,
-    R.string.time_axis_noon,
-    R.string.time_axis_6pm,
-    R.string.time_axis_midnight,
-)
 
 /**
  * A time of day in the phone's 12/24-hour style. Delegates to the app's one

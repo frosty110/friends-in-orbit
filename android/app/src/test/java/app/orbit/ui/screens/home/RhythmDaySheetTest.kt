@@ -3,6 +3,7 @@ package app.orbit.ui.screens.home
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import app.orbit.data.entity.CallDirection
+import app.orbit.ui.util.formatDuration
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,7 +34,7 @@ class RhythmDaySheetTest {
         photoUri = null,
         durationSeconds = 600,
         direction = direction,
-        durationLabel = "10 min",
+        durationLabel = formatDuration(600),
         timeLabel = "4:30pm",
     )
 

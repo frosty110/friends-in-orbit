@@ -29,6 +29,7 @@ import app.orbit.domain.usecase.MoveContactsUseCase
 import app.orbit.domain.usecase.RelinkContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
 import app.orbit.testutil.MainDispatcherRule
+import app.orbit.ui.util.UiText
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -86,6 +87,9 @@ class ContactPickerViewModelTest {
         )
             .allowMainThreadQueries()
             .build()
+
+    /** Snackbar copy is UiText (strings_picker.xml and shared); resolved against real resources. */
+    private fun UiText?.text(): String? = this?.asString(ApplicationProvider.getApplicationContext<Context>())
 
     @After
     fun closeDb() {
@@ -191,8 +195,8 @@ class ContactPickerViewModelTest {
         s.commitBus.events.test {
             s.vm.onIgnore(12L, "Sarah")
             val event = awaitItem()
-            assertEquals("Ignored Sarah", event.message)
-            assertEquals("Undo", event.actionLabel)
+            assertEquals("Ignored Sarah", event.message.text())
+            assertEquals("Undo", event.actionLabel.text())
         }
 
         assertEquals(
@@ -211,12 +215,15 @@ class ContactPickerViewModelTest {
         val s = fixture()
         s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
 
-        s.vm.onIgnore(12L, "Sarah")
+        s.commitBus.events.test {
+            s.vm.onIgnore(12L, "Sarah")
+            // The words travel on the event; UndoStack holds only the inverse.
+            assertEquals("Ignored Sarah", awaitItem().message.text())
+        }
         assertEquals(true, s.contactRepo.getById(12L)?.isIgnored)
 
         val pending = s.undoStack.take()
         assertNotNull("ignore must record a depth-1 undo", pending)
-        assertEquals("Ignored Sarah", pending?.label)
         pending?.inverse?.invoke()
         assertEquals(false, s.contactRepo.getById(12L)?.isIgnored)
     }
@@ -235,8 +242,8 @@ class ContactPickerViewModelTest {
         s.commitBus.events.test {
             s.vm.onIgnore(12L, "Sarah")
             val event = awaitItem()
-            assertEquals("Couldn't save that", event.message)
-            assertNull("failure toast carries no action", event.actionLabel)
+            assertEquals("Couldn't save that", event.message.text())
+            assertNull("failure toast carries no action", event.actionLabel.text())
         }
         assertNull("failed ignore must not record an undo", s.undoStack.peek())
     }
@@ -271,8 +278,8 @@ class ContactPickerViewModelTest {
         s.commitBus.events.test {
             s.vm.onCommit()
             val event = awaitItem()
-            assertEquals("Moved 2 to Inner orbit", event.message)
-            assertEquals("Undo", event.actionLabel)
+            assertEquals("Moved 2 to Inner orbit", event.message.text())
+            assertEquals("Undo", event.actionLabel.text())
         }
 
         val move = s.membershipDao.moveCalls.single()
@@ -284,7 +291,8 @@ class ContactPickerViewModelTest {
         // Undo restores the source rows and removes the freshly-moved target rows.
         val pending = s.undoStack.take()
         assertNotNull("move must record a depth-1 undo", pending)
-        assertEquals("Moved 2 to Inner orbit", pending?.label)
+        // The words are asserted on the event above; UndoStack holds only the inverse.
+        assertNull("depth-1: taking the undo leaves nothing behind", s.undoStack.peek())
         pending?.inverse?.invoke()
         val removed = s.membershipDao.removeCalls.single()
         assertEquals(1L, removed.fromListId)
@@ -309,8 +317,8 @@ class ContactPickerViewModelTest {
             s.commitBus.events.test {
                 s.vm.onCommit()
                 val event = awaitItem()
-                assertEquals("Couldn't save that", event.message)
-                assertNull("failure toast carries no action", event.actionLabel)
+                assertEquals("Couldn't save that", event.message.text())
+                assertNull("failure toast carries no action", event.actionLabel.text())
             }
             assertTrue("no move dispatch without a source", s.membershipDao.moveCalls.isEmpty())
             assertNull("no undo entry for a failed move", s.undoStack.peek())
@@ -366,14 +374,15 @@ class ContactPickerViewModelTest {
             s.commitBus.events.test {
                 s.vm.onCommit()
                 val event = awaitItem()
-                assertEquals("Re-linked to Mum", event.message)
-                assertEquals("Undo", event.actionLabel)
+                assertEquals("Re-linked to Mum", event.message.text())
+                assertEquals("Undo", event.actionLabel.text())
             }
 
             assertEquals("Mum", db.contactDao().get(10L)?.displayName)
             assertFalse(db.contactDao().get(10L)!!.isOrphaned)
             assertNull("the picked row was merged away", db.contactDao().get(20L))
-            assertEquals("Re-linked to Mum", s.undoStack.peek()?.label)
+            // The words are asserted on the event above; UndoStack holds only the inverse.
+            assertNotNull("re-link must record a depth-1 undo", s.undoStack.peek())
             assertTrue(
                 "Regression: Re-link used to insert memberships into a list " +
                     "sharing the contact's id",
@@ -392,8 +401,8 @@ class ContactPickerViewModelTest {
         s.commitBus.events.test {
             s.vm.onCommit()
             val event = awaitItem()
-            assertEquals("Couldn't save that", event.message)
-            assertNull(event.actionLabel)
+            assertEquals("Couldn't save that", event.message.text())
+            assertNull(event.actionLabel.text())
         }
         assertNull(s.undoStack.peek())
         assertEquals(2, db.contactDao().getAllOnce().size)
@@ -506,8 +515,8 @@ class ContactPickerViewModelTest {
             s.commitBus.events.test {
                 s.vm.onCommit()
                 val event = awaitItem()
-                assertEquals("Added 2 to Inner orbit", event.message)
-                assertEquals("Undo", event.actionLabel)
+                assertEquals("Added 2 to Inner orbit", event.message.text())
+                assertEquals("Undo", event.actionLabel.text())
             }
 
             val insert = s.membershipDao.insertCalls.single()
@@ -524,12 +533,15 @@ class ContactPickerViewModelTest {
         val s = fixture(mode = "add")
         s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
         s.vm.onToggleSelect(12L)
-        s.vm.onCommit()
+        s.commitBus.events.test {
+            s.vm.onCommit()
+            // The words travel on the event; UndoStack holds only the inverse.
+            assertEquals("Added 1 to Inner orbit", awaitItem().message.text())
+        }
         assertEquals(1, s.membershipDao.insertCalls.size)
 
         val pending = s.undoStack.take()
         assertNotNull("add must record a depth-1 undo", pending)
-        assertEquals("Added 1 to Inner orbit", pending?.label)
         pending?.inverse?.invoke()
         val removed = s.membershipDao.removeCalls.single()
         assertEquals(1L, removed.fromListId)
@@ -562,8 +574,8 @@ class ContactPickerViewModelTest {
         s.commitBus.events.test {
             s.vm.onCommit()
             val event = awaitItem()
-            assertEquals("Couldn't save that", event.message)
-            assertNull("failure toast carries no action", event.actionLabel)
+            assertEquals("Couldn't save that", event.message.text())
+            assertNull("failure toast carries no action", event.actionLabel.text())
         }
         assertNull("failed add must not record an undo", s.undoStack.peek())
     }
@@ -585,8 +597,8 @@ class ContactPickerViewModelTest {
         s.commitBus.events.test {
             s.vm.onCommit()
             val event = awaitItem()
-            assertEquals("Copied 2 to Inner orbit", event.message)
-            assertEquals("Undo", event.actionLabel)
+            assertEquals("Copied 2 to Inner orbit", event.message.text())
+            assertEquals("Undo", event.actionLabel.text())
         }
 
         val insert = s.membershipDao.insertCalls.single()
@@ -697,8 +709,8 @@ class ContactPickerViewModelTest {
         s.commitBus.events.test {
             s.vm.onUnignore(12L, "Sarah")
             val event = awaitItem()
-            assertEquals("Restored Sarah", event.message)
-            assertEquals("Undo", event.actionLabel)
+            assertEquals("Restored Sarah", event.message.text())
+            assertEquals("Undo", event.actionLabel.text())
         }
         assertEquals(false, s.contactRepo.getById(12L)?.isIgnored)
 

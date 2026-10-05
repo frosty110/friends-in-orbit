@@ -15,8 +15,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
@@ -34,7 +36,8 @@ import app.orbit.ui.theme.OrbitTheme
  * they're acknowledging the notice. Sentence case copy is locked.
  *
  * Privacy curtain (PRIV-03): when `curtain` is true, heading reads
- * "Contact is unpaused" — generic, no contact-specific phrasing.
+ * "Contact is unpaused": generic, no contact-specific phrasing. Copy lives in
+ * strings_contact.xml.
  *
  * Shape language matches OrphanBanner shell: `shapes.lg`, `bgSubtle`,
  * `x4` padding.
@@ -46,7 +49,11 @@ fun UnpauseBanner(
     onUnpause: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val displayHeading = if (curtain) "Contact is unpaused" else "$contactName is unpaused"
+    val displayHeading = if (curtain) {
+        stringResource(R.string.contact_unpaused_heading)
+    } else {
+        stringResource(R.string.contact_unpaused_heading_named, contactName)
+    }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -73,7 +80,7 @@ fun UnpauseBanner(
             )
             Spacer(Modifier.height(OrbitTheme.spacing.x1))
             Text(
-                text = "They'll surface again on this list.",
+                text = stringResource(R.string.contact_unpaused_body),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
             )
         }
@@ -86,7 +93,7 @@ fun UnpauseBanner(
         OrbitIconButton(
             icon = "x",
             onClick = onUnpause,
-            contentDescription = "Dismiss unpause notice",
+            contentDescription = stringResource(R.string.contact_unpaused_dismiss),
         )
     }
 }

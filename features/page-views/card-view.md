@@ -17,6 +17,7 @@ What a user expects to see or do here:
 - Tap the card, or "View details", to open the full contact
 - Move them with Later (left swipe or button) or Sooner (right swipe or button), both labelled, and undo from a snackbar that names them and says when they come back (CARD-02)
 - After a call the log confirms, see "Called {name}" with "Add a note" (CARD-03)
-- The three-dots menu: Browse people, Add contacts, Edit list
+- The three-dots menu: Browse people, Add people, List settings (the same words as Home's list menu; until 2026-10-05 it said "Add contacts" and "Edit list")
+- With nobody on the list, "Add people" opens the picker
 - When nobody is due, a calm "All quiet for now." with who comes up next and when (CARD-05)
 - In landscape on a phone, the card on the left and its actions beside it; with large text, Call on its own row (CARD-06)

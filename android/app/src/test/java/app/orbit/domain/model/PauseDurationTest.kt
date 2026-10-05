@@ -8,20 +8,20 @@ import org.junit.Test
 /**
  * DOM-08 — the [PauseDuration] sealed catalog. `Indefinite` MUST carry a null
  * duration (the use case maps it to the 9999 sentinel at write time); the finite
- * options carry their exact spans and snackbar labels.
+ * options carry their exact spans. How each one reads in a snackbar ("for 1
+ * week", "indefinitely") is copy, so it moved to string resources with the
+ * snackbar sentence; app.orbit.ui.util.PauseTextTest holds those assertions.
  */
 class PauseDurationTest {
 
     @Test
     fun `OneWeek is seven days`() {
         assertEquals(Duration.ofDays(7), PauseDuration.OneWeek.duration)
-        assertEquals("for 1 week", PauseDuration.OneWeek.snackbarPhrase)
     }
 
     @Test
     fun `OneMonth is thirty days`() {
         assertEquals(Duration.ofDays(30), PauseDuration.OneMonth.duration)
-        assertEquals("for 1 month", PauseDuration.OneMonth.snackbarPhrase)
     }
 
     @Test
@@ -30,6 +30,5 @@ class PauseDurationTest {
             PauseDuration.Indefinite.duration,
             "Indefinite must be null so the use case maps it to the sentinel"
         )
-        assertEquals("indefinitely", PauseDuration.Indefinite.snackbarPhrase)
     }
 }

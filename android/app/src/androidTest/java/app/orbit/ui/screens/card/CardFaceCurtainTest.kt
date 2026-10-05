@@ -10,6 +10,8 @@ import app.orbit.data.Contact
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
+import app.orbit.ui.util.formatDuration
+import app.orbit.ui.util.formatSpan
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,13 +30,13 @@ class CardFaceCurtainTest {
         id = "c-1",
         name = "Avery Quinn",
         phone = "+1 555 0100",
-        lastCalledLabel = "11 days ago",
-        avgLengthLabel = "14 min",
+        lastCalledLabel = UiText.plural(R.plurals.time_ago_days, 11, 11),
+        avgLengthLabel = formatDuration(14 * 60),
         pickupRateLabel = "",
         totalCalls = 12,
         due = true,
         listIds = listOf("1"),
-        bestWindowLabel = "Evenings",
+        bestWindowLabel = UiText.res(R.string.time_daypart_evenings),
         heat = FloatArray(24),
         history = emptyList(),
         notes = emptyList(),
@@ -50,7 +52,7 @@ class CardFaceCurtainTest {
                         listContext = "Inner orbit",
                         nowHour = 19,
                         isAheadOfToday = false,
-                        whyNowLine = UiText.res(R.string.card_why_span, "11 days"),
+                        whyNowLine = UiText.res(R.string.card_why_span, formatSpan(11)),
                     )
                 }
             }

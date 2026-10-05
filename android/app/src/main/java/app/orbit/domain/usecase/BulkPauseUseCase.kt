@@ -31,11 +31,12 @@ class BulkPauseUseCase @Inject constructor(
      *                   dispatches at most one `setPausedUntilBatch` call per
      *                   distinct prior `pausedUntil` (mirrors [BulkIgnoreUseCase]'s
      *                   shape; M8 fix avoids N round trips).
-     * @property label Snackbar copy: "Paused {N} contacts
-     *                  {duration.snackbarPhrase}" ("1 contact" when the batch is
-     *                  a single row).
+     * @property count How many people the batch paused, for the caller's
+     *                  snackbar ("Paused 3 people for 1 week", a plural per
+     *                  duration in string resources; the domain layer holds
+     *                  no copy).
      */
-    data class Result(val inverse: suspend () -> Unit, val label: String)
+    data class Result(val inverse: suspend () -> Unit, val count: Int)
 
     suspend operator fun invoke(contactIds: List<Long>, duration: PauseDuration): Result {
         // PauseDuration.duration is null only for Indefinite; reuse the shared
@@ -60,10 +61,7 @@ class BulkPauseUseCase @Inject constructor(
                     }
                 }
             },
-            label = run {
-                val noun = if (contactIds.size == 1) "contact" else "contacts"
-                "Paused ${contactIds.size} $noun ${duration.snackbarPhrase}"
-            }
+            count = contactIds.size
         )
     }
 }

@@ -51,7 +51,7 @@ As a user, I create lists that match how I actually think about my people. Each 
 - A smart list with no cadence is given Keep in touch.
 - Convert to static keeps the current members as a snapshot and ends syncing (the list is no longer smart); a list with no cadence gets Keep in touch.
 
-**Pickers** (`ui/screens/picker/`; page views [Add contacts](../page-views/picker-contacts.md) and [Add to lists](../page-views/picker-lists.md)).
+**Pickers** (`ui/screens/picker/`; page views [Add people](../page-views/picker-contacts.md) and [Add to lists](../page-views/picker-lists.md)).
 - The contact picker (BULK-05) files people into a list: search by name or number, sort, filters, an A to Z rail, and a docked bar that commits ("Add 3 to Inner orbit"). The list picker (BULK-06) is the reverse: one person, several lists.
 - One visual system (2026-10-05, UX rubric D4): every filter is the shared `OrbitFilterChip`, every check mark the shared `OrbitCheckbox` (ink, not accent; the row carries the checkbox semantics), and the sort and "On a list" menus are the shared `OrbitDropdownMenu`. They were Material chips, checkboxes and menus with colour overrides. The only accent on either picker is the commit button; the rail's current letter is bold ink.
 - Plain words (rubric D7): "Never called" (sentence case; it was lowercase), "On Inner orbit, Late night" (was "In: ..."), the "Not on a list" filter (was "Unsorted"), "On a list" (was "In list…"), "Select all 14 matches" (was "Select all matching (14)"), "Already added" on a list the person is on (was "added"), "Try removing a filter." (was "Try removing a chip or widening your thresholds in Settings.").
@@ -59,7 +59,7 @@ As a user, I create lists that match how I actually think about my people. Each 
 - Privacy curtain: names, photos and list names are masked (list names read "List", or "On 2 lists"), and the list picker's title drops the person's name.
 
 **Picker requirements** (defined 2026-10-05 from what the code already cites for them; PICK-09 is new):
-- **BULK-05: Add people from a list.** The "+" on Browse and "Add contacts" elsewhere open the contact picker for that list (`pick/contacts?targetListId=...`), in Add, Move or Copy mode; the title says which ("Add contacts", "Move 3 contacts").
+- **BULK-05: Add people from a list.** The "+" on Browse and "Add people" elsewhere open the contact picker for that list (`pick/contacts?targetListId=...`), in Add, Move or Copy mode; the title says which ("Add people", "Move 3 people"). Until 2026-10-05 these read "Add contacts" and "Move 3 contacts"; the app says "people" for the people in Orbit.
 - **BULK-06: Add one person to lists.** "Add to lists" on Contact detail and "Add to list" in Search open the list picker for that person, which can also make a new list inline.
 - **PICK-01: Filter by list.** "On a list" filters the candidates to members of one of your other non-archived lists; the applied filter reads "On {list}".
 - **PICK-02: Filters narrow together.** Active filters combine as AND: a contact shows only if it matches every one.

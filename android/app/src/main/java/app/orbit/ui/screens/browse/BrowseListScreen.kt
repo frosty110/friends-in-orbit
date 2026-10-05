@@ -2,6 +2,7 @@ package app.orbit.ui.screens.browse
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.Resources
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
@@ -58,6 +60,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import app.orbit.R
 import app.orbit.data.Contact
 import app.orbit.data.entity.ListEntity
 import app.orbit.domain.model.PauseDuration
@@ -80,7 +83,10 @@ import app.orbit.ui.screens.contact.sections.PauseSheet
 import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 import app.orbit.ui.util.dialPhoneNumber
+import app.orbit.ui.util.formatDuration
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -213,6 +219,8 @@ private fun BrowseContent(
     val curtain = LocalPrivacyCurtain.current
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    // Snackbar copy is UiText (strings_browse.xml and shared); resolved when shown.
+    val context = LocalContext.current
 
     var queryText by rememberSaveable { mutableStateOf(initialQuery) }
 
@@ -232,8 +240,8 @@ private fun BrowseContent(
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             snackbarEvents.collect { event ->
                 val r = snackbarHostState.showSnackbar(
-                    message = event.message,
-                    actionLabel = event.actionLabel,
+                    message = event.message.asString(context),
+                    actionLabel = event.actionLabel?.asString(context),
                     duration = SnackbarDuration.Short,
                     withDismissAction = false
                 )
@@ -242,7 +250,9 @@ private fun BrowseContent(
         }
     }
 
-    val searchPlaceholder = if (curtain) "Search people" else "Search your people"
+    val searchPlaceholder = stringResource(
+        if (curtain) R.string.browse_search_placeholder_curtain else R.string.browse_search_placeholder
+    )
 
     val isMs = (state as? BrowseUiState.Ready)?.isMultiSelect ?: false
     val selectedIds: Set<Long> = (state as? BrowseUiState.Ready)?.selectedIds ?: emptySet()
@@ -372,12 +382,16 @@ private fun BrowseContent(
                     // all along). Curtain hides the user-authored name (list
                     // names can be sensitive — "people who ground me"); the
                     // generic title also covers the pre-emission blank.
-                    title = if (curtain || listName.isBlank()) "Your people" else listName,
+                    title = if (curtain || listName.isBlank()) {
+                        stringResource(R.string.browse_title_fallback)
+                    } else {
+                        listName
+                    },
                     leading = {
                         OrbitIconButton(
                             icon = "arrow-left",
                             onClick = onBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.components_action_back)
                         )
                     },
                     trailing = {
@@ -386,7 +400,7 @@ private fun BrowseContent(
                         OrbitIconButton(
                             icon = "plus",
                             onClick = { onAddContacts(listId) },
-                            contentDescription = "Add contacts"
+                            contentDescription = stringResource(R.string.browse_add_people)
                         )
                     }
                 )
@@ -420,12 +434,12 @@ private fun BrowseContent(
                 .padding(horizontal = OrbitTheme.spacing.x4)
         ) {
             OrbitFilterChip(
-                label = "Called recently",
+                label = stringResource(R.string.browse_filter_called_recently),
                 selected = BrowseFilter.CalledRecently in activeFilters,
                 onClick = { onToggleFilter(BrowseFilter.CalledRecently) }
             )
             OrbitFilterChip(
-                label = "Not called yet",
+                label = stringResource(R.string.browse_filter_not_called_yet),
                 selected = BrowseFilter.NotCalledYet in activeFilters,
                 onClick = { onToggleFilter(BrowseFilter.NotCalledYet) }
             )
@@ -439,7 +453,7 @@ private fun BrowseContent(
                     // meta (every "Never called" would be a false claim).
                     if (state.callLogPermissionDenied) {
                         Text(
-                            text = "Orbit can't see your calls, so call times are hidden.",
+                            text = stringResource(R.string.browse_call_log_denied_notice),
                             style = OrbitTheme.type.meta,
                             color = OrbitTheme.colors.fgMuted,
                             modifier = Modifier
@@ -465,7 +479,7 @@ private fun BrowseContent(
                         // suggest them" (vision BROWSE-1); the label says so.
                         if (queuedContacts.isNotEmpty()) {
                             item(key = "up-next-header", contentType = "sectionHeader") {
-                                BrowseSectionLabel("Up next")
+                                BrowseSectionLabel(stringResource(R.string.browse_section_up_next))
                             }
                         }
                         personRows(queuedContacts, state, rowActions)
@@ -473,7 +487,13 @@ private fun BrowseContent(
                         if (otherContacts.isNotEmpty()) {
                             item(key = "other-members-header", contentType = "sectionHeader") {
                                 BrowseSectionLabel(
-                                    if (queuedContacts.isEmpty()) "On this list" else "Everyone else"
+                                    stringResource(
+                                        if (queuedContacts.isEmpty()) {
+                                            R.string.browse_section_on_this_list
+                                        } else {
+                                            R.string.browse_section_everyone_else
+                                        }
+                                    )
                                 )
                             }
                             personRows(otherContacts, state, rowActions)
@@ -487,35 +507,35 @@ private fun BrowseContent(
 
                 BrowseUiState.Error -> OrbitScreenMessage(
                     icon = "warning-circle",
-                    title = "Couldn't load this list",
-                    body = "Something went wrong reading it. Try again in a moment.",
-                    actionLabel = "Try again",
+                    title = stringResource(R.string.browse_error_title),
+                    body = stringResource(R.string.browse_error_body),
+                    actionLabel = stringResource(R.string.browse_try_again),
                     onAction = onRetry,
                     actionVariant = OrbitButtonVariant.Primary
                 )
 
                 BrowseUiState.Empty -> OrbitScreenMessage(
                     icon = "users",
-                    title = "No one here yet",
-                    body = "Add the people you'd like this list to bring up.",
-                    actionLabel = "Add contacts",
+                    title = stringResource(R.string.browse_empty_title),
+                    body = stringResource(R.string.browse_empty_body),
+                    actionLabel = stringResource(R.string.browse_add_people),
                     onAction = { onAddContacts(listId) }
                 )
 
                 // 2026-06-09 #19 — the list has people; the chips excluded them.
                 // Distinct copy + a way back, instead of the false "No one here yet."
                 BrowseUiState.FilteredEmpty -> OrbitScreenMessage(
-                    title = "No one matches these filters",
-                    body = "Everyone on this list is hidden by the filters you chose.",
-                    actionLabel = "Clear filters",
+                    title = stringResource(R.string.browse_filtered_empty_title),
+                    body = stringResource(R.string.browse_filtered_empty_body),
+                    actionLabel = stringResource(R.string.browse_clear_filters),
                     onAction = onClearFilters
                 )
 
                 is BrowseUiState.NoMatches -> OrbitScreenMessage(
                     icon = "magnifying-glass",
-                    title = "Nothing matches “${state.query}”",
-                    body = "Try a shorter name, or part of their number.",
-                    actionLabel = "Clear search",
+                    title = stringResource(R.string.browse_no_matches_title, state.query),
+                    body = stringResource(R.string.browse_no_matches_body),
+                    actionLabel = stringResource(R.string.browse_clear_search),
                     onAction = { queryText = "" }
                 )
 
@@ -524,10 +544,9 @@ private fun BrowseContent(
                 // honestly without the call log.
                 BrowseUiState.CallLogDenied -> OrbitScreenMessage(
                     icon = "phone-slash",
-                    title = "These filters need your call history",
-                    body = "Orbit can't see your calls, so it can't tell who you've " +
-                        "called. You can turn call log access on in Settings.",
-                    actionLabel = "Clear filters",
+                    title = stringResource(R.string.browse_filters_need_calls_title),
+                    body = stringResource(R.string.browse_filters_need_calls_body),
+                    actionLabel = stringResource(R.string.browse_clear_filters),
                     onAction = onClearFilters
                 )
             }
@@ -642,8 +661,8 @@ private fun BrowsePersonRow(
                         }
                     }
                 },
-                onLongClickLabel = if (isMultiSelect) null else "Quick actions",
-                onClickLabel = if (isMultiSelect) null else "Open details",
+                onLongClickLabel = if (isMultiSelect) null else stringResource(R.string.browse_row_quick_actions),
+                onClickLabel = if (isMultiSelect) null else stringResource(R.string.browse_row_open_details),
                 role = if (isMultiSelect) Role.Checkbox else null,
                 onClick = {
                     if (isMultiSelect) {
@@ -677,8 +696,8 @@ private fun BrowsePersonRow(
             // ride Ready (not Contact: id-only equality).
             due = contact.id in state.dueIds,
             statusLabel = when (state.rowStatus[contact.id]) {
-                BrowseRowStatus.Paused -> "Paused"
-                BrowseRowStatus.Ignored -> "Ignored"
+                BrowseRowStatus.Paused -> stringResource(R.string.browse_row_paused)
+                BrowseRowStatus.Ignored -> stringResource(R.string.browse_row_ignored)
                 null -> null
             },
             showCallMeta = !state.callLogPermissionDenied,
@@ -724,7 +743,15 @@ private fun BrowseRowActionMenu(
     OrbitDropdownMenu(
         expanded = true,
         onDismissRequest = onDismiss,
-        actions = browseRowMenuActions(isPaused, onCall, onSelect, onPause, onUnpause, onIgnore)
+        actions = browseRowMenuActions(
+            LocalContext.current.resources,
+            isPaused,
+            onCall,
+            onSelect,
+            onPause,
+            onUnpause,
+            onIgnore
+        )
     )
 }
 
@@ -732,9 +759,11 @@ private fun BrowseRowActionMenu(
  * The long-press actions for one Browse row. A paused row offers Unpause in
  * the pause slot: before, the only way back from a pause was its own Undo
  * snackbar, so an indefinite pause was permanent. `internal` so the order and
- * the swap are unit-tested (BrowseRowMenuTest).
+ * the swap are unit-tested (BrowseRowMenuTest). Takes [Resources] because
+ * [OrbitMenuAction] carries resolved text (the `listRowMenuActions` precedent).
  */
 internal fun browseRowMenuActions(
+    resources: Resources,
     isPaused: Boolean,
     onCall: () -> Unit,
     onSelect: () -> Unit,
@@ -742,15 +771,15 @@ internal fun browseRowMenuActions(
     onUnpause: () -> Unit,
     onIgnore: () -> Unit
 ): List<OrbitMenuAction> = listOf(
-    OrbitMenuAction(label = "Call", onClick = onCall, icon = "phone-call"),
-    OrbitMenuAction(label = "Select", onClick = onSelect),
+    OrbitMenuAction(label = resources.getString(R.string.browse_menu_call), onClick = onCall, icon = "phone-call"),
+    OrbitMenuAction(label = resources.getString(R.string.browse_menu_select), onClick = onSelect),
     if (isPaused) {
-        OrbitMenuAction(label = "Unpause", onClick = onUnpause, icon = "play")
+        OrbitMenuAction(label = resources.getString(R.string.browse_menu_unpause), onClick = onUnpause, icon = "play")
     } else {
-        OrbitMenuAction(label = "Pause", onClick = onPause, icon = "pause-circle")
+        OrbitMenuAction(label = resources.getString(R.string.browse_menu_pause), onClick = onPause, icon = "pause-circle")
     },
     OrbitMenuAction(
-        label = "Ignore",
+        label = resources.getString(R.string.browse_menu_ignore),
         onClick = onIgnore,
         icon = "eye-slash",
         tone = OrbitMenuTone.Destructive
@@ -760,17 +789,17 @@ internal fun browseRowMenuActions(
 // ─── Previews ──────────────────────────────────────────────────────────────────
 // One per state, so each renders in the screenshot gallery.
 
-private fun previewContact(id: Long, name: String, lastCalled: String): Contact = Contact(
+private fun previewContact(id: Long, name: String, lastCalled: UiText?): Contact = Contact(
     id = "c-$id",
     name = name,
     phone = "+1 555 0100",
     lastCalledLabel = lastCalled,
-    avgLengthLabel = "14 min",
+    avgLengthLabel = formatDuration(14 * 60),
     pickupRateLabel = "82%",
     totalCalls = 12,
     due = false,
     listIds = listOf("inner-orbit"),
-    bestWindowLabel = "Evenings",
+    bestWindowLabel = UiText.res(R.string.time_daypart_evenings),
     heat = FloatArray(24) { 0f },
     history = emptyList(),
     notes = emptyList(),
@@ -779,10 +808,10 @@ private fun previewContact(id: Long, name: String, lastCalled: String): Contact 
 
 private val previewState: BrowseUiState = BrowseUiState.Ready(
     contacts = listOf(
-        previewContact(1, "Avery Quinn", "11 days ago"),
-        previewContact(2, "Sam Patel", "3 weeks ago"),
-        previewContact(3, "Jordan Lee", ""),
-        previewContact(4, "Priya Anand", "2 months ago")
+        previewContact(1, "Avery Quinn", UiText.plural(R.plurals.time_ago_days, 11, 11)),
+        previewContact(2, "Sam Patel", UiText.plural(R.plurals.time_ago_weeks, 3, 3)),
+        previewContact(3, "Jordan Lee", null),
+        previewContact(4, "Priya Anand", UiText.plural(R.plurals.time_ago_months, 2, 2))
     ),
     searchQuery = "",
     activeFilters = emptySet(),

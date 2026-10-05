@@ -7,7 +7,6 @@ import java.time.Instant
 import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.abs
 
 data class CallRow(
     val normalizedPhone: String,
@@ -130,24 +129,10 @@ open class CallLogReader @Inject constructor(
             }
         }
 
-        fun relativeTime(whenMs: Long, now: Long = System.currentTimeMillis()): String {
-            val deltaSec = abs(now - whenMs) / 1000
-            val deltaDays = deltaSec / 86400
-            return when {
-                deltaSec < 60 -> "just now"
-                deltaSec < 3600 -> "${deltaSec / 60} min ago"
-                deltaSec < 86400 -> "${deltaSec / 3600} hr ago"
-                deltaDays == 1L -> "1 day ago"
-                deltaDays < 14 -> "$deltaDays days ago"
-                deltaDays < 60 -> "${deltaDays / 7} weeks ago"
-                else -> "${deltaDays / 30} months ago"
-            }
-        }
-
-        fun durationLabel(seconds: Int): String {
-            if (seconds < 60) return "${seconds}s"
-            val mins = seconds / 60
-            return "$mins min"
-        }
+        // `relativeTime` and `durationLabel` lived here until 2026-10-05: a
+        // second, English-only way of saying "3 weeks ago" and "14 min" that
+        // nothing called. They were removed so app/orbit/ui/util/RelativeTime.kt
+        // stays the one formatter (voice.md glossary) and all its words stay in
+        // strings_time.xml.
     }
 }

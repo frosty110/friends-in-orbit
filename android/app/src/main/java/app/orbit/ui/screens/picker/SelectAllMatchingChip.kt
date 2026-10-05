@@ -3,7 +3,9 @@ package app.orbit.ui.screens.picker
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -26,7 +28,7 @@ fun SelectAllMatchingChip(
     modifier: Modifier = Modifier,
 ) {
     OrbitButton(
-        text = if (matchingCount == 1) "Select the 1 match" else "Select all $matchingCount matches",
+        text = pluralStringResource(R.plurals.picker_select_all_matching, matchingCount, matchingCount),
         onClick = onClick,
         variant = OrbitButtonVariant.Ghost,
         modifier = modifier.fillMaxWidth(),

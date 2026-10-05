@@ -36,24 +36,24 @@ class MoveContactsUseCase @Inject constructor(
 ) {
     /**
      * @property inverse Suspending closure the snackbar's "Undo" runs to revert.
-     * @property label Snackbar copy: "Moved {N} to {targetListName}". Empty when
-     *                 the use case short-circuits (caller should suppress UI).
+     * @property count How many people were moved, for the caller's snackbar
+     *                 ("Moved 3 to Inner orbit", string resources). 0 when the
+     *                 use case short-circuits (caller should suppress UI).
      */
-    data class Result(val inverse: suspend () -> Unit, val label: String)
+    data class Result(val inverse: suspend () -> Unit, val count: Int)
 
     suspend operator fun invoke(
         fromListId: Long,
         toListId: Long,
         contactIds: List<Long>,
-        targetListName: String,
     ): Result {
-        if (contactIds.isEmpty()) return Result(inverse = {}, label = "")
-        if (fromListId == toListId) return Result(inverse = {}, label = "")
+        if (contactIds.isEmpty()) return Result(inverse = {}, count = 0)
+        if (fromListId == toListId) return Result(inverse = {}, count = 0)
 
         val result = txRunner.withTransaction {
             val target = listDao.get(toListId)
             if (target == null || target.isArchived) {
-                return@withTransaction Result(inverse = {}, label = "")
+                return@withTransaction Result(inverse = {}, count = 0)
             }
 
             // Snapshot source-side rows so the inverse can restore addedAt /
@@ -96,12 +96,12 @@ class MoveContactsUseCase @Inject constructor(
                     // the forward path. Debounced by the 30s KEEP work.
                     widgetRefreshTrigger.scheduleRefresh()
                 },
-                label = "Moved ${contactIds.size} to $targetListName",
+                count = contactIds.size,
             )
         }
-        // WIDGET-06: membership moved — who-is-due changed. Only fire on the
-        // success path (non-empty label signals the move actually happened).
-        if (result.label.isNotEmpty()) {
+        // WIDGET-06: membership moved, so who-is-due changed. Only fire on the
+        // success path (a non-zero count signals the move actually happened).
+        if (result.count > 0) {
             widgetRefreshTrigger.scheduleRefresh()
         }
         return result

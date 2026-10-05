@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
+import app.orbit.R
 import app.orbit.data.dao.RecordingListMembershipDao
 import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListType
@@ -29,6 +30,7 @@ import app.orbit.notify.NudgeSchedule
 import app.orbit.notify.NudgeScheduler
 import app.orbit.testutil.MainDispatcherRule
 import app.orbit.ui.screens.picker.SnackbarEvent
+import app.orbit.ui.util.UiText
 import java.time.DayOfWeek
 import java.time.LocalTime
 import kotlin.test.assertEquals
@@ -197,7 +199,7 @@ class ListConfigViewModelTest {
         s.vm.snackbarEvents.test(timeout = 2.seconds) {
             s.vm.setRuleTemplate(RuleKind.ENERGIZE)
             val event = awaitItem()
-            assertEquals(SnackbarEvent("Couldn't update list"), event)
+            assertEquals(SnackbarEvent(UiText.res(R.string.lists_snackbar_update_failed)), event)
             cancel()
         }
         assertTrue(
@@ -552,7 +554,8 @@ class ListConfigViewModelTest {
         s.vm.snackbarEvents.test(timeout = 2.seconds) {
             s.vm.onRemoveMember(contactId = 5L, contactName = "Mom")
             val event = awaitItem()
-            assertEquals(SnackbarEvent("Removed Mom", "Undo"), event)
+            assertEquals(SnackbarEvent.undoable(UiText.res(R.string.lists_snackbar_member_removed, "Mom")), event)
+            assertEquals("Removed Mom", event.message.asString(ApplicationProvider.getApplicationContext<Context>()))
             cancel()
         }
     }
@@ -565,7 +568,11 @@ class ListConfigViewModelTest {
         s.vm.onRemoveMember(contactId = 5L, contactName = "Mom")
         val pending = s.undoStack.peek()
         assertNotNull(pending, "expected a PendingUndo on the stack after onRemoveMember")
-        assertEquals("Removed 1 from Inner orbit", pending.label)
+        // It is the use case's inverse: running it puts the member back. (It
+        // carried a "Removed 1 from Inner orbit" label nothing showed.)
+        s.recDao.clearCalls()
+        pending.inverse()
+        assertEquals(listOf(5L), s.recDao.insertCalls.single().memberships.map { it.contactId })
     }
 
     @Test

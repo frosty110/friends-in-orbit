@@ -139,8 +139,8 @@
     <!-- %1$s: a theme name, for example "Using the Warm accent". -->
     <string name="settings_appearance_accent_from_theme">Using the %1$s accent</string>
     <string name="settings_appearance_accent_custom">Custom accent</string>
-    <!-- Screen-reader name of the accent colour slider. -->
-    <string name="settings_appearance_accent_slider">Accent colour</string>
+    <!-- Screen-reader name of the accent color slider. -->
+    <string name="settings_appearance_accent_slider">Accent color</string>
     <!-- Screen-reader name of a theme swatch. %1$s: the theme name. -->
     <string name="settings_appearance_theme_a11y">%1$s theme</string>
     <string name="settings_appearance_theme_selected_a11y">%1$s theme, selected</string>

@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
@@ -37,6 +38,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.ChipTone
 import app.orbit.data.Contact
 import app.orbit.data.entity.ContactEntity
@@ -57,6 +59,7 @@ import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSearchField
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
 import app.orbit.ui.util.dialPhoneNumber
 import app.orbit.ui.util.formatRelative
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -285,7 +288,7 @@ class GlobalSearchViewModel @Inject constructor(
      * comparison + honest singulars, matching Browse and the call log.
      */
     private fun Contact.withLastCallLabel(lastCallAt: Instant?, now: Instant): Contact {
-        if (lastCallAt == null) return copy(lastCalledLabel = "")
+        if (lastCallAt == null) return copy(lastCalledLabel = null)
         return copy(lastCalledLabel = formatRelative(lastCallAt, now, zone))
     }
 
@@ -359,12 +362,12 @@ private fun GlobalSearchContent(
 
     OrbitScreen {
         OrbitAppBar(
-            title = "Search",
+            title = stringResource(R.string.browse_search_title),
             leading = {
                 OrbitIconButton(
                     icon = "arrow-left",
                     onClick = onBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.components_action_back),
                 )
             },
         )
@@ -380,7 +383,7 @@ private fun GlobalSearchContent(
             OrbitSearchField(
                 query = queryText,
                 onQueryChange = { queryText = it },
-                placeholder = "Search people",
+                placeholder = stringResource(R.string.browse_search_hint),
                 focusRequester = searchFocusRequester,
             )
         }
@@ -388,23 +391,23 @@ private fun GlobalSearchContent(
         when (val s = state) {
             SearchUiState.Empty -> OrbitScreenMessage(
                 icon = "magnifying-glass",
-                title = "Find someone",
-                body = "Search everyone in your contacts by name or number.",
+                title = stringResource(R.string.browse_search_empty_title),
+                body = stringResource(R.string.browse_search_empty_body),
             )
             // BROWSE-06: a typed query waiting on its people: a skeleton,
             // never a premature "Nothing matches".
             SearchUiState.Loading -> OrbitListSkeleton(rows = 4)
             SearchUiState.Error -> OrbitScreenMessage(
                 icon = "warning-circle",
-                title = "Couldn't search right now",
-                body = "Something went wrong reading your contacts. Try again in a moment.",
-                actionLabel = "Try again",
+                title = stringResource(R.string.browse_search_error_title),
+                body = stringResource(R.string.browse_search_error_body),
+                actionLabel = stringResource(R.string.browse_try_again),
                 onAction = onRetry,
                 actionVariant = OrbitButtonVariant.Primary,
             )
             is SearchUiState.NoMatches -> OrbitScreenMessage(
-                title = "Nothing matches “${s.query}”",
-                body = "Try a shorter name, or part of their number.",
+                title = stringResource(R.string.browse_no_matches_title, s.query),
+                body = stringResource(R.string.browse_no_matches_body),
             )
             is SearchUiState.Ready -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -469,7 +472,7 @@ private fun SearchHitRow(
             ) {
                 if (hit.lists.isEmpty()) {
                     Text(
-                        text = "Not on any list",
+                        text = stringResource(R.string.browse_search_not_on_a_list),
                         style = OrbitTheme.type.meta,
                         color = OrbitTheme.colors.fgMuted,
                     )
@@ -493,7 +496,7 @@ private fun SearchHitRow(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "Add to list",
+                    text = stringResource(R.string.browse_search_add_to_list),
                     style = OrbitTheme.type.button,
                     color = OrbitTheme.colors.fg,
                 )
@@ -505,18 +508,18 @@ private fun SearchHitRow(
 // ─── Previews ──────────────────────────────────────────────────────────────────
 // One per state, so each renders in the screenshot gallery.
 
-private fun previewHit(id: Long, name: String, lastCalled: String, lists: List<String>) = SearchHit(
+private fun previewHit(id: Long, name: String, lastCalled: UiText?, lists: List<String>) = SearchHit(
     contact = Contact(
         id = "c-$id",
         name = name,
         phone = "+1 555 0100",
         lastCalledLabel = lastCalled,
-        avgLengthLabel = "",
+        avgLengthLabel = null,
         pickupRateLabel = "",
         totalCalls = 0,
         due = false,
         listIds = emptyList(),
-        bestWindowLabel = "",
+        bestWindowLabel = null,
         heat = FloatArray(24) { 0f },
         history = emptyList(),
         notes = emptyList(),
@@ -555,8 +558,8 @@ private fun GlobalSearchResultsPreview() {
     SearchPreviewHost(
         SearchUiState.Ready(
             results = listOf(
-                previewHit(1, "Maya Ahmed", "3 days ago", listOf("Inner orbit", "Late night")),
-                previewHit(2, "Maya Brooks", "", emptyList()),
+                previewHit(1, "Maya Ahmed", UiText.plural(R.plurals.time_ago_days, 3, 3), listOf("Inner orbit", "Late night")),
+                previewHit(2, "Maya Brooks", null, emptyList()),
             ),
             query = "maya",
         ),

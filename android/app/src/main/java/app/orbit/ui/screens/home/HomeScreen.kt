@@ -93,6 +93,8 @@ import app.orbit.ui.util.UiText
 import app.orbit.ui.util.asString
 import app.orbit.ui.util.dialPhoneNumber
 import app.orbit.ui.util.formatDayHeader
+import app.orbit.ui.util.formatDuration
+import app.orbit.ui.util.formatSpan
 import kotlinx.coroutines.flow.collectLatest
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -619,7 +621,7 @@ private fun ListTile(
 private fun rhythmDayLabel(index: Int, size: Int): String = remember(index, size) {
     val today = LocalDate.now()
     formatDayHeader(today.minusDays((size - 1 - index).toLong()), today)
-}
+}.asString()
 
 /** HOME-3 — the recommendation half of the header band. */
 @Composable
@@ -961,7 +963,7 @@ private fun previewCall(
     photoUri = null,
     durationSeconds = minutes * 60,
     direction = direction,
-    durationLabel = "$minutes min",
+    durationLabel = formatDuration(minutes * 60),
     timeLabel = "4:30pm",
 )
 
@@ -984,7 +986,7 @@ private val previewState: HomeUiState = HomeUiState.Ready(
     lists = listOf(
         ListTileState(
             id = 1L, name = "Inner orbit", dueCount = 3, type = ListType.STATIC, memberCount = 12,
-            nextUp = NextUp(1L, "Kai", null, UiText.res(R.string.home_why_span, "3 weeks"), phone = "+1 555 0100"),
+            nextUp = NextUp(1L, "Kai", null, UiText.res(R.string.home_why_span, formatSpan(21)), phone = "+1 555 0100"),
             rhythm = previewRhythm(0),
         ),
         ListTileState(

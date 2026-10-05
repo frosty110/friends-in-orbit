@@ -5,7 +5,9 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.theme.OrbitTheme
@@ -38,10 +40,9 @@ fun PermissionDeniedEmpty(
     // which settings: the phone's, not Orbit's.
     OrbitScreenMessage(
         icon = "shield-check",
-        title = "Contacts access is off",
-        body = "Turn it on in your phone's settings to add people to your lists. " +
-            "Your contacts stay on this device.",
-        actionLabel = "Open phone settings",
+        title = stringResource(R.string.picker_denied_title),
+        body = stringResource(R.string.picker_denied_body),
+        actionLabel = stringResource(R.string.picker_denied_open_settings),
         onAction = onOpenSettings,
         // The only way forward from here, so it takes the screen's accent.
         actionVariant = OrbitButtonVariant.Primary,

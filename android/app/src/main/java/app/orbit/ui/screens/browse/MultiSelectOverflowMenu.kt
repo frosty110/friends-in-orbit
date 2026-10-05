@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
@@ -41,12 +43,12 @@ fun MultiSelectOverflowMenu(
         modifier = modifier,
         actions = listOf(
             OrbitMenuAction(
-                label = "Pause all",
+                label = stringResource(R.string.browse_select_pause_all),
                 onClick = onPauseAll,
                 icon = "pause-circle",
             ),
             OrbitMenuAction(
-                label = "Ignore all",
+                label = stringResource(R.string.browse_select_ignore_all),
                 onClick = onIgnoreAll,
                 icon = "eye-slash",
                 tone = OrbitMenuTone.Destructive,

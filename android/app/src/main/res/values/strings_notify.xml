@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Nudges: the one notification Orbit posts, when someone on a list is worth a call.
+    Built by notify/NotificationCopy.kt; CopyAuditTest checks every string here for
+    shame framing ("it's been", "overdue", a count of who is due) and exclamation marks.
+    Keys are area_what (features/_foundations/voice.md, "Where copy lives").
+    The nudge's title is the list's own name.
+-->
+<resources>
+
+    <!-- The nudge when Orbit doesn't name anyone. Never a count: one person, or "a few".
+         %1$s: the list's name. -->
+    <string name="notify_nudge_body_one">Someone in %1$s is ready when you are. Want to call?</string>
+    <string name="notify_nudge_body_few">A few people in %1$s are ready when you are. Start with one?</string>
+    <!-- The nudge that names the list's next person. %1$s: their first name. -->
+    <string name="notify_nudge_named_body">%1$s is ready when you are. Want to call?</string>
+    <!-- The nudge's action: opens the phone's dialer with their number. %1$s: first name. -->
+    <string name="notify_call_action">Call %1$s</string>
+
+    <!-- What a locked phone shows instead of the nudge when it hides sensitive content.
+         No name, no list: only that someone is ready. -->
+    <string name="notify_public_title">Someone is ready when you are</string>
+    <string name="notify_public_body">Want to call?</string>
+
+    <!-- The notification channel, as Android's notification settings show it. -->
+    <string name="notify_channel_list_nudges">List nudges</string>
+    <string name="notify_channel_list_nudges_description">A gentle nudge when you have someone to call.</string>
+
+</resources>

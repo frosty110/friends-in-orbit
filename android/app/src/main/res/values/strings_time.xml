@@ -1,16 +1,95 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Time-of-day copy shared by several screens.
+    Time copy shared by several screens: how long ago, how long for, which day.
+    Built by ui/util/RelativeTime.kt, the one formatter every screen goes through
+    (features/_foundations/voice.md glossary: "Time since a call").
     Keys are area_what (features/_foundations/voice.md, "Where copy lives").
 -->
 <resources>
 
     <!-- Tick labels under a 24-hour strip (Card view's "usually answers" heat strip and a
          list's active hours bar). Midnight, 6 in the morning, noon, 6 in the evening,
-         midnight. Keep them as short as possible: five sit side by side on a phone. -->
+         midnight. Keep them as short as possible: five sit side by side on a phone.
+         These are for phones set to 12-hour time. -->
     <string name="time_axis_midnight">12a</string>
     <string name="time_axis_6am">6a</string>
     <string name="time_axis_noon">12p</string>
     <string name="time_axis_6pm">6p</string>
+    <!-- The same ticks for phones set to 24-hour time: 00:00, 06:00, 12:00, 18:00. -->
+    <string name="time_axis_24h_midnight">00</string>
+    <string name="time_axis_24h_6am">06</string>
+    <string name="time_axis_24h_noon">12</string>
+    <string name="time_axis_24h_6pm">18</string>
+
+    <!-- A length of time, lowercase so it can sit mid-sentence ("It's been 3 weeks.",
+         "in 2 months"). Below two weeks Orbit counts days, below two months weeks, below a
+         year months, then years. -->
+    <plurals name="time_span_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <plurals name="time_span_weeks">
+        <item quantity="one">%1$d week</item>
+        <item quantity="other">%1$d weeks</item>
+    </plurals>
+    <plurals name="time_span_months">
+        <item quantity="one">%1$d month</item>
+        <item quantity="other">%1$d months</item>
+    </plurals>
+    <plurals name="time_span_years">
+        <item quantity="one">%1$d year</item>
+        <item quantity="other">%1$d years</item>
+    </plurals>
+
+    <!-- How long ago something happened, for example a call or a note. Lowercase: it
+         often sits after a label ("Last call: 3 days ago") or mid-sentence. Same buckets
+         as the spans above. -->
+    <string name="time_ago_today">today</string>
+    <string name="time_ago_yesterday">yesterday</string>
+    <plurals name="time_ago_days">
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
+    <plurals name="time_ago_weeks">
+        <item quantity="one">%1$d week ago</item>
+        <item quantity="other">%1$d weeks ago</item>
+    </plurals>
+    <plurals name="time_ago_months">
+        <item quantity="one">%1$d month ago</item>
+        <item quantity="other">%1$d months ago</item>
+    </plurals>
+    <plurals name="time_ago_years">
+        <item quantity="one">%1$d year ago</item>
+        <item quantity="other">%1$d years ago</item>
+    </plurals>
+
+    <!-- Day headings in the call log and on Home's rhythm day sheet. -->
+    <string name="time_day_today">Today</string>
+    <string name="time_day_yesterday">Yesterday</string>
+    <!-- An older day. %1$s: the weekday ("Wednesday"), %2$d: the day of the month,
+         %3$s: the month ("June"). Reorder for your language: "Wednesday 3 June". -->
+    <string name="time_day_named">%1$s %2$d %3$s</string>
+    <!-- The same for a day in another year. %4$d: the year. "Monday 29 December 2025". -->
+    <string name="time_day_named_year">%1$s %2$d %3$s %4$d</string>
+
+    <!-- When someone usually picks up, from past calls: the stat beside Card view's heat
+         strip and the "Usually" row on a person's details. Morning is 5 to 11, afternoon
+         noon to 4, evening 5 to 9, late night 10 to 4. -->
+    <string name="time_daypart_mornings">Mornings</string>
+    <string name="time_daypart_afternoons">Afternoons</string>
+    <string name="time_daypart_evenings">Evenings</string>
+    <string name="time_daypart_late_nights">Late nights</string>
+
+    <!-- How long a call lasted, short: "45s", "14 min", "1h 5m". -->
+    <plurals name="time_duration_seconds">
+        <item quantity="one">%1$ds</item>
+        <item quantity="other">%1$ds</item>
+    </plurals>
+    <plurals name="time_duration_minutes">
+        <item quantity="one">%1$d min</item>
+        <item quantity="other">%1$d min</item>
+    </plurals>
+    <!-- %1$d: hours, %2$d: minutes. Both abbreviated: "1h 5m". -->
+    <string name="time_duration_hours_minutes">%1$dh %2$dm</string>
 
 </resources>

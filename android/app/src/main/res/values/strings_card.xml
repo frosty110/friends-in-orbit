@@ -6,11 +6,11 @@
 -->
 <resources>
 
-    <!-- App bar menu of list actions. -->
+    <!-- App bar menu of list actions. The same words as Home's list menu. -->
     <string name="card_list_options">List options</string>
     <string name="card_menu_browse">Browse people</string>
-    <string name="card_menu_add_contacts">Add contacts</string>
-    <string name="card_menu_edit_list">Edit list</string>
+    <string name="card_menu_add_people">Add people</string>
+    <string name="card_menu_list_settings">List settings</string>
 
     <!-- Notice while the call log permission is off. -->
     <string name="card_call_log_denied">Orbit can\'t see your calls, so cards won\'t move on by themselves.</string>
@@ -19,7 +19,7 @@
     <!-- Empty list. -->
     <string name="card_no_members_heading">No one is in this list yet.</string>
     <string name="card_no_members_body">Add a few people to start surfacing names.</string>
-    <string name="card_add_contacts">Add contacts</string>
+    <string name="card_add_people">Add people</string>
     <string name="card_go_home">Go home</string>
 
     <!-- Nobody to suggest right now. Calm, never "caught up". -->
@@ -53,7 +53,7 @@
     <string name="card_no_call_history">No call history yet</string>
     <!-- When this person tends to pick up, from past calls. -->
     <string name="card_usually_answers">Usually answers</string>
-    <string name="card_usually_tooltip">Based on when you usually answer or call this contact.</string>
+    <string name="card_usually_tooltip">Based on when you usually answer or call this person.</string>
     <string name="card_usually_tooltip_label">About usually answers</string>
     <string name="card_answer_good">Good time to call</string>
     <string name="card_answer_sometimes">Sometimes answers now</string>

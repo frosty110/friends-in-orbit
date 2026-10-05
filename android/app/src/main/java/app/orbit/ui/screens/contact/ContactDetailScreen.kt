@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.contact
 
+import android.content.res.Resources
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -47,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -59,6 +61,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import app.orbit.R
 import app.orbit.data.CallDirection
 import app.orbit.data.CallEntry
 import app.orbit.data.ChipTone
@@ -90,7 +93,10 @@ import app.orbit.ui.screens.contact.sections.UnpauseBanner
 import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 import app.orbit.ui.util.dialPhoneNumber
+import app.orbit.ui.util.formatDuration
 import kotlinx.coroutines.delay
 
 /**
@@ -133,6 +139,8 @@ fun ContactDetailScreen(
     // collects below so each is gated by STARTED (no snackbar / focus / nav
     // side effect fires while the screen is STOPPED).
     val lifecycleOwner = LocalLifecycleOwner.current
+    // Snackbar copy is UiText (strings_contact.xml); resolved when shown.
+    val context = LocalContext.current
 
     // Snackbar collector for note-delete + undo. Mirrors the BrowseListScreen
     // pattern (UndoStack-backed inverse closure dispatched on
@@ -141,8 +149,8 @@ fun ContactDetailScreen(
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             vm.snackbarEvents.collect { event ->
                 val r = snackbarHostState.showSnackbar(
-                    message = event.message,
-                    actionLabel = event.actionLabel,
+                    message = event.message.asString(context),
+                    actionLabel = event.actionLabel?.asString(context),
                     duration = SnackbarDuration.Short,
                     withDismissAction = false
                 )
@@ -265,7 +273,7 @@ private fun ContactDetailContent(
                     OrbitIconButton(
                         icon = "arrow-left",
                         onClick = onBack,
-                        contentDescription = "Back"
+                        contentDescription = stringResource(R.string.components_action_back)
                     )
                 },
                 trailing = if (state is ContactDetailUiState.Ready) {
@@ -274,7 +282,9 @@ private fun ContactDetailContent(
                             OrbitIconButton(
                                 icon = "dots-three-vertical",
                                 onClick = { showOverflow = true },
-                                contentDescription = "More actions for ${readyContactName ?: "contact"}"
+                                contentDescription = readyContactName
+                                    ?.let { stringResource(R.string.contact_more_actions_named, it) }
+                                    ?: stringResource(R.string.contact_more_actions)
                             )
                             // Ordering + danger tint per the shared
                             // [OrbitDropdownMenu] contract: the everyday reads
@@ -284,6 +294,7 @@ private fun ContactDetailContent(
                                 expanded = showOverflow,
                                 onDismissRequest = { showOverflow = false },
                                 actions = contactOverflowActions(
+                                    resources = LocalContext.current.resources,
                                     isPaused = (state as? ContactDetailUiState.Ready)?.pausedLabel != null,
                                     onViewAllCalls = onViewAllCalls,
                                     onPause = { showPauseSheet = true },
@@ -301,18 +312,18 @@ private fun ContactDetailContent(
                 ContactDetailUiState.Loading -> EmptyContactShell()
                 ContactDetailUiState.NotFound -> OrbitScreenMessage(
                     icon = "user",
-                    title = "This person isn't in Orbit anymore",
-                    body = "They may have been removed from your phone's contacts.",
-                    actionLabel = "Go back",
+                    title = stringResource(R.string.contact_not_found_title),
+                    body = stringResource(R.string.contact_not_found_body),
+                    actionLabel = stringResource(R.string.contact_go_back),
                     onAction = onBack
                 )
                 // CONTACT-08: a failed read says so, with Retry, instead of
                 // crashing. The only action here, so it takes the accent.
                 ContactDetailUiState.Error -> OrbitScreenMessage(
                     icon = "warning-circle",
-                    title = "Couldn't load this person",
-                    body = "Something went wrong reading their details. Try again in a moment.",
-                    actionLabel = "Try again",
+                    title = stringResource(R.string.contact_error_title),
+                    body = stringResource(R.string.contact_error_body),
+                    actionLabel = stringResource(R.string.contact_try_again),
                     onAction = onRetry,
                     actionVariant = OrbitButtonVariant.Primary
                 )
@@ -369,7 +380,7 @@ private fun ContactDetailContent(
                         // wraps in its own AnimatedVisibility on listsOnSize >= 2,
                         // and edit affordances are off per the orphan banner copy.
                         customScheduleVisible = false,
-                        currentTemplateName = "",
+                        currentTemplateName = null,
                         primaryListName = "",
                         hasOverride = false,
                         currentParams = null,
@@ -473,11 +484,11 @@ private fun ContactBodyLazyColumn(
     draft: String,
     listsOn: List<String>,
     recentCalls: List<CallEntry>,
-    longestGapLabel: String,
+    longestGapLabel: UiText?,
     unpausePromptVisible: Boolean,
-    pausedLabel: String?,
+    pausedLabel: UiText?,
     customScheduleVisible: Boolean,
-    currentTemplateName: String,
+    currentTemplateName: UiText?,
     primaryListName: String,
     hasOverride: Boolean,
     currentParams: RuleParams?,
@@ -516,7 +527,7 @@ private fun ContactBodyLazyColumn(
     notesInputFocusRequester: FocusRequester? = null
 ) {
     val curtain = LocalPrivacyCurtain.current
-    val displayName = if (curtain) "Contact" else contact.name
+    val displayName = if (curtain) stringResource(R.string.components_curtain_contact) else contact.name
 
     // LOG-03 — `LazyListState` hoisted so the screen can
     // animateScrollToItem to the matching call-event row when the user
@@ -605,7 +616,12 @@ private fun ContactBodyLazyColumn(
                 // FINDING A — tappable phone row. ACTION_DIAL via the shared
                 // Dialer util (never CALL_PHONE); 48dp target per design rule 3.
                 // PRIV-07: masked under the curtain like the name and photo.
-                val formattedPhone = if (curtain) "Number hidden" else formatPhone(contact.phone)
+                val formattedPhone = if (curtain) {
+                    stringResource(R.string.contact_number_hidden)
+                } else {
+                    formatPhone(contact.phone)
+                }
+                val callNumberLabel = stringResource(R.string.contact_call_number, formattedPhone)
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
@@ -614,7 +630,7 @@ private fun ContactBodyLazyColumn(
                         .clickable(enabled = hasPhone && !curtain) { context.dialPhoneNumber(contact.phone) }
                         .semantics {
                             role = Role.Button
-                            contentDescription = "Call $formattedPhone"
+                            contentDescription = callNumberLabel
                         }
                         .padding(horizontal = OrbitTheme.spacing.x3)
                 ) {
@@ -628,7 +644,7 @@ private fun ContactBodyLazyColumn(
                 // (the overflow offers Unpause while this shows).
                 if (pausedLabel != null) {
                     Text(
-                        text = pausedLabel,
+                        text = pausedLabel.asString(),
                         style = OrbitTheme.type.meta,
                         color = OrbitTheme.colors.fgMuted
                     )
@@ -642,7 +658,7 @@ private fun ContactBodyLazyColumn(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     OrbitButton(
-                        text = "Call",
+                        text = stringResource(R.string.contact_call),
                         onClick = { context.dialPhoneNumber(contact.phone) },
                         variant = callButtonVariant,
                         leadingIcon = "phone",
@@ -651,7 +667,7 @@ private fun ContactBodyLazyColumn(
                     )
                     if (onOpenLogConnection != null) {
                         OrbitButton(
-                            text = "Log a connection",
+                            text = stringResource(R.string.contact_log_connection),
                             onClick = onOpenLogConnection,
                             variant = OrbitButtonVariant.Secondary,
                             modifier = Modifier.weight(1f)
@@ -664,7 +680,7 @@ private fun ContactBodyLazyColumn(
         // On these lists
         item {
             Spacer(Modifier.height(OrbitTheme.spacing.x6))
-            SectionEyebrow("On these lists")
+            SectionEyebrow(stringResource(R.string.contact_section_lists))
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
@@ -679,7 +695,7 @@ private fun ContactBodyLazyColumn(
                 if (listsOn.isEmpty()) {
                     // A bare dash read as broken (vision CONTACT-3).
                     Text(
-                        text = "Not on any list yet",
+                        text = stringResource(R.string.contact_not_on_any_list),
                         style = OrbitTheme.type.body,
                         color = OrbitTheme.colors.fgMuted
                     )
@@ -690,30 +706,35 @@ private fun ContactBodyLazyColumn(
         // Stats
         item {
             Spacer(Modifier.height(OrbitTheme.spacing.x6))
-            SectionEyebrow("Stats")
+            SectionEyebrow(stringResource(R.string.contact_section_stats))
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
+            val notEnoughCalls = stringResource(R.string.contact_stat_not_enough_calls)
             ContactStatsPanel(
                 stats = listOf(
                     StatEntry(
-                        label = "Last call",
-                        value = contact.lastCalledLabel.ifBlank { "Never called" }
+                        label = stringResource(R.string.contact_stat_last_call),
+                        value = contact.lastCalledLabel?.asString()
+                            ?: stringResource(R.string.contact_stat_never_called)
                     ),
                     StatEntry(
-                        label = "Total calls",
+                        label = stringResource(R.string.contact_stat_total_calls),
                         value = contact.totalCalls.toString()
                     ),
                     // Plain words, not "Avg", and a sentence, not a bare dash,
                     // where there isn't enough history yet: a dash read as
-                    // broken (vision CONTACT-3, rubric D7).
+                    // broken (vision CONTACT-3, rubric D7). A null label is
+                    // "nothing to state" (no measured call, fewer than two
+                    // calls), so there is no placeholder value to filter out.
                     StatEntry(
-                        label = "Average length",
+                        label = stringResource(R.string.contact_stat_average_length),
                         value = contact.avgLengthLabel
-                            .takeIf { contact.totalCalls >= 3 && it.isNotBlank() && it != NO_VALUE }
-                            ?: NOT_ENOUGH_CALLS
+                            ?.takeIf { contact.totalCalls >= 3 }
+                            ?.asString()
+                            ?: notEnoughCalls
                     ),
                     StatEntry(
-                        label = "Longest gap",
-                        value = longestGapLabel.takeIf { it.isNotBlank() && it != NO_VALUE } ?: NOT_ENOUGH_CALLS
+                        label = stringResource(R.string.contact_stat_longest_gap),
+                        value = longestGapLabel?.asString() ?: notEnoughCalls
                     )
                 )
             )
@@ -721,7 +742,7 @@ private fun ContactBodyLazyColumn(
                 color = OrbitTheme.colors.line,
                 thickness = 1.dp
             )
-            UsuallyStatRow(value = contact.bestWindowLabel.ifBlank { NOT_ENOUGH_CALLS })
+            UsuallyStatRow(value = contact.bestWindowLabel?.asString() ?: notEnoughCalls)
         }
 
         // BULK-06 — "Add to lists" entry to the reverse picker.
@@ -731,7 +752,7 @@ private fun ContactBodyLazyColumn(
             item {
                 Spacer(Modifier.height(OrbitTheme.spacing.x6))
                 OrbitButton(
-                    text = "Add to lists",
+                    text = stringResource(R.string.contact_add_to_lists),
                     onClick = onAddToLists,
                     // Secondary — the hero Call button is the screen's one
                     // terracotta element (rules.md design rule 5).
@@ -776,8 +797,9 @@ private fun ContactBodyLazyColumn(
                 RuleOverrideSection(
                     listsOnSize = listsOn.size,
                     currentTemplateName = currentTemplateName,
-                    // List names are masked under the curtain (ListContextChip).
-                    primaryListName = if (curtain) "its list" else primaryListName,
+                    // List names are masked under the curtain (ListContextChip):
+                    // null makes the section say "from its list".
+                    primaryListName = if (curtain) null else primaryListName,
                     hasOverride = hasOverride,
                     currentParams = currentParams ?: RuleParams.KeepInTouch(),
                     onOverride = onOpenOverride,
@@ -790,13 +812,13 @@ private fun ContactBodyLazyColumn(
         // Recent calls
         item {
             Spacer(Modifier.height(OrbitTheme.spacing.x6))
-            SectionEyebrow("Recent calls")
+            SectionEyebrow(stringResource(R.string.contact_section_recent_calls))
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
         }
         if (recentCalls.isEmpty()) {
             item {
                 Text(
-                    text = "No calls yet.",
+                    text = stringResource(R.string.contact_no_calls),
                     style = OrbitTheme.type.body,
                     color = OrbitTheme.colors.fgMuted
                 )
@@ -849,18 +871,6 @@ private fun SectionEyebrow(label: String) {
     SectionLabel(text = label)
 }
 
-private const val USUALLY_TOOLTIP = "Based on when you usually answer or call this contact."
-
-/** What a stat says until there is enough history to compute it. */
-private const val NOT_ENOUGH_CALLS = "Not enough calls yet"
-
-/**
- * The placeholder the shared mapper and [ContactDetailViewModel] put in a stat
- * they can't compute (an em dash, written as its escape). Card view still
- * shows it; this screen swaps it for [NOT_ENOUGH_CALLS].
- */
-private const val NO_VALUE = "\u2014"
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun UsuallyStatRow(value: String) {
@@ -875,11 +885,14 @@ private fun UsuallyStatRow(value: String) {
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                text = "Usually",
+                text = stringResource(R.string.contact_stat_usually),
                 style = OrbitTheme.type.eyebrow,
                 color = OrbitTheme.colors.fgMuted
             )
-            InfoTip(text = USUALLY_TOOLTIP, label = "What usually means")
+            InfoTip(
+                text = stringResource(R.string.contact_usually_tooltip),
+                label = stringResource(R.string.contact_usually_tooltip_label)
+            )
         }
         Text(
             text = value,
@@ -915,26 +928,26 @@ internal fun OrphanBanner(onRelink: () -> Unit, onArchive: () -> Unit) {
             .padding(OrbitTheme.spacing.x4)
     ) {
         Text(
-            text = "This contact was deleted from your phone",
+            text = stringResource(R.string.contact_orphan_title),
             style = OrbitTheme.type.h3,
             color = OrbitTheme.colors.fg
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
-            text = "History stays here. Re-link to a phone contact, or archive to remove from lists.",
+            text = stringResource(R.string.contact_orphan_body),
             style = OrbitTheme.type.body,
             color = OrbitTheme.colors.fgMuted
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x3))
         Row(horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3)) {
             OrbitButton(
-                text = "Re-link",
+                text = stringResource(R.string.contact_orphan_relink),
                 onClick = onRelink,
                 variant = OrbitButtonVariant.Primary,
                 leadingIcon = "link"
             )
             OrbitButton(
-                text = "Archive",
+                text = stringResource(R.string.components_action_archive),
                 onClick = onArchive,
                 variant = OrbitButtonVariant.Secondary,
                 leadingIcon = "eye-slash"
@@ -975,15 +988,15 @@ private fun CallHistoryRow(call: CallEntry, isManual: Boolean = false, isAttempt
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = when {
-                    isAttempt -> "Attempted"
-                    isManual -> "Logged"
-                    else -> call.lengthLabel
+                    isAttempt -> stringResource(R.string.contact_call_attempted)
+                    isManual -> stringResource(R.string.contact_call_logged)
+                    else -> call.lengthLabel.asString()
                 },
                 style = OrbitTheme.type.body,
                 color = OrbitTheme.colors.fg
             )
             Text(
-                text = call.relativeWhen,
+                text = call.relativeWhen.asString(),
                 style = OrbitTheme.type.meta,
                 color = OrbitTheme.colors.fgMuted
             )
@@ -1037,7 +1050,7 @@ private fun RetroNoteAffordance(
                 ) {
                     if (draft.isEmpty()) {
                         Text(
-                            text = "Add a note about this call",
+                            text = stringResource(R.string.contact_retro_note_hint),
                             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted)
                         )
                     }
@@ -1048,7 +1061,7 @@ private fun RetroNoteAffordance(
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         OrbitButton(
-            text = "Add note to this call",
+            text = stringResource(R.string.contact_retro_note_add),
             onClick = onSave,
             enabled = draft.isNotBlank(),
             // Secondary — the hero Call button is the screen's one terracotta
@@ -1073,13 +1086,13 @@ private val previewContact: app.orbit.data.Contact = app.orbit.data.Contact(
     id = "preview-1",
     name = "Avery Quinn",
     phone = "+1 555 0100",
-    lastCalledLabel = "11 days ago",
-    avgLengthLabel = "14 min",
+    lastCalledLabel = UiText.plural(R.plurals.time_ago_days, 11, 11),
+    avgLengthLabel = formatDuration(14 * 60),
     pickupRateLabel = "82%",
     totalCalls = 12,
     due = false,
     listIds = listOf("inner-orbit"),
-    bestWindowLabel = "Evenings",
+    bestWindowLabel = UiText.res(R.string.time_daypart_evenings),
     heat = FloatArray(24) { 0f },
     history = emptyList(),
     notes = emptyList(),
@@ -1094,16 +1107,24 @@ private val previewState: ContactDetailUiState = ContactDetailUiState.Ready(
             contactId = 1L,
             body = "Starting the new job on Monday. Ask how the first week went.",
             createdAtMs = 0L,
-            relativeTimestamp = "11 days ago",
-            absoluteTimestamp = "Sep 24 · 7:40 pm"
+            relativeTimestamp = UiText.plural(R.plurals.time_ago_days, 11, 11),
+            absoluteTimestamp = "Sep 24 · 7:40pm"
         )
     ),
     listsOn = listOf("Inner orbit"),
     recentCalls = listOf(
-        CallEntry(direction = CallDirection.Outgoing, relativeWhen = "11 days ago", lengthLabel = "14 min"),
-        CallEntry(direction = CallDirection.Incoming, relativeWhen = "1 month ago", lengthLabel = "32 min")
+        CallEntry(
+            direction = CallDirection.Outgoing,
+            relativeWhen = UiText.plural(R.plurals.time_ago_days, 11, 11),
+            lengthLabel = formatDuration(14 * 60)
+        ),
+        CallEntry(
+            direction = CallDirection.Incoming,
+            relativeWhen = UiText.plural(R.plurals.time_ago_months, 1, 1),
+            lengthLabel = formatDuration(32 * 60)
+        )
     ),
-    longestGapLabel = "21 days"
+    longestGapLabel = UiText.plural(R.plurals.time_span_days, 21, 21)
 )
 
 @Composable
@@ -1148,11 +1169,16 @@ private fun ContactDetailContentPreview() {
 private fun ContactDetailNewPersonPreview() {
     ContactDetailPreviewHost(
         ContactDetailUiState.Ready(
-            contact = previewContact.copy(lastCalledLabel = "", totalCalls = 0, avgLengthLabel = "", bestWindowLabel = ""),
+            contact = previewContact.copy(
+                lastCalledLabel = null,
+                totalCalls = 0,
+                avgLengthLabel = null,
+                bestWindowLabel = null
+            ),
             notes = emptyList(),
             listsOn = emptyList(),
             recentCalls = emptyList(),
-            longestGapLabel = NO_VALUE
+            longestGapLabel = null
         )
     )
 }
@@ -1185,8 +1211,11 @@ private fun ContactDetailNotFoundPreview() {
  * While a pause is in force the pause slot offers Unpause instead. There was
  * no Unpause anywhere before, so an indefinite pause outlived its snackbar
  * permanently. `internal` so the order is unit-tested (ContactOverflowMenuTest).
+ * Takes [Resources] because [OrbitMenuAction] carries resolved text (the
+ * precedent is `listRowMenuActions`).
  */
 internal fun contactOverflowActions(
+    resources: Resources,
     isPaused: Boolean,
     onViewAllCalls: () -> Unit,
     onPause: () -> Unit,
@@ -1194,17 +1223,25 @@ internal fun contactOverflowActions(
     onIgnore: () -> Unit
 ): List<OrbitMenuAction> = listOf(
     OrbitMenuAction(
-        label = "View all calls",
+        label = resources.getString(R.string.contact_menu_view_all_calls),
         onClick = onViewAllCalls,
         icon = "clock-counter-clockwise"
     ),
     if (isPaused) {
-        OrbitMenuAction(label = "Unpause", onClick = onUnpause, icon = "play")
+        OrbitMenuAction(
+            label = resources.getString(R.string.contact_menu_unpause),
+            onClick = onUnpause,
+            icon = "play"
+        )
     } else {
-        OrbitMenuAction(label = "Pause", onClick = onPause, icon = "pause-circle")
+        OrbitMenuAction(
+            label = resources.getString(R.string.contact_menu_pause),
+            onClick = onPause,
+            icon = "pause-circle"
+        )
     },
     OrbitMenuAction(
-        label = "Ignore",
+        label = resources.getString(R.string.contact_menu_ignore),
         onClick = onIgnore,
         icon = "eye-slash",
         tone = OrbitMenuTone.Destructive

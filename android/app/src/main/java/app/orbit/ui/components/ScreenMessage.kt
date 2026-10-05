@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
@@ -26,6 +27,7 @@ import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -121,10 +123,11 @@ fun OrbitListSkeleton(
     showSectionLabel: Boolean = false,
     avatarSize: Dp = SkeletonAvatarSize,
 ) {
+    val loadingLabel = stringResource(R.string.components_loading)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clearAndSetSemantics { contentDescription = "Loading" }
+            .clearAndSetSemantics { contentDescription = loadingLabel }
             .padding(vertical = OrbitTheme.spacing.x2),
     ) {
         if (showSectionLabel) {

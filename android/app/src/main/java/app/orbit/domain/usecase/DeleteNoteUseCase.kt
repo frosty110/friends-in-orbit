@@ -15,13 +15,16 @@ import javax.inject.Inject
 class DeleteNoteUseCase @Inject constructor(
     private val noteRepo: NoteRepository,
 ) {
-    data class Result(val inverse: suspend () -> Unit, val label: String)
+    /**
+     * @property inverse Re-inserts the note. The snackbar's words ("Note
+     *                   deleted") are the caller's, from string resources.
+     */
+    data class Result(val inverse: suspend () -> Unit)
 
     suspend operator fun invoke(note: NoteEntity): Result {
         noteRepo.delete(note)
         return Result(
             inverse = { noteRepo.insert(note) },
-            label = "Note deleted",
         )
     }
 }

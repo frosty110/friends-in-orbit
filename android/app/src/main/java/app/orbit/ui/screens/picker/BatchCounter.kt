@@ -12,8 +12,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.theme.OrbitTheme
 
@@ -53,10 +56,10 @@ fun BatchCounter(
     if (selectionCount == 0) return
 
     val ctaCopy: String = when (mode) {
-        PickerMode.Add -> "Add $selectionCount to $targetListName"
-        PickerMode.Move -> "Move $selectionCount to $targetListName"
-        PickerMode.Copy -> "Copy $selectionCount to $targetListName"
-        PickerMode.Relink -> "Re-link $targetListName"
+        PickerMode.Add -> pluralStringResource(R.plurals.picker_commit_add, selectionCount, selectionCount, targetListName)
+        PickerMode.Move -> pluralStringResource(R.plurals.picker_commit_move, selectionCount, selectionCount, targetListName)
+        PickerMode.Copy -> pluralStringResource(R.plurals.picker_commit_copy, selectionCount, selectionCount, targetListName)
+        PickerMode.Relink -> stringResource(R.string.picker_commit_relink, targetListName)
     }
 
     Column(
@@ -82,7 +85,7 @@ fun BatchCounter(
                 )
         ) {
             Text(
-                text = "$selectionCount selected",
+                text = pluralStringResource(R.plurals.picker_selected_count, selectionCount, selectionCount),
                 style = OrbitTheme.type.body,
                 color = OrbitTheme.colors.fg,
                 modifier = Modifier.weight(1f)

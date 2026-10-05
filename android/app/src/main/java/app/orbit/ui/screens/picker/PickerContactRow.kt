@@ -22,12 +22,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitCheckbox
@@ -36,6 +39,7 @@ import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.asString
 import app.orbit.ui.util.formatRelative
 import java.time.Instant
 
@@ -105,7 +109,7 @@ fun PickerContactRow(
     onOpenInPhone: ((PickerContact) -> Unit)? = null,
 ) {
     val curtain = LocalPrivacyCurtain.current
-    val displayName = if (curtain) "Contact" else contact.displayName
+    val displayName = if (curtain) stringResource(R.string.components_curtain_contact) else contact.displayName
     val haptics = LocalHapticFeedback.current
 
     // The ignore-side action for this row's state (null = not a curation
@@ -118,21 +122,24 @@ fun PickerContactRow(
     var menuExpanded by remember { mutableStateOf(false) }
 
     val callLine: String = if (contact.callCount == 0 || contact.lastCallAt == null) {
-        "Never called"
+        stringResource(R.string.picker_row_never_called)
     } else {
-        val rel = formatRelative(contact.lastCallAt)
-        val callsWord = if (contact.callCount == 1) "call" else "calls"
-        "Last called $rel · ${contact.callCount} $callsWord"
+        val rel = formatRelative(contact.lastCallAt).asString()
+        pluralStringResource(R.plurals.picker_row_last_called, contact.callCount, rel, contact.callCount)
     }
 
     val membershipLine: String? = when {
         contact.listNames.isEmpty() -> null
-        curtain -> if (contact.listNames.size == 1) "On 1 list" else "On ${contact.listNames.size} lists"
-        contact.listNames.size <= 3 -> "On ${contact.listNames.joinToString(", ")}"
+        curtain -> pluralStringResource(
+            R.plurals.picker_row_on_lists_count,
+            contact.listNames.size,
+            contact.listNames.size,
+        )
+        contact.listNames.size <= 3 -> stringResource(R.string.picker_row_on_lists, contact.listNames.joinToString(", "))
         else -> {
             val head = contact.listNames.take(3).joinToString(", ")
             val rest = contact.listNames.size - 3
-            "On $head and $rest more"
+            pluralStringResource(R.plurals.picker_row_on_lists_more, rest, head, rest)
         }
     }
 
@@ -166,7 +173,7 @@ fun PickerContactRow(
                     } else {
                         null
                     },
-                    onLongClickLabel = if (hasMenu) "More actions" else null,
+                    onLongClickLabel = if (hasMenu) stringResource(R.string.picker_row_more_actions) else null,
                     role = if (contact.isIgnored) Role.Button else Role.Checkbox,
                 )
                 .padding(
@@ -204,7 +211,7 @@ fun PickerContactRow(
 
             if (contact.isIgnored) {
                 Text(
-                    text = "Ignored",
+                    text = stringResource(R.string.picker_row_ignored),
                     style = OrbitTheme.type.meta,
                     color = OrbitTheme.colors.fgSubtle,
                 )
@@ -223,7 +230,7 @@ fun PickerContactRow(
                     icon = "dots-three-vertical",
                     onClick = { menuExpanded = true },
                     tint = OrbitTheme.colors.fgMuted,
-                    contentDescription = "More actions for $displayName",
+                    contentDescription = stringResource(R.string.picker_row_more_actions_for, displayName),
                 )
             }
         }
@@ -280,10 +287,9 @@ private fun PickerRowActionMenu(
             if (onOpenInPhone != null) {
                 add(
                     OrbitMenuAction(
-                        label = "Open in Contacts",
+                        label = stringResource(R.string.picker_row_open_in_contacts),
                         onClick = onOpenInPhone,
-                        supporting = "See their call and message history in your " +
-                            "phone's contacts app.",
+                        supporting = stringResource(R.string.picker_row_open_in_contacts_supporting),
                     ),
                 )
             }
@@ -291,14 +297,13 @@ private fun PickerRowActionMenu(
                 add(
                     if (isIgnored) {
                         // Restoring someone is not destructive — it stays in fg.
-                        OrbitMenuAction(label = "Unignore", onClick = onIgnoreAction)
+                        OrbitMenuAction(label = stringResource(R.string.picker_row_unignore), onClick = onIgnoreAction)
                     } else {
                         OrbitMenuAction(
-                            label = "Ignore",
+                            label = stringResource(R.string.picker_row_ignore),
                             onClick = onIgnoreAction,
                             tone = OrbitMenuTone.Destructive,
-                            supporting = "Hide $displayName from Orbit. " +
-                                "They stay in your phone's contacts.",
+                            supporting = stringResource(R.string.picker_row_ignore_supporting, displayName),
                         )
                     },
                 )

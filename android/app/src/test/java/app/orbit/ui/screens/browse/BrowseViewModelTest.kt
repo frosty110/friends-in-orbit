@@ -2,6 +2,7 @@ package app.orbit.ui.screens.browse
 
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import app.orbit.R
 import app.orbit.data.dao.ListDao
 import app.orbit.data.dao.RecordingContactDao
 import app.orbit.data.dao.RecordingListMembershipDao
@@ -29,6 +30,7 @@ import app.orbit.domain.usecase.MoveContactsUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.domain.usecase.SurfaceQueueUseCase
 import app.orbit.testutil.MainDispatcherRule
+import app.orbit.ui.util.UiText
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -219,11 +221,15 @@ class BrowseViewModelTest {
             listOf(contactFixture(id = 7L, displayName = "Kai", pausedUntil = sentinel))
         )
 
-        s.vm.onSingleRowUnpause(7L, "Kai")
+        s.vm.snackbarEvents.test(timeout = 2.seconds) {
+            s.vm.onSingleRowUnpause(7L, "Kai")
+            // "Unpaused Kai" (SnackbarCopyTest pins the English).
+            assertEquals(UiText.res(R.string.components_snackbar_unpaused, "Kai"), awaitItem().message)
+            cancelAndIgnoreRemainingEvents()
+        }
 
         assertEquals(null, s.contactRepo.getById(7L)?.pausedUntil)
         val undo = s.undoStack.take()
-        assertEquals("Unpaused Kai", undo?.label)
         undo!!.inverse()
         assertEquals(
             sentinel,
@@ -517,11 +523,11 @@ class BrowseViewModelTest {
         s.vm.snackbarEvents.test(timeout = 2.seconds) {
             s.vm.onBulkRemove()
             val event = awaitItem()
-            assertTrue(
-                event.message.startsWith("Removed 2 from"),
-                "expected 'Removed 2 from <list>', got ${event.message}"
-            )
-            assertEquals("Undo", event.actionLabel)
+            // "Removed 2 from <list>" (strings_browse.xml).
+            val message = event.message as UiText.Plural
+            assertEquals(R.plurals.browse_snackbar_removed, message.id)
+            assertEquals(2, message.count)
+            assertEquals(UiText.res(R.string.components_action_undo), event.actionLabel)
             cancel()
         }
         // After commit, multi-select auto-exits (MOVE-06).

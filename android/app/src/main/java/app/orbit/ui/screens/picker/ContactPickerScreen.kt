@@ -38,6 +38,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
@@ -51,6 +53,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.orbit.R
 import app.orbit.domain.search.ContactSearch
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
@@ -64,6 +67,8 @@ import app.orbit.ui.components.OrbitSearchField
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 import app.orbit.ui.util.openPhoneContact
 import java.time.Instant
 import kotlinx.coroutines.FlowPreview
@@ -170,18 +175,17 @@ fun ContactPickerScreen(
 
 /**
  * App-bar title per [PickerMode]. Move/Copy carry the live selection count with
- * an honest singular ("Move 1 contact", never "Move 1 contacts"). Pure +
- * internal so the JVM unit test can pin it.
+ * an honest singular ("Move 1 person", never "Move 1 people"), from
+ * `<plurals>` (strings_picker.xml). Pure + internal so the unit test can pin
+ * it. The app says "people", not "contacts", for the people in Orbit (the
+ * title read "Add contacts" until 2026-10-05).
  */
-internal fun pickerModeTitle(mode: PickerMode, selectionCount: Int): String {
-    val noun = if (selectionCount == 1) "contact" else "contacts"
-    return when (mode) {
-        PickerMode.Add -> "Add contacts"
-        PickerMode.Move -> "Move $selectionCount $noun"
-        PickerMode.Copy -> "Copy $selectionCount $noun"
-        // CONTACT-07: one pick, so no count.
-        PickerMode.Relink -> "Re-link contact"
-    }
+internal fun pickerModeTitle(mode: PickerMode, selectionCount: Int): UiText = when (mode) {
+    PickerMode.Add -> UiText.res(R.string.picker_title_add)
+    PickerMode.Move -> UiText.plural(R.plurals.picker_title_move, selectionCount, selectionCount)
+    PickerMode.Copy -> UiText.plural(R.plurals.picker_title_copy, selectionCount, selectionCount)
+    // CONTACT-07: one pick, so no count.
+    PickerMode.Relink -> UiText.res(R.string.picker_title_relink)
 }
 
 @OptIn(FlowPreview::class)
@@ -236,15 +240,15 @@ private fun ContactPickerContent(
 
     OrbitScreen {
         // App-bar title varies with mode and singularizes honestly
-        // ("Move 1 contact").
-        val title: String = pickerModeTitle(state.mode, state.selectionCount)
+        // ("Move 1 person").
+        val title: String = pickerModeTitle(state.mode, state.selectionCount).asString()
         OrbitAppBar(
             title = title,
             leading = {
                 OrbitIconButton(
                     icon = "arrow-left",
                     onClick = onBack,
-                    contentDescription = "Back"
+                    contentDescription = stringResource(R.string.components_action_back)
                 )
             },
             // No clear-X here: the search field carries its own, gated on the
@@ -278,9 +282,9 @@ private fun ContactPickerContent(
                     NotFoundEmpty(state.mode)
                 ContactPickerUiState.Phase.Error -> OrbitScreenMessage(
                     icon = "warning-circle",
-                    title = "Couldn't load your contacts",
-                    body = "Something went wrong reading them. Try again in a moment.",
-                    actionLabel = "Try again",
+                    title = stringResource(R.string.picker_error_title),
+                    body = stringResource(R.string.picker_error_body),
+                    actionLabel = stringResource(R.string.picker_try_again),
                     onAction = onRetry,
                     actionVariant = OrbitButtonVariant.Primary
                 )
@@ -356,7 +360,7 @@ private fun ReadyContent(
             query = searchInput,
             onQueryChange = onSearchInputChange,
             // The shared matcher also searches phone digits.
-            placeholder = "Search name or number",
+            placeholder = stringResource(R.string.picker_search_hint),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x2)
@@ -392,6 +396,8 @@ private fun ReadyContent(
         val hasCallHistory = remember(state.allContacts) {
             state.allContacts.any { it.lastCallAt != null }
         }
+        val filterHintNeedsCalls = stringResource(R.string.picker_filters_need_calls)
+        val filterHintGreyed = stringResource(R.string.picker_filters_greyed)
         val filterDisabledHint: String? = run {
             val callDependent = listOf(
                 PickerFilter.CommonlyCalled,
@@ -403,9 +409,8 @@ private fun ReadyContent(
             }
             when {
                 !anyGreyed -> null
-                !hasCallHistory ->
-                    "Filters like “long gap” wake up once Orbit has your call history."
-                else -> "Greyed filters have no matches right now."
+                !hasCallHistory -> filterHintNeedsCalls
+                else -> filterHintGreyed
             }
         }
 
@@ -441,8 +446,11 @@ private fun ReadyContent(
             )
         } else if (state.selectAllCapExceeded) {
             Text(
-                text = "Over ${ContactPickerUiState.SELECT_ALL_MAX} matches. " +
-                    "Narrow the search to select them all.",
+                text = pluralStringResource(
+                    R.plurals.picker_select_all_capped,
+                    ContactPickerUiState.SELECT_ALL_MAX,
+                    ContactPickerUiState.SELECT_ALL_MAX,
+                ),
                 style = OrbitTheme.type.meta,
                 color = OrbitTheme.colors.fgMuted,
                 modifier = Modifier.padding(
@@ -508,16 +516,16 @@ private fun ReadyContent(
                 state.filteredContacts.isEmpty() -> OrbitScreenMessage(
                     icon = "magnifying-glass",
                     title = if (state.searchQuery.isNotBlank()) {
-                        "Nothing matches \u201C${state.searchQuery}\u201D"
+                        stringResource(R.string.picker_no_matches_query_title, state.searchQuery)
                     } else {
-                        "Nothing matches these filters"
+                        stringResource(R.string.picker_no_matches_filters_title)
                     },
                     // Plain words: "chip" and "thresholds" were developer
                     // vocabulary on a user-facing line (rubric D7).
                     body = if (state.searchQuery.isNotBlank()) {
-                        "Try a shorter name, part of a number, or one filter fewer."
+                        stringResource(R.string.picker_no_matches_query_body)
                     } else {
-                        "Try removing a filter."
+                        stringResource(R.string.picker_no_matches_filters_body)
                     }
                 )
                 else -> LazyColumn(
@@ -581,7 +589,7 @@ private fun ReadyContent(
             }
         } else if (onSkip != null) {
             OrbitButton(
-                text = "Skip for now",
+                text = stringResource(R.string.picker_skip_for_now),
                 onClick = onSkip,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -611,19 +619,14 @@ private fun SortControl(
 
     // Ordered list of the user-facing sort options.
     val options: List<Pair<PickerSort, String>> = listOf(
-        PickerSort.ByName to "Alphabetical",
-        PickerSort.ByMostCalled to "Most called",
+        PickerSort.ByName to stringResource(R.string.picker_sort_alphabetical),
+        PickerSort.ByMostCalled to stringResource(R.string.picker_sort_most_called),
         // "Recently called" — absorbs the intent of the removed "Called recently"
         // filter (surface recent callers by ordering, not by hiding others).
-        PickerSort.ByRecency to "Recently called",
-        PickerSort.ByRecentlySaved to "Recently added"
+        PickerSort.ByRecency to stringResource(R.string.picker_sort_recently_called),
+        PickerSort.ByRecentlySaved to stringResource(R.string.picker_sort_recently_added)
     )
-    val currentLabel = when (sortBy) {
-        PickerSort.ByName -> "Alphabetical"
-        PickerSort.ByMostCalled -> "Most called"
-        PickerSort.ByRecentlySaved -> "Recently added"
-        PickerSort.ByRecency -> "Recently called"
-    }
+    val currentLabel = options.first { it.first == sortBy }.second
 
     Box(modifier = modifier) {
         Row(
@@ -631,7 +634,10 @@ private fun SortControl(
             modifier = Modifier
                 .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
                 .clip(OrbitTheme.shapes.full)
-                .clickable(role = Role.Button, onClickLabel = "Change the order") { expanded = true }
+                .clickable(
+                    role = Role.Button,
+                    onClickLabel = stringResource(R.string.picker_sort_change)
+                ) { expanded = true }
                 .padding(
                     horizontal = OrbitTheme.spacing.x3,
                     vertical = OrbitTheme.spacing.x2
@@ -644,7 +650,7 @@ private fun SortControl(
             )
             Spacer(Modifier.width(OrbitTheme.spacing.x2))
             Text(
-                text = "Sort: $currentLabel",
+                text = stringResource(R.string.picker_sort_label, currentLabel),
                 style = OrbitTheme.type.meta,
                 color = OrbitTheme.colors.fg
             )
@@ -699,7 +705,7 @@ private fun ShowIgnoredControl(
         )
         Spacer(Modifier.width(OrbitTheme.spacing.x2))
         Text(
-            text = if (showIgnored) "Hide ignored" else "Show ignored",
+            text = stringResource(if (showIgnored) R.string.picker_hide_ignored else R.string.picker_show_ignored),
             style = OrbitTheme.type.meta,
             color = OrbitTheme.colors.fg
         )
@@ -784,8 +790,10 @@ private fun SectionHeader(letter: String) {
 private fun NotFoundEmpty(mode: PickerMode) {
     OrbitScreenMessage(
         // Re-link routes carry a contact, not a list.
-        title = if (mode == PickerMode.Relink) "Contact not found" else "List not found",
-        body = "It may have been removed. Go back and try again."
+        title = stringResource(
+            if (mode == PickerMode.Relink) R.string.picker_contact_not_found else R.string.picker_list_not_found
+        ),
+        body = stringResource(R.string.picker_not_found_body)
     )
 }
 

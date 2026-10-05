@@ -91,13 +91,8 @@ class SettingsIgnoredViewModel @Inject constructor(
      */
     fun onUnignore(contactId: Long, name: String) = viewModelScope.launch {
         unignoreContactUseCase(contactId)
-        undoStack.put(
-            UndoStack.PendingUndo(
-                inverse = { ignoreContactUseCase(contactId, name) },
-                label = "Restored $name"
-            )
-        )
-        _snackbarEvents.tryEmit(SnackbarEvent("Restored $name", "Undo"))
+        undoStack.put(UndoStack.PendingUndo(inverse = { ignoreContactUseCase(contactId) }))
+        _snackbarEvents.tryEmit(SnackbarEvent.undoable(UiText.res(R.string.components_snackbar_restored, name)))
     }
 
     /** Snackbar "Undo" tap — replay the inverse closure recorded on [UndoStack]. */
@@ -112,8 +107,7 @@ class SettingsIgnoredViewModel @Inject constructor(
             name = displayName,
             photoUri = photoUri,
             ignoredAtMs = ignoredInstant.toEpochMilli(),
-            // formatRelative still returns English; it slots into the resource
-            // sentence until RelativeTime returns UiText.
+            // "Ignored {3 days ago}": formatRelative's UiText nests as the argument.
             ignoredRelativeLabel = UiText.res(R.string.settings_ignored_relative, formatRelative(ignoredInstant, now))
         )
     }

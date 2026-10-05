@@ -15,8 +15,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.data.entity.ListEntity
 import app.orbit.ui.theme.OrbitTheme
 
@@ -52,10 +54,12 @@ fun ListSelectorSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val title = when (mode) {
-        Mode.Move -> "Move to which list?"
-        Mode.Copy -> "Copy to which list?"
-    }
+    val title = stringResource(
+        when (mode) {
+            Mode.Move -> R.string.browse_move_to_which_list
+            Mode.Copy -> R.string.browse_copy_to_which_list
+        },
+    )
 
     val visibleLists = lists.filter { entity ->
         !entity.isArchived && (mode == Mode.Copy || entity.id != currentListId)
@@ -135,7 +139,7 @@ private fun ListSelectorSheetLightPreview() {
                 .background(OrbitTheme.colors.surface)
                 .padding(OrbitTheme.spacing.x4)) {
                 Text(
-                    text = "Move to which list?",
+                    text = stringResource(R.string.browse_move_to_which_list),
                     style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
                     modifier = Modifier.padding(bottom = OrbitTheme.spacing.x3),
                 )

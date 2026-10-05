@@ -11,21 +11,20 @@ import java.time.Duration
  *
  * Callers MUST import `app.orbit.domain.model.PauseDuration`.
  *
- * @property duration  Length of the pause. `null` means indefinite — the use case maps
+ * @property duration  Length of the pause. `null` means indefinite; the use case maps
  *                     this to the 9999 sentinel at write time.
- * @property snackbarPhrase How the pause reads at the end of every "Paused …"
- *                     snackbar, single or bulk: "for 1 week", "for 1 month",
- *                     "indefinitely". It carries its own preposition because
- *                     "indefinitely" takes none; building "for {label}" at the
- *                     call site is what produced "Paused 3 contacts for
- *                     indefinitely". One owner, so the three pause paths cannot
- *                     word it differently again.
+ *
+ * How a pause reads ("Paused Sam for 1 week", "Paused 3 people indefinitely")
+ * is copy, so it lives in string resources, one whole sentence per duration,
+ * built in one place: `app.orbit.ui.util.pausedSnackbar`. Until 2026-10-05
+ * this class carried an English `snackbarPhrase` ("for 1 week",
+ * "indefinitely") for that sentence; a whole sentence per duration keeps the
+ * same guarantee (no "for indefinitely") in every language.
  */
 sealed class PauseDuration(
     val duration: Duration?,
-    val snackbarPhrase: String
 ) {
-    data object OneWeek : PauseDuration(Duration.ofDays(7), "for 1 week")
-    data object OneMonth : PauseDuration(Duration.ofDays(30), "for 1 month")
-    data object Indefinite : PauseDuration(null, "indefinitely")
+    data object OneWeek : PauseDuration(Duration.ofDays(7))
+    data object OneMonth : PauseDuration(Duration.ofDays(30))
+    data object Indefinite : PauseDuration(null)
 }

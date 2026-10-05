@@ -1,5 +1,6 @@
 package app.orbit.domain.undo
 
+import kotlin.test.assertSame
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,17 +22,17 @@ class UndoStackTest {
     @Test
     fun put_then_take_returns_entry() {
         val stack = UndoStack()
-        val entry = UndoStack.PendingUndo(inverse = { /* no-op */ }, label = "Moved 3")
+        val entry = UndoStack.PendingUndo(inverse = { /* no-op */ })
         stack.put(entry)
         val got = stack.take()
         assertNotNull(got)
-        assertEquals("Moved 3", got.label)
+        assertSame(entry, got)
     }
 
     @Test
     fun take_clears_pending() {
         val stack = UndoStack()
-        stack.put(UndoStack.PendingUndo(inverse = {}, label = "A"))
+        stack.put(UndoStack.PendingUndo(inverse = {}))
         stack.take()
         assertNull(stack.peek())
         assertNull(stack.take())
@@ -40,29 +41,32 @@ class UndoStackTest {
     @Test
     fun put_replaces_previous_depth1_invariant() {
         val stack = UndoStack()
-        stack.put(UndoStack.PendingUndo(inverse = {}, label = "first"))
-        stack.put(UndoStack.PendingUndo(inverse = {}, label = "second"))
+        val first = UndoStack.PendingUndo(inverse = {})
+        val second = UndoStack.PendingUndo(inverse = {})
+        stack.put(first)
+        stack.put(second)
         val got = stack.take()
         assertNotNull(got)
-        assertEquals("second", got.label, "newer put MUST replace older entry")
+        assertSame(second, got, "newer put MUST replace older entry")
         assertNull(stack.take(), "only one entry was ever held")
     }
 
     @Test
     fun peek_does_not_clear() {
         val stack = UndoStack()
-        stack.put(UndoStack.PendingUndo(inverse = {}, label = "X"))
+        val entry = UndoStack.PendingUndo(inverse = {})
+        stack.put(entry)
         stack.peek()
         stack.peek()
         val got = stack.take()
         assertNotNull(got)
-        assertEquals("X", got.label)
+        assertSame(entry, got)
     }
 
     @Test
     fun clear_unconditionally_empties_stack() {
         val stack = UndoStack()
-        stack.put(UndoStack.PendingUndo(inverse = {}, label = "X"))
+        stack.put(UndoStack.PendingUndo(inverse = {}))
         stack.clear()
         assertNull(stack.peek())
         assertNull(stack.take())
@@ -72,7 +76,7 @@ class UndoStackTest {
     fun inverse_lambda_is_invocable_via_take() = runBlocking {
         val stack = UndoStack()
         var inverseRan = false
-        stack.put(UndoStack.PendingUndo(inverse = { inverseRan = true }, label = "X"))
+        stack.put(UndoStack.PendingUndo(inverse = { inverseRan = true }))
         stack.take()?.inverse?.invoke()
         assertEquals(true, inverseRan, "take() returns the inverse closure unmodified")
     }

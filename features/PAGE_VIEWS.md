@@ -41,8 +41,8 @@ Each page view lives in its own file under [`page-views/`](page-views/). When a 
 | Page view | Route |
 |---|---|
 | [Lists manager](page-views/lists-manager.md) | `lists` |
-| [Edit list / configuration](page-views/list-config.md) | `lists/{listId}/config` |
-| [Add contacts / picker](page-views/picker-contacts.md) | `pick/contacts` |
+| [List settings / configuration](page-views/list-config.md) | `lists/{listId}/config` |
+| [Add people / picker](page-views/picker-contacts.md) | `pick/contacts` |
 | [Add to lists / reverse picker](page-views/picker-lists.md) | `pick/lists` |
 
 ## Settings & data

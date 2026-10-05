@@ -20,19 +20,24 @@ import app.orbit.ui.util.asString
  * Confirmation dialog for the one-way SMART → STATIC conversion (LIST-08).
  * Atomicity is owned by [app.orbit.data.repository.ListRepository.convertSmartToStatic]
  * (the `db.withTransaction` wrap). This composable is the UI bridge: it
- * surfaces the consequence ("the rule will no longer update membership"),
- * names how many people get snapshotted, and lists the first three names so
- * the user can read what they're locking in.
+ * surfaces the consequence (the list stops adding people by itself), names
+ * how many people stay, and lists the first three names so the user can read
+ * what they're keeping.
  *
- * Copy is verbatim from the convert-to-static dialog spec:
- *  - Title: "Convert to a static list?"
- *  - Body (singular vs plural toggles on N == 1)
+ * Copy (strings_lists.xml) uses the same words as the "Make this a regular
+ * list" button that opens it and the note under that button; until
+ * 2026-10-05 it said "Convert to a static list?" and "snapshots ... as
+ * permanent members", engineering words beside a plain-words button:
+ *  - Title: "Make this a regular list?"
+ *  - Body: "The N people here now stay, and the list stops adding people by
+ *    itself. This can't be undone." (plural; "No one is on this list right
+ *    now, ..." when it matches no one)
  *  - Optional preview line listing first up to 3 names + "and N more"
- *  - Confirm button: "Convert" (Destructive variant)
+ *  - Confirm button: "Make it regular" (Destructive variant)
  *  - Cancel button: "Cancel" (Ghost variant)
  *
- * No undo affordance — the post-confirm Snackbar reads
- * `List converted — membership locked.` and is owned by the calling screen.
+ * No undo affordance: the post-confirm snackbar reads "This is now a regular
+ * list." and is owned by the calling screen.
  */
 @Composable
 fun ConvertToStaticDialog(
@@ -51,7 +56,12 @@ fun ConvertToStaticDialog(
             )
         },
         text = {
-            val sentence = pluralStringResource(R.plurals.lists_convert_body, memberCount, memberCount)
+            // "The 0 people here now stay" read oddly; an empty list says so.
+            val sentence = if (memberCount == 0) {
+                stringResource(R.string.lists_convert_body_empty)
+            } else {
+                pluralStringResource(R.plurals.lists_convert_body, memberCount, memberCount)
+            }
             val previewLine = buildPreviewLine(memberCount, firstNames)?.asString()
             val body = if (previewLine != null) {
                 stringResource(R.string.lists_convert_body_with_preview, sentence, previewLine)

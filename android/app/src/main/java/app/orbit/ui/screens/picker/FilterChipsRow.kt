@@ -18,9 +18,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import app.orbit.R
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitFilterChip
@@ -78,12 +80,12 @@ fun FilterChipsRow(
     val allChips: List<Pair<PickerFilter, String>> = listOf(
         // Android favorites (ContactsContract STARRED), seeded
         // into the picker so hand-curated closest people are one tap away.
-        PickerFilter.Starred to "Starred",
-        PickerFilter.CommonlyCalled to "Commonly called",
-        PickerFilter.RarelyCalled to "Rarely called",
-        PickerFilter.NeverCalled to "Never called",
-        PickerFilter.LongGap to "Long gap",
-        PickerFilter.Unsorted to "Not on a list",
+        PickerFilter.Starred to stringResource(R.string.picker_filter_starred),
+        PickerFilter.CommonlyCalled to stringResource(R.string.picker_filter_commonly_called),
+        PickerFilter.RarelyCalled to stringResource(R.string.picker_filter_rarely_called),
+        PickerFilter.NeverCalled to stringResource(R.string.picker_filter_never_called),
+        PickerFilter.LongGap to stringResource(R.string.picker_filter_long_gap),
+        PickerFilter.Unsorted to stringResource(R.string.picker_filter_not_on_a_list),
     )
 
     val activeInList = activeFilters.firstNotNullOfOrNull { it as? PickerFilter.InList }
@@ -111,13 +113,17 @@ fun FilterChipsRow(
             ) {
                 selectedChips.forEach { (filter, label) ->
                     AppliedChip(
-                        text = "$label · ${countFor(filter)}",
+                        text = stringResource(R.string.picker_filter_applied, label, countFor(filter)),
                         onClear = { onToggle(filter) },
                     )
                 }
                 if (activeInList != null) {
                     AppliedChip(
-                        text = if (curtain || activeListName == null) "On a list" else "On $activeListName",
+                        text = if (curtain || activeListName == null) {
+                            stringResource(R.string.picker_filter_on_a_list)
+                        } else {
+                            stringResource(R.string.picker_filter_on_list, activeListName)
+                        },
                         onClear = onClearInList,
                     )
                 }
@@ -198,7 +204,7 @@ private fun InListChip(
     var menuExpanded by remember { mutableStateOf(false) }
     Box {
         OrbitFilterChip(
-            label = "On a list",
+            label = stringResource(R.string.picker_filter_on_a_list),
             selected = false,
             onClick = { menuExpanded = true },
             role = Role.DropdownList,
@@ -208,11 +214,17 @@ private fun InListChip(
             expanded = menuExpanded,
             onDismissRequest = { menuExpanded = false },
             actions = if (availableLists.isEmpty()) {
-                listOf(OrbitMenuAction(label = "No lists yet", onClick = {}, enabled = false))
+                listOf(
+                    OrbitMenuAction(
+                        label = stringResource(R.string.picker_filter_no_lists),
+                        onClick = {},
+                        enabled = false,
+                    ),
+                )
             } else {
                 availableLists.map { list ->
                     OrbitMenuAction(
-                        label = if (curtain) "List" else list.name,
+                        label = if (curtain) stringResource(R.string.components_curtain_list) else list.name,
                         onClick = { onSelectInList(list.id, list.name) },
                     )
                 }
@@ -240,7 +252,7 @@ private fun FilterChipsRowPreview() {
                 availableLists = previewLists,
                 onSelectInList = { _, _ -> },
                 onClearInList = {},
-                disabledHint = "Greyed filters have no matches right now.",
+                disabledHint = stringResource(R.string.picker_filters_greyed),
             )
         }
     }

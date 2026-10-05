@@ -39,6 +39,10 @@ import app.orbit.nav.Routes
  *
  * [subject] null means the name-free nudge (no face, no action), either
  * because nobody can be named or because NOTIF-15 holds the name back.
+ *
+ * The words come from [NotificationCopy] as [app.orbit.ui.util.UiText] and
+ * are resolved here against [Context], in the user's language
+ * (strings_notify.xml).
  */
 internal object NudgeNotification {
 
@@ -59,17 +63,17 @@ internal object NudgeNotification {
             .setPublicVersion(publicVersion(context, accent))
 
         if (subject == null) {
-            builder.setContentText(NotificationCopy.nudgeBody(listName, dueCount))
+            builder.setContentText(NotificationCopy.nudgeBody(listName, dueCount).asString(context))
         } else {
             val firstName = NotificationCopy.firstNameOf(subject.displayName)
             builder
-                .setContentText(NotificationCopy.nudgeNamedBody(firstName))
+                .setContentText(NotificationCopy.nudgeNamedBody(firstName).asString(context))
                 .setLargeIcon(face)
             val dial = dialIntent(subject)
             if (dial.resolveActivity(context.packageManager) != null) {
                 builder.addAction(
                     R.drawable.ph_phone,
-                    NotificationCopy.callActionLabel(firstName),
+                    NotificationCopy.callActionLabel(firstName).asString(context),
                     PendingIntent.getActivity(
                         context,
                         NotificationIds.listPrompt(listId),
@@ -83,13 +87,14 @@ internal object NudgeNotification {
     }
 
     /**
-     * NOTIF-13: what the lock screen may show. Built from constants only, so
-     * nothing a caller passes (a list name, a person, a note) can reach it.
+     * NOTIF-13: what the lock screen may show. Built from fixed resources
+     * only, so nothing a caller passes (a list name, a person, a note) can
+     * reach it.
      */
     fun publicVersion(context: Context, @ColorInt accent: Int): Notification =
         base(context, accent)
-            .setContentTitle(NotificationCopy.PUBLIC_TITLE)
-            .setContentText(NotificationCopy.PUBLIC_BODY)
+            .setContentTitle(NotificationCopy.PUBLIC_TITLE.asString(context))
+            .setContentText(NotificationCopy.PUBLIC_BODY.asString(context))
             .build()
 
     /** What the full and the public version share: channel, icon, colour, kind. */

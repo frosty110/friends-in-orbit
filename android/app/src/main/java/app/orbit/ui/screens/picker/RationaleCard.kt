@@ -12,9 +12,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.PhIcon
@@ -31,7 +33,8 @@ import app.orbit.ui.theme.OrbitTheme
  * Locked copy:
  *   - Title:   "Allow access to your contacts"
  *   - Body:    "Orbit reads your phone contacts so you can add them to lists.
- *               Nothing is uploaded — your contacts stay on this device."
+ *               Nothing is uploaded: your contacts stay on this device."
+ *               (A colon since 2026-10-05; it was an em dash, against voice.md.)
  *   - Primary: "Grant access"
  *   - Ghost:   "Not now" (optional secondary; surfaces only if [onDismiss]
  *               is non-null — the picker passes `onBack` so the user can back
@@ -58,13 +61,13 @@ fun RationaleCard(
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
-            text = "Allow access to your contacts",
+            text = stringResource(R.string.picker_rationale_title),
             style = OrbitTheme.type.h3,
             color = OrbitTheme.colors.fg,
             textAlign = TextAlign.Center,
         )
         Text(
-            text = "Orbit reads your phone contacts so you can add them to lists. Nothing is uploaded — your contacts stay on this device.",
+            text = stringResource(R.string.picker_rationale_body),
             style = OrbitTheme.type.body,
             color = OrbitTheme.colors.fgMuted,
             textAlign = TextAlign.Center,
@@ -72,13 +75,13 @@ fun RationaleCard(
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x3))
         OrbitButton(
-            text = "Grant access",
+            text = stringResource(R.string.picker_rationale_grant),
             onClick = onGrant,
             modifier = Modifier.fillMaxWidth(),
         )
         if (onDismiss != null) {
             OrbitButton(
-                text = "Not now",
+                text = stringResource(R.string.picker_rationale_not_now),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
                 modifier = Modifier.fillMaxWidth(),

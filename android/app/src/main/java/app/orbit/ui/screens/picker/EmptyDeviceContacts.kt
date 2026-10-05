@@ -2,7 +2,9 @@ package app.orbit.ui.screens.picker
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.theme.OrbitTheme
 
@@ -25,8 +27,8 @@ fun EmptyDeviceContacts(
     // these screens has one layout.
     OrbitScreenMessage(
         icon = "users",
-        title = "No contacts on this device",
-        body = "Add people to your phone's contacts, then come back here.",
+        title = stringResource(R.string.picker_no_device_contacts_title),
+        body = stringResource(R.string.picker_no_device_contacts_body),
         modifier = modifier,
     )
 }

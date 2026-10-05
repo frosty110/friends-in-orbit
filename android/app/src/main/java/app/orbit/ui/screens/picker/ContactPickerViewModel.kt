@@ -7,6 +7,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.AppPrefs
 import app.orbit.data.PickerThresholds
 import app.orbit.data.android.ContactsReader
@@ -26,6 +27,7 @@ import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MoveContactsUseCase
 import app.orbit.domain.usecase.RelinkContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
+import app.orbit.ui.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.Duration
@@ -386,7 +388,7 @@ class ContactPickerViewModel @Inject constructor(
         appScope.launch {
             try {
                 val targetName = listRepo.getById(listId)?.name.orEmpty()
-                val dispatched: Pair<suspend () -> Unit, String>? = when (mode) {
+                val dispatched: Pair<suspend () -> Unit, UiText>? = when (mode) {
                     PickerMode.Add -> {
                         val now = clock.now()
                         listMembershipDao.insertAll(
@@ -404,12 +406,18 @@ class ContactPickerViewModel @Inject constructor(
                                 ids
                             )
                         }
-                        inverse to "Added ${ids.size} to $targetName"
+                        inverse to UiText.plural(R.plurals.picker_snackbar_added, ids.size, ids.size, targetName)
                     }
 
                     PickerMode.Copy -> {
-                        val r = copyUseCase(listId, ids, targetName)
-                        r.inverse to r.label
+                        val r = copyUseCase(listId, ids)
+                        // A count of 0 is a short-circuit (missing or archived
+                        // list): a failed save below, never an empty snackbar.
+                        if (r.count == 0) {
+                            null
+                        } else {
+                            r.inverse to UiText.plural(R.plurals.components_snackbar_copied, r.count, r.count, targetName)
+                        }
                     }
 
                     PickerMode.Move -> {
@@ -417,15 +425,19 @@ class ContactPickerViewModel @Inject constructor(
                         // sourceListId to NotFound, so `from` is non-null on
                         // every reachable commit; the guard keeps the failure
                         // loud if a future nav change breaks that invariant.
-                        // The use case returns an empty label when it
+                        // The use case returns a count of 0 when it
                         // short-circuited (missing/archived destination,
-                        // same-list move) — surfaced below, never swallowed.
+                        // same-list move): surfaced below, never swallowed.
                         val from = sourceListId
                         if (from == null) {
                             null
                         } else {
-                            val r = moveUseCase(from, listId, ids, targetName)
-                            if (r.label.isEmpty()) null else r.inverse to r.label
+                            val r = moveUseCase(from, listId, ids)
+                            if (r.count == 0) {
+                                null
+                            } else {
+                                r.inverse to UiText.plural(R.plurals.components_snackbar_moved, r.count, r.count, targetName)
+                            }
                         }
                     }
 
@@ -434,17 +446,19 @@ class ContactPickerViewModel @Inject constructor(
                 }
 
                 if (dispatched != null) {
-                    val (inverse, label) = dispatched
-                    undoStack.put(UndoStack.PendingUndo(inverse = inverse, label = label))
-                    commitBus.publish(SnackbarEvent(label, "Undo"))
-                } else if (mode == PickerMode.Move) {
-                    // Per project convention "no silent fallbacks": a Move that
-                    // dispatched nothing is a failed save, not a quiet exit.
-                    commitBus.publish(SnackbarEvent("Couldn't save that"))
+                    val (inverse, message) = dispatched
+                    undoStack.put(UndoStack.PendingUndo(inverse = inverse))
+                    commitBus.publish(SnackbarEvent.undoable(message))
+                } else if (mode == PickerMode.Move || mode == PickerMode.Copy) {
+                    // Per project convention "no silent fallbacks": a Move or
+                    // Copy that dispatched nothing is a failed save, not a
+                    // quiet exit. (A short-circuited Copy used to publish an
+                    // empty snackbar with Undo.)
+                    commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
                 }
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
-                commitBus.publish(SnackbarEvent("Couldn't save that"))
+                commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
             } finally {
                 _isCommitting.value = false
             }
@@ -472,16 +486,16 @@ class ContactPickerViewModel @Inject constructor(
             try {
                 val result = relinkUseCase(orphanId = orphanId, liveId = liveId)
                 if (result == null) {
-                    commitBus.publish(SnackbarEvent("Couldn't save that"))
+                    commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
                 } else {
-                    undoStack.put(
-                        UndoStack.PendingUndo(inverse = result.inverse, label = result.label)
+                    undoStack.put(UndoStack.PendingUndo(inverse = result.inverse))
+                    commitBus.publish(
+                        SnackbarEvent.undoable(UiText.res(R.string.picker_snackbar_relinked, result.linkedName))
                     )
-                    commitBus.publish(SnackbarEvent(result.label, "Undo"))
                 }
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
-                commitBus.publish(SnackbarEvent("Couldn't save that"))
+                commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
             } finally {
                 _isCommitting.value = false
             }
@@ -511,12 +525,14 @@ class ContactPickerViewModel @Inject constructor(
         }
         appScope.launch {
             try {
-                val result = ignoreUseCase(contactId, displayName)
-                undoStack.put(UndoStack.PendingUndo(inverse = result.inverse, label = result.label))
-                commitBus.publish(SnackbarEvent(result.label, "Undo"))
+                val result = ignoreUseCase(contactId)
+                undoStack.put(UndoStack.PendingUndo(inverse = result.inverse))
+                commitBus.publish(
+                    SnackbarEvent.undoable(UiText.res(R.string.components_snackbar_ignored, displayName))
+                )
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
-                commitBus.publish(SnackbarEvent("Couldn't save that"))
+                commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
             }
         }
     }
@@ -532,16 +548,13 @@ class ContactPickerViewModel @Inject constructor(
         appScope.launch {
             try {
                 unignoreUseCase(contactId)
-                undoStack.put(
-                    UndoStack.PendingUndo(
-                        inverse = { ignoreUseCase(contactId, displayName) },
-                        label = "Restored $displayName"
-                    )
+                undoStack.put(UndoStack.PendingUndo(inverse = { ignoreUseCase(contactId) }))
+                commitBus.publish(
+                    SnackbarEvent.undoable(UiText.res(R.string.components_snackbar_restored, displayName))
                 )
-                commitBus.publish(SnackbarEvent("Restored $displayName", "Undo"))
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
-                commitBus.publish(SnackbarEvent("Couldn't save that"))
+                commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
             }
         }
     }
