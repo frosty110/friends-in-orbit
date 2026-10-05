@@ -76,3 +76,25 @@ sealed interface CardViewUiState {
     @Immutable
     data class Error(val cause: String) : CardViewUiState
 }
+
+/**
+ * One-off messages for the Card view's snackbar (2026-10-05).
+ *
+ * Each Later or Sooner carries its own [Undoable.token], and only the newest
+ * token can be undone: the screen replaces an older snackbar the moment a
+ * newer one arrives. Before, snackbars queued while the undo slot held only
+ * the latest action, so Undo on the first of three quick swipes reverted the
+ * third person (UX rubric gate G1).
+ */
+sealed interface CardMessage {
+    val text: String
+
+    /** A Later or Sooner the user can take back with "Undo". */
+    data class Undoable(override val text: String, val token: Long) : CardMessage
+
+    /** The call log confirmed a call placed from this card; offers "Add a note". */
+    data class Called(override val text: String, val contactId: Long) : CardMessage
+
+    /** A write failed; says so (rules.md Code 3, no silent fallbacks). */
+    data class Failed(override val text: String) : CardMessage
+}

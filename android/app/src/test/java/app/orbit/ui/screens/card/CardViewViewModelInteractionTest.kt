@@ -191,7 +191,7 @@ class CardViewViewModelInteractionTest {
     }
 
     @Test
-    fun `onSwipeLeft emits a Deferred snackbar and stages an undo`() = runTest {
+    fun `onSwipeLeft emits an undoable message naming the person and stages an undo`() = runTest {
         val setup = fixture()
         setup.seedSarahReady()
         // Park a uiState collector so the WhileSubscribed feed runs; the
@@ -199,14 +199,14 @@ class CardViewViewModelInteractionTest {
         // snapshot, but the prior schedule capture does.
         setup.vm.uiState.test(timeout = 2.seconds) {
             awaitItem() // drain to Ready
-            setup.vm.snackbarEvents.test(timeout = 2.seconds) {
+            setup.vm.messages.test(timeout = 2.seconds) {
                 setup.vm.onSwipeLeft(contactId = 1L)
                 val event = awaitItem()
+                assertTrue(event is CardMessage.Undoable, "expected an undoable message, got $event")
                 assertTrue(
-                    event.message.startsWith("Deferred"),
-                    "expected a Deferred snackbar, got ${event.message}",
+                    event.text.startsWith("Sarah will come up again"),
+                    "expected the snackbar to name Sarah and say when, got ${event.text}",
                 )
-                assertEquals("Undo", event.actionLabel)
                 cancelAndIgnoreRemainingEvents()
             }
             cancelAndIgnoreRemainingEvents()
@@ -249,7 +249,7 @@ class CardViewViewModelInteractionTest {
     }
 
     @Test
-    fun `onSwipeRight emits a Moved up snackbar`() = runTest {
+    fun `onSwipeRight emits an undoable message naming the person`() = runTest {
         val setup = fixture()
         setup.contactRepo.seed(listOf(contactFixture(id = 1L, displayName = "Sarah Connor")))
         setup.listRepo.seed(listOf(listFixture(id = 1L, ruleTemplateId = 1L)))
@@ -258,14 +258,14 @@ class CardViewViewModelInteractionTest {
         )
         setup.vm.uiState.test(timeout = 2.seconds) {
             awaitItem()
-            setup.vm.snackbarEvents.test(timeout = 2.seconds) {
+            setup.vm.messages.test(timeout = 2.seconds) {
                 setup.vm.onSwipeRight(contactId = 1L)
                 val event = awaitItem()
+                assertTrue(event is CardMessage.Undoable, "expected an undoable message, got $event")
                 assertTrue(
-                    event.message.startsWith("Moved up"),
-                    "expected a Moved up snackbar, got ${event.message}",
+                    event.text.startsWith("Sarah is now due"),
+                    "expected the snackbar to name Sarah and say when, got ${event.text}",
                 )
-                assertEquals("Undo", event.actionLabel)
                 cancelAndIgnoreRemainingEvents()
             }
             cancelAndIgnoreRemainingEvents()
@@ -283,11 +283,11 @@ class CardViewViewModelInteractionTest {
         setup.seedSarahReady()
         setup.vm.uiState.test(timeout = 2.seconds) {
             awaitItem() // Ready
-            setup.vm.onSwipeLeft(contactId = 1L) // stages undo, bumps to +24h
+            setup.vm.onSwipeLeft(contactId = 1L) // stages undo (token 1), bumps to +24h
             awaitItem() // re-emission after skip
             assertTrue(setup.undoStack.peek() != null, "undo staged after skip")
 
-            setup.vm.onUndo()
+            setup.vm.onUndo(token = 1L)
             // The card re-surfaces the contact at its restored (null/cold-start)
             // schedule.
             awaitItem()
@@ -306,9 +306,9 @@ class CardViewViewModelInteractionTest {
         setup.seedSarahReady()
         setup.vm.uiState.test(timeout = 2.seconds) {
             awaitItem()
-            // Nothing staged — onUndo's runMutation invokes take()?.inverse,
-            // which is null, so no restore call is recorded and no crash.
-            setup.vm.onUndo()
+            // Nothing staged: no token was ever issued, so onUndo is ignored
+            // and no restore call is recorded.
+            setup.vm.onUndo(token = 1L)
             cancelAndIgnoreRemainingEvents()
         }
         assertTrue(
@@ -316,6 +316,29 @@ class CardViewViewModelInteractionTest {
             "no inverse means no recompute side effects",
         )
         assertNull(setup.undoStack.peek())
+    }
+
+    // Gate G1 (UX rubric): Undo on an older snackbar must never revert the
+    // newest action, which belongs to someone else. Only the newest token works.
+    @Test
+    fun `onUndo with a stale token does not revert the newer action`() = runTest {
+        val setup = fixture()
+        setup.seedSarahReady()
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            awaitItem()
+            setup.vm.messages.test(timeout = 2.seconds) {
+                setup.vm.onSwipeLeft(contactId = 1L)
+                assertEquals(1L, (awaitItem() as CardMessage.Undoable).token)
+                setup.vm.onSwipeLeft(contactId = 1L)
+                assertEquals(2L, (awaitItem() as CardMessage.Undoable).token)
+                cancelAndIgnoreRemainingEvents()
+            }
+            setup.vm.onUndo(token = 1L) // the first snackbar's Undo, tapped late
+            cancelAndIgnoreRemainingEvents()
+        }
+        val row = setup.listRepo.observeMembershipsForContact(1L).first().single()
+        assertEquals(2, row.skipCount, "both Laters stand; the stale Undo replayed nothing")
+        assertTrue(setup.undoStack.peek() != null, "the newest action stays undoable")
     }
 
     // ========================================================================

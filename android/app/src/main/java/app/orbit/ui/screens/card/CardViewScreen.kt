@@ -33,13 +33,19 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -70,7 +76,6 @@ import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.PhIcon
-import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
@@ -122,16 +127,15 @@ fun CardViewScreen(
         state = state,
         listId = listId,
         callLogDenied = callLogDenied,
-        snackbarEvents = vm.snackbarEvents,
+        messages = vm.messages,
         onBack = onBack,
         onBrowse = onBrowse,
         onEditList = onEditList,
         onAddContacts = onAddContacts,
         onTapToCall = { contactId, phone ->
-            // Tap-to-call dials only — navigation to contact detail is
-            // explicit via "View details". vm.onCall records that a dial
-            // happened so the screen triggers an immediate call-log resync on
-            // return and the deck advances on its own.
+            // Only the labelled Call button dials (CARD-01). vm.onCall records
+            // that a dial happened so the screen triggers an immediate
+            // call-log resync on return and the deck advances on its own.
             context.dialPhoneNumber(phone)
             vm.onCall(contactId)
         },
@@ -144,9 +148,10 @@ fun CardViewScreen(
 }
 
 /**
- * List actions overflow for the Card view. The hamburger anchors an
- * [OrbitDropdownMenu] so the user chooses the action rather than being routed
- * into one. Nothing here is destructive, so the whole menu stays in fg.
+ * List actions overflow for the Card view. Three dots, the platform's sign for
+ * "more options" (it was a hamburger, which on Home means "your lists"; one
+ * icon meaning two things is the navigation bug the rubric's D2 names).
+ * Nothing here is destructive, so the whole menu stays in fg.
  */
 @Composable
 private fun ListActionsMenu(
@@ -157,9 +162,9 @@ private fun ListActionsMenu(
     var expanded by remember { mutableStateOf(false) }
     Box {
         OrbitIconButton(
-            icon = "list",
+            icon = "dots-three-vertical",
             onClick = { expanded = true },
-            contentDescription = "List actions"
+            contentDescription = "List options"
         )
         OrbitDropdownMenu(
             expanded = expanded,
@@ -178,7 +183,7 @@ private fun CardViewContent(
     state: CardViewUiState,
     listId: String,
     callLogDenied: Boolean,
-    snackbarEvents: SharedFlow<SnackbarEvent>,
+    messages: SharedFlow<CardMessage>,
     onBack: () -> Unit,
     onBrowse: (listId: String) -> Unit,
     onEditList: (listId: String) -> Unit,
@@ -186,7 +191,7 @@ private fun CardViewContent(
     onTapToCall: (contactId: Long, phone: String) -> Unit,
     onSwipeLeft: (contactId: Long) -> Unit,
     onSwipeRight: (contactId: Long) -> Unit,
-    onUndo: () -> Unit,
+    onUndo: (token: Long) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenContact: (contactId: Long) -> Unit
 ) {
@@ -196,18 +201,35 @@ private fun CardViewContent(
         else -> ""
     }
 
-    // Swipe-commit / mark-called snackbars; "Undo" replays the UndoStack
-    // inverse (mirrors SettingsIgnoredScreen's collector).
+    // One snackbar at a time, newest wins (CARD-02, gate G1): collectLatest
+    // cancels the older showSnackbar, which dismisses it, so the Undo on
+    // screen always belongs to the person named in it. Undo snackbars stay
+    // up for the long duration (and longer if the user has raised Android's
+    // "time to take action" setting, which Material's host honours).
     val snackbarHostState = remember { SnackbarHostState() }
+    val currentOnUndo by rememberUpdatedState(onUndo)
+    val currentOnOpenContact by rememberUpdatedState(onOpenContact)
     LaunchedEffect(Unit) {
-        snackbarEvents.collect { event ->
-            val r = snackbarHostState.showSnackbar(
-                message = event.message,
-                actionLabel = event.actionLabel,
-                duration = SnackbarDuration.Short,
+        messages.collectLatest { message ->
+            snackbarHostState.currentSnackbarData?.dismiss()
+            val actionLabel = when (message) {
+                is CardMessage.Undoable -> "Undo"
+                is CardMessage.Called -> "Add a note"
+                is CardMessage.Failed -> null
+            }
+            val result = snackbarHostState.showSnackbar(
+                message = message.text,
+                actionLabel = actionLabel,
+                duration = if (actionLabel != null) SnackbarDuration.Long else SnackbarDuration.Short,
                 withDismissAction = false
             )
-            if (r == SnackbarResult.ActionPerformed) onUndo()
+            if (result == SnackbarResult.ActionPerformed) {
+                when (message) {
+                    is CardMessage.Undoable -> currentOnUndo(message.token)
+                    is CardMessage.Called -> currentOnOpenContact(message.contactId)
+                    is CardMessage.Failed -> Unit
+                }
+            }
         }
     }
 
@@ -284,7 +306,7 @@ private fun CallLogDeniedNotice(onOpenSettings: () -> Unit) {
             .padding(start = OrbitTheme.spacing.x3)
     ) {
         Text(
-            text = "Orbit can't see your calls — cards won't move on on their own",
+            text = "Orbit can't see your calls, so cards won't move on by themselves.",
             style = OrbitTheme.type.meta,
             color = OrbitTheme.colors.fgMuted,
             modifier = Modifier
@@ -371,10 +393,11 @@ private fun NothingEligibleShell(
         val who = if (curtain) "Someone" else state.upNextName
         "$who comes up ${state.upNextLabel}."
     } else {
-        "No one needs a call right now."
+        "No one needs a call right now. Enjoy the quiet."
     }
     EmptyShell(
-        heading = "No one is up next on this list.",
+        // CARD-05: the honest, kind word for "nobody is due".
+        heading = "You're caught up.",
         body = body,
         primaryText = "Browse this list",
         onPrimary = onBrowse,
@@ -448,6 +471,9 @@ private fun ReadyCard(
     val contactId = state.contactId
     val contact = state.contact
     val frameState = remember { CardSwipeFrameState() }
+    val curtain = LocalPrivacyCurtain.current
+    // Masked like the face and app bar: "Call Contact" under the curtain.
+    val firstName = (if (curtain) "Contact" else contact.name).substringBefore(' ')
 
     Column(modifier = Modifier.fillMaxSize()) {
         CardSwipeFrame(
@@ -462,7 +488,7 @@ private fun ReadyCard(
                 .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x3),
             ghostOverlay = { offsetFraction -> GhostHints(offsetFraction) }
         ) {
-            // Crossfade keyed on contactId — the outgoing face fades while the
+            // Crossfade keyed on contactId: the outgoing face fades while the
             // incoming face fades in, so card advancement reads as one quiet
             // motion instead of a teleporting snap-back (2026-06-09 fix).
             AnimatedContent(
@@ -475,81 +501,91 @@ private fun ReadyCard(
                 label = "card face",
                 modifier = Modifier.fillMaxSize()
             ) { face ->
+                val faceFirst = (if (curtain) "Contact" else face.contact.name).substringBefore(' ')
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .orbitHeroShadow(OrbitTheme.shapes.xl, OrbitTheme.colors.isDark)
                         .clip(OrbitTheme.shapes.xl)
                         .background(OrbitTheme.colors.surface)
-                        .clickable { onTapToCall(face.contactId, face.contact.phone) }
+                        // CARD-01: tapping the face opens the person's details.
+                        // It used to dial, so the natural "look closer" tap
+                        // placed a call (one was placed by accident in review).
+                        // A call reaches another person and can't be undone, so
+                        // only the labelled Call button dials.
+                        .clickable(onClickLabel = "Open details", role = Role.Button) {
+                            onOpenContact(face.contactId)
+                        }
+                        // The swipes, and the call, as named actions on the node
+                        // TalkBack actually focuses (they used to sit on the
+                        // non-focusable frame, out of reach).
+                        .semantics {
+                            customActions = listOf(
+                                CustomAccessibilityAction("Call $faceFirst") {
+                                    onTapToCall(face.contactId, face.contact.phone); true
+                                },
+                                CustomAccessibilityAction("Later") { frameState.requestSwipeLeft(); true },
+                                CustomAccessibilityAction("Sooner") { frameState.requestSwipeRight(); true },
+                            )
+                        }
                 ) {
                     ContactCardFace(
                         contact = face.contact,
                         listContext = face.listContext,
                         nowHour = face.nowHour,
                         isAheadOfToday = face.isAheadOfToday,
-                        whyNowLine = face.whyNowLine
+                        whyNowLine = face.whyNowLine,
+                        lastNote = face.recentNotes.firstOrNull()
                     )
                 }
             }
         }
 
-        // NOTE-03 — RecentNotesSummary peek under the
-        // stats panel. Hidden entirely when empty so the Card stays focused.
-        RecentNotesSummary(
-            notes = state.recentNotes,
-            onOpenContact = { onOpenContact(contactId) }
-        )
-
         Row(
             horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Top,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = OrbitTheme.spacing.x6, vertical = OrbitTheme.spacing.x5)
+                .padding(
+                    start = OrbitTheme.spacing.x4,
+                    end = OrbitTheme.spacing.x4,
+                    top = OrbitTheme.spacing.x4,
+                    bottom = OrbitTheme.spacing.x2
+                )
         ) {
             // Buttons animate the card to its anchor (same settle path +
-            // haptic as a drag) instead of mutating with zero motion.
-            CircleSideButton("arrow-left", onClick = frameState::requestSwipeLeft)
+            // haptic as a drag) instead of mutating with zero motion. CARD-02:
+            // they carry their names, "Later" and "Sooner", on screen and to
+            // TalkBack; the bare arrows were unlabelled.
+            CircleSideButton("arrow-left", label = "Later", onClick = frameState::requestSwipeLeft)
             OrbitButton(
-                text = "Call ${contact.name.substringBefore(' ')}",
+                text = "Call $firstName",
                 onClick = { onTapToCall(contactId, contact.phone) },
                 leadingIcon = "phone-call",
                 height = 56.dp,
                 modifier = Modifier.weight(1f)
             )
-            CircleSideButton("arrow-right", onClick = frameState::requestSwipeRight)
+            CircleSideButton("arrow-right", label = "Sooner", onClick = frameState::requestSwipeRight)
         }
 
-        Row(
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
+        // A visible way in for anyone who doesn't guess the card is tappable.
+        // "Skip" used to sit here too; it did exactly what Later does, under a
+        // third name for the same thing.
+        Box(
+            contentAlignment = Alignment.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = OrbitTheme.spacing.x4)
+                .padding(bottom = OrbitTheme.spacing.x3)
         ) {
-            Text(
-                text = "Skip",
-                style = OrbitTheme.type.skipAffordance,
-                color = OrbitTheme.colors.fgSubtle,
-                modifier = Modifier
-                    .defaultMinSize(minWidth = 96.dp, minHeight = OrbitTheme.spacing.tapMin)
-                    .clickable(onClick = frameState::requestSwipeLeft)
-                    .padding(OrbitTheme.spacing.x3)
-            )
-            Text(
-                text = "·",
-                style = OrbitTheme.type.skipAffordance,
-                color = OrbitTheme.colors.fgSubtle,
-                modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x1)
-            )
             Text(
                 text = "View details",
                 style = OrbitTheme.type.skipAffordance,
-                color = OrbitTheme.colors.fgSubtle,
+                color = OrbitTheme.colors.fgMuted,
+                textAlign = TextAlign.Center,
                 modifier = Modifier
                     .defaultMinSize(minWidth = 96.dp, minHeight = OrbitTheme.spacing.tapMin)
-                    .clickable { onOpenContact(contactId) }
+                    .clip(OrbitTheme.shapes.md)
+                    .clickable(role = Role.Button) { onOpenContact(contactId) }
                     .padding(OrbitTheme.spacing.x3)
             )
         }
@@ -595,18 +631,30 @@ private fun BoxScope.GhostHints(offsetFraction: Float) {
 }
 
 @Composable
-private fun CircleSideButton(icon: String, onClick: () -> Unit) {
-    Box(
-        contentAlignment = Alignment.Center,
+private fun CircleSideButton(icon: String, label: String, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .size(56.dp)
-            .orbitCardShadow(OrbitTheme.shapes.full, OrbitTheme.colors.isDark)
-            .clip(OrbitTheme.shapes.full)
-            .background(OrbitTheme.colors.surface)
-            .border(1.dp, OrbitTheme.colors.line, OrbitTheme.shapes.full)
-            .clickable(onClick = onClick)
+            .clip(OrbitTheme.shapes.md)
+            .clickable(role = Role.Button, onClick = onClick)
     ) {
-        PhIcon(name = icon, size = 22.dp, tint = OrbitTheme.colors.fgMuted)
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(56.dp)
+                .orbitCardShadow(OrbitTheme.shapes.full, OrbitTheme.colors.isDark)
+                .clip(OrbitTheme.shapes.full)
+                .background(OrbitTheme.colors.surface)
+                .border(1.dp, OrbitTheme.colors.line, OrbitTheme.shapes.full)
+        ) {
+            PhIcon(name = icon, size = 22.dp, tint = OrbitTheme.colors.fgMuted)
+        }
+        Text(
+            text = label,
+            style = OrbitTheme.type.meta,
+            color = OrbitTheme.colors.fgMuted,
+            modifier = Modifier.padding(top = OrbitTheme.spacing.x1)
+        )
     }
 }
 
@@ -617,7 +665,8 @@ internal fun ContactCardFace(
     listContext: String,
     nowHour: Int,
     isAheadOfToday: Boolean,
-    whyNowLine: String
+    whyNowLine: String,
+    lastNote: NoteRow? = null
 ) {
     // 200% font-scale fix (2026-06-09 a11y sweep) — at default scale the
     // weight spacer pins StatRow to the card's bottom edge; at large font
@@ -629,7 +678,8 @@ internal fun ContactCardFace(
     // PRIV-03: the face renders contact.name, so it masks it like every other
     // surface does; the app bar above already reads "Contact" under the curtain,
     // and a real name (or real initials) on the card below it was the leak.
-    val shownName = if (LocalPrivacyCurtain.current) "Contact" else contact.name
+    val curtain = LocalPrivacyCurtain.current
+    val shownName = if (curtain) "Contact" else contact.name
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -647,13 +697,14 @@ internal fun ContactCardFace(
                 .padding(horizontal = OrbitTheme.spacing.x6, vertical = OrbitTheme.spacing.x6)
         ) {
             Spacer(Modifier.height(OrbitTheme.spacing.x6))
-            Avatar(name = shownName, size = 104.dp)
+            Avatar(name = shownName, size = 104.dp, photoUri = if (curtain) null else contact.photoUri)
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
-            // Tide marker (2026-05-08) — small framing line above the contact
-            // name. `due today` when the engine's nextDueAt has arrived;
-            // `ahead of today` past the waterline.
+            // Tide marker (2026-05-08): small framing line above the contact
+            // name. "Due today" when the engine's nextDueAt has arrived; "Not
+            // due yet" past the waterline. Sentence case per voice.md (it was
+            // lowercase "due today" / "ahead of today", which read as a typo).
             Text(
-                text = if (isAheadOfToday) "ahead of today" else "due today",
+                text = if (isAheadOfToday) "Not due yet" else "Due today",
                 style = OrbitTheme.type.eyebrow,
                 color = OrbitTheme.colors.fgMuted
             )
@@ -669,6 +720,26 @@ internal fun ContactCardFace(
                 Spacer(Modifier.height(OrbitTheme.spacing.x1))
                 Text(
                     text = whyNowLine,
+                    style = OrbitTheme.type.meta,
+                    color = OrbitTheme.colors.fgMuted,
+                    textAlign = TextAlign.Center
+                )
+            }
+            // CARD-04: the last thing you noted is the best reason to call,
+            // so it leads the context, ahead of the statistics. Note bodies
+            // are private, so the curtain hides it.
+            if (lastNote != null && !curtain) {
+                Spacer(Modifier.height(OrbitTheme.spacing.x3))
+                Text(
+                    text = "\u201C${lastNote.body}\u201D",
+                    style = OrbitTheme.type.body,
+                    color = OrbitTheme.colors.fg,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Your note, ${lastNote.relativeTimestamp}",
                     style = OrbitTheme.type.meta,
                     color = OrbitTheme.colors.fgMuted
                 )
@@ -749,7 +820,10 @@ private fun UsuallyAnswersCard(contact: Contact, nowHour: Int) {
             ) {
                 Text(
                     text = "Usually answers",
-                    style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted)
+                    style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted),
+                    // Shrinks before the info button does, so the button
+                    // survives 200% font scale.
+                    modifier = Modifier.weight(1f, fill = false)
                 )
                 InfoTip(text = USUALLY_TOOLTIP, label = "About usually answers")
             }
@@ -866,51 +940,6 @@ private fun Divider(height: Dp) {
     )
 }
 
-/**
- * NOTE-03 — RecentNotesSummary on Card View.
- *
- * Renders up to 2 recent notes (caller pre-filters to last 30 days, max 2)
- * underneath the stats panel. Tapping anywhere on the section invokes
- * [onOpenContact]. When [notes] is empty the section is omitted entirely.
- *
- * B3 — Clock-free composable; relative timestamps come pre-formatted from
- * the VM's `toNoteRow(now)` mapper.
- */
-@Composable
-private fun RecentNotesSummary(notes: List<NoteRow>, onOpenContact: () -> Unit) {
-    if (notes.isEmpty()) return
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(
-                horizontal = OrbitTheme.spacing.x6,
-                vertical = OrbitTheme.spacing.x2
-            )
-    ) {
-        notes.forEach { note ->
-            key(note.id) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenContact() }
-                        .padding(vertical = OrbitTheme.spacing.x2)
-                ) {
-                    Text(
-                        text = note.relativeTimestamp,
-                        style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted)
-                    )
-                    Text(
-                        text = note.body,
-                        style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
-
 // Preview fixture for the stateless CardViewContent.
 // Contact carries a 24-element heat array with evening signal so the pattern
 // panel renders in previews (THEME-04 / THEME-05 — D-06).
@@ -936,9 +965,18 @@ private val previewState: CardViewUiState = CardViewUiState.Ready(
     contact = previewContact,
     listContext = "Inner orbit",
     queueSize = 5,
-    recentNotes = emptyList(),
+    recentNotes = listOf(
+        NoteRow(
+            id = 1L,
+            contactId = 1L,
+            body = "Starting the new job on Monday. Ask how the first week went.",
+            createdAtMs = 0L,
+            relativeTimestamp = "12 days ago",
+            absoluteTimestamp = "",
+        )
+    ),
     nowHour = 19,
-    whyNowLine = "It's been 11 days."
+    whyNowLine = "It's been 11 days.\nYou usually talk about every 2 weeks."
 )
 
 private val previewStateAhead: CardViewUiState = CardViewUiState.Ready(
@@ -958,7 +996,7 @@ private fun PreviewContent(state: CardViewUiState, callLogDenied: Boolean = fals
         state = state,
         listId = "inner-orbit",
         callLogDenied = callLogDenied,
-        snackbarEvents = MutableSharedFlow<SnackbarEvent>().asSharedFlow(),
+        messages = MutableSharedFlow<CardMessage>().asSharedFlow(),
         onBack = {},
         onBrowse = {},
         onEditList = {},

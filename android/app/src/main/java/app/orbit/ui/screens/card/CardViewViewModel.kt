@@ -19,7 +19,6 @@ import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.SkipContactUseCase
 import app.orbit.domain.usecase.SurfaceResult
 import app.orbit.domain.usecase.SurfaceSoonerUseCase
-import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.util.formatAbsolute
 import app.orbit.ui.util.formatRelative
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,6 +29,8 @@ import java.time.format.TextStyle
 import java.util.Locale
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -113,32 +114,46 @@ class CardViewViewModel @Inject constructor(
                 )
         }
 
-    /** Swipe-commit + undo acknowledgments; screen hosts the snackbar. */
-    private val _snackbarEvents = MutableSharedFlow<SnackbarEvent>(extraBufferCapacity = 1)
-    val snackbarEvents: SharedFlow<SnackbarEvent> = _snackbarEvents.asSharedFlow()
+    /** Later / Sooner, call acknowledgements and failures; the screen hosts the snackbar. */
+    private val _messages = MutableSharedFlow<CardMessage>(extraBufferCapacity = 4)
+    val messages: SharedFlow<CardMessage> = _messages.asSharedFlow()
 
     // Dial-in-flight marker: the contact id set on tap-to-call, consumed on the
     // next ON_RESUME to trigger an immediate call-log resync ([onReturnedFromDial]).
-    // Plain field — no UI reads it; a non-null value just means "a dial happened".
+    // Plain field; no UI reads it. A non-null value just means "a dial happened".
     private var dialPendingContactId: Long? = null
+    private var dialPendingName: String? = null
 
-    /** CORE-04 — left swipe defers this contact on the current list. */
+    // The newest undoable action. Older snackbars are replaced on screen, and a
+    // stale token can never replay an inverse that belongs to someone else.
+    private var undoToken = 0L
+
+    // Waits for the call log to confirm a call placed from this card, so the
+    // acknowledgement names a call that happened. Cancelled by any swipe, so a
+    // deck that moved for another reason is never credited as a call.
+    private var callAckJob: Job? = null
+
+    /** CORE-04: Later (left swipe or the Later button) defers this contact on the current list. */
     fun onSwipeLeft(contactId: Long) = viewModelScope.launch {
-        runMutation("Couldn't defer that") {
+        callAckJob?.cancel()
+        val name = firstNameOf(contactId)
+        runMutation("Couldn't move ${name ?: "them"} to later. Try again.") {
             val prior = captureSchedule(contactId)
             skipContact(contactId = contactId, listId = listId)
             val newDue = focusedDueAfterMutation(contactId)
-            stageUndo(prior, label = deferredMessage(newDue))
+            stageUndo(prior, label = laterMessage(name, newDue))
         }
     }
 
-    /** CORE-03 — right swipe brings this contact forward on the current list. */
+    /** CORE-03: Sooner (right swipe or the Sooner button) brings this contact forward on the current list. */
     fun onSwipeRight(contactId: Long) = viewModelScope.launch {
-        runMutation("Couldn't move that up") {
+        callAckJob?.cancel()
+        val name = firstNameOf(contactId)
+        runMutation("Couldn't move ${name ?: "them"} sooner. Try again.") {
             val prior = captureSchedule(contactId)
             surfaceSooner(contactId = contactId, listId = listId)
             val newDue = focusedDueAfterMutation(contactId)
-            stageUndo(prior, label = movedUpMessage(newDue))
+            stageUndo(prior, label = soonerMessage(name, newDue))
         }
     }
 
@@ -150,6 +165,7 @@ class CardViewViewModel @Inject constructor(
      */
     fun onCall(contactId: Long) {
         dialPendingContactId = contactId
+        dialPendingName = firstNameOf(contactId)
     }
 
     /**
@@ -171,15 +187,42 @@ class CardViewViewModel @Inject constructor(
      * Resumes with nothing pending (including first composition) are no-ops.
      */
     fun onReturnedFromDial() {
-        if (dialPendingContactId != null) {
-            dialPendingContactId = null
-            callLogResync.enqueueImmediateSync(fullResync = false)
+        val dialed = dialPendingContactId ?: return
+        val name = dialPendingName
+        dialPendingContactId = null
+        dialPendingName = null
+        callLogResync.enqueueImmediateSync(fullResync = false)
+        acknowledgeCallWhenConfirmed(dialed, name)
+    }
+
+    /**
+     * CARD-03: once the call log confirms the call (the deck moves past the
+     * person, CORE-04), say so: "Called Avery", with "Add a note" while the
+     * conversation is fresh. Nothing is said if the call is not confirmed
+     * within [CALL_ACK_WAIT_MS] (it did not connect, or call-log access is
+     * off), because thanking someone for a call that didn't happen is worse
+     * than silence.
+     */
+    private fun acknowledgeCallWhenConfirmed(contactId: Long, name: String?) {
+        callAckJob?.cancel()
+        callAckJob = viewModelScope.launch {
+            val moved = withTimeoutOrNull(CALL_ACK_WAIT_MS) {
+                uiState.first { state -> state !is CardViewUiState.Loading && (state as? CardViewUiState.Ready)?.contactId != contactId }
+            }
+            if (moved != null) {
+                _messages.tryEmit(CardMessage.Called(text = if (name != null) "Called $name" else "Call logged", contactId = contactId))
+            }
         }
     }
 
-    /** Snackbar "Undo" tap — pop [UndoStack] and replay the inverse closure. */
-    fun onUndo() = viewModelScope.launch {
-        runMutation("Couldn't undo") { undoStack.take()?.inverse?.invoke() }
+    /**
+     * Snackbar "Undo" tap. Replays the inverse only when [token] is the newest
+     * action's; an older snackbar's Undo (one the screen failed to replace in
+     * time) is ignored rather than reverting a different person.
+     */
+    fun onUndo(token: Long) = viewModelScope.launch {
+        if (token != undoToken) return@launch
+        runMutation("Couldn't undo that. Try again.") { undoStack.take()?.inverse?.invoke() }
     }
 
     // ─── Swipe-undo internals ────────────────────────────────────────────────
@@ -219,14 +262,27 @@ class CardViewViewModel @Inject constructor(
             }
         }
         undoStack.put(UndoStack.PendingUndo(inverse, label))
-        _snackbarEvents.tryEmit(SnackbarEvent(label, "Undo"))
+        val token = ++undoToken
+        _messages.tryEmit(CardMessage.Undoable(text = label, token = token))
     }
 
-    private fun deferredMessage(newDue: Instant?): String =
-        newDue?.let { "Deferred — back ${futureDueLabel(it, clock.now())}" } ?: "Deferred"
+    /** The first name of the person on the card, read before a mutation moves it on. */
+    private fun firstNameOf(contactId: Long): String? =
+        (uiState.value as? CardViewUiState.Ready)
+            ?.takeIf { it.contactId == contactId }
+            ?.contact?.name?.trim()?.substringBefore(' ')?.ifBlank { null }
 
-    private fun movedUpMessage(newDue: Instant?): String =
-        newDue?.let { "Moved up — due ${futureDueLabel(it, clock.now())}" } ?: "Moved up"
+    // CARD-02: the snackbar names the person and says when they come back, in
+    // the app's two verbs for this, Later and Sooner (voice.md glossary).
+    private fun laterMessage(name: String?, newDue: Instant?): String {
+        val who = name ?: "They"
+        return newDue?.let { "$who will come up again ${futureDueLabel(it, clock.now())}." } ?: "$who moved to later."
+    }
+
+    private fun soonerMessage(name: String?, newDue: Instant?): String {
+        val who = name ?: "They"
+        return newDue?.let { "$who is now due ${futureDueLabel(it, clock.now())}." } ?: "$who moved sooner."
+    }
 
     /**
      * H4-style uniform mutation wrapper — surfaces failures on the snackbar
@@ -238,7 +294,7 @@ class CardViewViewModel @Inject constructor(
             block()
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
-            _snackbarEvents.tryEmit(SnackbarEvent(failureLabel))
+            _messages.tryEmit(CardMessage.Failed(failureLabel))
         }
     }
 
@@ -291,13 +347,38 @@ class CardViewViewModel @Inject constructor(
             ?.occurredAt
             ?: return ""
         val days = Duration.between(lastCallAt, now).toDays().coerceAtLeast(0L)
-        return when {
+        val since = when {
             days == 0L -> "You talked today."
             days == 1L -> "You talked yesterday."
             days < 14L -> "It's been $days days."
             days < 60L -> "It's been ${days / 7} weeks."
             else -> "It's been ${days / 30} months."
         }
+        // Two short lines read better than one that wraps mid-phrase.
+        return listOfNotNull(since, rhythmSentence(recentCalls)).joinToString("\n")
+    }
+
+    /**
+     * CARD-04: the pair's own rhythm, so "why now" is about the two of them
+     * rather than a statistic: "You usually talk about every 2 weeks." The
+     * median gap between calls (robust to one long silence), and only once
+     * there are four calls (three gaps), because a rhythm from two calls is
+     * a guess. Stated as a fact, never as a deadline (voice.md: no guilt).
+     */
+    private fun rhythmSentence(recentCalls: List<CallEventEntity>): String? {
+        val times = recentCalls.map { it.occurredAt }.distinct().sorted()
+        if (times.size < 4) return null
+        val gaps = times.zipWithNext { a, b -> Duration.between(a, b).toDays() }.filter { it > 0 }.sorted()
+        if (gaps.size < 3) return null
+        val median = gaps[gaps.size / 2]
+        val every = when {
+            median <= 1L -> "every day"
+            median < 7L -> "every $median days"
+            median < 11L -> "every week"
+            median < 60L -> "every ${(median + 3) / 7} weeks"
+            else -> "every ${(median + 15) / 30} months"
+        }
+        return "You usually talk about $every."
     }
 
     /**
@@ -331,3 +412,6 @@ class CardViewViewModel @Inject constructor(
         absoluteTimestamp = formatAbsolute(createdAt),
     )
 }
+
+/** How long to wait for the call log to confirm a call before saying nothing. */
+private const val CALL_ACK_WAIT_MS = 15_000L

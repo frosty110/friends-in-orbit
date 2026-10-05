@@ -75,6 +75,16 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
     companion object {
         private const val SETTLE_MS = 2_000L
 
+        // Dialogs whose text field takes focus on open. Under Robolectric
+        // their window never reports idle (60s timeout), even with the clock
+        // paused, so they cannot be captured on the JVM. Review them on a
+        // device; everything else in the app renders here.
+        private val NEVER_IDLE = setOf(
+            "RenameListDialogLightPreview",
+            "RenameListDialogDarkPreview",
+            "CreateListNameDialogPreview",
+        )
+
         private val outputDir: File by lazy {
             File(System.getProperty("orbit.screenshots.dir") ?: "build/screenshots").apply { mkdirs() }
         }
@@ -97,6 +107,7 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
                 .scanPackageTrees("app.orbit")
                 .includePrivatePreviews()
                 .getPreviews()
+                .filter { p -> p.methodName !in NEVER_IDLE }
                 .filter { p -> only == null || only.containsMatchIn("${p.declaringClass.substringAfterLast('.')}.${p.methodName}") }
         }
     }

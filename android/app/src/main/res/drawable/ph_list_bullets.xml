@@ -28,11 +28,11 @@
         android:strokeLineJoin="round" />
     <path
         android:pathData="M32,64A12,12 0 1,0 56,64A12,12 0 1,0 32,64Z"
-        android:fillColor="#00000000" />
+        android:fillColor="#FF000000" />
     <path
         android:pathData="M32,128A12,12 0 1,0 56,128A12,12 0 1,0 32,128Z"
-        android:fillColor="#00000000" />
+        android:fillColor="#FF000000" />
     <path
         android:pathData="M32,192A12,12 0 1,0 56,192A12,12 0 1,0 32,192Z"
-        android:fillColor="#00000000" />
+        android:fillColor="#FF000000" />
 </vector>

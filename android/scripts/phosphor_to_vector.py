@@ -92,6 +92,11 @@ def element_path(el: ET.Element) -> str | None:
 
 def vector_xml(svg: Path) -> str:
     root = ET.parse(svg).getroot()
+    # SVG paint inherits from the root, and an unset fill means black, not
+    # none. Getting this wrong drew every fill-only icon (the dots of "more",
+    # the dot in "info" and "warning", "minus", the drag handle) invisibly.
+    root_fill = root.get("fill", "black")
+    root_stroke = root.get("stroke")
     out = []
     for el in root.iter():
         if el is root:
@@ -100,8 +105,8 @@ def vector_xml(svg: Path) -> str:
         if d is None:
             continue
         a = el.attrib
-        filled = a.get("fill", "none") not in ("none",)
-        stroked = a.get("stroke") not in (None, "none")
+        filled = a.get("fill", root_fill) != "none"
+        stroked = a.get("stroke", root_stroke) not in (None, "none")
         attrs = [f'android:pathData="{d}"']
         attrs.append('android:fillColor="#FF000000"' if filled else 'android:fillColor="#00000000"')
         if stroked:
