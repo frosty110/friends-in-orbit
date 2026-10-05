@@ -2,6 +2,7 @@ package app.orbit.ui.screens.lists
 
 import androidx.compose.runtime.Immutable
 import app.orbit.data.entity.ListType
+import app.orbit.ui.util.UiText
 
 /**
  * Lists Manager state contract (LIST-02 / LIST-07). Sealed interface
@@ -13,8 +14,9 @@ import app.orbit.data.entity.ListType
  *   - `archivedExpanded` carries the user-toggle state into the projection so
  *     the screen reads a single immutable snapshot per emission.
  *   - `ListTileState` gains `type: ListType` and an optional `ruleSummary`
- *     string so smart-list rows can render a "Smart list" chip + per-rule
- *     subtitle without re-decoding the JSON inside the composable.
+ *     ([UiText], resolved by the row) so smart-list rows can render a
+ *     "Smart list" chip + per-rule subtitle without re-decoding the JSON
+ *     inside the composable.
  *
  * `memberCount` starts at 0 — hydrating it requires a per-list
  * `SELECT COUNT(*) GROUP BY listId` DAO query owned by the membership layer.
@@ -42,5 +44,5 @@ data class ListTileState(
     val name: String,
     val memberCount: Int,
     val type: ListType,
-    val ruleSummary: String?,
+    val ruleSummary: UiText?,
 )

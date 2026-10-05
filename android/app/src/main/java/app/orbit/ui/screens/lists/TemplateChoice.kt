@@ -1,6 +1,8 @@
 package app.orbit.ui.screens.lists
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
+import app.orbit.R
 import app.orbit.data.entity.ListType
 import app.orbit.data.entity.RuleKind
 import app.orbit.domain.smart.SmartListRule
@@ -10,6 +12,9 @@ import app.orbit.domain.smart.SmartListRule
  *
  * Order in [Catalog] is locked — the picker grid renders rows in this
  * order, and tests assert on the id ordering.
+ *
+ * Names and subtitles are string resources (strings_lists.xml); the screen
+ * resolves them. [defaultNameRes] is null for "Start from blank".
  *
  * Each entry maps to a single fresh [app.orbit.data.entity.ListEntity] shape:
  *   - Four "static named" templates (Inner orbit, Family, Mentors, Drifted)
@@ -36,11 +41,11 @@ import app.orbit.domain.smart.SmartListRule
 @Immutable
 data class TemplateChoice(
     val id: String,
-    val displayName: String,
-    val subtitle: String,
+    @StringRes val displayNameRes: Int,
+    @StringRes val subtitleRes: Int,
     val iconName: String,
     val type: ListType,
-    val defaultName: String,
+    @StringRes val defaultNameRes: Int?,
     val smartRule: SmartListRule?,
     val ruleKind: RuleKind?,
     /** Keep-in-touch interval written at creation; null keeps the template default (2 days). */
@@ -50,68 +55,68 @@ data class TemplateChoice(
         val Catalog: List<TemplateChoice> = listOf(
             TemplateChoice(
                 id = "inner_orbit",
-                displayName = "Inner orbit",
-                subtitle = "Closest people, about weekly.",
+                displayNameRes = R.string.lists_template_inner_orbit,
+                subtitleRes = R.string.lists_template_inner_orbit_subtitle,
                 iconName = "heart",
                 type = ListType.STATIC,
-                defaultName = "Inner orbit",
+                defaultNameRes = R.string.lists_template_inner_orbit,
                 smartRule = null,
                 ruleKind = RuleKind.KEEP_IN_TOUCH,
                 intervalDays = 7
             ),
             TemplateChoice(
                 id = "family",
-                displayName = "Family",
-                subtitle = "Steady, every couple of weeks.",
+                displayNameRes = R.string.lists_template_family,
+                subtitleRes = R.string.lists_template_family_subtitle,
                 iconName = "users",
                 type = ListType.STATIC,
-                defaultName = "Family",
+                defaultNameRes = R.string.lists_template_family,
                 smartRule = null,
                 ruleKind = RuleKind.KEEP_IN_TOUCH,
                 intervalDays = 14
             ),
             TemplateChoice(
                 id = "mentors",
-                displayName = "Mentors",
-                subtitle = "Every couple of months.",
+                displayNameRes = R.string.lists_template_mentors,
+                subtitleRes = R.string.lists_template_mentors_subtitle,
                 // Spec'd `compass` not in assets/icons/ — `star` reads as guidance.
                 iconName = "star",
                 type = ListType.STATIC,
-                defaultName = "Mentors",
+                defaultNameRes = R.string.lists_template_mentors,
                 smartRule = null,
                 ruleKind = RuleKind.KEEP_IN_TOUCH,
                 intervalDays = 60
             ),
             TemplateChoice(
                 id = "drifted",
-                displayName = "Drifted",
-                subtitle = "Reconnect about once a month.",
+                displayNameRes = R.string.lists_template_drifted,
+                subtitleRes = R.string.lists_template_drifted_subtitle,
                 // Spec'd `wind` not in assets/icons/ — clock-counter-clockwise
                 // carries the "time since last call" sense better than wind anyway.
                 iconName = "clock-counter-clockwise",
                 type = ListType.STATIC,
-                defaultName = "Drifted",
+                defaultNameRes = R.string.lists_template_drifted,
                 smartRule = null,
                 ruleKind = RuleKind.KEEP_IN_TOUCH,
                 intervalDays = 30
             ),
             TemplateChoice(
                 id = "recently_added_not_called",
-                displayName = "Recently added, not called",
-                subtitle = "Auto-updates as you add people.",
+                displayNameRes = R.string.lists_template_recently_added,
+                subtitleRes = R.string.lists_template_recently_added_subtitle,
                 iconName = "shuffle-angular",
                 type = ListType.SMART,
-                defaultName = "Recently added, not called",
+                defaultNameRes = R.string.lists_template_recently_added,
                 smartRule = SmartListRule.RecentlyAddedNotCalled(daysWindow = 30),
                 ruleKind = RuleKind.KEEP_IN_TOUCH
             ),
             TemplateChoice(
                 id = "blank",
-                displayName = "Start from blank",
-                subtitle = "Choose your own rhythm.",
+                displayNameRes = R.string.lists_template_blank,
+                subtitleRes = R.string.lists_template_blank_subtitle,
                 iconName = "plus",
                 type = ListType.STATIC,
-                defaultName = "",
+                defaultNameRes = null,
                 smartRule = null,
                 ruleKind = RuleKind.KEEP_IN_TOUCH
             )

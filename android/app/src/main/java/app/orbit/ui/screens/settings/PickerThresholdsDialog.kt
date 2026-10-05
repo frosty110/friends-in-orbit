@@ -1,6 +1,7 @@
 package app.orbit.ui.screens.settings
 
 import android.content.res.Configuration
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,7 +14,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.data.PickerThresholds
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
@@ -55,11 +59,11 @@ fun PickerThresholdsDialog(
         title = {
             Column {
                 Text(
-                    text = "Groups when adding people",
+                    text = stringResource(R.string.settings_thresholds_title),
                     style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
                 )
                 Text(
-                    text = "When you add people to a list, Orbit sorts your contacts into these groups. Choose where each one begins.",
+                    text = stringResource(R.string.settings_thresholds_body),
                     style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                     modifier = Modifier.padding(top = OrbitTheme.spacing.x1),
                 )
@@ -68,9 +72,9 @@ fun PickerThresholdsDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 ThresholdStepperRow(
-                    label = "Commonly called: the top",
-                    helper = "Percent of the contacts you've called",
-                    unit = "%",
+                    label = stringResource(R.string.settings_thresholds_commonly),
+                    helper = stringResource(R.string.settings_thresholds_percent_helper),
+                    unit = stringResource(R.string.settings_thresholds_percent_unit),
                     value = commonlyTop,
                     minValue = 5,
                     maxValue = 50,
@@ -78,9 +82,9 @@ fun PickerThresholdsDialog(
                 )
                 HorizontalDivider(color = OrbitTheme.colors.lineSoft)
                 ThresholdStepperRow(
-                    label = "Rarely called: the bottom",
-                    helper = "Percent of the contacts you've called",
-                    unit = "%",
+                    label = stringResource(R.string.settings_thresholds_rarely),
+                    helper = stringResource(R.string.settings_thresholds_percent_helper),
+                    unit = stringResource(R.string.settings_thresholds_percent_unit),
                     value = rarelyBottom,
                     minValue = 10,
                     maxValue = 90,
@@ -88,9 +92,9 @@ fun PickerThresholdsDialog(
                 )
                 HorizontalDivider(color = OrbitTheme.colors.lineSoft)
                 ThresholdStepperRow(
-                    label = "Recently added",
-                    helper = "Days since Orbit first saw them",
-                    unit = "days",
+                    label = stringResource(R.string.settings_thresholds_recently_added),
+                    helper = stringResource(R.string.settings_thresholds_recently_added_helper),
+                    unit = pluralStringResource(R.plurals.settings_thresholds_days_unit, recentlyAdded),
                     value = recentlyAdded,
                     minValue = 1,
                     maxValue = 3650,
@@ -98,9 +102,9 @@ fun PickerThresholdsDialog(
                 )
                 HorizontalDivider(color = OrbitTheme.colors.lineSoft)
                 ThresholdStepperRow(
-                    label = "Long gap",
-                    helper = "Days since your last call",
-                    unit = "days",
+                    label = stringResource(R.string.settings_thresholds_long_gap),
+                    helper = stringResource(R.string.settings_thresholds_long_gap_helper),
+                    unit = pluralStringResource(R.plurals.settings_thresholds_days_unit, longGap),
                     value = longGap,
                     minValue = 1,
                     maxValue = 3650,
@@ -108,7 +112,7 @@ fun PickerThresholdsDialog(
                 )
                 if (contradictionLine != null) {
                     Text(
-                        text = contradictionLine,
+                        text = stringResource(contradictionLine),
                         style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                         modifier = Modifier.padding(top = OrbitTheme.spacing.x3),
                     )
@@ -117,7 +121,7 @@ fun PickerThresholdsDialog(
         },
         confirmButton = {
             OrbitButton(
-                text = "Save",
+                text = stringResource(R.string.components_action_save),
                 enabled = contradictionLine == null,
                 onClick = {
                     onSave(
@@ -134,7 +138,7 @@ fun PickerThresholdsDialog(
         },
         dismissButton = {
             OrbitButton(
-                text = "Cancel",
+                text = stringResource(R.string.components_action_cancel),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
             )
@@ -147,13 +151,14 @@ fun PickerThresholdsDialog(
  * computes "commonly called" as the TOP [commonlyTopPct]% of called contacts
  * and "rarely called" as the BOTTOM [rarelyBottomPct]% (see
  * `ContactPickerViewModel`); if the two sum past 100 the bands overlap and a
- * contact could be both at once. Returns the quiet helper line to render, or
- * null when the values are consistent. Pure + internal so the JVM unit test
- * can pin the boundary.
+ * contact could be both at once. Returns the quiet helper line to render (a
+ * string resource id), or null when the values are consistent. Pure +
+ * internal so the unit test can pin the boundary.
  */
-internal fun thresholdsContradictionLine(commonlyTopPct: Int, rarelyBottomPct: Int): String? =
+@StringRes
+internal fun thresholdsContradictionLine(commonlyTopPct: Int, rarelyBottomPct: Int): Int? =
     if (commonlyTopPct + rarelyBottomPct > 100) {
-        "These two bands overlap — together they can't be more than 100%."
+        R.string.settings_thresholds_overlap
     } else {
         null
     }

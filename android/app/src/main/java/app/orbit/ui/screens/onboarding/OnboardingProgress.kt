@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import app.orbit.R
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -14,7 +16,7 @@ import app.orbit.ui.theme.OrbitTheme
 @Composable
 fun OnboardingProgress(step: OnboardingStep, modifier: Modifier = Modifier) {
     Text(
-        text = "${step.ordinal1} of ${step.total}",
+        text = stringResource(R.string.onb_progress, step.ordinal1, step.total),
         style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgSubtle),
         modifier = modifier.padding(horizontal = OrbitTheme.spacing.x3),
     )

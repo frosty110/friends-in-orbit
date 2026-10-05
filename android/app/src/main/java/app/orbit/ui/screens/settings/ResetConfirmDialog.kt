@@ -3,6 +3,8 @@ package app.orbit.ui.screens.settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -24,27 +26,26 @@ fun ResetConfirmDialog(
         containerColor = OrbitTheme.colors.surface,
         title = {
             Text(
-                text = "Reset Orbit?",
+                text = stringResource(R.string.settings_reset_dialog_title),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         },
         text = {
             Text(
-                text = "Every list, contact, note, and call record on this phone will be erased. " +
-                    "Your phone's contacts and call log are not touched.",
+                text = stringResource(R.string.settings_reset_dialog_body),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             )
         },
         confirmButton = {
             OrbitButton(
-                text = "Reset",
+                text = stringResource(R.string.settings_reset_confirm),
                 onClick = onConfirm,
                 variant = OrbitButtonVariant.Destructive,
             )
         },
         dismissButton = {
             OrbitButton(
-                text = "Cancel",
+                text = stringResource(R.string.components_action_cancel),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
             )

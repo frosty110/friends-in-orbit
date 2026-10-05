@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import app.orbit.R
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
@@ -113,11 +115,13 @@ fun OnboardingPermScreen(
         step = step,
         onBack = onBack,
         primary = OnboardingAction(
-            label = when {
-                granted -> "Continue"
-                permanentlyDenied -> "Open settings"
-                else -> "Allow access"
-            },
+            label = stringResource(
+                when {
+                    granted -> R.string.components_action_continue
+                    permanentlyDenied -> R.string.onb_perm_open_settings
+                    else -> R.string.onb_perm_allow
+                },
+            ),
             onClick = {
                 when {
                     granted -> onContinue()
@@ -127,7 +131,7 @@ fun OnboardingPermScreen(
             },
         ),
         secondary = if (granted) null else OnboardingAction(
-            label = "Continue without it",
+            label = stringResource(R.string.onb_perm_continue_without),
             onClick = { showSkipDialog = true },
         ),
     ) {
@@ -185,7 +189,7 @@ private fun PermanentlyDeniedBanner() {
             .padding(OrbitTheme.spacing.x3),
     ) {
         Text(
-            text = "Permissions → allow: Contacts, Call logs, Notifications",
+            text = stringResource(R.string.onb_perm_denied_banner),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.warning),
         )
     }
@@ -225,8 +229,8 @@ private fun PermissionExplainerCard(
         Column(Modifier.weight(1f)) {
             Text(
                 text = when {
-                    granted -> "Allowed"
-                    permanentlyDenied -> "Denied — change in settings"
+                    granted -> stringResource(R.string.onb_perm_allowed)
+                    permanentlyDenied -> stringResource(R.string.onb_perm_denied_title)
                     else -> promiseTitle
                 },
                 style = OrbitTheme.type.body.copy(
@@ -284,11 +288,11 @@ private fun OnboardingPermScreenPreview() {
             permission = "android.permission.READ_CONTACTS",
             skipPermission = SkipPermission.Contacts,
             iconName = "users",
-            title = "Build lists from your people",
-            body = "Orbit reads your phone contacts so you can pick who goes on each list by name.",
-            promiseTitle = "Stays on your device",
-            promise = "We don't upload your address book.",
-            deniedNote = "You can still create lists. To add contacts, allow access in your phone's settings.",
+            title = stringResource(R.string.onb_perm_contacts_title),
+            body = stringResource(R.string.onb_perm_contacts_body),
+            promiseTitle = stringResource(R.string.onb_perm_promise_on_device),
+            promise = stringResource(R.string.onb_perm_contacts_promise),
+            deniedNote = stringResource(R.string.onb_perm_contacts_denied),
             granted = false,
             hasBeenAsked = false,
             onRefresh = {},

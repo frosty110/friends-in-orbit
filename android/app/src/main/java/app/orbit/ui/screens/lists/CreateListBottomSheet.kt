@@ -30,10 +30,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.PhIcon
@@ -114,7 +116,7 @@ private fun CreateListContent(
             ),
     ) {
         SectionLabel(
-            text = "Choose a template",
+            text = stringResource(R.string.lists_create_choose_template),
             modifier = Modifier.padding(top = OrbitTheme.spacing.x1, bottom = OrbitTheme.spacing.x3),
         )
 
@@ -126,6 +128,7 @@ private fun CreateListContent(
                 horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
             ) {
                 rowItems.forEach { template ->
+                    val defaultName = template.defaultNameRes?.let { stringResource(it) }.orEmpty()
                     TemplateTile(
                         template = template,
                         selected = selected?.id == template.id,
@@ -133,7 +136,7 @@ private fun CreateListContent(
                             selected = template
                             // Pre-fill name on first selection or when user
                             // hasn't typed anything custom yet.
-                            if (name.isBlank()) name = template.defaultName
+                            if (name.isBlank()) name = defaultName
                         },
                         modifier = Modifier.weight(1f),
                     )
@@ -147,7 +150,7 @@ private fun CreateListContent(
         Spacer(Modifier.height(OrbitTheme.spacing.x6))
 
         Text(
-            text = "Name your list",
+            text = stringResource(R.string.lists_create_name_label),
             style = OrbitTheme.type.h3,
             color = OrbitTheme.colors.fg,
         )
@@ -161,8 +164,7 @@ private fun CreateListContent(
             },
             placeholder = {
                 Text(
-                    text = selected?.displayName?.takeIf { it.isNotBlank() }
-                        ?: "e.g. Inner orbit",
+                    text = stringResource(selected?.displayNameRes ?: R.string.lists_create_name_placeholder),
                     style = OrbitTheme.type.body,
                     color = OrbitTheme.colors.fgSubtle,
                 )
@@ -188,7 +190,7 @@ private fun CreateListContent(
         )
         if (nameError) {
             Text(
-                text = "Give your list a name",
+                text = stringResource(R.string.lists_create_name_error),
                 style = OrbitTheme.type.meta,
                 color = OrbitTheme.colors.danger,
                 modifier = Modifier.padding(
@@ -205,13 +207,13 @@ private fun CreateListContent(
             horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x4),
         ) {
             OrbitButton(
-                text = "Cancel",
+                text = stringResource(R.string.components_action_cancel),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
                 modifier = Modifier.weight(1f),
             )
             OrbitButton(
-                text = "Create",
+                text = stringResource(R.string.lists_create_cta),
                 onClick = {
                     attemptedSubmit = true
                     val tpl = selected ?: return@OrbitButton
@@ -254,14 +256,14 @@ private fun TemplateTile(
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
-            text = template.displayName,
+            text = stringResource(template.displayNameRes),
             style = OrbitTheme.type.body.copy(fontWeight = FontWeight.Medium),
             color = OrbitTheme.colors.fg,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x1))
         Text(
-            text = template.subtitle,
+            text = stringResource(template.subtitleRes),
             style = OrbitTheme.type.meta,
             color = OrbitTheme.colors.fgMuted,
             textAlign = TextAlign.Center,

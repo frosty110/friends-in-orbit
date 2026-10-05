@@ -42,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
@@ -52,6 +54,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import app.orbit.R
 import app.orbit.calllog.CallLogPermissionState
 import app.orbit.data.PickerThresholds
 import app.orbit.ui.components.OrbitAppBar
@@ -169,10 +172,10 @@ fun SettingsScreen(
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             exportVm.snackbarEvents.collect { event ->
                 val message = when (event) {
-                    ExportSnackbar.Success -> "Saved your encrypted backup."
-                    ExportSnackbar.Failure -> "Couldn't save the file. Try again?"
+                    ExportSnackbar.Success -> R.string.settings_export_saved
+                    ExportSnackbar.Failure -> R.string.settings_export_failed
                 }
-                snackbarHostState.showSnackbar(message)
+                snackbarHostState.showSnackbar(context.getString(message))
             }
         }
     }
@@ -180,15 +183,12 @@ fun SettingsScreen(
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             importVm.snackbarEvents.collect { event ->
                 val message = when (event) {
-                    ImportSnackbar.Restored -> "Backup restored."
-                    ImportSnackbar.Unreadable ->
-                        "That file couldn't be read. Check it's an Orbit backup."
-                    ImportSnackbar.VersionTooNew ->
-                        "This backup was made by a newer version of Orbit. Update Orbit first."
-                    ImportSnackbar.ApplyFailed ->
-                        "Couldn't restore the backup. Nothing was changed."
+                    ImportSnackbar.Restored -> R.string.settings_import_restored
+                    ImportSnackbar.Unreadable -> R.string.settings_import_unreadable
+                    ImportSnackbar.VersionTooNew -> R.string.settings_import_too_new
+                    ImportSnackbar.ApplyFailed -> R.string.settings_import_failed
                 }
-                snackbarHostState.showSnackbar(message)
+                snackbarHostState.showSnackbar(context.getString(message))
             }
         }
     }
@@ -455,8 +455,10 @@ private fun SettingsContent(
 
     OrbitScreen {
         OrbitAppBar(
-            title = "Settings",
-            leading = { OrbitIconButton("arrow-left", onBack, contentDescription = "Back") },
+            title = stringResource(R.string.settings_title),
+            leading = {
+                OrbitIconButton("arrow-left", onBack, contentDescription = stringResource(R.string.components_action_back))
+            },
         )
 
         // SET-09: nothing but the app bar until the saved settings load. The
@@ -473,7 +475,7 @@ private fun SettingsContent(
                 .padding(horizontal = 16.dp, vertical = 4.dp)
                 .padding(bottom = 32.dp),
         ) {
-            SettingGroup(title = "Appearance") {
+            SettingGroup(title = stringResource(R.string.settings_section_appearance)) {
                 AppearanceSection(
                     themeId = colorTheme,
                     darkMode = darkMode,
@@ -484,30 +486,30 @@ private fun SettingsContent(
                 )
             }
 
-            SettingGroup(title = "Permissions") {
+            SettingGroup(title = stringResource(R.string.settings_section_permissions)) {
                 PermissionsRow(
-                    label = "Contacts",
+                    label = stringResource(R.string.settings_perm_contacts),
                     status = contactsPermission,
                     onRequestPermission = onRequestContactsPermission,
                     onOpenAndroidSettings = onOpenAndroidSettings,
                 )
                 Divider()
                 PermissionsRow(
-                    label = "Call log",
+                    label = stringResource(R.string.settings_perm_call_log),
                     status = callLogPermission.toPermissionStatus(),
                     onRequestPermission = onRequestCallLogPermission,
                     onOpenAndroidSettings = onOpenAndroidSettings,
                 )
                 Divider()
                 PermissionsRow(
-                    label = "Notifications",
+                    label = stringResource(R.string.settings_perm_notifications),
                     status = notificationsPermission,
                     onRequestPermission = onRequestNotificationsPermission,
                     onOpenAndroidSettings = onOpenAndroidSettings,
                 )
             }
 
-            SettingGroup(title = "Contacts") {
+            SettingGroup(title = stringResource(R.string.settings_section_contacts)) {
                 ContactsSyncRow(
                     lastSyncedAtMs = lastContactsSyncAtMs,
                     inFlight = contactsSyncInFlight,
@@ -516,7 +518,7 @@ private fun SettingsContent(
                 )
             }
 
-            SettingGroup(title = "Call history") {
+            SettingGroup(title = stringResource(R.string.settings_section_call_history)) {
                 CallSyncStatusRow(
                     lastSyncedAtMs = lastSyncedAtMs,
                     inFlight = callLogSyncInFlight,
@@ -536,7 +538,7 @@ private fun SettingsContent(
                 CallHistoryEntryRow(onClick = onOpenCallHistory)
             }
 
-            SettingGroup(title = "Data") {
+            SettingGroup(title = stringResource(R.string.settings_section_data)) {
                 ExportEntryRow(onClick = onExport)
                 Divider()
                 ImportEntryRow(onClick = onImport)
@@ -544,7 +546,7 @@ private fun SettingsContent(
                 ResetDataRow(onClick = { showResetDialog = true })
             }
 
-            SettingGroup(title = "About") {
+            SettingGroup(title = stringResource(R.string.settings_section_about)) {
                 AboutSection(onSourceCode = onSourceCode)
             }
         }
@@ -602,9 +604,9 @@ private fun ImportRangeRow(
             // 16/14 row padding matches every sibling row in this screen.
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
-        Text("Import range", style = OrbitTheme.type.body, color = OrbitTheme.colors.fg)
+        Text(stringResource(R.string.settings_import_range), style = OrbitTheme.type.body, color = OrbitTheme.colors.fg)
         Text(
-            "How far back to read",
+            stringResource(R.string.settings_import_range_sub),
             style = OrbitTheme.type.meta,
             color = OrbitTheme.colors.fgMuted,
             modifier = Modifier.padding(top = 2.dp),
@@ -634,12 +636,13 @@ private fun ImportRangeRow(
 
 private val IMPORT_DAY_OPTIONS: List<Int> = listOf(30, 90, 180, 365)
 
+@Composable
 private fun importRangeLabel(days: Int): String = when (days) {
-    30 -> "1 month"
-    90 -> "3 months"
-    180 -> "6 months"
-    365 -> "1 year"
-    else -> "$days days"
+    30 -> pluralStringResource(R.plurals.settings_import_range_months, 1, 1)
+    90 -> pluralStringResource(R.plurals.settings_import_range_months, 3, 3)
+    180 -> pluralStringResource(R.plurals.settings_import_range_months, 6, 6)
+    365 -> pluralStringResource(R.plurals.settings_import_range_years, 1, 1)
+    else -> pluralStringResource(R.plurals.settings_import_range_days, days, days)
 }
 
 /**
@@ -661,11 +664,11 @@ private fun ExportEntryRow(onClick: () -> Unit) {
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                text = "Export my data",
+                text = stringResource(R.string.settings_export_title),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             Text(
-                text = "Encrypted JSON, password protected",
+                text = stringResource(R.string.settings_export_sub),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.padding(top = 2.dp),
             )
@@ -691,11 +694,11 @@ private fun ImportEntryRow(onClick: () -> Unit) {
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                text = "Import backup",
+                text = stringResource(R.string.settings_import_title),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             Text(
-                text = "Replace what's here with an exported file",
+                text = stringResource(R.string.settings_import_sub),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.padding(top = 2.dp),
             )
@@ -713,7 +716,11 @@ private fun ImportEntryRow(onClick: () -> Unit) {
  */
 @Composable
 private fun IgnoredEntryRow(count: Int, onClick: () -> Unit) {
-    val subtitle = if (count > 0) "$count ignored" else "No ignored contacts"
+    val subtitle = if (count > 0) {
+        pluralStringResource(R.plurals.settings_ignored_count, count, count)
+    } else {
+        stringResource(R.string.settings_ignored_none)
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -725,7 +732,7 @@ private fun IgnoredEntryRow(count: Int, onClick: () -> Unit) {
         PhIcon(name = "eye-slash", size = 18.dp, tint = OrbitTheme.colors.fgMuted)
         Column(Modifier.weight(1f)) {
             Text(
-                text = "Ignored",
+                text = stringResource(R.string.settings_ignored_title),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             Text(
@@ -758,11 +765,11 @@ private fun CallHistoryEntryRow(onClick: () -> Unit) {
         PhIcon(name = "clock-counter-clockwise", size = 18.dp, tint = OrbitTheme.colors.fgMuted)
         Column(Modifier.weight(1f)) {
             Text(
-                text = "Call history",
+                text = stringResource(R.string.settings_call_history_title),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             Text(
-                text = "Every call to people on your lists",
+                text = stringResource(R.string.settings_call_history_sub),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.padding(top = 2.dp),
             )

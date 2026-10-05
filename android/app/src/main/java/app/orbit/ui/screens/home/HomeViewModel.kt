@@ -2,10 +2,12 @@ package app.orbit.ui.screens.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.feed.HomeFeed
 import app.orbit.data.feed.ListEnrichment
 import app.orbit.data.repository.ListRepository
 import app.orbit.domain.clock.Clock
+import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatSpan
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -38,10 +40,12 @@ import javax.inject.Inject
  *
  * Lists Manager emits this same type: its archive and delete must behave
  * exactly like Home's (features/orbit-lists), so the two share one contract.
+ * [message] and [actionLabel] are [UiText]: the screen resolves them when it
+ * shows the snackbar, so the copy lives in string resources.
  */
 data class HomeSnackbarEvent(
-    val message: String,
-    val actionLabel: String? = null,
+    val message: UiText,
+    val actionLabel: UiText? = null,
     val payloadListId: Long? = null,
     val kind: Kind = Kind.PLAIN
 ) {
@@ -206,15 +210,17 @@ class HomeViewModel @Inject constructor(
      * shame ("you haven't called X in N days" is forbidden; voice.md). A null
      * last-call reads as a gentle "you haven't spoken yet".
      */
-    private fun recencyWhy(lastCalledAt: Instant?, now: Instant): String {
-        if (lastCalledAt == null) return "you haven't spoken yet"
+    private fun recencyWhy(lastCalledAt: Instant?, now: Instant): UiText {
+        if (lastCalledAt == null) return UiText.res(R.string.home_why_never)
         val days = ChronoUnit.DAYS.between(lastCalledAt, now)
         // The app's one span formatter (voice.md glossary), so Home and the
-        // card never word the same gap two ways.
+        // card never word the same gap two ways. formatSpan still returns
+        // English; it slots into the resource sentence as an argument until
+        // RelativeTime returns UiText too.
         return when {
-            days <= 0L -> "you spoke today"
-            days == 1L -> "you spoke yesterday"
-            else -> "${formatSpan(days)} since you last spoke"
+            days <= 0L -> UiText.res(R.string.home_why_today)
+            days == 1L -> UiText.res(R.string.home_why_yesterday)
+            else -> UiText.res(R.string.home_why_span, formatSpan(days))
         }
     }
 
@@ -226,7 +232,7 @@ class HomeViewModel @Inject constructor(
         )
 
     /**
-     * Long-press → "Mute prompts" / "Unmute prompts". Flips the per-list
+     * Long-press → "Pause nudges" / "Resume nudges". Flips the per-list
      * notifications flag in place; [currentlyEnabled] is the tile's current
      * value so the new state and the confirming copy are both derived from one
      * read. No Undo — re-tapping reverses it.
@@ -236,7 +242,11 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             runMutation { listRepo.updateNotificationsEnabled(listId, enable) }
             _snackbarEvents.tryEmit(
-                HomeSnackbarEvent(message = if (enable) "Prompts on." else "Prompts muted.")
+                HomeSnackbarEvent(
+                    message = UiText.res(
+                        if (enable) R.string.home_snackbar_nudges_on else R.string.home_snackbar_nudges_paused,
+                    ),
+                )
             )
         }
     }
@@ -247,8 +257,8 @@ class HomeViewModel @Inject constructor(
             runMutation { listRepo.setArchived(listId, archived = true) }
             _snackbarEvents.tryEmit(
                 HomeSnackbarEvent(
-                    message = "List archived.",
-                    actionLabel = "Undo",
+                    message = UiText.res(R.string.lists_snackbar_archived),
+                    actionLabel = UiText.res(R.string.components_action_undo),
                     payloadListId = listId,
                     kind = HomeSnackbarEvent.Kind.ARCHIVE_UNDO
                 )
@@ -272,8 +282,8 @@ class HomeViewModel @Inject constructor(
         pendingDeletes.update { it + listId }
         _snackbarEvents.tryEmit(
             HomeSnackbarEvent(
-                message = "List deleted.",
-                actionLabel = "Undo",
+                message = UiText.res(R.string.lists_snackbar_deleted),
+                actionLabel = UiText.res(R.string.components_action_undo),
                 payloadListId = listId,
                 kind = HomeSnackbarEvent.Kind.DELETE_UNDO
             )
@@ -311,7 +321,7 @@ class HomeViewModel @Inject constructor(
             block()
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
-            _snackbarEvents.tryEmit(HomeSnackbarEvent(message = "Couldn't save your change"))
+            _snackbarEvents.tryEmit(HomeSnackbarEvent(message = UiText.res(R.string.components_snackbar_save_failed)))
         }
     }
 }

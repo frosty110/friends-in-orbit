@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -25,11 +27,11 @@ fun ResetDataRow(onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         Text(
-            text = "Reset Orbit",
+            text = stringResource(R.string.settings_reset_title),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.danger),
         )
         Text(
-            text = "Erase every list, contact, and note on this phone",
+            text = stringResource(R.string.settings_reset_sub),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
             modifier = Modifier.padding(top = 2.dp),
         )

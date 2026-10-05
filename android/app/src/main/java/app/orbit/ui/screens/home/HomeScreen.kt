@@ -47,6 +47,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -64,6 +66,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import app.orbit.AppViewModel
+import app.orbit.R
 import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.ListType
 import app.orbit.ui.components.Avatar
@@ -81,6 +84,8 @@ import app.orbit.ui.screens.lists.DeleteListDialog
 import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 import app.orbit.ui.util.dialPhoneNumber
 import app.orbit.ui.util.formatDayHeader
 import kotlinx.coroutines.flow.collectLatest
@@ -126,6 +131,7 @@ fun HomeScreen(
     val curtain = LocalPrivacyCurtain.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     // Long-press menu snackbar surface (archive/delete Undo, mute confirmation,
     // mutation failures). collectLatest so the newest action's snackbar
@@ -139,8 +145,8 @@ fun HomeScreen(
             vm.snackbarEvents.collectLatest { event ->
                 try {
                     val result = snackbarHostState.showSnackbar(
-                        message = event.message,
-                        actionLabel = event.actionLabel,
+                        message = event.message.asString(context),
+                        actionLabel = event.actionLabel?.asString(context),
                         duration = SnackbarDuration.Short,
                     )
                     if (result == SnackbarResult.ActionPerformed) {
@@ -167,7 +173,6 @@ fun HomeScreen(
         onPauseOrDispose { /* prompt state lives in the VM; nothing to clean up */ }
     }
 
-    val context = LocalContext.current
     HomeContent(
         state = state,
         snackbarHostState = snackbarHostState,
@@ -237,25 +242,25 @@ private fun HomeContent(
     Box(modifier = Modifier.fillMaxSize()) {
       OrbitScreen {
         OrbitAppBar(
-            title = "Orbit",
+            title = stringResource(R.string.app_name),
             trailing = {
                 Row {
                     OrbitIconButton(
                         icon = "magnifying-glass",
                         onClick = onOpenSearch,
-                        contentDescription = "Search",
+                        contentDescription = stringResource(R.string.home_action_search),
                     )
                     // A bulleted list, as in the design: the plain hamburger
                     // also meant "list options" on Card view (rubric D2).
                     OrbitIconButton(
                         icon = "list-bullets",
                         onClick = onOpenLists,
-                        contentDescription = "Lists",
+                        contentDescription = stringResource(R.string.home_action_lists),
                     )
                     OrbitIconButton(
                         icon = "gear",
                         onClick = onOpenSettings,
-                        contentDescription = "Settings",
+                        contentDescription = stringResource(R.string.home_action_settings),
                     )
                 }
             },
@@ -288,12 +293,13 @@ private fun HomeContent(
         // an always-on recommender, not an inbox. Header shows only in Ready;
         // Loading is quiet chrome, Empty carries the first-install CTA.
         if (!isLoading && !isEmpty) {
-            val dateLabel = remember {
-                LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault()))
+            val datePattern = stringResource(R.string.home_date_pattern)
+            val dateLabel = remember(datePattern) {
+                LocalDate.now().format(DateTimeFormatter.ofPattern(datePattern, Locale.getDefault()))
             }
             Column(Modifier.padding(horizontal = OrbitTheme.spacing.x5, vertical = 0.dp)) {
                 Text(
-                    text = "Today",
+                    text = stringResource(R.string.home_date_eyebrow),
                     style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted),
                 )
                 Text(
@@ -319,12 +325,12 @@ private fun HomeContent(
                     .padding(horizontal = OrbitTheme.spacing.x6),
             ) {
                 Text(
-                    text = "Start with the people you keep meaning to call.",
+                    text = stringResource(R.string.home_empty_body),
                     style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.height(OrbitTheme.spacing.x5))
-                OrbitButton(text = "Create your first list", onClick = onCreateList)
+                OrbitButton(text = stringResource(R.string.home_empty_cta), onClick = onCreateList)
             }
         } else {
             // HOME-5 — single column of full-width tonal cards.
@@ -358,7 +364,7 @@ private fun HomeContent(
                             onCallNextUp = onCallNextUp,
                         )
                     }
-                    item { CreateListTile(label = "New list", onClick = onCreateList) }
+                    item { CreateListTile(label = stringResource(R.string.home_new_list), onClick = onCreateList) }
                     item { ReflectionFooter() }
                 }
             }
@@ -407,7 +413,7 @@ private fun ListTile(
     val tone = OrbitTheme.tones.listTone(toneIndex.toLong())
     // List names stay masked under the curtain (user-authored, relationship-
     // revealing); the neutral noun for a list is "List".
-    val displayName = if (curtain) "List" else tile.name
+    val displayName = if (curtain) stringResource(R.string.components_curtain_list) else tile.name
     val haptic = LocalHapticFeedback.current
     // HOME-8 — which rhythm day the user tapped open (index into tile.rhythm,
     // 0 = six days ago). rememberSaveable so a rotation mid-sheet doesn't drop
@@ -424,8 +430,8 @@ private fun ListTile(
             // button); long-press opens the manage-this-list quick-actions menu.
             .combinedClickable(
                 onClick = onClick,
-                onClickLabel = "Open list",
-                onLongClickLabel = "Quick actions",
+                onClickLabel = stringResource(R.string.home_tile_open_list),
+                onLongClickLabel = stringResource(R.string.home_tile_quick_actions),
                 onLongClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onLongPress()
@@ -440,20 +446,22 @@ private fun ListTile(
             expanded = menuOpen,
             onDismissRequest = onDismissMenu,
             actions = listOf(
-                OrbitMenuAction(label = "Add people", onClick = onAddPeople),
-                OrbitMenuAction(label = "List settings", onClick = onListSettings),
+                OrbitMenuAction(label = stringResource(R.string.home_menu_add_people), onClick = onAddPeople),
+                OrbitMenuAction(label = stringResource(R.string.home_menu_list_settings), onClick = onListSettings),
                 OrbitMenuAction(
                     // Glossary (voice.md): these notifications are "nudges".
-                    label = if (tile.notificationsEnabled) "Pause nudges" else "Resume nudges",
+                    label = stringResource(
+                        if (tile.notificationsEnabled) R.string.home_menu_pause_nudges else R.string.home_menu_resume_nudges,
+                    ),
                     onClick = onToggleMute,
                 ),
                 OrbitMenuAction(
-                    label = "Archive",
+                    label = stringResource(R.string.components_action_archive),
                     onClick = onArchive,
                     tone = OrbitMenuTone.Destructive,
                 ),
                 OrbitMenuAction(
-                    label = "Delete",
+                    label = stringResource(R.string.components_action_delete),
                     onClick = onDelete,
                     tone = OrbitMenuTone.Destructive,
                 ),
@@ -592,7 +600,7 @@ private fun NextUpRow(
             // Rare: list has members but nobody surfaceable right now.
             // HOME-6: calm, never "caught up" or "no one due".
             Text(
-                text = "All quiet for now",
+                text = stringResource(R.string.home_next_up_quiet),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.weight(1f),
             )
@@ -601,13 +609,14 @@ private fun NextUpRow(
         // Contact names mask under the curtain (PRIV-03). The avatar keeps the
         // full name (initials / photo); the line shows just the first name — the
         // warm "one name" feel (HOME-3).
-        val avatarName = if (curtain) "Someone" else nextUp.name
-        val firstName = if (curtain) "Someone" else nextUp.name.substringBefore(' ').ifBlank { nextUp.name }
+        val someone = stringResource(R.string.components_curtain_someone)
+        val avatarName = if (curtain) someone else nextUp.name
+        val firstName = if (curtain) someone else nextUp.name.substringBefore(' ').ifBlank { nextUp.name }
         Avatar(name = avatarName, size = 44.dp, photoUri = if (curtain) null else nextUp.photoUri)
         Spacer(Modifier.width(OrbitTheme.spacing.x3))
         Column(Modifier.weight(1f)) {
             Text(
-                text = "Next up",
+                text = stringResource(R.string.home_next_up_eyebrow),
                 style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgSubtle),
             )
             Text(
@@ -617,7 +626,7 @@ private fun NextUpRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = nextUp.why,
+                text = nextUp.why.asString(),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -634,7 +643,7 @@ private fun NextUpRow(
                 icon = "phone-call",
                 onClick = { onCall(phone) },
                 tint = OrbitTheme.colors.fgMuted,
-                contentDescription = "Call $firstName",
+                contentDescription = stringResource(R.string.home_next_up_call, firstName),
             )
         } else {
             PhIcon(name = "caret-right", size = 20.dp, tint = OrbitTheme.colors.fgSubtle)
@@ -675,7 +684,7 @@ private fun RhythmStrip(rhythm: List<RhythmDay>, onDayClick: (index: Int) -> Uni
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Last 7 days",
+                text = stringResource(R.string.home_rhythm_eyebrow),
                 style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgSubtle),
                 modifier = Modifier.weight(1f),
             )
@@ -708,16 +717,16 @@ private fun RhythmStrip(rhythm: List<RhythmDay>, onDayClick: (index: Int) -> Uni
  *  second one. */
 @Composable
 private fun DirectionLegend() {
+    val legendDescription = stringResource(R.string.home_rhythm_legend_a11y)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
         modifier = Modifier.clearAndSetSemantics {
-            contentDescription =
-                "Bar outlines show direction: one colour for calls you made, another for calls you received"
+            contentDescription = legendDescription
         },
     ) {
-        LegendSwatch(label = "You", rim = OrbitTheme.colors.directionOutgoing)
-        LegendSwatch(label = "Them", rim = OrbitTheme.colors.directionIncoming)
+        LegendSwatch(label = stringResource(R.string.home_rhythm_legend_you), rim = OrbitTheme.colors.directionOutgoing)
+        LegendSwatch(label = stringResource(R.string.home_rhythm_legend_them), rim = OrbitTheme.colors.directionIncoming)
     }
 }
 
@@ -753,18 +762,21 @@ private fun DayColumn(
     // A quiet day has nothing to open, so it stays inert rather than presenting
     // a tap target that leads to an empty sheet.
     val tappable = day.calls.isNotEmpty()
+    // Resolved in composition: the semantics block below is not composable.
+    val a11yLabel = dayA11yLabel(label, day.calls)
+    val seeDayLabel = stringResource(R.string.home_rhythm_see_day)
     Column(
         modifier = modifier
             .clip(OrbitTheme.shapes.sm)
             .then(
                 if (tappable) {
                     Modifier
-                        .clickable(onClickLabel = "See this day", onClick = onClick)
+                        .clickable(onClickLabel = seeDayLabel, onClick = onClick)
                         // mergeDescendants so the column announces as one target
                         // ("Monday, 2 calls…") instead of the bare weekday letter
                         // the child Text would otherwise contribute.
                         .semantics(mergeDescendants = true) {
-                            contentDescription = dayA11yLabel(label, day.calls)
+                            contentDescription = a11yLabel
                         }
                 } else {
                     Modifier
@@ -824,15 +836,20 @@ private fun DayColumn(
  * split visually; this is the same information in words, since a colour rim is
  * invisible to TalkBack.
  */
+@Composable
 private fun dayA11yLabel(dayLabel: String, calls: List<RhythmCall>): String =
-    "$dayLabel, ${calls.size} ${if (calls.size == 1) "call" else "calls"}. " +
-        "${directionSummary(calls)}. Tap to see who."
+    stringResource(
+        R.string.home_rhythm_day_a11y,
+        dayLabel,
+        pluralStringResource(R.plurals.home_rhythm_day_calls, calls.size, calls.size),
+        directionSummary(calls).asString(),
+    )
 
+@Composable
 private fun memberLabel(count: Int?): String = when (count) {
     null -> ""
-    0 -> "No one yet"
-    1 -> "1 person"
-    else -> "$count people"
+    0 -> stringResource(R.string.home_member_count_none)
+    else -> pluralStringResource(R.plurals.home_member_count, count, count)
 }
 
 // Reflection footer — the app's one piece of wisdom, surfaced once at the foot
@@ -849,8 +866,7 @@ private fun ReflectionFooter() {
             ),
     ) {
         Text(
-            text = "The call that makes your day can make someone else's. " +
-                "You deserve to be the one who reaches out.",
+            text = stringResource(R.string.home_reflection),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             textAlign = TextAlign.Center,
         )
@@ -930,12 +946,12 @@ private val previewState: HomeUiState = HomeUiState.Ready(
     lists = listOf(
         ListTileState(
             id = 1L, name = "Inner orbit", dueCount = 3, type = ListType.STATIC, memberCount = 12,
-            nextUp = NextUp(1L, "Kai", null, "3 weeks since you last spoke", phone = "+1 555 0100"),
+            nextUp = NextUp(1L, "Kai", null, UiText.res(R.string.home_why_span, "3 weeks"), phone = "+1 555 0100"),
             rhythm = previewRhythm(0),
         ),
         ListTileState(
             id = 2L, name = "Late night", dueCount = 0, type = ListType.SMART, memberCount = 5,
-            nextUp = NextUp(2L, "Mara", null, "you haven't spoken yet", phone = "+1 555 0101"),
+            nextUp = NextUp(2L, "Mara", null, UiText.res(R.string.home_why_never), phone = "+1 555 0101"),
             rhythm = previewRhythm(8),
         ),
     ),

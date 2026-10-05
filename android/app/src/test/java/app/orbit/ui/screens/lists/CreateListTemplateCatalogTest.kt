@@ -49,6 +49,9 @@ class CreateListTemplateCatalogTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
+    // Template names and subtitles are string resources; resolve them here.
+    private val context = ApplicationProvider.getApplicationContext<Context>()
+
     // ============================================================================
     // Test 1 — locked size + id order.
     // ============================================================================
@@ -77,15 +80,13 @@ class CreateListTemplateCatalogTest {
     @Test
     fun displayNames_are_verbatim_per_ui_spec() {
         val byId = TemplateChoice.Catalog.associateBy { it.id }
-        assertEquals("Inner orbit", byId["inner_orbit"]?.displayName)
-        assertEquals("Family", byId["family"]?.displayName)
-        assertEquals("Mentors", byId["mentors"]?.displayName)
-        assertEquals("Drifted", byId["drifted"]?.displayName)
-        assertEquals(
-            "Recently added, not called",
-            byId["recently_added_not_called"]?.displayName
-        )
-        assertEquals("Start from blank", byId["blank"]?.displayName)
+        fun name(id: String): String = context.getString(byId.getValue(id).displayNameRes)
+        assertEquals("Inner orbit", name("inner_orbit"))
+        assertEquals("Family", name("family"))
+        assertEquals("Mentors", name("mentors"))
+        assertEquals("Drifted", name("drifted"))
+        assertEquals("Recently added, not called", name("recently_added_not_called"))
+        assertEquals("Start from blank", name("blank"))
     }
 
     // ============================================================================
@@ -139,7 +140,7 @@ class CreateListTemplateCatalogTest {
         assertEquals(14, byId.getValue("family").intervalDays)
         assertEquals(60, byId.getValue("mentors").intervalDays)
         assertEquals(30, byId.getValue("drifted").intervalDays)
-        assertEquals("Every couple of months.", byId.getValue("mentors").subtitle)
+        assertEquals("Every couple of months.", context.getString(byId.getValue("mentors").subtitleRes))
         // Every interval must be reachable on the 1-60 day slider (ADR 0010).
         TemplateChoice.Catalog.mapNotNull { it.intervalDays }.forEach { assertTrue(it in 1..60) }
     }
@@ -183,7 +184,8 @@ class CreateListTemplateCatalogTest {
     @Test
     fun blank_template_has_empty_default_name() {
         val blank = TemplateChoice.Catalog.single { it.id == "blank" }
-        assertEquals("", blank.defaultName)
+        // No default name: the sheet leaves the field empty for the user to fill.
+        assertNull(blank.defaultNameRes)
         assertEquals(RuleKind.KEEP_IN_TOUCH, blank.ruleKind)
         assertEquals(ListType.STATIC, blank.type)
         assertNull(blank.smartRule)

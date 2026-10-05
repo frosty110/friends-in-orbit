@@ -9,7 +9,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.theme.OrbitTheme
 
@@ -55,7 +58,7 @@ fun ThresholdStepperRow(
             OrbitIconButton(
                 icon = "minus",
                 onClick = { onChange((value - 1).coerceAtLeast(minValue)) },
-                contentDescription = "Decrease $label",
+                contentDescription = stringResource(R.string.settings_thresholds_decrease, label),
             )
             Text(
                 text = "$value",
@@ -65,7 +68,7 @@ fun ThresholdStepperRow(
             OrbitIconButton(
                 icon = "plus",
                 onClick = { onChange((value + 1).coerceAtMost(maxValue)) },
-                contentDescription = "Increase $label",
+                contentDescription = stringResource(R.string.settings_thresholds_increase, label),
             )
             Text(
                 text = unit,
@@ -86,9 +89,9 @@ fun ThresholdStepperRow(
 private fun ThresholdStepperRowLightPreview() {
     OrbitTheme(darkTheme = false) {
         ThresholdStepperRow(
-            label = "Commonly called: the top",
-            helper = "% of contacts with at least one call",
-            unit = "%",
+            label = stringResource(R.string.settings_thresholds_commonly),
+            helper = stringResource(R.string.settings_thresholds_percent_helper),
+            unit = stringResource(R.string.settings_thresholds_percent_unit),
             value = 20,
             minValue = 5,
             maxValue = 50,
@@ -106,9 +109,9 @@ private fun ThresholdStepperRowLightPreview() {
 private fun ThresholdStepperRowDarkPreview() {
     OrbitTheme(darkTheme = true) {
         ThresholdStepperRow(
-            label = "Recently added",
-            helper = "Days since first seen by Orbit",
-            unit = "days",
+            label = stringResource(R.string.settings_thresholds_recently_added),
+            helper = stringResource(R.string.settings_thresholds_recently_added_helper),
+            unit = pluralStringResource(R.plurals.settings_thresholds_days_unit, 30),
             value = 30,
             minValue = 1,
             maxValue = 3650,

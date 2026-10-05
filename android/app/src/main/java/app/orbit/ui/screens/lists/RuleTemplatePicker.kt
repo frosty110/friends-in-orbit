@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.lists
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,8 +18,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.data.entity.RuleKind
 import app.orbit.data.entity.RuleTemplateEntity
 import app.orbit.ui.theme.OrbitTheme
@@ -47,8 +50,8 @@ fun RuleTemplatePicker(
         RuleKind.entries.forEachIndexed { index, kind ->
             if (index > 0) RuleRowDivider()
             RuleRow(
-                label = labelFor(kind),
-                sub = subtitleFor(kind),
+                label = stringResource(labelFor(kind)),
+                sub = stringResource(subtitleFor(kind)),
                 selected = currentKind == kind,
                 onClick = { onSelect(kind) },
             )
@@ -56,10 +59,11 @@ fun RuleTemplatePicker(
     }
 }
 
-private fun labelFor(kind: RuleKind): String = when (kind) {
-    RuleKind.KEEP_IN_TOUCH -> "Keep in touch"
-    RuleKind.LATE_NIGHT -> "Late night"
-    RuleKind.ENERGIZE -> "Energize"
+@StringRes
+private fun labelFor(kind: RuleKind): Int = when (kind) {
+    RuleKind.KEEP_IN_TOUCH -> R.string.lists_rule_keep_in_touch
+    RuleKind.LATE_NIGHT -> R.string.lists_rule_late_night
+    RuleKind.ENERGIZE -> R.string.lists_rule_energize
 }
 
 /**
@@ -72,10 +76,11 @@ private fun labelFor(kind: RuleKind): String = when (kind) {
  *  - Energize: shortest cooldowns (24h base) and the strongest short-call /
  *    incoming-call resets — people genuinely come back sooner after a call.
  */
-private fun subtitleFor(kind: RuleKind): String = when (kind) {
-    RuleKind.KEEP_IN_TOUCH -> "Surfaces each person on a steady rhythm you set."
-    RuleKind.LATE_NIGHT -> "A slower, more patient rhythm for people you reach at night."
-    RuleKind.ENERGIZE -> "A quicker rhythm that brings people back sooner after a call."
+@StringRes
+private fun subtitleFor(kind: RuleKind): Int = when (kind) {
+    RuleKind.KEEP_IN_TOUCH -> R.string.lists_rule_keep_in_touch_sub
+    RuleKind.LATE_NIGHT -> R.string.lists_rule_late_night_sub
+    RuleKind.ENERGIZE -> R.string.lists_rule_energize_sub
 }
 
 @Composable

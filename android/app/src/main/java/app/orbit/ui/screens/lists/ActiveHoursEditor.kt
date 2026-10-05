@@ -28,15 +28,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitSwitch
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatClockTime
 import java.time.LocalTime
 
@@ -85,7 +88,7 @@ fun ActiveHoursEditor(
                         modifier = Modifier.weight(1f),
                     )
                     Text(
-                        text = "to",
+                        text = stringResource(R.string.lists_hours_to),
                         style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                     )
                     TimeChip(
@@ -102,9 +105,9 @@ fun ActiveHoursEditor(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    listOf("12a", "6a", "12p", "6p", "12a").forEach { tick ->
+                    TIME_AXIS_TICKS.forEach { tick ->
                         Text(
-                            text = tick,
+                            text = stringResource(tick),
                             style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
                         )
                     }
@@ -112,7 +115,7 @@ fun ActiveHoursEditor(
                 if (spansMidnight(start, end)) {
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text = "Overnight list — active across midnight.",
+                        text = stringResource(R.string.lists_hours_overnight),
                         style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                     )
                 }
@@ -246,12 +249,12 @@ fun TimePickerDialogOrbit(
                     horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
                 ) {
                     OrbitButton(
-                        text = "Cancel",
+                        text = stringResource(R.string.components_action_cancel),
                         onClick = onDismiss,
                         variant = OrbitButtonVariant.Ghost,
                     )
                     OrbitButton(
-                        text = "OK",
+                        text = stringResource(R.string.lists_hours_ok),
                         onClick = { onConfirm(LocalTime.of(state.hour, state.minute)) },
                     )
                 }
@@ -274,11 +277,11 @@ private fun AlwaysActiveToggleRow(
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                text = "Always active",
+                text = stringResource(R.string.lists_hours_always_active),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             Text(
-                text = "Suggest at any time of day",
+                text = stringResource(R.string.lists_hours_always_active_sub),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.padding(top = 2.dp),
             )
@@ -330,12 +333,28 @@ private fun HairlineDivider() {
 
 internal fun spansMidnight(start: LocalTime, end: LocalTime): Boolean = end < start
 
-internal fun activeHoursReadout(start: LocalTime?, end: LocalTime?): String {
-    if (start == null || end == null) return "Always"
+internal fun activeHoursReadout(start: LocalTime?, end: LocalTime?): UiText {
+    if (start == null || end == null) return UiText.res(R.string.lists_hours_readout_always)
     val s = formatHour12(start)
     val e = formatHour12(end)
-    return if (spansMidnight(start, end)) "$s – $e (overnight)" else "$s – $e"
+    return if (spansMidnight(start, end)) {
+        UiText.res(R.string.lists_hours_readout_overnight, s, e)
+    } else {
+        UiText.res(R.string.lists_hours_readout_range, s, e)
+    }
 }
+
+/**
+ * Midnight, 6am, noon, 6pm, midnight under the 24-hour bar. The words live in
+ * strings_time.xml, shared with Card view's heat strip.
+ */
+private val TIME_AXIS_TICKS: List<Int> = listOf(
+    R.string.time_axis_midnight,
+    R.string.time_axis_6am,
+    R.string.time_axis_noon,
+    R.string.time_axis_6pm,
+    R.string.time_axis_midnight,
+)
 
 /**
  * A time of day in the phone's 12/24-hour style. Delegates to the app's one

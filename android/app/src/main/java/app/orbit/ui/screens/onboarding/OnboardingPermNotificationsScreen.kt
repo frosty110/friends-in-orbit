@@ -5,10 +5,12 @@ import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.orbit.R
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -44,11 +46,11 @@ fun OnboardingPermNotificationsScreen(
         permission = Manifest.permission.POST_NOTIFICATIONS,
         skipPermission = SkipPermission.Notifications,
         iconName = "bell",
-        title = "Stay in the loop",
-        body = "Orbit can let you know when it's time to reach out to someone.",
-        promiseTitle = "Quiet by design",
-        promise = "One quiet nudge per list per day. You can change this any time.",
-        deniedNote = "You can still use Orbit. To get reminders, allow notifications in your phone's settings.",
+        title = stringResource(R.string.onb_perm_notifications_title),
+        body = stringResource(R.string.onb_perm_notifications_body),
+        promiseTitle = stringResource(R.string.onb_perm_notifications_promise_title),
+        promise = stringResource(R.string.onb_perm_notifications_promise),
+        deniedNote = stringResource(R.string.onb_perm_notifications_denied),
         granted = granted,
         hasBeenAsked = hasBeenAsked,
         onRefresh = vm::onRefresh,
@@ -68,11 +70,11 @@ private fun OnboardingPermNotificationsScreenPreview() {
             permission = Manifest.permission.POST_NOTIFICATIONS,
             skipPermission = SkipPermission.Notifications,
             iconName = "bell",
-            title = "Stay in the loop",
-            body = "Orbit can let you know when it's time to reach out to someone.",
-            promiseTitle = "Quiet by design",
-            promise = "One quiet nudge per list per day. You can change this any time.",
-            deniedNote = "You can still use Orbit. To get reminders, allow notifications in your phone's settings.",
+            title = stringResource(R.string.onb_perm_notifications_title),
+            body = stringResource(R.string.onb_perm_notifications_body),
+            promiseTitle = stringResource(R.string.onb_perm_notifications_promise_title),
+            promise = stringResource(R.string.onb_perm_notifications_promise),
+            deniedNote = stringResource(R.string.onb_perm_notifications_denied),
             granted = false,
             hasBeenAsked = false,
             onRefresh = {},

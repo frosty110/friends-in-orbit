@@ -1,17 +1,28 @@
 package app.orbit.ui.screens.settings
 
+import android.app.Application
+import androidx.test.core.app.ApplicationProvider
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * [thresholdsContradictionLine] boundary. The "commonly called"
  * top band and "rarely called" bottom band overlap exactly when their sum
  * exceeds 100; at 100 they tile the called set with nothing left over, which
  * is consistent (no contact lands in both).
+ *
+ * The helper line is a string resource; it is resolved under Robolectric.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33], application = Application::class)
 class PickerThresholdsValidationTest {
+
+    private val context = ApplicationProvider.getApplicationContext<Application>()
 
     @Test
     fun consistent_bands_return_null() {
@@ -29,7 +40,7 @@ class PickerThresholdsValidationTest {
     fun overlapping_bands_return_the_helper_line() {
         val line = thresholdsContradictionLine(commonlyTopPct = 50, rarelyBottomPct = 51)
         assertNotNull(line)
-        assertEquals("These two bands overlap — together they can't be more than 100%.", line)
+        assertEquals("These two bands overlap: together they can't be more than 100%.", context.getString(line))
     }
 
     @Test

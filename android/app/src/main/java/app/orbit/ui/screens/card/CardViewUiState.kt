@@ -3,6 +3,7 @@ package app.orbit.ui.screens.card
 import androidx.compose.runtime.Immutable
 import app.orbit.data.Contact
 import app.orbit.data.NoteRow
+import app.orbit.ui.util.UiText
 
 /**
  * Card View state contract.
@@ -10,8 +11,8 @@ import app.orbit.data.NoteRow
  * Card-loop revision (2026-06-09):
  *  - `Ready.queueSize` now carries the list's real due-now count (was the
  *    dead constant 1).
- *  - `Ready.whyNowLine` — VM-formatted "It's been 3 weeks." framing line
- *    derived from the last connected call; empty when there is no history.
+ *  - `Ready.whyNowLine`: VM-built "It's been 3 weeks." framing line
+ *    derived from the last connected call; null when there is no history.
  *  - `EmptyNothingEligible` is a data class carrying the optional
  *    soonest-upcoming-member hint so the empty state can say
  *    "{name} comes up {when}." instead of a false "paused or out of reach".
@@ -48,10 +49,10 @@ sealed interface CardViewUiState {
         // Tide marker (2026-05-08) — true when the surfaced contact's
         // engine-computed nextDueAt is in the future at the moment of emission.
         val isAheadOfToday: Boolean = false,
-        // 2026-06-09 — why-now framing line ("It's been 3 weeks."), formatted
-        // by the VM from the most recent call event. Empty when no history;
-        // the screen hides the line entirely then.
-        val whyNowLine: String = "",
+        // 2026-06-09: why-now framing line ("It's been 3 weeks."), built by
+        // the VM from the most recent call event as UiText (resolved by the
+        // screen). Null when no history; the screen hides the line then.
+        val whyNowLine: UiText? = null,
     ) : CardViewUiState
 
     /**
@@ -70,7 +71,7 @@ sealed interface CardViewUiState {
     @Immutable
     data class EmptyNothingEligible(
         val upNextName: String? = null,
-        val upNextLabel: String? = null,
+        val upNextLabel: UiText? = null,
     ) : CardViewUiState
 
     @Immutable
@@ -85,16 +86,19 @@ sealed interface CardViewUiState {
  * newer one arrives. Before, snackbars queued while the undo slot held only
  * the latest action, so Undo on the first of three quick swipes reverted the
  * third person (UX rubric gate G1).
+ *
+ * [text] is [UiText]: the screen resolves it when it shows the snackbar, so
+ * the copy lives in strings_card.xml.
  */
 sealed interface CardMessage {
-    val text: String
+    val text: UiText
 
     /** A Later or Sooner the user can take back with "Undo". */
-    data class Undoable(override val text: String, val token: Long) : CardMessage
+    data class Undoable(override val text: UiText, val token: Long) : CardMessage
 
     /** The call log confirmed a call placed from this card; offers "Add a note". */
-    data class Called(override val text: String, val contactId: Long) : CardMessage
+    data class Called(override val text: UiText, val contactId: Long) : CardMessage
 
     /** A write failed; says so (rules.md Code 3, no silent fallbacks). */
-    data class Failed(override val text: String) : CardMessage
+    data class Failed(override val text: UiText) : CardMessage
 }

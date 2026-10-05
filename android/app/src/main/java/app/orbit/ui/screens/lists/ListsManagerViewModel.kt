@@ -2,6 +2,7 @@ package app.orbit.ui.screens.lists
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.repository.ListRepository
 import app.orbit.data.repository.RuleTemplateRepository
@@ -10,6 +11,7 @@ import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeScheduler
 import app.orbit.ui.screens.home.HomeSnackbarEvent
+import app.orbit.ui.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -139,8 +141,8 @@ class ListsManagerViewModel @Inject constructor(
             }
             _snackbarEvents.tryEmit(
                 HomeSnackbarEvent(
-                    message = "List archived.",
-                    actionLabel = "Undo",
+                    message = UiText.res(R.string.lists_snackbar_archived),
+                    actionLabel = UiText.res(R.string.components_action_undo),
                     payloadListId = listId,
                     kind = HomeSnackbarEvent.Kind.ARCHIVE_UNDO
                 )
@@ -179,8 +181,8 @@ class ListsManagerViewModel @Inject constructor(
         pendingDeletes.update { it + listId }
         _snackbarEvents.tryEmit(
             HomeSnackbarEvent(
-                message = "List deleted.",
-                actionLabel = "Undo",
+                message = UiText.res(R.string.lists_snackbar_deleted),
+                actionLabel = UiText.res(R.string.components_action_undo),
                 payloadListId = listId,
                 kind = HomeSnackbarEvent.Kind.DELETE_UNDO
             )
@@ -308,7 +310,7 @@ class ListsManagerViewModel @Inject constructor(
      * cancellation still propagates correctly.
      */
     private suspend fun runMutation(
-        failureLabel: String = "Couldn't save your change",
+        failureLabel: UiText = UiText.res(R.string.components_snackbar_save_failed),
         block: suspend () -> Unit
     ) {
         try {
@@ -332,12 +334,12 @@ class ListsManagerViewModel @Inject constructor(
 
     /**
      * Sentence-case rule-summary formatter for the Lists Manager copywriting
-     * contract. Maps each [SmartListRule] subtype to its
-     * verbatim row subtitle. Returns null for static lists or for malformed JSON
-     * — bad JSON should not crash the screen; the row simply renders without a
-     * subtitle.
+     * contract. Maps each [SmartListRule] subtype to its row subtitle
+     * (strings_lists.xml, with plurals for the day counts). Returns null for
+     * static lists or for malformed JSON: bad JSON should not crash the
+     * screen; the row simply renders without a subtitle.
      */
-    private fun ruleSummary(smartRuleJson: String?): String? {
+    private fun ruleSummary(smartRuleJson: String?): UiText? {
         if (smartRuleJson.isNullOrBlank()) return null
         val rule = try {
             json.decodeFromString(SmartListRule.serializer(), smartRuleJson)
@@ -345,11 +347,15 @@ class ListsManagerViewModel @Inject constructor(
             return null
         }
         return when (rule) {
-            is SmartListRule.RecentlyAddedNotCalled -> "Recently added · ${rule.daysWindow} days"
-            is SmartListRule.LongGap -> "Long gap · ${rule.daysThreshold} days"
-            is SmartListRule.CommonlyCalled -> "Commonly called · top ${rule.topPercent}%"
-            is SmartListRule.RarelyCalled -> "Rarely called · bottom ${rule.bottomPercent}%"
-            SmartListRule.NeverCalled -> "Never called"
+            is SmartListRule.RecentlyAddedNotCalled ->
+                UiText.plural(R.plurals.lists_rule_summary_recently_added, rule.daysWindow, rule.daysWindow)
+            is SmartListRule.LongGap ->
+                UiText.plural(R.plurals.lists_rule_summary_long_gap, rule.daysThreshold, rule.daysThreshold)
+            is SmartListRule.CommonlyCalled ->
+                UiText.res(R.string.lists_rule_summary_commonly_called, rule.topPercent)
+            is SmartListRule.RarelyCalled ->
+                UiText.res(R.string.lists_rule_summary_rarely_called, rule.bottomPercent)
+            SmartListRule.NeverCalled -> UiText.res(R.string.lists_rule_summary_never_called)
         }
     }
 }

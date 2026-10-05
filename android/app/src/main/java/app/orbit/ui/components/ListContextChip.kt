@@ -2,6 +2,8 @@ package app.orbit.ui.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import app.orbit.R
 import app.orbit.data.ChipTone
 
 /**
@@ -24,7 +26,7 @@ fun ListContextChip(
 ) {
     val curtain = LocalPrivacyCurtain.current
     OrbitChip(
-        label = if (curtain) "List" else listName,
+        label = if (curtain) stringResource(R.string.components_curtain_list) else listName,
         tone = if (curtain) ChipTone.Stone else tone,
         modifier = modifier,
     )

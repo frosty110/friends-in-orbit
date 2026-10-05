@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Shared component copy, and the chrome words every screen uses.
+    Keys are area_what (features/_foundations/voice.md, "Where copy lives").
+    Sentence case, no exclamation marks, the voice.md glossary's words.
+-->
+<resources>
+
+    <!-- Shared actions: buttons, app-bar back arrow, snackbar actions. -->
+    <string name="components_action_back">Back</string>
+    <string name="components_action_cancel">Cancel</string>
+    <string name="components_action_save">Save</string>
+    <string name="components_action_done">Done</string>
+    <string name="components_action_continue">Continue</string>
+    <!-- Snackbar action that reverses the change the snackbar just announced. -->
+    <string name="components_action_undo">Undo</string>
+    <string name="components_action_archive">Archive</string>
+    <string name="components_action_delete">Delete</string>
+
+    <!-- Shown when a change could not be written. Rules: a failed write always tells the user. -->
+    <string name="components_snackbar_save_failed">Couldn\'t save your change</string>
+
+    <!-- Privacy curtain: stands in for a person's or list's real name while the app is
+         covered (app switcher, someone looking over a shoulder). -->
+    <string name="components_curtain_contact">Contact</string>
+    <string name="components_curtain_list">List</string>
+    <string name="components_curtain_someone">Someone</string>
+
+    <!-- Banner after the user returns from a call. -->
+    <string name="components_post_call_heading_generic">You just made a call</string>
+    <!-- %1$s: the person's name. -->
+    <string name="components_post_call_heading_named">You just called %1$s</string>
+    <string name="components_post_call_body">Add a note while it\'s fresh</string>
+    <string name="components_post_call_add_note">Add a note</string>
+    <string name="components_post_call_dismiss">Dismiss</string>
+
+    <!-- A person row in Browse and Search. %1$s: the person's first name. -->
+    <string name="components_browse_row_call">Call %1$s</string>
+    <string name="components_browse_row_open_details">Open details</string>
+    <!-- Screen-reader word for the small dot that marks someone worth a call now. -->
+    <string name="components_browse_row_due">Due</string>
+    <string name="components_browse_row_never_called">Never called</string>
+    <!-- %1$s: how long ago, for example "3 days ago". -->
+    <string name="components_browse_row_last_call">Last call: %1$s</string>
+
+    <string name="components_search_clear">Clear search</string>
+    <!-- Screen-reader name of the small "i" button that explains the thing next to it. -->
+    <string name="components_info_tip_label">About this</string>
+
+</resources>

@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -30,6 +31,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import app.orbit.R
 import app.orbit.data.entity.ListType
 import app.orbit.data.entity.RuleKind
 import app.orbit.domain.JsonProvider
@@ -171,24 +173,27 @@ private fun ListConfigContent(
     onRemoveMember: (Long, String) -> Unit,
     onAddContacts: () -> Unit,
 ) {
+    val fallbackTitle = stringResource(R.string.lists_config_title_fallback)
     val title = when (state) {
-        is ListConfigUiState.Ready -> state.name.ifBlank { "List" }
-        ListConfigUiState.NotFound -> "List"
+        is ListConfigUiState.Ready -> state.name.ifBlank { fallbackTitle }
+        ListConfigUiState.NotFound -> fallbackTitle
         ListConfigUiState.Loading -> ""
     }
 
     OrbitScreen {
         OrbitAppBar(
             title = title,
-            leading = { OrbitIconButton("arrow-left", onBack, contentDescription = "Back") },
+            leading = {
+                OrbitIconButton("arrow-left", onBack, contentDescription = stringResource(R.string.components_action_back))
+            },
             // Only offered once there is a list to be done with — Loading and
             // NotFound have nothing to finish.
             trailing = if (state is ListConfigUiState.Ready) {
                 {
                     OrbitAppBarTextAction(
-                        text = "Done",
+                        text = stringResource(R.string.components_action_done),
                         onClick = onDone,
-                        contentDescription = "Done — back to your lists",
+                        contentDescription = stringResource(R.string.lists_config_done_a11y),
                     )
                 }
             } else null,
@@ -203,7 +208,7 @@ private fun ListConfigContent(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "List not found",
+                    text = stringResource(R.string.lists_config_not_found),
                     style = OrbitTheme.type.h3,
                     color = OrbitTheme.colors.fg,
                     textAlign = TextAlign.Center,

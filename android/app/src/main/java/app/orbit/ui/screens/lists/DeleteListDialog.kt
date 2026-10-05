@@ -6,7 +6,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -34,7 +36,7 @@ fun DeleteListDialog(
         containerColor = OrbitTheme.colors.surface,
         title = {
             Text(
-                text = "Delete this list?",
+                text = stringResource(R.string.lists_delete_title),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         },
@@ -42,20 +44,20 @@ fun DeleteListDialog(
             Text(
                 // Sentence case per voice.md (UX rubric decision 8, 2026-10-05);
                 // the PRD line that pinned lowercase was updated with it.
-                text = "This removes the list. People stay in your contacts.",
+                text = stringResource(R.string.lists_delete_body),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             )
         },
         confirmButton = {
             OrbitButton(
-                text = "Delete",
+                text = stringResource(R.string.components_action_delete),
                 onClick = onConfirm,
                 variant = OrbitButtonVariant.Destructive,
             )
         },
         dismissButton = {
             OrbitButton(
-                text = "Keep",
+                text = stringResource(R.string.lists_delete_keep),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
             )

@@ -1,6 +1,7 @@
 package app.orbit.ui.screens.settings.ignored
 
 import androidx.compose.runtime.Immutable
+import app.orbit.ui.util.UiText
 
 /**
  * IGNORE-06 — view-state contract for the Settings → Ignored route.
@@ -28,6 +29,8 @@ sealed interface SettingsIgnoredUiState {
  * `state -> composable` projection — see project architecture conventions:
  * ViewModels never know about composables.
  *
+ * `ignoredRelativeLabel` is [UiText] ("Ignored {today}"), resolved by the screen.
+ *
  * `ignoredAtMs` is the millisecond timestamp; the screen does not currently
  * read it directly but it is preserved for stable list keys / future "Sort by
  * ignored time" UX without re-deriving the source-of-truth from the row.
@@ -38,5 +41,5 @@ data class IgnoredContactRow(
     val name: String,
     val photoUri: String?,
     val ignoredAtMs: Long,
-    val ignoredRelativeLabel: String,
+    val ignoredRelativeLabel: UiText,
 )

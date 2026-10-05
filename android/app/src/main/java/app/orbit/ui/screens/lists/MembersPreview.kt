@@ -18,11 +18,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
@@ -67,16 +70,14 @@ fun MembersPreview(
             .padding(horizontal = 16.dp, vertical = 18.dp),
     ) {
         Text(
-            text = "${members.size} ${if (members.size == 1) "person" else "people"}",
+            text = pluralStringResource(R.plurals.lists_members_count, members.size, members.size),
             style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted),
         )
         if (members.isEmpty()) {
             Text(
-                text = if (isSmart) {
-                    "No one matches this rule right now."
-                } else {
-                    "No one in this list yet."
-                },
+                text = stringResource(
+                    if (isSmart) R.string.lists_members_empty_smart else R.string.lists_members_empty_static,
+                ),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.padding(top = 12.dp),
             )
@@ -129,21 +130,23 @@ private fun ShowAllRow(
     totalCount: Int,
     onShowAll: () -> Unit,
 ) {
+    // Resolved here: the semantics block below is not composable.
+    val showAllDescription = pluralStringResource(R.plurals.lists_members_show_all_a11y, totalCount, totalCount)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
             .clickable(onClick = onShowAll)
-            .semantics { contentDescription = "Show all $totalCount members" },
+            .semantics { contentDescription = showAllDescription },
     ) {
         Text(
-            text = "Showing $visibleCount of $totalCount",
+            text = stringResource(R.string.lists_members_showing, visibleCount, totalCount),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgSubtle),
             modifier = Modifier.weight(1f),
         )
         Text(
-            text = "Show all",
+            text = stringResource(R.string.lists_members_show_all),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
         )
     }
@@ -155,6 +158,8 @@ private fun MemberRow(
     showRemove: Boolean,
     onRemove: () -> Unit,
 ) {
+    // Resolved here: the semantics block below is not composable.
+    val removeDescription = stringResource(R.string.lists_members_remove, snapshot.displayName)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -178,7 +183,7 @@ private fun MemberRow(
                     )
                     .clickable(onClick = onRemove)
                     .semantics {
-                        contentDescription = "Remove ${snapshot.displayName} from list"
+                        contentDescription = removeDescription
                     },
             ) {
                 PhIcon(
@@ -196,6 +201,8 @@ private fun AddContactsRow(
     hasMembers: Boolean,
     onAddContacts: () -> Unit,
 ) {
+    // Resolved here: the semantics block below is not composable.
+    val addDescription = stringResource(R.string.lists_members_add_a11y)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -204,7 +211,7 @@ private fun AddContactsRow(
             .heightIn(min = OrbitTheme.spacing.tapMin)
             .clickable(role = Role.Button, onClick = onAddContacts)
             .padding(top = if (hasMembers) 14.dp else 12.dp, bottom = 4.dp)
-            .semantics { contentDescription = "Add people to this list" },
+            .semantics { contentDescription = addDescription },
     ) {
         Box(
             contentAlignment = Alignment.Center,
@@ -217,7 +224,7 @@ private fun AddContactsRow(
             )
         }
         Text(
-            text = "Add people",
+            text = stringResource(R.string.lists_members_add),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
         )
     }

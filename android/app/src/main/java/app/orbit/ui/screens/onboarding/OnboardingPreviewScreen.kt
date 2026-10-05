@@ -24,15 +24,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 
 /**
  * ONB-19 — H/β recency × frequency preview screen.
@@ -63,6 +68,8 @@ fun OnboardingPreviewScreen(
         if (ready != null && ready.candidates.size < 3) onSkip()
     }
 
+    val defaultName = ready?.defaultName?.asString().orEmpty()
+
     if (ready == null) {
         // Loading used to render nothing (blank flash while the H/β rank
         // settles). Quiet skeleton under disabled CTAs instead, the
@@ -71,12 +78,12 @@ fun OnboardingPreviewScreen(
             step = OnboardingStep.FirstList,
             onBack = null,
             primary = OnboardingAction(
-                label = "Make this my first list",
+                label = stringResource(R.string.onb_preview_accept),
                 onClick = {},
                 enabled = false,
             ),
             secondary = OnboardingAction(
-                label = "Start blank",
+                label = stringResource(R.string.onb_preview_start_blank),
                 onClick = onSkip,
             ),
         ) {
@@ -90,7 +97,7 @@ fun OnboardingPreviewScreen(
     OnboardingPreviewContent(
         state = ready,
         onAccept = { selectedIds ->
-            onAccept(ready.defaultName, selectedIds)
+            onAccept(defaultName, selectedIds)
         },
         onSkip = onSkip,
     )
@@ -119,25 +126,24 @@ private fun OnboardingPreviewContent(
         step = OnboardingStep.FirstList, // logically still step 5
         onBack = null,
         primary = OnboardingAction(
-            label = "Make this my first list",
+            label = stringResource(R.string.onb_preview_accept),
             onClick = {
                 onAccept(candidateIds.filter { it in selectedIds })
             },
             enabled = !noneSelected,
         ),
         secondary = OnboardingAction(
-            label = "Start blank",
+            label = stringResource(R.string.onb_preview_start_blank),
             onClick = onSkip,
         ),
     ) {
         Text(
-            text = "Here are 5 to 10 people you've been in touch with",
+            text = stringResource(R.string.onb_preview_title),
             style = OrbitTheme.type.title.copy(color = OrbitTheme.colors.fg),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
-            text = "Untick anyone you'd rather not include. " +
-                "You can edit anything before saving.",
+            text = stringResource(R.string.onb_preview_body),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
@@ -148,11 +154,11 @@ private fun OnboardingPreviewContent(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "${selectedIds.size} selected",
+                text = pluralStringResource(R.plurals.onb_preview_selected, selectedIds.size, selectedIds.size),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
             )
             OrbitButton(
-                text = if (allSelected) "Deselect all" else "Select all",
+                text = stringResource(if (allSelected) R.string.onb_preview_deselect_all else R.string.onb_preview_select_all),
                 onClick = {
                     selectedIds = if (allSelected) emptySet() else candidateIds.toSet()
                 },
@@ -207,7 +213,7 @@ private fun PreviewRow(
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             Text(
-                text = candidate.lastCallRelative,
+                text = candidate.lastCallRelative.asString(),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
             )
         }
@@ -267,11 +273,11 @@ private fun OnboardingPreviewLoadingPreview() {
             step = OnboardingStep.FirstList,
             onBack = null,
             primary = OnboardingAction(
-                label = "Make this my first list",
+                label = stringResource(R.string.onb_preview_accept),
                 onClick = {},
                 enabled = false,
             ),
-            secondary = OnboardingAction(label = "Start blank", onClick = {}),
+            secondary = OnboardingAction(label = stringResource(R.string.onb_preview_start_blank), onClick = {}),
         ) {
             PreviewLoadingSkeleton()
         }
@@ -286,9 +292,9 @@ private fun OnboardingPreviewScreenPreview() {
         OnboardingPreviewContent(
             state = OnboardingPreviewUiState.Ready(
                 candidates = listOf(
-                    PreviewCandidate(1L, "Sam", "Called 2 days ago"),
-                    PreviewCandidate(2L, "Alex", "Called 4 days ago"),
-                    PreviewCandidate(3L, "Jordan", "Called a week ago"),
+                    PreviewCandidate(1L, "Sam", UiText.res(R.string.onb_preview_called, "2 days ago")),
+                    PreviewCandidate(2L, "Alex", UiText.res(R.string.onb_preview_called, "4 days ago")),
+                    PreviewCandidate(3L, "Jordan", UiText.res(R.string.onb_preview_called, "a week ago")),
                 ),
             ),
             onAccept = {},

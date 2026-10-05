@@ -27,8 +27,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -103,20 +105,18 @@ private fun ExportPassphraseContent(
             ),
     ) {
         Text(
-            text = "Export your data",
+            text = stringResource(R.string.settings_export_sheet_title),
             style = OrbitTheme.type.h2.copy(color = OrbitTheme.colors.fg),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
-            text = "We'll save an encrypted file of your lists, contacts, call history, " +
-                "notes, and rule overrides. Pick a strong password — we don't store it, " +
-                "and we can't recover it.",
+            text = stringResource(R.string.settings_export_sheet_body),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
 
         Text(
-            text = "Password",
+            text = stringResource(R.string.settings_password),
             style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
@@ -133,7 +133,7 @@ private fun ExportPassphraseContent(
                 .background(OrbitTheme.colors.bgSubtle),
         )
         Text(
-            text = if (tooShort) "Use 8 or more characters." else "At least 8 characters.",
+            text = stringResource(if (tooShort) R.string.settings_password_too_short else R.string.settings_password_hint),
             style = OrbitTheme.type.meta.copy(
                 color = if (tooShort) OrbitTheme.colors.danger else OrbitTheme.colors.fgMuted,
             ),
@@ -143,7 +143,7 @@ private fun ExportPassphraseContent(
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
 
         Text(
-            text = "Type it again",
+            text = stringResource(R.string.settings_password_confirm),
             style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
@@ -161,7 +161,7 @@ private fun ExportPassphraseContent(
         )
         if (mismatch) {
             Text(
-                text = "Passwords don't match.",
+                text = stringResource(R.string.settings_password_mismatch),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.danger),
                 modifier = Modifier.padding(top = OrbitTheme.spacing.x1, start = OrbitTheme.spacing.x1),
             )
@@ -174,13 +174,13 @@ private fun ExportPassphraseContent(
             horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x4),
         ) {
             OrbitButton(
-                text = "Cancel",
+                text = stringResource(R.string.components_action_cancel),
                 onClick = onCancel,
                 variant = OrbitButtonVariant.Ghost,
                 modifier = Modifier.weight(1f),
             )
             OrbitButton(
-                text = "Export",
+                text = stringResource(R.string.settings_export_cta),
                 onClick = {
                     if (canSubmit) onSubmit(password.toCharArray())
                 },
