@@ -83,6 +83,7 @@ import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.PostCallBanner
 import app.orbit.ui.screens.lists.DeleteListDialog
 import app.orbit.ui.theme.OrbitMotion
+import app.orbit.ui.theme.LocalReducedMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
 import app.orbit.ui.util.UiText
@@ -242,6 +243,7 @@ private fun HomeContent(
     val isEmpty = state is HomeUiState.Empty
     val isLoading = state is HomeUiState.Loading
     val isError = state is HomeUiState.Error
+    val reducedMotion = LocalReducedMotion.current
 
     Box(modifier = Modifier.fillMaxSize()) {
       OrbitScreen {
@@ -361,6 +363,10 @@ private fun HomeContent(
                 // until the database answers (never the first-install CTA).
                 if (!isLoading) {
                     itemsIndexed(tiles, key = { _, tile -> tile.id }) { index, tile ->
+                        // Cards slide and fade when a list is archived, deleted,
+                        // restored or reordered, instead of popping (rubric D5);
+                        // still when the system's animations are off.
+                        Box(if (reducedMotion) Modifier else Modifier.animateItem()) {
                         ListTile(
                             tile = tile,
                             toneIndex = index,
@@ -376,6 +382,7 @@ private fun HomeContent(
                             onOpenContact = onOpenContact,
                             onCallNextUp = onCallNextUp,
                         )
+                        }
                     }
                     item { CreateListTile(label = stringResource(R.string.home_new_list), onClick = onCreateList) }
                     item { ReflectionFooter() }
