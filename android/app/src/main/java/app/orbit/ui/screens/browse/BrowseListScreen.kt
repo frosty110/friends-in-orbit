@@ -10,21 +10,21 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Checkbox
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -44,9 +44,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
@@ -57,28 +58,32 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import app.orbit.data.ChipTone
 import app.orbit.data.Contact
 import app.orbit.data.entity.ListEntity
 import app.orbit.domain.model.PauseDuration
 import app.orbit.ui.components.BrowseRow
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
-import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
-import app.orbit.ui.components.OrbitChip
+import app.orbit.ui.components.OrbitCheckbox
 import app.orbit.ui.components.OrbitDropdownMenu
+import app.orbit.ui.components.OrbitFilterChip
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitListSkeleton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSearchField
+import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.screens.contact.sections.PauseSheet
+import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.dialPhoneNumber
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -92,12 +97,16 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  *   - inner owns the local debounced TextField buffer (via `snapshotFlow` +
  *     `debounce(250)`) and forwards committed query strings to `vm::onSearchChanged`.
  *
- * BROWSE-01: per-list contacts sorted `lastCallAt DESC NULLS LAST` (VM-side).
+ * BROWSE-01: per-list contacts in queue order (VM-side), under "Up next";
+ *            members outside the rotation follow under "Everyone else".
  * BROWSE-02: 250ms debounced search + 2 filter chips (chip×chip = UNION per
- *            user decision).
- * BROWSE-04: long-press on a row enters multi-select; combinedClickable
- *            modifier chain identical in both modes. Haptic fires ONLY on entry.
- * BROWSE-05: trailing phone icon on each row → `dialPhoneNumber`.
+ *            user decision), drawn with the shared [OrbitFilterChip].
+ * BROWSE-04: long-press on a row opens quick actions; "Select" enters
+ *            multi-select. Haptic fires ONLY on the long-press.
+ * BROWSE-05: trailing phone icon on each row → `dialPhoneNumber` (hidden in
+ *            multi-select, where it used to sit inert).
+ * BROWSE-06: a skeleton while the list loads and Retry when it fails, never a
+ *            false "No one here yet".
  * BULK-05  : trailing "+" in single-select app-bar → BULK-05 picker entry.
  * MOVE-01  : combinedClickable + LocalHapticFeedback on entry.
  * MOVE-02  : AnimatedContent fadeIn/fadeOut(250) cross-fade swap of
@@ -107,6 +116,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  * MOVE-06  : BackHandler(enabled = isMultiSelect) consumes back gesture.
  * MOVE-07  : Snackbar undo backed by [UndoStack].
  * PRIV-03:   app-bar title + row primary names obey `LocalPrivacyCurtain.current`.
+ *
+ * One accent element (rules.md §Design 5): the due dot, which marks who is
+ * ready. Active filters use the cluster-tier tint, selected rows the same, and
+ * the queue head's number is ink, not terracotta.
  */
 @Composable
 fun BrowseListScreen(
@@ -145,6 +158,7 @@ fun BrowseListScreen(
         onSearchChanged = vm::onSearchChanged,
         onToggleFilter = vm::onToggleFilter,
         onClearFilters = vm::onClearFilters,
+        onRetry = vm::onRetry,
         onBack = onBack,
         onOpenContact = onOpenContact,
         onAddContacts = onAddContacts,
@@ -165,7 +179,7 @@ fun BrowseListScreen(
     )
 }
 
-@OptIn(FlowPreview::class, ExperimentalFoundationApi::class)
+@OptIn(FlowPreview::class)
 @Composable
 private fun BrowseContent(
     state: BrowseUiState,
@@ -177,6 +191,7 @@ private fun BrowseContent(
     onSearchChanged: (String) -> Unit,
     onToggleFilter: (BrowseFilter) -> Unit,
     onClearFilters: () -> Unit,
+    onRetry: () -> Unit,
     onBack: () -> Unit,
     onOpenContact: (contactId: String) -> Unit,
     onAddContacts: (listId: String?) -> Unit,
@@ -193,11 +208,9 @@ private fun BrowseContent(
     onSingleRowUnpause: (Long, String) -> Unit,
     onUndo: () -> Unit,
     onContactIdParseFail: () -> Unit,
-    snackbarEvents: kotlinx.coroutines.flow.SharedFlow<app.orbit.ui.screens.picker.SnackbarEvent>
+    snackbarEvents: SharedFlow<SnackbarEvent>
 ) {
     val curtain = LocalPrivacyCurtain.current
-    val context = LocalContext.current
-    val haptic = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -302,6 +315,23 @@ private fun BrowseContent(
         )
     }
 
+    // Everything a person row needs from the screen, built once per state.
+    val rowActions = BrowseRowActions(
+        menuAnchorContactId = menuAnchorContactId,
+        onOpenMenu = { menuAnchorContactId = it },
+        onDismissMenu = { menuAnchorContactId = null },
+        onOpenContact = onOpenContact,
+        onToggleSelect = onToggleSelect,
+        onEnterMultiSelect = onEnterMultiSelect,
+        onPause = { id, name ->
+            pauseSheetForContactName = name
+            pauseSheetForContactId = id
+        },
+        onUnpause = onSingleRowUnpause,
+        onIgnore = onSingleRowIgnore,
+        onContactIdParseFail = onContactIdParseFail
+    )
+
     OrbitScreen {
         // App-bar swap for Browse multi-select integration.
         // Duration via the OrbitMotion token, not a literal.
@@ -369,7 +399,7 @@ private fun BrowseContent(
                 .fillMaxWidth()
                 .padding(
                     horizontal = OrbitTheme.spacing.x4,
-                    vertical = OrbitTheme.spacing.x3
+                    vertical = OrbitTheme.spacing.x2
                 )
         ) {
             OrbitSearchField(
@@ -379,25 +409,24 @@ private fun BrowseContent(
             )
         }
 
-        // Filter chips row — chip×chip composition is UNION per user decision.
+        // Filter chips: chip×chip composition is UNION per user decision.
+        // Scrolls sideways rather than wrap a label at 200% font scale.
         Row(
             horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(
-                    horizontal = OrbitTheme.spacing.x4,
-                    vertical = OrbitTheme.spacing.x2
-                )
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = OrbitTheme.spacing.x4)
         ) {
-            FilterChipPill(
+            OrbitFilterChip(
                 label = "Called recently",
-                active = BrowseFilter.CalledRecently in activeFilters,
+                selected = BrowseFilter.CalledRecently in activeFilters,
                 onClick = { onToggleFilter(BrowseFilter.CalledRecently) }
             )
-            FilterChipPill(
+            OrbitFilterChip(
                 label = "Not called yet",
-                active = BrowseFilter.NotCalledYet in activeFilters,
+                selected = BrowseFilter.NotCalledYet in activeFilters,
                 onClick = { onToggleFilter(BrowseFilter.NotCalledYet) }
             )
         }
@@ -410,7 +439,7 @@ private fun BrowseContent(
                     // meta (every "Never called" would be a false claim).
                     if (state.callLogPermissionDenied) {
                         Text(
-                            text = "Showing names only. Call times need the call-log permission.",
+                            text = "Orbit can't see your calls, so call times are hidden.",
                             style = OrbitTheme.type.meta,
                             color = OrbitTheme.colors.fgMuted,
                             modifier = Modifier
@@ -428,313 +457,76 @@ private fun BrowseContent(
                         contentPadding = PaddingValues(bottom = OrbitTheme.spacing.x6)
                     ) {
                         // Partition contacts into queued (position number) and
-                        // non-queued ("Other members" section below, no position number).
+                        // non-queued (everyone else, below, no position number).
                         val (queuedContacts, otherContacts) =
                             state.contacts.partition { state.queuePositions[it.id] != null }
 
-                        items(
-                            items = queuedContacts,
-                            key = { it.id },
-                            contentType = { "browseRow" }
-                        ) { contact ->
-                            val queuePos = state.queuePositions[contact.id]
-                            // UI Contact.id is "c-$entityId" (String); the use cases need Long.
-                            val entityId: Long? = contact.id.removePrefix("c-").toLongOrNull()
-                            val isSelected = entityId != null && entityId in state.selectedIds
-                            val isMultiSelect = state.isMultiSelect
-                            // combinedClickable chain identical in both modes;
-                            // differentiation lives INSIDE the lambdas. Haptic fires ONLY on
-                            // entry — gated by `!isMultiSelect`.
-                            //
-                            // BROWSE-04: long-press on a single row when NOT
-                            // already in multi-select opens an anchored DropdownMenu with
-                            // Call / Ignore / Pause / Select. The "Select" item invokes
-                            // `onEnterMultiSelect(entityId)` — preserves the multi-select
-                            // contract so all existing BrowseViewModelTest tests still pass.
-                            // When already in multi-select, long-press is silent (no-op).
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(
-                                        if (isMultiSelect && isSelected) {
-                                            OrbitTheme.colors.accentTint
-                                        } else {
-                                            Color.Transparent
-                                        }
-                                    )
-                                    .combinedClickable(
-                                        onLongClick = {
-                                            // LOW polish — surface a snackbar when the row's UI id
-                                            // ("c-<long>") fails to parse, so the long-press isn't a
-                                            // silent no-op. Multi-select long-press stays inert.
-                                            if (!isMultiSelect) {
-                                                if (entityId != null) {
-                                                    haptic.performHapticFeedback(
-                                                        HapticFeedbackType.LongPress
-                                                    )
-                                                    menuAnchorContactId = entityId
-                                                } else {
-                                                    onContactIdParseFail()
-                                                }
-                                            }
-                                        },
-                                        onLongClickLabel = "Quick actions",
-                                        onClick = {
-                                            if (isMultiSelect) {
-                                                if (entityId != null) {
-                                                    onToggleSelect(entityId)
-                                                } else {
-                                                    onContactIdParseFail()
-                                                }
-                                            } else {
-                                                onOpenContact(contact.id)
-                                            }
-                                        }
-                                    )
-                                    .semantics {
-                                        if (isMultiSelect) selected = isSelected
-                                    }
-                            ) {
-                                if (isMultiSelect) {
-                                    Checkbox(
-                                        checked = isSelected,
-                                        onCheckedChange = null,
-                                        modifier = Modifier.padding(start = OrbitTheme.spacing.x3)
-                                    )
-                                }
-                                BrowseRow(
-                                    contact = contact,
-                                    onTap = null, // the parent combinedClickable owns tap + long-press
-                                    onDial = if (isMultiSelect) {
-                                        ({})
-                                    } else {
-                                        (
-                                            {
-                                                val phone = contact.phone
-                                                if (phone.isNotBlank()) {
-                                                    context.dialPhoneNumber(phone)
-                                                }
-                                            }
-                                            )
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    // 2026-06-09 #19 — due dot + paused/ignored status
-                                    // ride Ready (not Contact — id-only equality).
-                                    due = contact.id in state.dueIds,
-                                    statusLabel = when (state.rowStatus[contact.id]) {
-                                        BrowseRowStatus.Paused -> "Paused"
-                                        BrowseRowStatus.Ignored -> "Ignored"
-                                        null -> null
-                                    },
-                                    showCallMeta = !state.callLogPermissionDenied,
-                                    // Queue position prefix; head row in accent.
-                                    queuePosition = queuePos,
-                                    isHead = queuePos == 1
-                                )
-
-                                // Anchored DropdownMenu — only renders for the row whose
-                                // entityId matches the open-menu anchor. The menu lives
-                                // inside the row so its anchor offset is correct.
-                                if (entityId != null && menuAnchorContactId == entityId) {
-                                    BrowseRowActionMenu(
-                                        isPaused = state.rowStatus[contact.id] == BrowseRowStatus.Paused,
-                                        onDismiss = { menuAnchorContactId = null },
-                                        onCall = {
-                                            val phone = contact.phone
-                                            if (phone.isNotBlank()) {
-                                                context.dialPhoneNumber(phone)
-                                            }
-                                        },
-                                        onSelect = { onEnterMultiSelect(entityId) },
-                                        onPause = {
-                                            pauseSheetForContactName = contact.name
-                                            pauseSheetForContactId = entityId
-                                        },
-                                        onUnpause = { onSingleRowUnpause(entityId, contact.name) },
-                                        onIgnore = { onSingleRowIgnore(entityId, contact.name) }
-                                    )
-                                }
+                        // BROWSE-01: the numbers mean "the order Orbit will
+                        // suggest them" (vision BROWSE-1); the label says so.
+                        if (queuedContacts.isNotEmpty()) {
+                            item(key = "up-next-header", contentType = "sectionHeader") {
+                                BrowseSectionLabel("Up next")
                             }
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(1.dp)
-                                    .background(OrbitTheme.colors.lineSoft)
-                            )
                         }
+                        personRows(queuedContacts, state, rowActions)
 
                         if (otherContacts.isNotEmpty()) {
                             item(key = "other-members-header", contentType = "sectionHeader") {
-                                Text(
-                                    text = "Other members",
-                                    style = OrbitTheme.type.eyebrow,
-                                    color = OrbitTheme.colors.fgMuted,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(
-                                            horizontal = OrbitTheme.spacing.x5,
-                                            vertical = OrbitTheme.spacing.x3
-                                        )
+                                BrowseSectionLabel(
+                                    if (queuedContacts.isEmpty()) "On this list" else "Everyone else"
                                 )
                             }
-                            items(
-                                items = otherContacts,
-                                key = { it.id },
-                                contentType = { "browseRow" }
-                            ) { contact ->
-                                // `state.queuePositions[contact.id]` is null here — BrowseRow
-                                // renders a blank position column for "Other members" rows.
-                                val entityId: Long? = contact.id.removePrefix("c-").toLongOrNull()
-                                val isSelected = entityId != null && entityId in state.selectedIds
-                                val isMultiSelect = state.isMultiSelect
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(
-                                            if (isMultiSelect && isSelected) {
-                                                OrbitTheme.colors.accentTint
-                                            } else {
-                                                Color.Transparent
-                                            }
-                                        )
-                                        .combinedClickable(
-                                            onLongClick = {
-                                                if (!isMultiSelect) {
-                                                    if (entityId != null) {
-                                                        haptic.performHapticFeedback(
-                                                            HapticFeedbackType.LongPress
-                                                        )
-                                                        menuAnchorContactId = entityId
-                                                    } else {
-                                                        onContactIdParseFail()
-                                                    }
-                                                }
-                                            },
-                                            onLongClickLabel = "Quick actions",
-                                            onClick = {
-                                                if (isMultiSelect) {
-                                                    if (entityId != null) {
-                                                        onToggleSelect(entityId)
-                                                    } else {
-                                                        onContactIdParseFail()
-                                                    }
-                                                } else {
-                                                    onOpenContact(contact.id)
-                                                }
-                                            }
-                                        )
-                                        .semantics {
-                                            if (isMultiSelect) selected = isSelected
-                                        }
-                                ) {
-                                    if (isMultiSelect) {
-                                        Checkbox(
-                                            checked = isSelected,
-                                            onCheckedChange = null,
-                                            modifier = Modifier.padding(
-                                                start = OrbitTheme.spacing.x3
-                                            )
-                                        )
-                                    }
-                                    BrowseRow(
-                                        contact = contact,
-                                        onTap = null, // the parent combinedClickable owns tap + long-press
-                                        onDial = if (isMultiSelect) {
-                                            ({})
-                                        } else {
-                                            (
-                                                {
-                                                    val phone = contact.phone
-                                                    if (phone.isNotBlank()) {
-                                                        context.dialPhoneNumber(phone)
-                                                    }
-                                                }
-                                                )
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                        // 2026-06-09 #19 — due dot + paused/ignored status
-                                        due = contact.id in state.dueIds,
-                                        statusLabel = when (state.rowStatus[contact.id]) {
-                                            BrowseRowStatus.Paused -> "Paused"
-                                            BrowseRowStatus.Ignored -> "Ignored"
-                                            null -> null
-                                        },
-                                        showCallMeta = !state.callLogPermissionDenied
-                                        // queuePosition = null (default) — blank column for "Other members"
-                                    )
-                                    if (entityId != null && menuAnchorContactId == entityId) {
-                                        BrowseRowActionMenu(
-                                            isPaused = state.rowStatus[contact.id] == BrowseRowStatus.Paused,
-                                            onDismiss = { menuAnchorContactId = null },
-                                            onCall = {
-                                                val phone = contact.phone
-                                                if (phone.isNotBlank()) {
-                                                    context.dialPhoneNumber(phone)
-                                                }
-                                            },
-                                            onSelect = { onEnterMultiSelect(entityId) },
-                                            onPause = {
-                                                pauseSheetForContactName = contact.name
-                                                pauseSheetForContactId = entityId
-                                            },
-                                            onUnpause = {
-                                                onSingleRowUnpause(
-                                                    entityId,
-                                                    contact.name
-                                                )
-                                            },
-                                            onIgnore = {
-                                                onSingleRowIgnore(
-                                                    entityId,
-                                                    contact.name
-                                                )
-                                            }
-                                        )
-                                    }
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(1.dp)
-                                        .background(OrbitTheme.colors.lineSoft)
-                                )
-                            }
+                            personRows(otherContacts, state, rowActions)
                         }
                     }
                 }
 
-                // Loading branch render path retired (ADR 0006).
-                // The Loading data variant is kept on the sealed type for
-                // defense-in-depth; first-install renders Empty directly.
-                BrowseUiState.Loading,
-                BrowseUiState.Empty
-                -> EmptyShell(
-                    heading = "No one here yet.",
-                    body = "This list is waiting for people."
+                // BROWSE-06: the feed hasn't emitted yet: a quiet skeleton,
+                // never "No one here yet" for a list that has people.
+                BrowseUiState.Loading -> OrbitListSkeleton()
+
+                BrowseUiState.Error -> OrbitScreenMessage(
+                    icon = "warning-circle",
+                    title = "Couldn't load this list",
+                    body = "Something went wrong reading it. Try again in a moment.",
+                    actionLabel = "Try again",
+                    onAction = onRetry,
+                    actionVariant = OrbitButtonVariant.Primary
+                )
+
+                BrowseUiState.Empty -> OrbitScreenMessage(
+                    icon = "users",
+                    title = "No one here yet",
+                    body = "Add the people you'd like this list to bring up.",
+                    actionLabel = "Add contacts",
+                    onAction = { onAddContacts(listId) }
                 )
 
                 // 2026-06-09 #19 — the list has people; the chips excluded them.
                 // Distinct copy + a way back, instead of the false "No one here yet."
-                BrowseUiState.FilteredEmpty -> EmptyShell(
-                    heading = "No one matches these filters.",
-                    body = "Everyone on this list is hidden by the active filters.",
+                BrowseUiState.FilteredEmpty -> OrbitScreenMessage(
+                    title = "No one matches these filters",
+                    body = "Everyone on this list is hidden by the filters you chose.",
                     actionLabel = "Clear filters",
                     onAction = onClearFilters
                 )
 
-                is BrowseUiState.NoMatches -> EmptyShell(
-                    heading = "Nothing matches \"${state.query}\".",
-                    body = "Try a shorter name or clear the search."
+                is BrowseUiState.NoMatches -> OrbitScreenMessage(
+                    icon = "magnifying-glass",
+                    title = "Nothing matches “${state.query}”",
+                    body = "Try a shorter name, or part of their number.",
+                    actionLabel = "Clear search",
+                    onAction = { queryText = "" }
                 )
 
                 // 2026-06-09 #19 — reachable now: READ_CALL_LOG denied while a
                 // call-history chip is active. The chips can't be answered
                 // honestly without the call log.
-                BrowseUiState.CallLogDenied -> EmptyShell(
-                    heading = "Showing names only.",
-                    body = "These filters need the call-log permission. You can turn it on in Settings.",
+                BrowseUiState.CallLogDenied -> OrbitScreenMessage(
+                    icon = "phone-slash",
+                    title = "These filters need your call history",
+                    body = "Orbit can't see your calls, so it can't tell who you've " +
+                        "called. You can turn call log access on in Settings.",
                     actionLabel = "Clear filters",
                     onAction = onClearFilters
                 )
@@ -744,6 +536,168 @@ private fun BrowseContent(
             SnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+    }
+}
+
+@Composable
+private fun BrowseSectionLabel(text: String) {
+    SectionLabel(
+        text = text,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = OrbitTheme.spacing.x5,
+                vertical = OrbitTheme.spacing.x3
+            )
+    )
+}
+
+/** What a person row needs from the screen; one instance per composition. */
+private class BrowseRowActions(
+    val menuAnchorContactId: Long?,
+    val onOpenMenu: (Long) -> Unit,
+    val onDismissMenu: () -> Unit,
+    val onOpenContact: (String) -> Unit,
+    val onToggleSelect: (Long) -> Unit,
+    val onEnterMultiSelect: (Long) -> Unit,
+    val onPause: (Long, String) -> Unit,
+    val onUnpause: (Long, String) -> Unit,
+    val onIgnore: (Long, String) -> Unit,
+    val onContactIdParseFail: () -> Unit
+)
+
+/**
+ * The person rows of one section. Both sections ("Up next" and everyone
+ * else) used to carry their own copy of this block; one copy means the
+ * selection semantics below cannot drift apart again.
+ */
+private fun LazyListScope.personRows(
+    contacts: List<Contact>,
+    state: BrowseUiState.Ready,
+    actions: BrowseRowActions
+) {
+    items(
+        items = contacts,
+        key = { it.id },
+        contentType = { "browseRow" }
+    ) { contact ->
+        BrowsePersonRow(contact = contact, state = state, actions = actions)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(OrbitTheme.colors.lineSoft)
+        )
+    }
+}
+
+/**
+ * One person in Browse.
+ *
+ * The combinedClickable chain is identical in both modes; the differences
+ * live inside the lambdas. Outside multi-select, tap opens the contact and
+ * long-press opens the quick actions (BROWSE-04), with a haptic. In
+ * multi-select, tap toggles the row, long-press does nothing, and the row is a
+ * checkbox for TalkBack ("Alex, checkbox, checked"), drawn with
+ * [OrbitCheckbox]. The dial button is hidden there instead of sitting inert.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BrowsePersonRow(
+    contact: Contact,
+    state: BrowseUiState.Ready,
+    actions: BrowseRowActions
+) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val queuePos = state.queuePositions[contact.id]
+    // UI Contact.id is "c-$entityId" (String); the use cases need Long.
+    val entityId: Long? = contact.id.removePrefix("c-").toLongOrNull()
+    val isSelected = entityId != null && entityId in state.selectedIds
+    val isMultiSelect = state.isMultiSelect
+    val dial = {
+        val phone = contact.phone
+        if (phone.isNotBlank()) context.dialPhoneNumber(phone)
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (isMultiSelect && isSelected) OrbitTheme.colors.accentTint else Color.Transparent
+            )
+            .combinedClickable(
+                onLongClick = {
+                    // LOW polish: surface a snackbar when the row's UI id
+                    // ("c-<long>") fails to parse, so the long-press isn't a
+                    // silent no-op. Multi-select long-press stays inert.
+                    if (!isMultiSelect) {
+                        if (entityId != null) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            actions.onOpenMenu(entityId)
+                        } else {
+                            actions.onContactIdParseFail()
+                        }
+                    }
+                },
+                onLongClickLabel = if (isMultiSelect) null else "Quick actions",
+                onClickLabel = if (isMultiSelect) null else "Open details",
+                role = if (isMultiSelect) Role.Checkbox else null,
+                onClick = {
+                    if (isMultiSelect) {
+                        if (entityId != null) {
+                            actions.onToggleSelect(entityId)
+                        } else {
+                            actions.onContactIdParseFail()
+                        }
+                    } else {
+                        actions.onOpenContact(contact.id)
+                    }
+                }
+            )
+            .semantics {
+                if (isMultiSelect) toggleableState = ToggleableState(isSelected)
+            }
+    ) {
+        if (isMultiSelect) {
+            OrbitCheckbox(
+                checked = isSelected,
+                modifier = Modifier.padding(start = OrbitTheme.spacing.x3)
+            )
+        }
+        BrowseRow(
+            contact = contact,
+            onTap = null, // the parent combinedClickable owns tap + long-press
+            onDial = dial,
+            showDial = !isMultiSelect,
+            modifier = Modifier.weight(1f),
+            // 2026-06-09 #19: due dot + paused/ignored status
+            // ride Ready (not Contact: id-only equality).
+            due = contact.id in state.dueIds,
+            statusLabel = when (state.rowStatus[contact.id]) {
+                BrowseRowStatus.Paused -> "Paused"
+                BrowseRowStatus.Ignored -> "Ignored"
+                null -> null
+            },
+            showCallMeta = !state.callLogPermissionDenied,
+            queuePosition = queuePos,
+            isHead = queuePos == 1
+        )
+
+        // Anchored DropdownMenu: only renders for the row whose entityId
+        // matches the open-menu anchor. The menu lives inside the row so its
+        // anchor offset is correct.
+        if (entityId != null && actions.menuAnchorContactId == entityId) {
+            BrowseRowActionMenu(
+                isPaused = state.rowStatus[contact.id] == BrowseRowStatus.Paused,
+                onDismiss = actions.onDismissMenu,
+                onCall = dial,
+                onSelect = { actions.onEnterMultiSelect(entityId) },
+                onPause = { actions.onPause(entityId, contact.name) },
+                onUnpause = { actions.onUnpause(entityId, contact.name) },
+                onIgnore = { actions.onIgnore(entityId, contact.name) }
             )
         }
     }
@@ -803,71 +757,14 @@ internal fun browseRowMenuActions(
     )
 )
 
-/**
- * Filter chip — wraps [OrbitChip] with active/inactive tone visual. Active uses
- * Terracotta (accent tone), inactive uses Stone (neutral). Tap target is
- * floor-clamped at `spacing.tapMin`.
- */
-@Composable
-private fun FilterChipPill(label: String, active: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        OrbitChip(
-            label = label,
-            tone = if (active) ChipTone.Terracotta else ChipTone.Stone
-        )
-    }
-}
+// ─── Previews ──────────────────────────────────────────────────────────────────
+// One per state, so each renders in the screenshot gallery.
 
-@Composable
-private fun EmptyShell(
-    heading: String,
-    body: String,
-    actionLabel: String? = null,
-    onAction: () -> Unit = {}
-) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x6)
-        ) {
-            Text(
-                text = heading,
-                style = OrbitTheme.type.h2,
-                color = OrbitTheme.colors.fg,
-                textAlign = TextAlign.Center
-            )
-            Box(modifier = Modifier.height(OrbitTheme.spacing.x2))
-            Text(
-                text = body,
-                style = OrbitTheme.type.body,
-                color = OrbitTheme.colors.fgMuted,
-                textAlign = TextAlign.Center
-            )
-            if (actionLabel != null) {
-                Box(modifier = Modifier.height(OrbitTheme.spacing.x4))
-                // Ghost variant — the screen's single terracotta element stays
-                // the rows' tap-to-call icon (rules.md §Design 5).
-                OrbitButton(
-                    text = actionLabel,
-                    onClick = onAction,
-                    variant = OrbitButtonVariant.Ghost
-                )
-            }
-        }
-    }
-}
-
-// Preview fixtures for the stateless BrowseContent.
-private val previewContact: Contact = Contact(
-    id = "preview-1",
-    name = "Avery Quinn",
+private fun previewContact(id: Long, name: String, lastCalled: String): Contact = Contact(
+    id = "c-$id",
+    name = name,
     phone = "+1 555 0100",
-    lastCalledLabel = "11 days ago",
+    lastCalledLabel = lastCalled,
     avgLengthLabel = "14 min",
     pickupRateLabel = "82%",
     totalCalls = 12,
@@ -881,29 +778,37 @@ private val previewContact: Contact = Contact(
 )
 
 private val previewState: BrowseUiState = BrowseUiState.Ready(
-    contacts = listOf(previewContact),
+    contacts = listOf(
+        previewContact(1, "Avery Quinn", "11 days ago"),
+        previewContact(2, "Sam Patel", "3 weeks ago"),
+        previewContact(3, "Jordan Lee", ""),
+        previewContact(4, "Priya Anand", "2 months ago")
+    ),
     searchQuery = "",
     activeFilters = emptySet(),
     callLogPermissionDenied = false,
-    dueIds = setOf("preview-1")
+    dueIds = setOf("c-1", "c-2"),
+    rowStatus = mapOf("c-4" to BrowseRowStatus.Paused),
+    queuePositions = mapOf("c-1" to 1, "c-2" to 2, "c-3" to 3)
 )
 
-@OptIn(ExperimentalFoundationApi::class, FlowPreview::class)
-@PreviewLightDark
-@PreviewFontScale
 @Composable
-private fun BrowseContentPreview() {
+private fun BrowsePreviewHost(
+    state: BrowseUiState,
+    activeFilters: Set<BrowseFilter> = emptySet()
+) {
     OrbitTheme {
         BrowseContent(
-            state = previewState,
+            state = state,
             initialQuery = "",
-            activeFilters = emptySet(),
+            activeFilters = activeFilters,
             lists = emptyList(),
-            listId = "inner-orbit",
+            listId = "1",
             listName = "Inner orbit",
             onSearchChanged = {},
             onToggleFilter = {},
             onClearFilters = {},
+            onRetry = {},
             onBack = {},
             onOpenContact = {},
             onAddContacts = {},
@@ -920,7 +825,46 @@ private fun BrowseContentPreview() {
             onSingleRowUnpause = { _, _ -> },
             onUndo = {},
             onContactIdParseFail = {},
-            snackbarEvents = MutableSharedFlow<app.orbit.ui.screens.picker.SnackbarEvent>().asSharedFlow()
+            snackbarEvents = MutableSharedFlow<SnackbarEvent>().asSharedFlow()
         )
     }
+}
+
+@PreviewLightDark
+@PreviewFontScale
+@Composable
+private fun BrowseContentPreview() {
+    BrowsePreviewHost(previewState)
+}
+
+@PreviewLightDark
+@Composable
+private fun BrowseMultiSelectPreview() {
+    BrowsePreviewHost(
+        (previewState as BrowseUiState.Ready).copy(isMultiSelect = true, selectedIds = setOf(1L, 3L))
+    )
+}
+
+@PreviewLightDark
+@Composable
+private fun BrowseLoadingPreview() {
+    BrowsePreviewHost(BrowseUiState.Loading)
+}
+
+@PreviewLightDark
+@Composable
+private fun BrowseEmptyPreview() {
+    BrowsePreviewHost(BrowseUiState.Empty)
+}
+
+@PreviewLightDark
+@Composable
+private fun BrowseFilteredEmptyPreview() {
+    BrowsePreviewHost(BrowseUiState.FilteredEmpty, activeFilters = setOf(BrowseFilter.NotCalledYet))
+}
+
+@PreviewLightDark
+@Composable
+private fun BrowseErrorPreview() {
+    BrowsePreviewHost(BrowseUiState.Error)
 }

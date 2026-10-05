@@ -2,6 +2,8 @@ package app.orbit.ui.screens.browse
 
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import app.orbit.data.entity.ContactEntity
+import app.orbit.data.repository.ContactRepository
 import app.orbit.domain.FakeCallEventRepository
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
@@ -12,10 +14,18 @@ import app.orbit.domain.listFixture
 import app.orbit.domain.membershipFixture
 import app.orbit.nav.Routes
 import app.orbit.testutil.MainDispatcherRule
+import java.io.IOException
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -43,12 +53,22 @@ class GlobalSearchViewModelTest {
         val callEventRepo: FakeCallEventRepository,
     )
 
-    private fun makeVm(): Setup {
+    /** [contactsFlow], when set, replaces the contact stream the VM reads. */
+    private fun makeVm(
+        contactsFlow: ((FakeContactRepository) -> Flow<List<ContactEntity>>)? = null,
+    ): Setup {
         val contactRepo = FakeContactRepository()
         val listRepo = FakeListRepository()
         val callEventRepo = FakeCallEventRepository()
+        val vmContacts: ContactRepository = if (contactsFlow == null) {
+            contactRepo
+        } else {
+            object : ContactRepository by contactRepo {
+                override fun observeAll(): Flow<List<ContactEntity>> = contactsFlow(contactRepo)
+            }
+        }
         val vm = GlobalSearchViewModel(
-            contactRepo = contactRepo,
+            contactRepo = vmContacts,
             listRepo = listRepo,
             callEventRepo = callEventRepo,
             clock = TestClock(),
@@ -255,6 +275,59 @@ class GlobalSearchViewModelTest {
             // the load-bearing contract.
             assertEquals("c-7", hit.contact.id)
             assertEquals("pick/lists?contactId=c-7", Routes.pickLists(hit.contact.id))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ========================================================================
+    // BROWSE-06: no false states while loading; Error with Retry
+    // ========================================================================
+
+    @Test
+    fun `a typed query before contacts load is Loading, never NoMatches`() = runTest {
+        val gate = MutableStateFlow(false)
+        val s = makeVm(contactsFlow = { fake -> gate.filter { it }.flatMapLatest { fake.observeAll() } })
+        s.contactRepo.seed(listOf(contactFixture(id = 1L, displayName = "Maya")))
+        s.vm.onSearchChanged("maya")
+        s.vm.uiState.test(timeout = 2.seconds) {
+            var item = awaitItem()
+            while (item == SearchUiState.Empty) item = awaitItem()
+            assertEquals(SearchUiState.Loading, item)
+            expectNoEvents()
+            gate.value = true
+            assertEquals(listOf("Maya"), awaitReadyWhere(this) { true }.results.map { it.contact.name })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an empty query shows the hint without waiting for contacts`() = runTest {
+        val s = makeVm(contactsFlow = { emptyFlow() })
+        s.vm.uiState.test(timeout = 2.seconds) {
+            assertEquals(SearchUiState.Empty, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a failing contact stream is Error, and Retry recovers`() = runTest {
+        var failing = true
+        val s = makeVm(
+            contactsFlow = { fake ->
+                flow {
+                    if (failing) throw IOException("disk")
+                    emitAll(fake.observeAll())
+                }
+            },
+        )
+        s.contactRepo.seed(listOf(contactFixture(id = 1L, displayName = "Maya")))
+        s.vm.onSearchChanged("maya")
+        s.vm.uiState.test(timeout = 2.seconds) {
+            var item = awaitItem()
+            while (item != SearchUiState.Error) item = awaitItem()
+            failing = false
+            s.vm.onRetry()
+            assertEquals(listOf("Maya"), awaitReadyWhere(this) { true }.results.map { it.contact.name })
             cancelAndIgnoreRemainingEvents()
         }
     }

@@ -47,10 +47,16 @@ import app.orbit.data.Contact
  * `CallLogDenied` = hard gate: READ_CALL_LOG is denied AND a call-history
  * filter chip is active — the chips cannot be answered honestly without the
  * call log, so the screen explains instead of showing a false result set.
+ * `Loading` = the list's feed has not emitted yet (BROWSE-06); the screen
+ * shows a skeleton. Before 2026-10-05 this variant was "retired" and the VM
+ * started at `Empty`, so a full list flashed "No one here yet" first.
+ * `Error` = a source flow failed (BROWSE-06); the screen offers Retry.
  */
 sealed interface BrowseUiState {
 
     @Immutable data object Loading : BrowseUiState
+
+    @Immutable data object Error : BrowseUiState
 
     @Immutable
     data class Ready(
