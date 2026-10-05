@@ -39,13 +39,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.orbit.data.NoteRow
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
+import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.components.OrbitDropdownMenu
+import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitMenuAction
+import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
@@ -56,7 +60,8 @@ import app.orbit.ui.theme.OrbitTheme
  * Stateless composable: receives a list of [NoteRow] (newest-first; caller
  * pre-sorts), the current draft, and event callbacks. Renders an inline
  * input + Add button at the top, then each note as a swipe-to-dismiss row
- * with long-press-to-edit overlay.
+ * with long-press-to-edit, both also reachable from the note's visible
+ * "More" menu (Edit, Delete).
  *
  * Layout note: this section uses [Column] (NOT a nested LazyColumn). The
  * parent screen already lives inside a LazyColumn — nesting another
@@ -176,6 +181,16 @@ fun NotesSection(
     }
 }
 
+/**
+ * One note. Swipe left still deletes and long-press still edits, but both now
+ * have a visible path too: the trailing "More" button opens Edit and Delete.
+ * Gesture-only actions are ones most people never find (rubric D5: every
+ * gesture has a visible alternative).
+ *
+ * Under the privacy curtain the body reads "Note hidden": a note is as private
+ * as a name (Card view hides the last note the same way), and it showed here
+ * until 2026-10-05.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun NoteRowItem(
@@ -183,9 +198,11 @@ private fun NoteRowItem(
     onDelete: (NoteRow) -> Unit,
     onEditCommit: (NoteRow, String) -> Unit,
 ) {
+    val curtain = LocalPrivacyCurtain.current
     var editing by remember(note.id) { mutableStateOf(false) }
     var draftEdit by remember(note.id) { mutableStateOf(note.body) }
     var showAbsolute by remember(note.id) { mutableStateOf(false) }
+    var menuOpen by remember(note.id) { mutableStateOf(false) }
 
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { target ->
@@ -201,19 +218,21 @@ private fun NoteRowItem(
     SwipeToDismissBox(
         state = dismissState,
         enableDismissFromStartToEnd = false,
-        enableDismissFromEndToStart = true,
+        enableDismissFromEndToStart = !editing,
         backgroundContent = {
+            // Delete, so it reads as delete: the danger tone the menus use,
+            // on a quiet surface (it was a cream icon on terracotta tint).
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(OrbitTheme.colors.accentTint)
+                    .background(OrbitTheme.colors.bgSubtle)
                     .padding(horizontal = OrbitTheme.spacing.x5),
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 PhIcon(
                     name = "trash",
                     size = 18.dp,
-                    tint = OrbitTheme.colors.bg,
+                    tint = OrbitTheme.colors.danger,
                 )
             }
         },
@@ -223,70 +242,113 @@ private fun NoteRowItem(
                 .fillMaxWidth()
                 .background(OrbitTheme.colors.surface)
                 .padding(
-                    horizontal = OrbitTheme.spacing.x3,
-                    vertical = OrbitTheme.spacing.x3,
+                    start = OrbitTheme.spacing.x3,
+                    top = OrbitTheme.spacing.x1,
+                    bottom = OrbitTheme.spacing.x3,
                 ),
         ) {
-            Text(
-                // B3 — toggle between two VM-pre-formatted strings; no JVM-time call here.
-                text = if (showAbsolute) note.absoluteTimestamp else note.relativeTimestamp,
-                style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier
-                    .clickable { showAbsolute = !showAbsolute }
-                    .semantics {
-                        contentDescription =
-                            if (showAbsolute) "Tap to show relative date"
-                            else "Tap to show absolute date"
-                    },
-            )
-            Spacer(Modifier.height(OrbitTheme.spacing.x1))
-            if (editing) {
-                BasicTextField(
-                    value = draftEdit,
-                    onValueChange = { draftEdit = it },
-                    textStyle = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                    cursorBrush = androidx.compose.ui.graphics.SolidColor(OrbitTheme.colors.accent),
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // B3: toggle between two VM-pre-formatted strings; no
+                // JVM-time call here. A real 48dp button that keeps its text
+                // for TalkBack (the old contentDescription replaced the date
+                // with "Tap to show absolute date").
+                Box(
+                    contentAlignment = Alignment.CenterStart,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(OrbitTheme.shapes.md)
-                        .background(OrbitTheme.colors.bgSubtle)
-                        .padding(OrbitTheme.spacing.x3),
-                )
-                Spacer(Modifier.height(OrbitTheme.spacing.x2))
-                Row(
-                    horizontalArrangement = Arrangement.End,
-                    modifier = Modifier.fillMaxWidth(),
+                        .weight(1f)
+                        .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
+                        .clickable(
+                            role = Role.Button,
+                            onClickLabel = if (showAbsolute) "Show how long ago" else "Show the date",
+                        ) { showAbsolute = !showAbsolute },
                 ) {
-                    OrbitButton(
-                        text = "Cancel",
-                        onClick = {
-                            editing = false
-                            draftEdit = note.body
-                        },
-                        variant = OrbitButtonVariant.Ghost,
-                    )
-                    Spacer(Modifier.width(OrbitTheme.spacing.x2))
-                    OrbitButton(
-                        text = "Save",
-                        onClick = {
-                            onEditCommit(note, draftEdit.trim())
-                            editing = false
-                        },
-                        variant = OrbitButtonVariant.Primary,
-                        enabled = draftEdit.isNotBlank() && draftEdit.trim() != note.body,
+                    Text(
+                        text = if (showAbsolute) note.absoluteTimestamp else note.relativeTimestamp,
+                        style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                     )
                 }
-            } else {
-                Text(
-                    text = note.body,
-                    style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                    modifier = Modifier
-                        .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
-                        .combinedClickable(
-                            onClick = {},
-                            onLongClick = { editing = true },
+                if (!editing && !curtain) {
+                    Box {
+                        OrbitIconButton(
+                            icon = "dots-three-vertical",
+                            onClick = { menuOpen = true },
+                            tint = OrbitTheme.colors.fgMuted,
+                            contentDescription = "More actions for this note",
+                        )
+                        OrbitDropdownMenu(
+                            expanded = menuOpen,
+                            onDismissRequest = { menuOpen = false },
+                            actions = listOf(
+                                OrbitMenuAction(
+                                    label = "Edit",
+                                    onClick = { editing = true },
+                                    icon = "pencil-simple",
+                                ),
+                                OrbitMenuAction(
+                                    label = "Delete",
+                                    onClick = { onDelete(note) },
+                                    icon = "trash",
+                                    tone = OrbitMenuTone.Destructive,
+                                ),
+                            ),
+                        )
+                    }
+                }
+            }
+            Column(modifier = Modifier.padding(end = OrbitTheme.spacing.x3)) {
+                if (editing) {
+                    BasicTextField(
+                        value = draftEdit,
+                        onValueChange = { draftEdit = it },
+                        textStyle = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(OrbitTheme.colors.accent),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(OrbitTheme.shapes.md)
+                            .background(OrbitTheme.colors.bgSubtle)
+                            .padding(OrbitTheme.spacing.x3),
+                    )
+                    Spacer(Modifier.height(OrbitTheme.spacing.x2))
+                    Row(
+                        horizontalArrangement = Arrangement.End,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        OrbitButton(
+                            text = "Cancel",
+                            onClick = {
+                                editing = false
+                                draftEdit = note.body
+                            },
+                            variant = OrbitButtonVariant.Ghost,
+                        )
+                        Spacer(Modifier.width(OrbitTheme.spacing.x2))
+                        OrbitButton(
+                            text = "Save",
+                            onClick = {
+                                onEditCommit(note, draftEdit.trim())
+                                editing = false
+                            },
+                            // Secondary: the hero Call button is the screen's
+                            // one accent element (rules.md §Design 5).
+                            variant = OrbitButtonVariant.Secondary,
+                            enabled = draftEdit.isNotBlank() && draftEdit.trim() != note.body,
+                        )
+                    }
+                } else {
+                    Text(
+                        text = if (curtain) "Note hidden" else note.body,
+                        style = OrbitTheme.type.body.copy(
+                            color = if (curtain) OrbitTheme.colors.fgMuted else OrbitTheme.colors.fg,
                         ),
-                )
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                onClick = {},
+                                onLongClick = { if (!curtain) editing = true },
+                                onLongClickLabel = "Edit note",
+                            ),
+                    )
+                }
             }
         }
     }

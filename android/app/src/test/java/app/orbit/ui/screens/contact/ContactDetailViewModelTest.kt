@@ -7,9 +7,11 @@ import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.CallSource
+import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.entity.NoteEntity
+import app.orbit.data.repository.ContactRepository
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
 import app.orbit.domain.FakeNoteRepository
@@ -28,12 +30,16 @@ import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.testutil.MainDispatcherRule
+import java.io.IOException
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -58,7 +64,11 @@ class ContactDetailViewModelTest {
 
     private val T0: Instant = Instant.parse("2026-01-01T12:00:00Z")
 
-    private fun fixture(contactIdArg: String? = "c-5"): Setup {
+    /** [wrapContactRepo] lets a test make the VM's contact stream fail. */
+    private fun fixture(
+        contactIdArg: String? = "c-5",
+        wrapContactRepo: (FakeContactRepository) -> ContactRepository = { it },
+    ): Setup {
         val contactRepo = FakeContactRepository()
         val noteRepo = FakeNoteRepository()
         val clock = TestClock(T0)
@@ -119,7 +129,7 @@ class ContactDetailViewModelTest {
         val undoStack = UndoStack()
         val savedState = SavedStateHandle(mapOf("contactId" to contactIdArg))
         val vm = ContactDetailViewModel(
-            contactRepo = contactRepo,
+            contactRepo = wrapContactRepo(contactRepo),
             listRepo = listRepo,
             callEventRepo = callEventRepo,
             noteRepo = noteRepo,
@@ -158,6 +168,37 @@ class ContactDetailViewModelTest {
         vm.uiState.test(timeout = 2.seconds) {
             // "missing".removePrefix("c-").toLongOrNull() = null → flowOf(null) → NotFound.
             assertEquals(ContactDetailUiState.NotFound, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ============================================================================
+    // CONTACT-08: a failing source is Error, not a crash; Retry recovers
+    // ============================================================================
+
+    @Test
+    fun `a failing source shows Error, and Retry recovers`() = runTest {
+        var failing = true
+        val s = fixture(
+            wrapContactRepo = { fake ->
+                object : ContactRepository by fake {
+                    override fun observeById(id: Long): Flow<ContactEntity?> = flow {
+                        if (failing) throw IOException("simulated read failure")
+                        emitAll(fake.observeById(id))
+                    }
+                }
+            }
+        )
+        s.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sam")))
+        s.vm.uiState.test(timeout = 2.seconds) {
+            var item = awaitItem()
+            while (item == ContactDetailUiState.Loading) item = awaitItem()
+            assertEquals(ContactDetailUiState.Error, item)
+            failing = false
+            s.vm.onRetry()
+            var next = awaitItem()
+            while (next !is ContactDetailUiState.Ready) next = awaitItem()
+            assertEquals("Sam", next.contact.name)
             cancelAndIgnoreRemainingEvents()
         }
     }

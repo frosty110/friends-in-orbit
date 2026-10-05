@@ -29,10 +29,11 @@ import kotlinx.coroutines.launch
  * (8dp gap):
  *   - 1 week
  *   - 1 month
- *   - Indefinite — until you unpause
+ *   - Until you unpause
  *
  * Voice locked per the copywriting contract (PauseSheet table). The
- * "Indefinite — until you unpause" copy is verbatim — NOT "Indefinitely"
+ * "Until you unpause" (2026-10-05; it read "Indefinite, until you unpause"
+ * with a dash, which said the same thing twice) is NOT "Indefinitely"
  * (which is the bulk-pause dialog copy at
  * `app.orbit.ui.screens.browse.PauseDurationDialog`).
  *
@@ -102,7 +103,7 @@ fun PauseSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
             OrbitButton(
-                text = "Indefinite — until you unpause",
+                text = "Until you unpause",
                 onClick = { commitAndDismiss(PauseDuration.Indefinite) },
                 variant = OrbitButtonVariant.Secondary,
                 modifier = Modifier.fillMaxWidth(),
@@ -152,7 +153,7 @@ private fun PauseSheetPreviewSurface() {
             modifier = Modifier.fillMaxWidth(),
         )
         OrbitButton(
-            text = "Indefinite — until you unpause",
+            text = "Until you unpause",
             onClick = {},
             variant = OrbitButtonVariant.Secondary,
             modifier = Modifier.fillMaxWidth(),

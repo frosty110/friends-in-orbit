@@ -210,9 +210,9 @@ private fun LogConnectionSheetContent(
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
             text = if (isAttempt) {
-                "A voicemail or no answer — you reached out but didn't connect."
+                "A voicemail or no answer: you reached out but didn't connect."
             } else {
-                "For the calls Orbit can't see — another app, or in person."
+                "For calls Orbit can't see, like a video call or time together in person."
             },
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             textAlign = TextAlign.Center,
