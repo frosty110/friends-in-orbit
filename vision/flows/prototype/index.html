@@ -45,6 +45,7 @@
   --chrome-bg: #ECE6DC; --chrome-panel: #FBF9F5; --chrome-fg: #26221F; --chrome-muted: #6E6862;
   --chrome-line: #DDD5C9; --chrome-hover: #F1ECE4;
   --markup: #3B5B8C; --markup-tint: #DCE5F2; --markup-fg: #FFFFFF;
+  --bug: #A33A2C; --bug-tint: #F6E1DC;
 
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -74,6 +75,7 @@
     --chrome-bg: #141210; --chrome-panel: #1C1917; --chrome-fg: #EDE7E0; --chrome-muted: #A39C94;
     --chrome-line: #322D29; --chrome-hover: #26221F;
     --markup: #8FB0E3; --markup-tint: #22303F; --markup-fg: #0F1620;
+    --bug: #F0A090; --bug-tint: #3A221D;
     color-scheme: dark;
   }
 }
@@ -100,6 +102,7 @@
   --chrome-bg: #141210; --chrome-panel: #1C1917; --chrome-fg: #EDE7E0; --chrome-muted: #A39C94;
   --chrome-line: #322D29; --chrome-hover: #26221F;
   --markup: #8FB0E3; --markup-tint: #22303F; --markup-fg: #0F1620;
+  --bug: #F0A090; --bug-tint: #3A221D;
   color-scheme: dark;
 }
 
@@ -165,6 +168,15 @@ svg.i { width: 24px; height: 24px; flex: none; display: block; }
 .insp-sec ul { margin: 0; padding-left: 18px; }
 .insp-sec li { margin: 3px 0; }
 .insp-sec p { margin: 0 0 8px; }
+.bug { border-left: 3px solid var(--bug); background: var(--bug-tint); padding: 8px 10px; border-radius: 0 6px 6px 0; font-size: 13px; margin-bottom: 8px; }
+.bug .bh { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.bug .bid { font-family: var(--font-mono); font-size: 11px; color: var(--bug); font-weight: 500; }
+.bug .bsev { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--bug); }
+.bug .bsure { font-size: 11.5px; color: var(--chrome-muted); }
+.store-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--chrome-muted); border: 1px dashed var(--chrome-line); border-radius: 999px; padding: 4px 10px; }
+.store-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--chrome-muted); }
+.store-chip.page { border-style: solid; border-color: var(--markup); color: var(--markup); }
+.store-chip.page::before { background: var(--markup); }
 .drift { border-left: 3px solid var(--markup); background: var(--markup-tint); padding: 8px 10px; border-radius: 0 6px 6px 0; font-size: 13px; }
 .state-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .state-chip { border: 1px solid var(--chrome-line); background: var(--chrome-panel); border-radius: 999px; padding: 5px 10px; font-size: 12.5px; cursor: pointer; min-height: 30px; }
@@ -583,6 +595,7 @@ textarea.fb:focus { outline: 2px solid var(--markup); outline-offset: 0; border-
       <button id="tab-map" role="tab" data-mode="map" aria-selected="false">Map</button>
       <button id="tab-feedback" role="tab" data-mode="feedback" aria-selected="false">Feedback<span class="count" id="fb-count"></span></button>
     </nav>
+    <span class="store-chip" id="store-chip" title="Where your feedback notes are kept">Notes save in this browser</span>
     <span class="spacer"></span>
     <button class="tool" id="tool-hot" aria-pressed="false" title="Outline everything you can tap in the phone"><svg class="i" aria-hidden="true"><use href="#i-squares-four"/></svg>Show tap targets</button>
     <button class="tool" id="tool-restart" title="Start the prototype again from Home"><svg class="i" aria-hidden="true"><use href="#i-house-simple"/></svg>Restart</button>
@@ -647,7 +660,7 @@ const L = {
   touch:  { name: 'In touch', template: 'Keep in touch', interval: 2, tone: 'A',
             queue: ['kai', 'luma', 'owen', 'rhea', 'alex', 'priya', 'jamie', 'sarah', 'nia', 'theo'], due: 6, other: ['marcus'], paused: ['marcus'] },
   late:   { name: 'Late night', template: 'Late night', tone: 'B', queue: ['dana', 'jamie', 'nia', 'theo'], due: 1, other: [] },
-  recent: { name: 'Recently added, not called', smart: true, rule: 'Recently added · 30 days', tone: 'A', queue: ['ama', 'leo'], due: 2, other: [] },
+  recent: { name: 'Recently added, not called', smart: true, rule: 'Recently added · 30 days', tone: 'A', queue: [], due: 0, other: [], preview: ['ama', 'leo'] },
 };
 const LIST_ORDER = ['touch', 'late', 'recent'];
 const members = (lid) => [...L[lid].queue, ...L[lid].other];
@@ -901,11 +914,11 @@ const FB = {
     if (c && typeof c.use === 'function') {
       c.use('db').then((db) => {
         if (!db) return;
-        this.db = db; this.mode = 'db';
+        this.db = db; this.mode = 'db'; storeChip();
         db.collection('feedback').orderBy('at').onSnapshot((snap) => {
           this.notes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           onNotesChanged();
-        }, () => { this.db = null; this.mode = 'local'; this.notes = this.local.slice(); onNotesChanged(); });
+        }, () => { this.db = null; this.mode = 'local'; this.notes = this.local.slice(); storeChip(); toastChrome("Notes can't reach the page right now, so new ones save in this browser."); onNotesChanged(); });
       }).catch(() => {});
     }
   },
@@ -934,6 +947,13 @@ const FB = {
   forScreen(id) { return this.notes.filter((n) => n.target !== 'flow' && n.screen === id); },
   forFlow(fid) { return this.notes.filter((n) => n.target === 'flow' && n.flow === fid); },
 };
+function storeChip() {
+  const c = $('#store-chip'); if (!c) return;
+  const page = FB.mode === 'db';
+  c.textContent = page ? 'Notes save to this page' : 'Notes save in this browser';
+  c.classList.toggle('page', page);
+  c.title = page ? 'Claude can read these back' : 'Use Copy as markdown on the Feedback tab to share them';
+}
 function onNotesChanged() {
   const open = FB.notes.filter((n) => !n.done).length;
   $('#fb-count').textContent = open ? String(open) : '';
@@ -1252,12 +1272,12 @@ function rhythmStrip(lid, live) {
 function listCard(lid, idx) {
   const l = L[lid];
   const n = l.queue.length + l.other.length;
-  const head = l.queue[D.cardPos[lid] % l.queue.length];
+  const head = l.queue.length ? l.queue[D.cardPos[lid] % l.queue.length] : null;
   const next = head
     ? `${avatar(head, 44)}<div class="grow"><div class="lbl">Next up</div><div class="who">${first(head)}</div><div class="why">${spoke(P[head].last)}</div></div><span style="color:var(--fg-subtle)">${ic('caret-right')}</span>`
     : '<div class="meta">No one up next</div>';
   return `<div class="lc ${idx % 2 ? 'B' : 'A'}" ${A.go('S11', null, lid)} data-lp="quick" data-p="${lid}" role="button" aria-label="${esc(l.name)}">
-    <div class="lc-top"><div class="lc-name"><div class="n">${esc(l.name)}${l.smart ? ` <span style="display:inline-block;vertical-align:-2px;opacity:.85">${ic('shuffle-angular').replace('class="i"', 'class="i" style="width:13px;height:13px"')}</span>` : ''}</div><div class="c">${n === 1 ? '1 person' : n + ' people'}</div></div><div class="lc-next">${next}</div></div>
+    <div class="lc-top"><div class="lc-name"><div class="n">${esc(l.name)}${l.smart ? ` <span style="display:inline-block;vertical-align:-2px;opacity:.85">${ic('shuffle-angular').replace('class="i"', 'class="i" style="width:13px;height:13px"')}</span>` : ''}</div><div class="c">${n === 0 ? 'No one yet' : n === 1 ? '1 person' : n + ' people'}</div></div><div class="lc-next">${next}</div></div>
     <div class="lc-bot">${rhythmStrip(lid)}</div></div>`;
 }
 
@@ -1330,6 +1350,7 @@ screen({
   render(st, p) {
     const lid = p || 'touch';
     const l = L[lid];
+    if (st === 'default' && !l.queue.length) st = 'empty'; // smart lists have no stored members (findings B1)
     const menuBtn = iconBtn('list', A.st('menu'), 'List actions');
     const bar = appBar({ title: st === 'empty' || st === 'none' ? '' : esc(l.name), actions: menuBtn });
     const notice = st === 'nolog' ? `<div style="margin:0 16px 4px;padding:8px 8px 8px 14px;border-radius:12px;background:var(--bg-subtle)" class="row"><div class="meta grow">Orbit can't see your calls - cards won't move on on their own</div><button class="btn text" style="color:var(--fg);font-weight:600" ${A.go('S40')}>Open settings</button></div>` : '';
@@ -1408,7 +1429,7 @@ screen({
     card.addEventListener('pointerup', end); card.addEventListener('pointercancel', end);
   },
 });
-function shiftCard(lid, by) { const n = L[lid].queue.length; D.cardPos[lid] = ((D.cardPos[lid] + by) % n + n) % n; }
+function shiftCard(lid, by) { const n = L[lid].queue.length; if (!n) return; D.cardPos[lid] = ((D.cardPos[lid] + by) % n + n) % n; }
 ACT.defer = (lid) => { lid = lid || 'touch'; shiftCard(lid, 1); snack('Deferred - back on Thursday', 'Undo'); S.snack.undo = () => shiftCard(lid, -1); return false; };
 ACT.sooner = (lid) => { lid = lid || 'touch'; shiftCard(lid, 1); snack('Moved up - due tomorrow', 'Undo'); S.snack.undo = () => shiftCard(lid, -1); return false; };
 ACT.undo = () => { if (S.snack && S.snack.undo) S.snack.undo(); S.snack = null; return false; };
@@ -1460,7 +1481,7 @@ screen({
       ? `<div class="ab" style="border-bottom:1px solid var(--line);gap:0">${iconBtn('x', `${A.act('exitSel')}`, 'Exit selection')}<div class="t" style="font-size:17px;font-weight:500;padding-left:0">${D.sel.size} selected</div>
           <button class="btn text" style="font-size:14px;padding:0 6px;color:var(--fg-muted)" ${A.st('move')}>Move to…</button><button class="btn text" style="font-size:14px;padding:0 6px;color:var(--fg-muted)" ${A.st('copy')}>Copy to…</button><button class="btn text" style="font-size:14px;padding:0 6px;color:var(--fg-muted)" ${A.act('bulk', 'remove')}>Remove</button>${iconBtn('dots-three-vertical', A.st('selmore'), 'More batch actions')}</div>`
       : appBar({ title: esc(l.name), actions: iconBtn('plus', A.go('S32', null, lid), 'Add contacts') });
-    if (st === 'empty') {
+    if (st === 'empty' || !members(lid).length) {
       return view({ bar, body: `${searchField('bq', 'bq', 'Search your people')}<div class="center-t" style="padding:64px 40px" class="gap8"><div class="h2">No one here yet.</div><div class="body muted">This list is waiting for people.</div></div>` });
     }
     const chipOn = (k) => D.bchips.has(k);
@@ -1691,7 +1712,7 @@ screen({
         <button class="ib muted" aria-label="Reorder list" ${A.snack('Drag the handle to reorder. Lists higher up show first on home.')}>${ic('dots-six-vertical').replace('class="i"', 'class="i" style="width:18px;height:18px"')}</button>
         <div class="grow"><div class="body">${esc(l.name)}</div>${l.smart ? `<div class="meta">${l.rule}</div>` : ''}</div>
         ${l.smart ? '<span class="chip ctx" style="font-size:12px;min-height:24px;padding:0 8px"><span class="dot"></span>Smart list</span>' : ''}
-        <span class="pill">${n}</span>
+        ${n ? `<span class="pill">${n}</span>` : ''}
         ${l.smart ? '' : iconBtn('plus', A.go('S32', null, lid), 'Add contacts to ' + l.name, 'muted')}
         ${iconBtn('dots-three-vertical', A.st('rowmenu', lid), 'More actions for ' + l.name, 'muted')}</div>`;
     }).join('') + (D.created ? `<div class="card row" style="border-radius:20px;padding:10px 4px 10px 0;min-height:76px;cursor:pointer" ${A.go('S31', 'new', 'new')}><button class="ib muted" aria-label="Reorder list">${ic('dots-six-vertical').replace('class="i"', 'class="i" style="width:18px;height:18px"')}</button><div class="grow"><div class="body">${esc(D.created.name)}</div></div>${(D.newMembers || []).length ? `<span class="pill">${D.newMembers.length}</span>` : ''}${iconBtn('plus', A.go('S32', null, 'new'), 'Add contacts to ' + D.created.name, 'muted')}${iconBtn('dots-three-vertical', A.st('rowmenu', 'touch'), 'More actions', 'muted')}</div>` : '');
@@ -1746,7 +1767,7 @@ screen({
     const isNew = st === 'new' || p === 'new';
     const lid = smart && !isNew ? 'recent' : L[p] ? p : 'touch';
     const name = isNew ? (D.created ? D.created.name : 'Family') : L[lid].name;
-    const mem = isNew ? (D.newMembers || []) : members(lid);
+    const mem = isNew ? (D.newMembers || []) : smart ? (L[lid].preview || []) : members(lid);
     const bar = appBar({ title: esc(name), actions: `<button class="btn text accent-t" data-back aria-label="Done, back to your lists">Done</button>` });
     let body = `<div class="sec-label">Name</div><div class="group"><div class="gi tap" ${A.snack('Tap to rename in place')}><span class="grow body">${esc(name)}</span>${ic('pencil-simple').replace('class="i"', 'class="i" style="color:var(--fg-muted)"')}</div></div>`;
     if (!smart) body += `<div class="sec-label">Cadence</div><div class="group">${cadenceRows(D.cadence, 'setCadence')}</div><div class="sec-label">Interval</div><div class="group">${intervalBlock(D.cadence, D.interval)}</div>`;
@@ -2079,6 +2100,41 @@ ACT.endCall = (pid) => {
 </script>
 <script>
 'use strict';
+/* ════════ Bugs found in the code. Mirrors vision/flows/findings.md; IDs match. ════════ */
+const BUGS = {
+  B1: { sev: 'High', sure: 'Confirmed in code', screens: ['S10', 'S11', 'S13', 'S30', 'S31'], title: 'Smart lists never surface anyone',
+    text: 'Smart lists are created with no cadence and never store members; their matches exist only in this list\'s settings preview. Home, Card view, and Browse all show no one. Converting to static still leaves no cadence picked.' },
+  B2: { sev: 'High', sure: 'Confirmed in code', screens: ['S20', 'S32'], title: 'Re-link writes to the wrong list',
+    text: 'Re-link passes the contact\'s id as the target list id. The picker adds people to whichever list has that number, or fails with "Couldn\'t save that". The orphan is never re-linked.' },
+  B3: { sev: 'High', sure: 'Confirmed in code', screens: ['S20', 'S13'], title: 'An indefinite pause cannot be undone',
+    text: 'There is no Unpause action anywhere. The unpause banner only shows after a timed pause expires, never for an indefinite one. Undo on the snackbar is the only way back.' },
+  B4: { sev: 'High', sure: 'Confirmed in code', screens: ['S31', 'S04', 'S50'], title: 'Active hours override your nudge days',
+    text: 'With active hours set, the scheduler merges in all seven days and adds an extra daily slot. "Weekdays at 10am" nudges every day, twice. "No days selected - nudges off" keeps nudging. Onboarding promised one nudge per list per day.' },
+  B5: { sev: 'Medium', sure: 'Confirmed in code', screens: ['S30'], title: 'Templates all create the same list',
+    text: 'Inner orbit, Family, Mentors ("Quarterly check-ins"), and Drifted all create Keep in touch every 2 days. Quarterly is not reachable: the interval slider stops at 60 days.' },
+  B6: { sev: 'Medium', sure: 'Confirmed in code', screens: ['S05', 'S06', 'S07'], title: 'First run can duplicate the first list',
+    text: 'If the app dies on Make your first list, relaunch resumes at the sync screen and Preview creates a second list; the first stays. System back from the first-list step does the same.' },
+  B7: { sev: 'Medium', sure: 'Reasoned, not seen on a device', screens: ['S13'], title: 'Browse rows probably ignore taps',
+    text: 'Each row\'s inner clickable has an empty handler and sits inside the real one, so it likely eats the tap and the long-press. That would make Contact detail and multi-select unreachable from Browse. This prototype shows the intended behaviour.' },
+  B8: { sev: 'Medium', sure: 'Confirmed in code', screens: ['S07'], title: 'First run swallows its undo',
+    text: 'This screen never places a snackbar host, so "Removed {name}" with Undo never appears, and the first message stalls every later one.' },
+  B9: { sev: 'Low', sure: 'Confirmed in code', screens: ['S20'], title: '"Usually" is always blank here',
+    text: 'Only Card view computes the usual answer time, so Contact detail always shows a placeholder for the same person.' },
+  B10: { sev: 'Low', sure: 'Confirmed in code', screens: ['S30', 'S10'], title: 'Delete has Undo on Home, not here',
+    text: 'Deleting a list from Home offers Undo; deleting it from Lists does not.' },
+  B11: { sev: 'Low', sure: 'Confirmed in code', screens: ['S11', 'S52'], title: 'The curtain misses the card face',
+    text: 'With the app in the background, the title becomes "Contact" but the card still shows the real name and initials.' },
+  B12: { sev: 'Low', sure: 'Confirmed in code', screens: ['S40', 'S41'], title: 'Ignored count and list disagree',
+    text: 'Settings counts archived ignored contacts; the Ignored screen hides them. "1 ignored" can open onto an empty screen.' },
+  B13: { sev: 'Low', sure: 'Confirmed in code', screens: ['S13'], title: '"for indefinitely"',
+    text: 'Pause all with Indefinitely reads "Paused 3 contacts for indefinitely".' },
+  B14: { sev: 'Low', sure: 'Confirmed', screens: ['S13', 'S22', 'S40'], title: 'Breaks the app\'s own accent rules',
+    text: 'rules.md allows one phone icon and one accent element per screen. Browse and Search put an accent phone on every row; Settings has two primary Sync now buttons.' },
+};
+const bugsFor = (id) => Object.entries(BUGS).filter(([, b]) => b.screens.includes(id));
+</script>
+<script>
+'use strict';
 /* ════════ Review chrome: rail, inspector, boards, flow player ════════ */
 const PARENT = { S02: 'S01', S03: 'S02', S04: 'S03', S05: 'S04', S06: 'S05', S07: 'S05', S11: 'S10', S13: 'S11', S20: 'S11', S21: 'S20', S22: 'S10', S30: 'S10', S31: 'S30', S32: 'S31', S40: 'S10', S41: 'S40', S42: 'S40', S53: 'S11' };
 function naturalStack(id, st, p) {
@@ -2160,7 +2216,9 @@ function renderInspector(force) {
   const states = `<div class="state-list">${sc.states.map(([k, l]) => `<button class="state-chip" data-state="${k}" aria-pressed="${t.st === k}">${esc(l)}</button>`).join('')}</div>`;
   const edges = sc.to.map(([to, via]) => `<button class="edge" data-open="${to}"><span class="rid">${to}</span><span><span class="to">${esc(SC[to] ? SC[to].name : to)}</span><br><span class="via">${esc(via)}</span></span></button>`).join('');
   const from = SCREENS.filter((s) => s.to.some(([to]) => to === t.id)).map((s) => { const via = s.to.find(([to]) => to === t.id)[1]; return `<button class="edge" data-open="${s.id}"><span class="rid">${s.id}</span><span><span class="to">${esc(s.name)}</span><br><span class="via">${esc(via)}</span></span></button>`; }).join('');
-  const screenInfo = `
+  const bugs = bugsFor(t.id);
+  const bugBox = bugs.length ? `<div class="insp-sec"><h4>Bugs found in the code</h4>${bugs.map(([id, b]) => `<div class="bug"><div class="bh"><span class="bid">${id}</span><span class="bsev">${b.sev}</span><b>${esc(b.title)}</b></div><div>${esc(b.text)}</div><div class="bsure">${esc(b.sure)}. Details in vision/flows/findings.md.</div></div>`).join('')}</div>` : '';
+  const screenInfo = `${bugBox}
     <div class="insp-sec"><h4>States you can open</h4>${states}</div>
     ${sc.drift ? `<div class="insp-sec"><h4>Docs vs code</h4><div class="drift">${esc(sc.drift)}</div></div>` : ''}
     <div class="insp-sec"><h4>Leads to</h4>${edges || '<p class="store-note">Nothing; this is a dead end.</p>'}</div>
@@ -2191,7 +2249,7 @@ function renderBoard() {
       GROUPS.map(([g, label]) => `<div class="lane"><h3>${label}</h3><div class="lane-row">${SCREENS.filter((s) => s.group === g).map((s) => {
         const n = FB.forScreen(s.id).filter((x) => !x.done).length;
         const html = composePhone(s.id, s.states[0][0], null, false).replace(/ id="[^"]*"/g, '');
-        return `<div class="thumb" role="button" tabindex="0" data-open="${s.id}" aria-label="Open ${s.id} ${esc(s.name)}"><div class="thumb-frame"><div class="phone-scale">${html}</div></div><span class="t-id">${s.id}${n ? ` · ${n} open notes` : ''}</span><span class="t-name">${esc(s.name)}</span><span class="t-to">→ ${s.to.map(([to]) => to).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'nothing'}</span></div>`;
+        return `<div class="thumb" role="button" tabindex="0" data-open="${s.id}" aria-label="Open ${s.id} ${esc(s.name)}"><div class="thumb-frame"><div class="phone-scale">${html}</div></div><span class="t-id">${s.id}${n ? ` · ${n} open notes` : ''}${bugsFor(s.id).length ? ` · <span style="color:var(--bug)">${bugsFor(s.id).map(([id]) => id).join(', ')}</span>` : ''}</span><span class="t-name">${esc(s.name)}</span><span class="t-to">→ ${s.to.map(([to]) => to).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'nothing'}</span></div>`;
       }).join('')}</div></div>`).join('');
     return;
   }
@@ -2279,6 +2337,7 @@ function applyTheme(th) {
 function boot() {
   wirePhone($('#phone'));
   FB.init();
+  storeChip();
   let theme = store.get('orbit-flow-theme', 'system');
   applyTheme(theme);
   $('#tool-theme').addEventListener('click', () => { theme = THEMES[(THEMES.indexOf(theme) + 1) % 3]; applyTheme(theme); store.set('orbit-flow-theme', theme); });

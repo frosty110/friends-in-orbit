@@ -6,6 +6,8 @@
 
 **Published copy:** https://claude.ai/artifact/XVatbjrA7kJ2VzvvwkWimp (private to its owner until shared). Notes left there are saved to the page.
 
+**Bugs found while building it:** [findings.md](findings.md) lists 14, from smart lists that never surface anyone to an indefinite pause that cannot be undone. Each one also shows on its screen in the prototype.
+
 **Built from:** the Compose source at commit `15b6bfb` (2026-10-04), read screen by screen. Copy is verbatim from the code, with one exception: the app uses em dashes in about a dozen strings, and the prototype shows those as a spaced hyphen. Data is the synthetic cast from `android/scripts/seed-avd.py` plus a few invented address-book names. Nothing here is a real contact.
 
 ---
@@ -209,7 +211,7 @@ Reading the code against `features/PAGE_VIEWS.md` and the feature specs turned u
 | S11 Card view | A "Pickup" stat | Last called, Avg length, Calls. Tapping anywhere on the card face also dials. |
 | S20 Contact detail | Usual answer time among the stats | Always shows a blank: the screen never computes it, though S11 shows it for the same person. Paused and ignored people look no different here. |
 | S01 Welcome | "Who made it" and in-screen feedback email | Neither. Feedback lives in Settings, About. |
-| S13 Browse | Row tap opens the person; long-press opens quick actions | Code reading suggests the row's own inert tap handler may swallow both. Not verified on a device. |
+| S13 Browse | Row tap opens the person; long-press opens quick actions | Probably swallowed by the row's own inert tap handler. See [B7](findings.md#b7--browse-rows-probably-ignore-taps--reasoned). |
 | S31 List settings | No mention | A Nudges section (days and times) and a Done exit both ship. |
 | S32 Add contacts | Add, Move, Copy modes; "Skip for now" during onboarding | Only Add is reachable. Skip for now never shows. Re-link from S20 opens plain Add mode. |
 | S42 Call history | A plain chronological list | Adds All, Incoming, Outgoing filters, sticky day headers, and a long-press menu. |
