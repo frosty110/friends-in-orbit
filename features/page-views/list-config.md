@@ -9,9 +9,9 @@
 What a user expects to see or do here:
 
 - Name the list
-- Choose a cadence rule template; tune the interval/cooldown (smart lists too)
+- Choose a rhythm (Keep in touch, Late night, Energize) and how often to aim for, in plain words ("Every 14 days"), smart lists too
 - Set active hours (or always active); they limit when a nudge may post, never which days it nudges
-- Toggle notifications
-- Preview members; remove with undo
-- For smart lists: edit the rule, or convert to a static list (current members stay as a snapshot; a list with no cadence gets Keep in touch)
-- Changes save as you go (no save button)
+- Turn nudges on or off and choose when they come
+- Preview members, add people, remove with undo
+- For smart lists: edit the rule, or make it a regular list (current members stay; a list with no rhythm gets Keep in touch)
+- Changes save as you go; "Done" is the only accent on the screen (LIST-21)

@@ -13,6 +13,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
@@ -588,7 +590,7 @@ private fun CallLogPermissionState.toPermissionStatus(): PermissionStatus = when
  * (M3 default palette, off-token). Restyled on the picker FilterChipsRow
  * idiom: accentTint selected container, fg label, 48dp tap floor.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ImportRangeRow(
     selectedDays: Int,
@@ -607,7 +609,9 @@ private fun ImportRangeRow(
             color = OrbitTheme.colors.fgMuted,
             modifier = Modifier.padding(top = 2.dp),
         )
-        Row(
+        // Wraps instead of squeezing: at larger text a fixed row crushed the
+        // last chip to a sliver (caught by the gallery's accessibility audit).
+        FlowRow(
             modifier = Modifier.padding(top = OrbitTheme.spacing.x2),
             horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
         ) {
@@ -615,7 +619,8 @@ private fun ImportRangeRow(
                 FilterChip(
                     selected = selectedDays == days,
                     onClick = { onChange(days) },
-                    label = { Text("${days}d") },
+                    // Words, not "30d" (rubric D7).
+                    label = { Text(importRangeLabel(days)) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = OrbitTheme.colors.accentTint,
                         selectedLabelColor = OrbitTheme.colors.fg,
@@ -628,6 +633,14 @@ private fun ImportRangeRow(
 }
 
 private val IMPORT_DAY_OPTIONS: List<Int> = listOf(30, 90, 180, 365)
+
+private fun importRangeLabel(days: Int): String = when (days) {
+    30 -> "1 month"
+    90 -> "3 months"
+    180 -> "6 months"
+    365 -> "1 year"
+    else -> "$days days"
+}
 
 /**
  * Data section "Export my data" entry. Tap routes

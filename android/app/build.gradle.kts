@@ -81,6 +81,15 @@ android {
             )
             signingConfig = signingConfigs.getByName("release")
         }
+        // Release, signed with the debug key so it installs anywhere, for the
+        // :benchmark module (startup timing and Baseline Profile generation).
+        // Never shipped.
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -201,6 +210,8 @@ tasks.withType<Test>().configureEach {
         systemProperty("roborazzi.test.record", "true")
         systemProperty("orbit.screenshots.dir", layout.buildDirectory.dir("screenshots").get().asFile.absolutePath)
         (project.findProperty("orbit.screenshots.only") as String?)?.let { systemProperty("orbit.screenshots.only", it) }
+        // -Porbit.a11y.strict fails a preview on any accessibility finding.
+        if (project.hasProperty("orbit.a11y.strict")) systemProperty("orbit.a11y.strict", "true")
         retry { maxRetries.set(0) }
     } else {
         exclude("app/orbit/ui/screenshots/**")
@@ -209,6 +220,9 @@ tasks.withType<Test>().configureEach {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    // Installs the Baseline Profile (src/main/baseline-prof.txt) at install
+    // time so startup and the core loop run AOT-compiled (UX rubric D10).
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))

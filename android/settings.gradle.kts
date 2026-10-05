@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Orbit"
 include(":app")
+include(":benchmark")

@@ -1,0 +1,18 @@
+# Starter Baseline Profile (hand-written, 2026-10-05). The profile installer
+# compiles these ahead of time at install, so the first launch and the core
+# loop do not run interpreted. Compose, Navigation and Room ship their own
+# library profiles; these rules cover Orbit's code on the startup path, Home
+# and Card view. Replace with a generated profile from
+# :benchmark BaselineProfileGenerator when a device is available.
+
+HSPLapp/orbit/OrbitApp;->**(**)**
+HSPLapp/orbit/MainActivity;->**(**)**
+HSPLapp/orbit/AppViewModel;->**(**)**
+HSPLapp/orbit/nav/**;->**(**)**
+HSPLapp/orbit/ui/theme/**;->**(**)**
+HSPLapp/orbit/ui/components/**;->**(**)**
+HSPLapp/orbit/ui/screens/home/**;->**(**)**
+HSPLapp/orbit/ui/screens/card/**;->**(**)**
+HSPLapp/orbit/data/feed/**;->**(**)**
+HSPLapp/orbit/domain/usecase/**;->**(**)**
+Lapp/orbit/**;

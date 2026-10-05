@@ -11,6 +11,6 @@ What a user expects to see or do here:
 - See all lists, reorderable by drag handle (order = home order)
 - Per list: name, optional rule summary, member count, "+" to add people
 - Per-list menu: Rename, Archive, Configure, Move up/down
-- Create a new list via the "New list" FAB (opens a name + rule-template sheet; Inner orbit, Family, Mentors and Drifted each create the rhythm their subtitle names, e.g. Family "Steady, every couple of weeks.")
+- Create a new list with the one "New list" button (floating when lists exist, centred when there are none; LIST-20). Inner orbit, Family, Mentors and Drifted each create the rhythm their subtitle names, e.g. Family "Steady, every couple of weeks."
 - Expand "Archived (N)" to restore, delete, or configure archived lists
 - Undo archive/restore/delete via snackbar ("List deleted." + Undo, as on Home)
