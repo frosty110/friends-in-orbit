@@ -1,10 +1,11 @@
 package app.orbit.ui.screens.lists
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,8 +15,8 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +41,7 @@ import app.orbit.ui.components.OrbitAppBarTextAction
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitSwitch
+import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
 import java.time.LocalTime
@@ -252,9 +254,8 @@ private fun ListConfigContent(
 @Composable
 internal fun SettingGroup(title: String, content: @Composable () -> Unit) {
     Column(Modifier.padding(bottom = 20.dp)) {
-        Text(
+        SectionLabel(
             text = title,
-            style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted),
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
         )
         Column(
@@ -281,8 +282,13 @@ internal fun ToggleRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .then(
-                if (enabled) Modifier.clickable { onChange(!value) } else Modifier,
+            // The row is the switch: one TalkBack stop with the label and an
+            // on/off state, and the whole row is the touch target.
+            .toggleable(
+                value = value,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onChange,
             )
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
@@ -299,7 +305,7 @@ internal fun ToggleRow(
                 )
             }
         }
-        OrbitSwitch(checked = value, onCheckedChange = onChange, enabled = enabled)
+        OrbitSwitch(checked = value, onCheckedChange = null, enabled = enabled)
     }
 }
 

@@ -193,6 +193,18 @@ tasks.withType<Test>().configureEach {
         maxRetries.set(2)
         failOnPassedAfterRetry.set(false)
     }
+    // The preview screenshot gallery renders ~140 previews in several modes;
+    // it runs only on request (-Pscreenshots) and then runs alone, writing
+    // PNGs to build/screenshots/.
+    if (project.hasProperty("screenshots")) {
+        filter { includeTestsMatching("app.orbit.ui.screenshots.*") }
+        systemProperty("roborazzi.test.record", "true")
+        systemProperty("orbit.screenshots.dir", layout.buildDirectory.dir("screenshots").get().asFile.absolutePath)
+        (project.findProperty("orbit.screenshots.only") as String?)?.let { systemProperty("orbit.screenshots.only", it) }
+        retry { maxRetries.set(0) }
+    } else {
+        exclude("app/orbit/ui/screenshots/**")
+    }
 }
 
 dependencies {
@@ -207,7 +219,6 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.coil.compose)
-    implementation(libs.coil.svg)
     implementation(libs.reorderable)
 
     implementation(libs.androidx.room.runtime)
@@ -246,6 +257,13 @@ dependencies {
     // Application context that satisfies AppPrefs' @ApplicationContext param without
     // requiring an emulator.
     testImplementation(libs.robolectric)
+    // Screenshot gallery (ui/screenshots/PreviewGalleryTest): renders every
+    // @Preview on the JVM. Run with -Pscreenshots; excluded otherwise.
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.composable.preview.scanner)
     testImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

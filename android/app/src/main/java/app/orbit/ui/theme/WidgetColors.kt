@@ -87,14 +87,16 @@ val OrbitWidgetColorProviders: ColorProviders by lazy {
  * touches android.graphics.Color, which is not mocked on the JVM, so the test
  * path uses the static [OrbitWidgetColorProviders] above instead.
  */
-fun orbitWidgetColorProviders(settings: ThemeSettings): ColorProviders {
+fun orbitWidgetColorProviders(settings: ThemeSettings, deviceHue: Float? = null): ColorProviders {
     val lightColors = OrbitThemes.resolve(
         settings,
         isDark = settings.darkMode == OrbitDarkMode.DARK,
+        deviceHue = deviceHue,
     ).colors
     val darkColors = OrbitThemes.resolve(
         settings,
         isDark = settings.darkMode != OrbitDarkMode.LIGHT,
+        deviceHue = deviceHue,
     ).colors
     return ColorProvidersFromM3(lightColors.toM3Scheme(), darkColors.toM3Scheme())
 }

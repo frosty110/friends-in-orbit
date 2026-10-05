@@ -1,26 +1,31 @@
 package app.orbit.ui.theme
 
+import app.orbit.R
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
-// Inter is the spec, but the app currently renders in SansSerif (Roboto).
-// MANUAL STEP (see DESIGN.md "Known gaps"): the bundled fonts in design/fonts/
-// are .woff2, which Android's res/font does not accept. Convert them to .ttf
-// (woff2_decompress, or fontTools+brotli) into res/font/ as inter_regular.ttf /
-// inter_medium.ttf / inter_semibold.ttf / inter_bold.ttf, then swap this to:
-//   FontFamily(
-//     Font(R.font.inter_regular, FontWeight.Normal),
-//     Font(R.font.inter_medium, FontWeight.Medium),
-//     Font(R.font.inter_semibold, FontWeight.SemiBold),
-//     Font(R.font.inter_bold, FontWeight.Bold),
-//   )
-// This is the single highest-leverage visual upgrade in the design system.
-private val OrbitFont: FontFamily = FontFamily.SansSerif
+// Inter, the typeface the design is drawn in. Bundled 2026-10-05 as TTFs in
+// res/font, converted from design/fonts/*.woff2 and subset to Latin, Greek and
+// Cyrillic (Android falls back to system fonts per glyph for other scripts, so
+// names in any language still render). Licence: SIL OFL 1.1, listed in
+// Settings > Open source licenses.
+internal val OrbitFont: FontFamily = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_bold, FontWeight.Bold),
+)
+
+// Numbers that sit in columns or update in place (counts, stats, times,
+// positions) use tabular figures so they don't jitter or misalign. Inter's
+// default figures are proportional.
+private const val TABULAR = "tnum"
 
 @Immutable
 data class OrbitTypography(
@@ -91,6 +96,7 @@ internal val OrbitType = OrbitTypography(
         fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
         lineHeight = 1.3.em,
+        fontFeatureSettings = TABULAR,
     ),
     micro = TextStyle(
         fontFamily = OrbitFont,
@@ -104,12 +110,15 @@ internal val OrbitType = OrbitTypography(
         fontSize = 13.sp,
         fontWeight = FontWeight.Medium,
         lineHeight = 1.3.em,
+        fontFeatureSettings = TABULAR,
     ),
     eyebrow = TextStyle(
         fontFamily = OrbitFont,
         fontSize = 12.sp,
         fontWeight = FontWeight.Medium,
-        letterSpacing = 0.08.em,
+        // Light tracking: eyebrows are sentence case (voice.md), and the wide
+        // 0.08em spacing meant for capitals made lowercase words look loose.
+        letterSpacing = 0.03.em,
         lineHeight = 1.3.em,
     ),
     timelineAxis = TextStyle(
@@ -118,6 +127,7 @@ internal val OrbitType = OrbitTypography(
         fontWeight = FontWeight.Normal,
         letterSpacing = 0.01.em,
         lineHeight = 1.3.em,
+        fontFeatureSettings = TABULAR,
     ),
     skipAffordance = TextStyle(
         fontFamily = OrbitFont,

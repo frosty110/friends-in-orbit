@@ -40,8 +40,9 @@ fun DeleteListDialog(
         },
         text = {
             Text(
-                // Lowercase verbatim — locked by PRD line 46.
-                text = "this removes the list. people stay in your contacts.",
+                // Sentence case per voice.md (UX rubric decision 8, 2026-10-05);
+                // the PRD line that pinned lowercase was updated with it.
+                text = "This removes the list. People stay in your contacts.",
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             )
         },

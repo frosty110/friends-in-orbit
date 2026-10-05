@@ -11,17 +11,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -37,7 +35,6 @@ import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.formatRelative
-import coil.compose.AsyncImage
 import java.time.Instant
 
 /**
@@ -172,17 +169,7 @@ fun PickerContactRow(
             // The photo is PII just like the name: under the
             // curtain the row falls back to initials derived from the masked
             // name, never the contact's face.
-            if (!curtain && !contact.photoUri.isNullOrBlank()) {
-                AsyncImage(
-                    model = contact.photoUri,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape),
-                )
-            } else {
-                Avatar(name = displayName, size = 44.dp)
-            }
+            Avatar(name = displayName, size = 44.dp, photoUri = if (curtain) null else contact.photoUri)
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(

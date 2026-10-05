@@ -15,7 +15,6 @@ import app.orbit.notify.OrbitNotifications
 import app.orbit.widget.WidgetUpdateScheduler
 import coil.ImageLoader
 import coil.ImageLoaderFactory
-import coil.decode.SvgDecoder
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -67,15 +66,13 @@ class OrbitApp : Application(), Configuration.Provider, ImageLoaderFactory {
             .build()
 
     /**
-     * Serve a single application-scoped Coil [ImageLoader] (decoder registry +
-     * OkHttp client + dispatchers) instead of letting each PhIcon call site
-     * allocate its own. Coil resolves this through `Coil.imageLoader(context)`
-     * whenever an [AsyncImage] composable does not pass an explicit
-     * `imageLoader` parameter.
+     * Serve a single application-scoped Coil [ImageLoader] (contact photos)
+     * instead of letting each [AsyncImage] call site allocate its own. Coil
+     * resolves this through `Coil.imageLoader(context)` whenever an
+     * [AsyncImage] does not pass an explicit `imageLoader`. Icons no longer go
+     * through Coil (see PhIcon), so no SVG decoder is registered.
      */
-    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
-        .components { add(SvgDecoder.Factory()) }
-        .build()
+    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this).build()
 
     override fun onCreate() {
         super.onCreate()

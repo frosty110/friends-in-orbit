@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -23,11 +22,10 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
@@ -44,7 +42,6 @@ import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.theme.OrbitTheme
-import coil.compose.AsyncImage
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -197,19 +194,8 @@ private fun IgnoredContactRowComposable(
         // PRIV-03 — avatar inputs are masked exactly like the
         // row text: under the curtain the photo is suppressed and the
         // initials derive from the masked name, so neither a face nor real
-        // initials survive a glance. Photo-vs-initials branch mirrors
-        // PickerContactRow.
-        if (!curtain && !row.photoUri.isNullOrBlank()) {
-            AsyncImage(
-                model = row.photoUri,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape),
-            )
-        } else {
-            Avatar(name = displayName, size = 44.dp)
-        }
+        // initials survive a glance.
+        Avatar(name = displayName, size = 44.dp, photoUri = if (curtain) null else row.photoUri)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = displayName,

@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,7 +14,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -32,7 +34,9 @@ fun OrbitAppBar(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp)
+            // Min, not fixed: a fixed 56dp clipped two-line titles at 200%
+            // font scale (rubric gate G3).
+            .heightIn(min = 56.dp)
             .background(if (subtle) Color.Transparent else OrbitTheme.colors.bg)
             .padding(start = 16.dp, end = 8.dp),
     ) {
@@ -47,7 +51,10 @@ fun OrbitAppBar(
             ),
             modifier = Modifier
                 .weight(1f)
-                .padding(start = if (leading != null) 4.dp else 0.dp),
+                .padding(start = if (leading != null) 4.dp else 0.dp, top = 8.dp, bottom = 8.dp)
+                // The screen title is a heading, so TalkBack users can jump
+                // to it and hear where they are.
+                .semantics { heading() },
         )
         if (trailing != null) {
             Box { trailing() }
@@ -75,7 +82,7 @@ fun OrbitAppBarTextAction(
         modifier = modifier
             .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
             .clip(OrbitTheme.shapes.md)
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .then(
                 if (contentDescription != null) {
                     Modifier.semantics { this.contentDescription = contentDescription }

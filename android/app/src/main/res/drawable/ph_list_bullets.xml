@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from app/icons-src/phosphor/list-bullets.svg by scripts/phosphor_to_vector.py. Do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="256"
+    android:viewportHeight="256">
+    <path
+        android:pathData="M88,64L216,64"
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="16"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M88,128L216,128"
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="16"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M88,192L216,192"
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="16"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M32,64A12,12 0 1,0 56,64A12,12 0 1,0 32,64Z"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M32,128A12,12 0 1,0 56,128A12,12 0 1,0 32,128Z"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M32,192A12,12 0 1,0 56,192A12,12 0 1,0 32,192Z"
+        android:fillColor="#00000000" />
+</vector>

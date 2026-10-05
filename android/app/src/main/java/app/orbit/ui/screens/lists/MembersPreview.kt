@@ -11,9 +11,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -160,7 +160,7 @@ private fun MemberRow(
             .fillMaxWidth()
             .semantics { contentDescription = snapshot.displayName },
     ) {
-        Avatar(name = snapshot.displayName, size = 32.dp)
+        Avatar(name = snapshot.displayName, size = 32.dp, photoUri = snapshot.photoUri)
         Text(
             text = snapshot.displayName,
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),

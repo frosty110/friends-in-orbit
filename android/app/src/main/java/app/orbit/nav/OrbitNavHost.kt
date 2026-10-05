@@ -50,6 +50,7 @@ import app.orbit.ui.screens.settings.SettingsScreen
 import app.orbit.ui.screens.settings.SettingsViewModel
 import app.orbit.ui.screens.settings.ignored.SettingsIgnoredScreen
 import app.orbit.ui.screens.settings.ignored.SettingsIgnoredViewModel
+import app.orbit.ui.theme.LocalReducedMotion
 import kotlinx.coroutines.launch
 
 /**
@@ -140,7 +141,16 @@ private fun OrbitNavGraph(
     startDestination: String
 ) {
     val onboardingLists = remember(listRepo, appPrefs) { OnboardingListStarter(listRepo, appPrefs) }
-    NavHost(navController = nav, startDestination = startDestination) {
+    val reducedMotion = LocalReducedMotion.current
+    val motion = remember(reducedMotion) { OrbitNavMotion(reducedMotion) }
+    NavHost(
+        navController = nav,
+        startDestination = startDestination,
+        enterTransition = motion.enter,
+        exitTransition = motion.exit,
+        popEnterTransition = motion.popEnter,
+        popExitTransition = motion.popExit,
+    ) {
         composable(Routes.Home) {
             HomeScreen(
                 vm = hiltViewModel<HomeViewModel>(),

@@ -21,10 +21,10 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.PhIcon
+import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -112,9 +113,8 @@ private fun CreateListContent(
                 bottom = OrbitTheme.spacing.x6,
             ),
     ) {
-        Text(
+        SectionLabel(
             text = "Choose a template",
-            style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted),
             modifier = Modifier.padding(top = OrbitTheme.spacing.x1, bottom = OrbitTheme.spacing.x3),
         )
 

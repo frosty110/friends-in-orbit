@@ -29,10 +29,10 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +47,7 @@ import app.orbit.data.NoteRow
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.PhIcon
+import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -99,10 +100,7 @@ fun NotesSection(
                 tint = OrbitTheme.colors.fgMuted,
             )
             Spacer(Modifier.width(OrbitTheme.spacing.x2))
-            Text(
-                text = "Notes",
-                style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted),
-            )
+            SectionLabel(text = "Notes")
         }
         Spacer(Modifier.height(OrbitTheme.spacing.x3))
 

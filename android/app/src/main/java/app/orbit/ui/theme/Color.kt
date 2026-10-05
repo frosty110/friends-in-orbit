@@ -7,8 +7,11 @@ import androidx.compose.ui.graphics.Color
 // Raw primitives — ported 1:1 from colors_and_type.css :root block.
 // Never reference these from screens; go through OrbitColors instead.
 internal object OrbitPrimitives {
-    val Terracotta     = Color(0xFFC8654A)
-    val TerracottaDark = Color(0xFF9B4A32)
+    // Brand terracotta. Deepened 2026-10-05 from #C8654A (same hue, lower
+    // lightness): white text on it was 3.88:1, below WCAG AA's 4.5:1 for the
+    // label of the app's main button. Now 4.85:1, and 4.5:1 as text on cream.
+    val Terracotta     = Color(0xFFB85338)
+    val TerracottaDark = Color(0xFF90412C)
     val TerracottaTint = Color(0xFFEDD6CE)
     val Sage           = Color(0xFF87A383)
     val SageTint       = Color(0xFFD8E3D6)
@@ -31,7 +34,9 @@ internal object OrbitPrimitives {
     val Ink            = Color(0xFF211E1C)
     val InkSoft        = Color(0xFF3A3531)
     val Stone          = Color(0xFF6B6560)
-    val StoneSoft      = Color(0xFF9A928B)
+    // Subtle text. Was #9A928B (2.84:1 on cream, failing AA); now 4.5:1 on the
+    // darkest light surface it sits on (CreamDeep).
+    val StoneSoft      = Color(0xFF716A63)
     val Line           = Color(0xFFE5DDD1)
     val LineSoft       = Color(0xFFEFE8DC)
 
@@ -54,16 +59,23 @@ internal object OrbitPrimitives {
     val DirOutgoingDk  = Color(0xFFB49BEA)   // dark — lifted, same hue
     val DirIncomingDk  = Color(0xFF6FBBE0)
 
-    val AccentHover    = Color(0xFFB85A40)   // light
+    val AccentHover    = Color(0xFFA44A32)   // light; hover/press deepen from Terracotta
+    // Green status text ("Allowed"): Sage itself is 2.76:1 on paper, so text
+    // uses this deeper sage (4.5:1); Sage stays for dots and fills.
+    val SageText       = Color(0xFF5D7859)
     val AccentDark     = Color(0xFFD87560)   // dark-mode lifted terracotta
     val AccentDarkHover = Color(0xFFE18670)
+    // Dark-mode press: deeper than AccentDark but still 4.5:1 with the ink
+    // label dark mode uses on the accent.
+    val AccentDarkPress = Color(0xFFD3654D)
     val AccentTintDark = Color(0xFF4A2D24)
     val BgSubtleDark   = Color(0xFF25211F)
     val SoftDark       = Color(0xFFDDD5CC)
     val PositiveTintDk = Color(0xFF344035)
     val WarningTintDk  = Color(0xFF4A3E25)
     val LineSoftDark   = Color(0xFF332E2A)
-    val FgSubtleDark   = Color(0xFF8F887F)
+    // Was #8F887F (4.23:1 on Graphite); now 4.5:1 on GraphiteDeep.
+    val FgSubtleDark   = Color(0xFF9D978F)
 }
 
 // Semantic slots. Mirrors the CSS `--bg`, `--fg`, `--accent`, etc.
@@ -86,6 +98,9 @@ data class OrbitColors(
     val accentTint: Color,
     val accentFg: Color,
     val positive: Color,
+    // Text-safe positive (status words such as "Allowed"); `positive` is for
+    // dots and fills and is too light to read as text.
+    val positiveText: Color,
     val positiveTint: Color,
     val warning: Color,
     val warningTint: Color,
@@ -124,6 +139,7 @@ internal val LightColors = OrbitColors(
     accentTint = OrbitPrimitives.TerracottaTint,
     accentFg = Color.White,
     positive = OrbitPrimitives.Sage,
+    positiveText = OrbitPrimitives.SageText,
     positiveTint = OrbitPrimitives.SageTint,
     warning = OrbitPrimitives.Olive,
     warningTint = OrbitPrimitives.OliveTint,
@@ -154,10 +170,13 @@ internal val DarkColors = OrbitColors(
     lineSoft = OrbitPrimitives.LineSoftDark,
     accent = OrbitPrimitives.AccentDark,
     accentHover = OrbitPrimitives.AccentDarkHover,
-    accentPress = OrbitPrimitives.TerracottaDark,
+    accentPress = OrbitPrimitives.AccentDarkPress,
     accentTint = OrbitPrimitives.AccentTintDark,
-    accentFg = Color.White,
+    // Dark mode puts an ink label on the lifted accent (5.2:1); white on it
+    // was 3.17:1. Material's dark schemes do the same with on-primary.
+    accentFg = OrbitPrimitives.Ink,
     positive = OrbitPrimitives.Sage,
+    positiveText = OrbitPrimitives.Sage,
     positiveTint = OrbitPrimitives.PositiveTintDk,
     warning = OrbitPrimitives.Olive,
     warningTint = OrbitPrimitives.WarningTintDk,

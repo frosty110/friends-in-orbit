@@ -29,6 +29,7 @@ import app.orbit.ui.theme.OrbitDarkMode
 import app.orbit.ui.theme.OrbitThemeId
 import app.orbit.ui.theme.OrbitWidgetTheme
 import app.orbit.ui.theme.ThemeSettings
+import app.orbit.ui.theme.deviceAccentHue
 import app.orbit.ui.theme.orbitWidgetColorProviders
 
 class OrbitWidget4x2 : GlanceAppWidget() {
@@ -51,7 +52,7 @@ class OrbitWidget4x2 : GlanceAppWidget() {
             darkMode = OrbitDarkMode.fromKey(prefs.darkMode.first()),
             accentHue = prefs.accentHue.first().let { if (it < 0) null else it },
         )
-        val widgetColors = orbitWidgetColorProviders(themeSettings)
+        val widgetColors = orbitWidgetColorProviders(themeSettings, deviceAccentHue(context))
 
         provideContent {
             OrbitWidgetTheme(colors = widgetColors) {

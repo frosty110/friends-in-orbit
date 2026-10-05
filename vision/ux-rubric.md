@@ -1,10 +1,10 @@
 # Orbit UX rubric
 
-> **Status:** draft for owner review (2026-10-05). Nothing in the app changes until this rubric is agreed.
+> **Status:** adopted 2026-10-05. The owner asked for my best answer to every open decision; they are recorded under [Decisions](#decisions) with the reasoning, and the plan below is being carried out against them.
 >
 > What "world class" means for Orbit, written so two people scoring the same build land within one point of each other. Every score needs evidence: a screenshot, a recording, a test report, or a `file:line`. A score without evidence does not count.
 
-**Contents:** [How to score](#how-to-score) · [The AAA bar](#the-aaa-bar) · [Hard gates](#hard-gates) · [The 12 dimensions](#the-12-dimensions) · [Where Orbit stands today](#where-orbit-stands-today) · [What is unprofessional today](#what-is-unprofessional-today) · [Plan to reach AAA](#plan-to-reach-aaa) · [Decisions for the owner](#decisions-for-the-owner)
+**Contents:** [How to score](#how-to-score) · [The AAA bar](#the-aaa-bar) · [Hard gates](#hard-gates) · [The 12 dimensions](#the-12-dimensions) · [Where Orbit stands today](#where-orbit-stands-today) · [What is unprofessional today](#what-is-unprofessional-today) · [Plan to reach AAA](#plan-to-reach-aaa) · [Decisions](#decisions)
 
 ---
 
@@ -46,6 +46,16 @@ Each dimension gets a whole number from 0 to 4. The anchors are the same for eve
 - Re-score after every release that changes UI. Keep the evidence with the score.
 
 ---
+
+## What "AAA" means here
+
+"AAA" is not a certification anyone issues. The term comes from games, where it was borrowed from bond credit ratings in the 1990s to mean the highest grade of production ([Wikipedia](https://en.wikipedia.org/wiki/AAA_(video_game_industry))). For an app, the honest translation is: **built to the standard of the apps the platforms themselves hold up as the best**, with nothing left rough. Three public bars define that standard, and Orbit's rubric folds all three in:
+
+1. **The Apple Design Awards** judge six things: *Delight and Fun*, *Innovation*, *Interaction* ("intuitive interfaces and effortless controls that are perfectly tailored to their platform"), *Inclusivity* ("a great experience for all"), *Social Impact*, and *Visuals and Graphics* ("outstanding artistic direction, animations, and graphical quality") ([Apple Newsroom, 2025](https://www.apple.com/newsroom/2025/06/apple-unveils-winners-and-finalists-of-the-2025-apple-design-awards/)). Those map to D1, D5, D3, D8, D12 and Orbit's mission.
+2. **Google's core app quality guidelines** set the Android floor: light and dark themes, 45 to 75 character lines, standard back and gesture navigation, state kept across backgrounding, 48dp touch targets, 4.5:1 text contrast (3:1 for large text), labels on every control, start-up under two seconds or a progress state, at least 60fps, no crashes or ANRs, permissions requested only when the feature needs them, and graceful degradation when they are refused ([developer.android.com](https://developer.android.com/docs/quality-guidelines/core-app-quality)). The large-screen guidelines add tiers; "large screen ready" (tier 3) means the app runs full screen and every critical flow works on tablets and foldables ([developer.android.com](https://developer.android.com/docs/quality-guidelines/archive/adaptive/large-screen-app-quality)).
+3. **WCAG 2.2** is the accessibility standard. Level AA is what laws and platforms anchor to, and the W3C itself advises against requiring Level AAA as a blanket policy, because some AAA criteria cannot be met for some content ([W3C](https://www.w3.org/TR/WCAG22/)). So Orbit takes **all of AA** as a hard gate, plus the three AAA criteria that suit a calm phone app: **1.4.6** enhanced contrast (7:1) for primary text, **2.5.5** enhanced target size (Android's 48dp already exceeds it), and **2.3.3** animation from interactions can be turned off.
+
+In one sentence: **Orbit is AAA when it would be a credible Apple Design Award finalist for Interaction and Inclusivity, passes every Google core quality check and the large-screen-ready tier, and meets WCAG 2.2 AA plus those three AAA criteria, with five real users confirming it.**
 
 ## The AAA bar
 
@@ -351,19 +361,19 @@ Four phases, ordered so the cheapest, most visible professionalism lands first a
 
 ---
 
-## Decisions for the owner
+## Decisions
 
-These change what gets built, so they are yours.
+The owner asked for my best recommendation on each open question and for the work to proceed on that basis. Each answer below is a decision, with the reason, so it can be revisited on its merits.
 
-1. **What "AAA" means.** I read it as top-tier product quality (Apple Design Award level), with WCAG 2.2 AA as the hard floor and AAA contrast for body text. Full WCAG 2.2 AAA conformance everywhere is stricter: it would push the terracotta much darker and affects the brand. Which do you want?
-2. **The terracotta button.** Reaching 4.5:1 with white text needs a darker fill (roughly 15% darker) or a different label colour. A visible brand change; approve the direction?
-3. **Card face tap.** Open details instead of dialing (recommended)?
-4. **Home direction.** Build toward `vision/00-home/design-twotone.png` (photos, next person per list, 7-day rhythm), or a different direction?
-5. **Contact photos.** Use real photos from the address book everywhere they exist?
-6. **Material You.** Add an optional "use device colours" theme beside the five curated ones, or keep the brand palette only?
-7. **Screen sizes.** Are tablets and foldables in scope for AAA, or phones only?
-8. **The lowercase delete dialog.** The PRD pins "this removes the list. people stay in your contacts." in lowercase. Keep it as a deliberate voice choice, or move to sentence case like everything else?
-9. **One phone icon per screen (Design 6).** Still open from the bug fixes: relax it for list rows, or drop the per-row icon?
-10. **Proof.** Can you get five people for a 30-minute test each? Without it, the AAA bar's last clause can't be met and the score rests on expert review alone.
-
-Once these are settled and the rubric is approved, work starts with Phase 0. Each phase lands as reviewable commits that re-score the affected dimensions with fresh evidence.
+| # | Question | Decision | Why |
+|---|---|---|---|
+| 1 | What "AAA" means | Top-tier product quality as defined [above](#what-aaa-means-here): WCAG 2.2 AA in full, plus AAA 1.4.6 for primary text, 2.5.5 and 2.3.3. Not blanket WCAG AAA. | W3C advises against blanket AAA; the three chosen criteria are the ones that matter for reading, tapping and motion on a phone. |
+| 2 | The terracotta button | Keep the hue, change the lightness: a deeper terracotta fill with white text at 4.5:1 or better in light mode; in dark mode a lighter terracotta with a dark label. The accent dial's generator is held to the same 4.5:1. | The button is the most important control on most screens. A brand colour that fails contrast on its primary use is not a brand asset. Hue carries the identity; lightness carries legibility. |
+| 3 | Card face tap | Tapping the card opens the person's details. Only the labelled Call button dials. | A call is the one action in Orbit that cannot be undone and reaches another person. It must never be one stray tap away. |
+| 4 | Home direction | Build toward `vision/00-home/design-twotone.png`: each list is a full-width card showing the next person, a face, a human reason, and the 7-day rhythm; tapping it opens that list's deck. | It is the owner's own design target, it answers "who next and why" at a glance, and it fixes the half-empty grid. |
+| 5 | Contact photos | Use the address-book photo everywhere a person appears, with initials as the fallback, through one avatar component, in widgets too. | Faces are how people recognise people; initials are a fallback, not an identity. |
+| 6 | Material You | Add a sixth theme, "Wallpaper" (stored as `device`), that takes the wallpaper's accent hue and runs it through the existing contrast-safe generator. The five curated themes stay. | It makes Orbit feel native on Android 12+ (minimum SDK is 31), and the generator means it can never break contrast. |
+| 7 | Screen sizes | Phones first; "large screen ready" (Google tier 3) is required: full screen, landscape works, content width capped on wide windows. Two-pane layouts are out of scope for now. | Tier 3 is the floor for a quality Android app; a two-pane redesign is a product decision of its own. |
+| 8 | The lowercase delete dialog | Sentence case: "This removes the list. People stay in your contacts." The PRD line is updated. | `voice.md` is canonical for voice and requires sentence case everywhere; lowercase read as a typo in review. |
+| 9 | One phone icon per screen (Design 6) | Amended: one *accent* call action per screen; a list of people may carry a quiet, muted dial icon on each row (Browse, Search). Nowhere else repeats it. | Calling is the app's job, and dialing from a list is the shortest path to it. Muting the icon keeps the accent meaningful. |
+| 10 | Proof with five users | I can't recruit people, so I've written a ready-to-run test kit (tasks, script, success criteria, word cards, scoring sheet) in [`ux-test-kit.md`](ux-test-kit.md). AAA stays **provisional** until the owner runs it. | The bar asks real people to confirm it; that part can only be done by people. |

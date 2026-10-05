@@ -39,7 +39,7 @@ Long-press on a list tile opens an anchored menu of manage-this-list actions. Th
   3. **List settings** — opens List Configuration (`Routes.listConfig(listId)`).
   4. — divider —
   5. **Archive** — removes the list from home, reversible. Reuses the existing "List archived." + Undo snackbar.
-  6. **Delete** — destructive. Opens the existing confirmation dialog ("this removes the list. people stay in your contacts."), then deletes **with an Undo snackbar** (see decision below).
+  6. **Delete**: destructive. Opens the existing confirmation dialog ("This removes the list. People stay in your contacts."), then deletes **with an Undo snackbar** (see decision below).
 - Long-press fires a single haptic tick on entry. Only one menu open at a time; long-pressing another tile (or tapping out) dismisses the current one.
 - **"Start this list" is intentionally not an item.** A plain tap already routes to Card View scoped to the list, so a menu entry would duplicate the primary gesture. Resolved against ground truth, not assumption (`HomeScreen.kt` tile `onClick` → `Routes.card(listId)`).
 - **Delete is reachable directly here** (not gated behind archive-first as it is in Lists Manager's archived section). Removing that archive buffer is why this surface's Delete carries an Undo — see Open product questions.

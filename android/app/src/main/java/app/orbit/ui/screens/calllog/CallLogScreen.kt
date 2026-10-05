@@ -26,12 +26,13 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -54,7 +55,6 @@ import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.dialPhoneNumber
-import coil.compose.AsyncImage
 
 /**
  * Chronological in-app call log, per the call-history spec (README §Behavior):
@@ -378,6 +378,7 @@ private fun DayHeader(label: String) {
         style = OrbitTheme.type.eyebrow,
         color = OrbitTheme.colors.fgMuted,
         modifier = Modifier
+            .semantics { heading() }
             .fillMaxWidth()
             .background(OrbitTheme.colors.bg)
             .padding(
@@ -426,10 +427,10 @@ private fun CallLogRowComposable(
                 // it masks the text: no photo, and initials derived from the
                 // same masked "Contact" literal (BrowseRow idiom). Real
                 // initials/photos under a masked name would leak who this is.
-                CallLogAvatar(
-                    photoUri = if (curtain) null else row.photoUri,
+                Avatar(
                     name = baseName,
                     size = 44.dp,
+                    photoUri = if (curtain) null else row.photoUri,
                 )
             }
             Spacer(Modifier.width(OrbitTheme.spacing.x3))
@@ -478,26 +479,6 @@ private fun CallLogRowComposable(
     }
 }
 
-/**
- * 44dp Avatar with optional Coil-backed photo. Mirrors ContactDetailScreen's
- * ContactPhoto pattern but inlined here so CallLogScreen has zero new
- * cross-screen component dependencies.
- */
-@Composable
-private fun CallLogAvatar(photoUri: String?, name: String, size: androidx.compose.ui.unit.Dp) {
-    if (photoUri.isNullOrBlank()) {
-        Avatar(name = name, size = size)
-    } else {
-        AsyncImage(
-            model = photoUri,
-            contentDescription = null,
-            modifier = Modifier
-                .size(size)
-                .clip(CircleShape)
-                .background(OrbitTheme.colors.bgSubtle),
-        )
-    }
-}
 
 // Preview fixture for the stateless CallLogContent.
 // Day-sectioned shape with wall-clock labels.

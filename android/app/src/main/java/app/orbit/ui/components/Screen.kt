@@ -1,16 +1,23 @@
 package app.orbit.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -28,18 +35,39 @@ import app.orbit.ui.theme.OrbitTheme
  * on their own — Compose's text fields request it on focus. A screen that
  * hosts a text field should therefore keep its body scrollable; the shell
  * guarantees the space, not the scrolling.
+ *
+ * Width: content is capped at [MaxContentWidth] and centred, so on a tablet,
+ * a foldable or a phone in landscape lines stay readable and controls stay
+ * within reach (Google's "large screen ready" tier; UX rubric decision 7). The
+ * background still fills the window. On a phone in portrait nothing changes.
+ * Insets also include display cutouts, which matter in landscape.
  */
 @Composable
 fun OrbitScreen(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(
-        modifier = modifier
+    Box(
+        contentAlignment = Alignment.TopCenter,
+        modifier = Modifier
             .fillMaxSize()
-            .background(OrbitTheme.colors.bg)
-            .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime)),
+            .background(OrbitTheme.colors.bg),
     ) {
-        content()
+        Column(
+            modifier = modifier
+                .fillMaxHeight()
+                .widthIn(max = MaxContentWidth)
+                .fillMaxWidth()
+                .windowInsetsPadding(
+                    WindowInsets.systemBars
+                        .union(WindowInsets.displayCutout)
+                        .union(WindowInsets.ime),
+                ),
+        ) {
+            content()
+        }
     }
 }
+
+/** Widest a screen's content grows: about 75 characters of body text. */
+val MaxContentWidth = 640.dp

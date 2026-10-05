@@ -1,5 +1,7 @@
 package app.orbit.ui.screens.lists
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,9 +22,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -266,7 +268,7 @@ private fun AlwaysActiveToggleRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onChange(!alwaysActive) }
+            .toggleable(value = alwaysActive, role = Role.Switch, onValueChange = onChange)
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         Column(Modifier.weight(1f)) {
@@ -280,7 +282,7 @@ private fun AlwaysActiveToggleRow(
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
-        OrbitSwitch(checked = alwaysActive, onCheckedChange = onChange)
+        OrbitSwitch(checked = alwaysActive, onCheckedChange = null)
     }
 }
 

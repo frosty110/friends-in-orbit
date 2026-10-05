@@ -25,25 +25,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
-import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +57,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.orbit.data.ChipTone
 import app.orbit.data.Contact
 import app.orbit.data.NoteRow
+import app.orbit.ui.components.InfoTip
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.ListContextChip
 import app.orbit.ui.components.LocalPrivacyCurtain
@@ -757,27 +751,7 @@ private fun UsuallyAnswersCard(contact: Contact, nowHour: Int) {
                     text = "Usually answers",
                     style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted)
                 )
-                TooltipBox(
-                    positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-                    tooltip = { PlainTooltip { Text(USUALLY_TOOLTIP) } },
-                    state = rememberTooltipState(isPersistent = false)
-                ) {
-                    // 48dp tap target per rules.md design rule 3
-                    // (the bare 14dp glyph was the whole target). The glyph
-                    // stays small; the Box carries the gesture area and its
-                    // padding replaces the old 6dp spacer.
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.size(OrbitTheme.spacing.tapMin)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Info,
-                            contentDescription = "About this stat",
-                            tint = OrbitTheme.colors.fgMuted,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
+                InfoTip(text = USUALLY_TOOLTIP, label = "About usually answers")
             }
             Text(
                 text = contact.bestWindowLabel,

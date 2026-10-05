@@ -23,13 +23,14 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -39,6 +40,7 @@ import app.orbit.ui.theme.OrbitDarkMode
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.OrbitThemeId
 import app.orbit.ui.theme.OrbitThemes
+import app.orbit.ui.theme.deviceAccentHue
 
 /**
  * Settings → Appearance (THEMING 2026-06-22). Three controls:
@@ -61,6 +63,11 @@ fun AppearanceSection(
     onAccentHue: (Int?) -> Unit,
 ) {
     val isDark = OrbitTheme.colors.isDark
+    val context = LocalContext.current
+    val deviceHue = remember(context) { deviceAccentHue(context) }
+    // The five curated palettes, then Wallpaper: the wallpaper's hue through
+    // the same contrast-safe generator (rubric decision 6).
+    val themes = remember(deviceHue) { OrbitThemes.all + OrbitThemes.def(OrbitThemeId.DEVICE, deviceHue) }
 
     Column(
         modifier = Modifier
@@ -82,7 +89,7 @@ fun AppearanceSection(
                 .padding(top = OrbitTheme.spacing.x3),
             horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x4),
         ) {
-            OrbitThemes.all.forEach { def ->
+            themes.forEach { def ->
                 val swatch = if (isDark) def.dark.accent else def.light.accent
                 ThemeSwatch(
                     label = def.id.displayName,
@@ -145,7 +152,7 @@ fun AppearanceSection(
         )
 
         val seedHue = remember(accentHue, themeId) {
-            (accentHue ?: OrbitThemes.defaultHueFor(themeId)).toFloat()
+            (accentHue ?: OrbitThemes.defaultHueFor(themeId, deviceHue)).toFloat()
         }
         var liveHue by remember(accentHue, themeId) { mutableStateOf(seedHue) }
         Row(

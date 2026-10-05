@@ -11,10 +11,12 @@
 // values (zero visual change); Cool/Forest/Plum are generated from a hue
 // through the contrast-guaranteed [accentForHue]; Mono is authored neutral.
 //
-// Material You is intentionally NOT wired here yet (2026-06-22 product call) —
-// the registry leaves room: add an entry that builds its OrbitColors from
-// dynamicLightColorScheme()/dynamicDarkColorScheme() and the resolver picks it
-// up unchanged.
+// Material You (2026-10-05, UX rubric decision 6): the sixth theme, Wallpaper
+// (key "device"), takes only the HUE of the wallpaper's accent and runs it
+// through the same contrast-guaranteed [accentForHue] as Cool/Forest/Plum. It
+// does not adopt Material's dynamic surfaces, so Orbit keeps its cream and
+// charcoal and can never fail contrast whatever the wallpaper is. The hue is
+// read by the caller ([deviceAccentHue]) because this registry has no Context.
 package app.orbit.ui.theme
 
 import androidx.compose.runtime.Immutable
@@ -28,6 +30,7 @@ enum class OrbitThemeId(val key: String, val displayName: String) {
     FOREST("forest", "Forest"),
     PLUM("plum", "Plum"),
     MONO("mono", "Mono"),
+    DEVICE("device", "Wallpaper"),
     ;
 
     companion object {
@@ -225,6 +228,7 @@ private val monoDef = OrbitThemeDef(
 
 /** The curated theme registry + the resolver the theme layer reads. */
 object OrbitThemes {
+    /** The five curated themes. [OrbitThemeId.DEVICE] is built per hue by [def]. */
     val all: List<OrbitThemeDef> = listOf(
         warmDef,
         generatedDef(OrbitThemeId.COOL, hue = 211f),   // slate blue
@@ -233,10 +237,24 @@ object OrbitThemes {
         monoDef,
     )
 
-    fun def(id: OrbitThemeId): OrbitThemeDef = all.first { it.id == id }
+    /** Warm's hue: the Wallpaper theme's fallback when the wallpaper has none. */
+    private val warmHue: Float = LightColors.accent.hueDegrees()
+
+    /**
+     * The definition for [id]. For [OrbitThemeId.DEVICE], [deviceHue] is the
+     * wallpaper's accent hue (see [deviceAccentHue]); null, as on a grey
+     * wallpaper, falls back to Warm's hue rather than inventing one.
+     */
+    fun def(id: OrbitThemeId, deviceHue: Float? = null): OrbitThemeDef =
+        if (id == OrbitThemeId.DEVICE) {
+            generatedDef(OrbitThemeId.DEVICE, deviceHue ?: warmHue)
+        } else {
+            all.first { it.id == id }
+        }
 
     /** Hue that seeds the dial when a theme is first opened (its own accent). */
-    fun defaultHueFor(id: OrbitThemeId): Int = def(id).light.accent.hueDegrees().toInt()
+    fun defaultHueFor(id: OrbitThemeId, deviceHue: Float? = null): Int =
+        def(id, deviceHue).light.accent.hueDegrees().toInt()
 
     /** Public live-preview of the dial accent for a hue — used by the Settings
      *  Appearance UI (which can't see the internal [accentForHue]). */
@@ -260,8 +278,8 @@ object OrbitThemes {
      * they track the dial; the multi-hue personality palette
      * (avatars/rhythm/chips) stays the theme's.
      */
-    fun resolve(settings: ThemeSettings, isDark: Boolean): ResolvedTheme {
-        val def = def(settings.themeId)
+    fun resolve(settings: ThemeSettings, isDark: Boolean, deviceHue: Float? = null): ResolvedTheme {
+        val def = def(settings.themeId, deviceHue)
         var colors = if (isDark) def.dark else def.light
         var tones = if (isDark) def.darkTones else def.lightTones
 

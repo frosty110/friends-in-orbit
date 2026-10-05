@@ -18,9 +18,9 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +31,7 @@ import app.orbit.domain.rule.RuleParams
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.screens.lists.RuleTemplatePicker
+import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -97,10 +98,7 @@ fun RuleOverrideSection(
         modifier = modifier,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = "Custom schedule",
-                style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted),
-            )
+            SectionLabel(text = "Custom schedule")
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
 
             if (!hasOverride) {

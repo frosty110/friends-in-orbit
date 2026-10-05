@@ -83,6 +83,8 @@ private val LICENSE_ENTRIES: List<LicenseEntry> = listOf(
     LicenseEntry("Timber", "Apache License 2.0"),
     LicenseEntry("libphonenumber", "Apache License 2.0"),
     LicenseEntry("Reorderable (sh.calvin.reorderable)", "Apache License 2.0"),
+    LicenseEntry("Inter typeface (Rasmus Andersson)", "SIL Open Font License 1.1"),
+    LicenseEntry("Phosphor Icons", "MIT License"),
 )
 
 @PreviewLightDark

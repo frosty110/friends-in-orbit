@@ -27,26 +27,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
-import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,7 +52,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -73,6 +65,7 @@ import app.orbit.data.Contact
 import app.orbit.data.NoteRow
 import app.orbit.domain.model.PauseDuration
 import app.orbit.domain.rule.RuleParams
+import app.orbit.ui.components.InfoTip
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.ContactStatsPanel
 import app.orbit.ui.components.LocalPrivacyCurtain
@@ -93,9 +86,9 @@ import app.orbit.ui.screens.contact.sections.PauseSheet
 import app.orbit.ui.screens.contact.sections.RuleOverrideSection
 import app.orbit.ui.screens.contact.sections.UnpauseBanner
 import app.orbit.ui.theme.OrbitMotion
+import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.dialPhoneNumber
-import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 
 /**
@@ -600,7 +593,7 @@ private fun ContactBodyLazyColumn(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                ContactPhoto(photoUri = contact.photoUri, name = displayName, size = 120.dp)
+                Avatar(name = displayName, size = 120.dp, photoUri = contact.photoUri)
                 Spacer(Modifier.height(OrbitTheme.spacing.x4))
                 Text(
                     text = displayName,
@@ -845,11 +838,7 @@ private fun ContactBodyLazyColumn(
 
 @Composable
 private fun SectionEyebrow(label: String) {
-    Text(
-        text = label,
-        style = OrbitTheme.type.eyebrow,
-        color = OrbitTheme.colors.fgMuted
-    )
+    SectionLabel(text = label)
 }
 
 private const val USUALLY_TOOLTIP = "Based on when you usually answer or call this contact."
@@ -872,19 +861,7 @@ private fun UsuallyStatRow(value: String) {
                 style = OrbitTheme.type.eyebrow,
                 color = OrbitTheme.colors.fgMuted
             )
-            Spacer(Modifier.width(6.dp))
-            TooltipBox(
-                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-                tooltip = { PlainTooltip { Text(USUALLY_TOOLTIP) } },
-                state = rememberTooltipState(isPersistent = false)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Info,
-                    contentDescription = "About this stat",
-                    tint = OrbitTheme.colors.fgMuted,
-                    modifier = Modifier.size(14.dp)
-                )
-            }
+            InfoTip(text = USUALLY_TOOLTIP, label = "About usually")
         }
         Text(
             text = value,
@@ -894,24 +871,6 @@ private fun UsuallyStatRow(value: String) {
     }
 }
 
-@Composable
-private fun ContactPhoto(photoUri: String?, name: String, size: Dp) {
-    if (photoUri.isNullOrBlank()) {
-        Avatar(name = name, size = size)
-    } else {
-        // Coil 2.7.0 (`coil.compose.AsyncImage`). Blank/error states fall back
-        // to the empty crop — an explicit Avatar fallback via Coil's painter
-        // parameters may be added later once Coil 2 painter helpers stabilise
-        // in our setup.
-        AsyncImage(
-            model = photoUri,
-            contentDescription = null,
-            modifier = Modifier
-                .size(size)
-                .clip(CircleShape)
-        )
-    }
-}
 
 /**
  * CONTACT-06 — orphan banner with Re-link + Archive actions.

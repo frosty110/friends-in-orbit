@@ -34,7 +34,6 @@ import app.orbit.data.entity.CallDirection
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
-import coil.compose.SubcomposeAsyncImage
 
 /**
  * HOME-8 — the day behind a rhythm bar.
@@ -206,20 +205,7 @@ private fun RowAvatar(photoUri: String?, name: String, rim: Color) {
         .padding(2.dp)
         .clip(CircleShape)
     Box(modifier = ring, contentAlignment = Alignment.Center) {
-        if (photoUri.isNullOrBlank()) {
-            Avatar(name = name, size = 36.dp)
-        } else {
-            SubcomposeAsyncImage(
-                model = photoUri,
-                contentDescription = null,
-                loading = { Avatar(name = name, size = 36.dp) },
-                error = { Avatar(name = name, size = 36.dp) },
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(OrbitTheme.colors.bgSubtle),
-            )
-        }
+        Avatar(name = name, size = 36.dp, photoUri = photoUri)
     }
 }
 

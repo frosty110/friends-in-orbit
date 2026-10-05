@@ -34,10 +34,10 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,7 +80,6 @@ import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
 import app.orbit.ui.util.formatDayHeader
-import coil.compose.SubcomposeAsyncImage
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -557,7 +556,7 @@ private fun NextUpRow(nextUp: NextUp?, curtain: Boolean, modifier: Modifier = Mo
         // warm "one name" feel (HOME-3).
         val avatarName = if (curtain) "Someone" else nextUp.name
         val firstName = if (curtain) "Someone" else nextUp.name.substringBefore(' ').ifBlank { nextUp.name }
-        NextUpAvatar(photoUri = if (curtain) null else nextUp.photoUri, name = avatarName, size = 44.dp)
+        Avatar(name = avatarName, size = 44.dp, photoUri = if (curtain) null else nextUp.photoUri)
         Spacer(Modifier.width(OrbitTheme.spacing.x3))
         Column(Modifier.weight(1f)) {
             Text(
@@ -582,28 +581,6 @@ private fun NextUpRow(nextUp: NextUp?, curtain: Boolean, modifier: Modifier = Mo
     }
 }
 
-/**
- * Photo-with-initials-fallback avatar for the Next-up person. Follows the
- * `CallLogAvatar` / `ContactPhoto` convention but uses [SubcomposeAsyncImage] so
- * a blank/error load falls back to real initials rather than an empty crop.
- */
-@Composable
-private fun NextUpAvatar(photoUri: String?, name: String, size: Dp) {
-    if (photoUri.isNullOrBlank()) {
-        Avatar(name = name, size = size)
-        return
-    }
-    SubcomposeAsyncImage(
-        model = photoUri,
-        contentDescription = null,
-        loading = { Avatar(name = name, size = size) },
-        error = { Avatar(name = name, size = size) },
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(OrbitTheme.colors.bgSubtle),
-    )
-}
 
 /**
  * HOME-7 — 7-day rhythm strip. Bars are RELATIVE to this list's own busiest day

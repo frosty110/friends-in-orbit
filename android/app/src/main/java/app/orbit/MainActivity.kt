@@ -1,15 +1,21 @@
 package app.orbit
 
+import android.app.UiModeManager
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.Lifecycle
@@ -23,7 +29,9 @@ import app.orbit.data.feed.HomeFeed
 import app.orbit.data.repository.ListRepository
 import app.orbit.nav.OrbitNavHost
 import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.theme.OrbitDarkMode
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.theme.OrbitThemes
 import app.orbit.ui.theme.ThemeSettings
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -177,8 +185,34 @@ class MainActivity : ComponentActivity() {
             val themeSettings by appViewModel.themeSettings.collectAsStateWithLifecycle()
             val curtain by appViewModel.privacyCurtainActive.collectAsStateWithLifecycle()
 
+            val settings = themeSettings ?: ThemeSettings.DEFAULT
+            val dark = OrbitThemes.effectiveDark(settings, isSystemInDarkTheme())
+            // System bar icons follow the in-app Light / Dark choice, not just
+            // the system's: with "Dark" chosen on a light-mode phone the icons
+            // were dark on charcoal. Transparent bars, edge to edge.
+            DisposableEffect(dark) {
+                val style = if (dark) {
+                    SystemBarStyle.dark(Color.TRANSPARENT)
+                } else {
+                    SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                }
+                enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+                onDispose {}
+            }
+            // Tell the system too, so the splash screen and system dialogs on
+            // the next launch match the choice (API 31+, the app's minimum).
+            LaunchedEffect(settings.darkMode) {
+                getSystemService(UiModeManager::class.java)?.setApplicationNightMode(
+                    when (settings.darkMode) {
+                        OrbitDarkMode.SYSTEM -> UiModeManager.MODE_NIGHT_AUTO
+                        OrbitDarkMode.LIGHT -> UiModeManager.MODE_NIGHT_NO
+                        OrbitDarkMode.DARK -> UiModeManager.MODE_NIGHT_YES
+                    },
+                )
+            }
+
             CompositionLocalProvider(LocalPrivacyCurtain provides curtain) {
-                OrbitTheme(settings = themeSettings ?: ThemeSettings.DEFAULT) {
+                OrbitTheme(settings = settings, darkTheme = dark) {
                     val resolvedStart = start ?: return@OrbitTheme   // splash still up
                     val nav = rememberNavController()
                     OrbitNavHost(

@@ -58,7 +58,7 @@ As a user, I create lists that match how I actually think about my people. Each 
 - [ ] Archived lists don't appear on home but remain retrievable from settings.
 - [ ] Active-hours toggle uses start/end pickers, not a schedule grid.
 - [ ] A call from card-view updates home's due counts and browse's rows for the same contact without a manual refresh.
-- [ ] Deleting a list requires confirmation; copy: "this removes the list. people stay in your contacts."
+- [ ] Deleting a list requires confirmation; copy: "This removes the list. People stay in your contacts." (sentence case per voice.md; was lowercase until 2026-10-05)
 - [ ] Dark mode + 200% font scale + TalkBack pass.
 
 ### Not in scope
