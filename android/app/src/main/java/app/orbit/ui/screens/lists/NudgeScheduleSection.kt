@@ -8,11 +8,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
@@ -177,9 +181,12 @@ private fun DayChipRow(
         DayOfWeek.SATURDAY to "S",
     )
 
+    // No spacing between cells: each cell is an equal seventh of the row, so
+    // the touch target is the full cell (about 49dp on a phone) while the
+    // visible pill is inset to keep the gaps. With 8dp gaps the cells were
+    // 42dp wide, under the 48dp floor (rules.md §Design 3).
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
     ) {
         ordered.forEach { (day, label) ->
             val selected = day in selectedDays
@@ -194,18 +201,25 @@ private fun DayChipRow(
                 modifier = Modifier
                     .weight(1f)
                     .height(OrbitTheme.spacing.tapMin)
-                    .clip(OrbitTheme.shapes.full)
-                    .background(bgColor)
-                    .then(
-                        if (selected) Modifier.border(1.5.dp, OrbitTheme.colors.fg, OrbitTheme.shapes.full) else Modifier,
-                    )
-                    .clickable { onToggle(day) }
+                    .toggleable(value = selected, role = Role.Checkbox, onValueChange = { onToggle(day) })
                     .semantics { contentDescription = cd },
             ) {
-                Text(
-                    text = label,
-                    style = OrbitTheme.type.body.copy(color = labelColor),
-                )
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 2.dp)
+                        .clip(OrbitTheme.shapes.full)
+                        .background(bgColor)
+                        .then(
+                            if (selected) Modifier.border(1.5.dp, OrbitTheme.colors.fg, OrbitTheme.shapes.full) else Modifier,
+                        ),
+                ) {
+                    Text(
+                        text = label,
+                        style = OrbitTheme.type.body.copy(color = labelColor),
+                    )
+                }
             }
         }
     }
@@ -225,13 +239,16 @@ private fun TimeChipRow(
             .clip(OrbitTheme.shapes.md)
             .background(OrbitTheme.colors.bgSubtle),
     ) {
-        // Leading clock icon + tappable time label
+        // Leading clock icon + tappable time label. The whole row height is
+        // the target (it was the text's ~20dp; caught by the gallery's
+        // accessibility audit).
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
             modifier = Modifier
                 .weight(1f)
-                .clickable(onClick = onTap)
+                .fillMaxHeight()
+                .clickable(onClickLabel = "Change time", role = Role.Button, onClick = onTap)
                 .padding(horizontal = OrbitTheme.spacing.x4),
         ) {
             PhIcon(
