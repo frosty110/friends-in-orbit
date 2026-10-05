@@ -98,6 +98,14 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    // Per-app language (Android 13+): AGP writes locales_config.xml from the
+    // values-* folders that exist, so a translation added later shows up in
+    // the system's app-language picker with no further wiring. The default
+    // (unqualified) strings are English; see res/resources.properties.
+    androidResources {
+        generateLocaleConfig = true
+    }
+
     buildFeatures {
         compose = true
         // AGP 8.x defaults buildConfig to false. OrbitApp.onCreate needs
