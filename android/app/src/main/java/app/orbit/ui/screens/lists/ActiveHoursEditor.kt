@@ -75,10 +75,10 @@ fun ActiveHoursEditor(
         )
         if (start != null && end != null) {
             HairlineDivider()
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
+            Column(Modifier.padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     TimeChip(
@@ -98,9 +98,9 @@ fun ActiveHoursEditor(
                         modifier = Modifier.weight(1f),
                     )
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(OrbitTheme.spacing.x3))
                 ActiveHoursRangeBar(start = start, end = end)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(OrbitTheme.spacing.x2))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -113,7 +113,7 @@ fun ActiveHoursEditor(
                     }
                 }
                 if (spansMidnight(start, end)) {
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(OrbitTheme.spacing.x3))
                     Text(
                         text = stringResource(R.string.lists_hours_overnight),
                         style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
@@ -241,12 +241,12 @@ fun TimePickerDialogOrbit(
     )
     Dialog(onDismissRequest = onDismiss) {
         Card(shape = OrbitTheme.shapes.lg) {
-            Column(Modifier.padding(24.dp)) {
+            Column(Modifier.padding(OrbitTheme.spacing.x6)) {
                 TimePicker(state = state)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(OrbitTheme.spacing.x2))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                    horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3, Alignment.End),
                 ) {
                     OrbitButton(
                         text = stringResource(R.string.components_action_cancel),
@@ -273,7 +273,7 @@ private fun AlwaysActiveToggleRow(
         modifier = Modifier
             .fillMaxWidth()
             .toggleable(value = alwaysActive, role = Role.Switch, onValueChange = onChange)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -283,7 +283,7 @@ private fun AlwaysActiveToggleRow(
             Text(
                 text = stringResource(R.string.lists_hours_always_active_sub),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
             )
         }
         OrbitSwitch(checked = alwaysActive, onCheckedChange = null)
@@ -299,13 +299,13 @@ private fun TimeChip(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
         modifier = modifier
             .height(48.dp)
             .clip(OrbitTheme.shapes.md)
             .background(OrbitTheme.colors.bgSubtle)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.rowY),
     ) {
         PhIcon(
             name = leadingIcon,
@@ -374,7 +374,7 @@ private fun hourFraction(t: LocalTime): Float =
 @Composable
 private fun ActiveHoursEditorLightNormalPreview() {
     OrbitTheme(darkTheme = false) {
-        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(8.dp)) {
+        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2)) {
             ActiveHoursEditor(
                 start = LocalTime.of(9, 0),
                 end = LocalTime.of(17, 0),
@@ -389,7 +389,7 @@ private fun ActiveHoursEditorLightNormalPreview() {
 @Composable
 private fun ActiveHoursEditorDarkOvernightPreview() {
     OrbitTheme(darkTheme = true) {
-        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(8.dp)) {
+        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2)) {
             ActiveHoursEditor(
                 start = LocalTime.of(21, 0),
                 end = LocalTime.of(2, 0),
@@ -404,7 +404,7 @@ private fun ActiveHoursEditorDarkOvernightPreview() {
 @Composable
 private fun ActiveHoursEditorAlwaysActivePreview() {
     OrbitTheme(darkTheme = false) {
-        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(8.dp)) {
+        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2)) {
             ActiveHoursEditor(
                 start = null,
                 end = null,

@@ -47,10 +47,10 @@ fun PermissionsRow(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -60,7 +60,7 @@ fun PermissionsRow(
             Text(
                 text = stringResource(status.labelRes),
                 style = OrbitTheme.type.meta.copy(color = status.color()),
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
             )
         }
         when (status.rowAction()) {

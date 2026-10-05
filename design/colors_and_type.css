@@ -159,6 +159,9 @@
   --space-8:  40px;
   --space-9:  56px;
   --space-10: 72px;
+  /* Named off-grid steps the app uses deliberately (2026-10-05). */
+  --space-hair:  2px;   /* title to its subtitle */
+  --space-row-y: 14px;  /* vertical padding inside a settings-style row */
 
   /* Tap target */
   --tap-min: 48px;

@@ -131,8 +131,8 @@ internal fun ListConfigBody(
             modifier = Modifier
                 .fillMaxWidth()
                 .imePadding()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .padding(bottom = 32.dp)
+                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x1)
+                .padding(bottom = OrbitTheme.spacing.x7)
         ) {
             ListConfigBodySections(
                 state = state,
@@ -156,8 +156,8 @@ internal fun ListConfigBody(
             val scrollModifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .padding(bottom = 32.dp)
+                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x1)
+                .padding(bottom = OrbitTheme.spacing.x7)
 
             Column(modifier = scrollModifier) {
                 ListConfigBodySections(
@@ -247,7 +247,7 @@ private fun ColumnScope.ListConfigBodySections(
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x2)
             )
         }
     } else {
@@ -305,7 +305,7 @@ private fun ColumnScope.ListConfigBodySections(
                         style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 14.dp)
+                            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY)
                     )
                 }
             }
@@ -374,7 +374,7 @@ private fun ColumnScope.ListConfigBodySections(
     }
 
     if (state.type == ListType.SMART) {
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(OrbitTheme.spacing.x2))
         OrbitButton(
             text = stringResource(R.string.lists_convert_button),
             onClick = onShowConvertDialog,
@@ -386,7 +386,7 @@ private fun ColumnScope.ListConfigBodySections(
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgSubtle),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 10.dp, start = 20.dp, end = 20.dp)
+                .padding(top = OrbitTheme.spacing.x3, start = OrbitTheme.spacing.x5, end = OrbitTheme.spacing.x5)
         )
     }
 
@@ -395,7 +395,7 @@ private fun ColumnScope.ListConfigBodySections(
     // screen and returns to wherever the list was opened from (Lists Manager,
     // for a list that was just created).
     if (onDone != null) {
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(OrbitTheme.spacing.x6))
         OrbitButton(
             text = stringResource(R.string.components_action_done),
             onClick = onDone,
@@ -432,7 +432,7 @@ private fun triggerConvertExtracted(
 private fun IntervalSliderLocal(currentHours: Int, onCommit: (Int) -> Unit) {
     val initialDays = (currentHours / 24f).coerceAtLeast(1f)
     var days by remember(currentHours) { mutableFloatStateOf(initialDays) }
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
+    Column(Modifier.padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4)) {
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = stringResource(R.string.lists_interval_aim),
@@ -457,9 +457,9 @@ private fun IntervalSliderLocal(currentHours: Int, onCommit: (Int) -> Unit) {
             valueDescription = days.toInt().coerceAtLeast(1).let { d ->
                 pluralStringResource(R.plurals.lists_interval_every_days, d, d)
             },
-            modifier = Modifier.padding(top = 4.dp)
+            modifier = Modifier.padding(top = OrbitTheme.spacing.x1)
         )
-        IntervalScaleLabels(modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+        IntervalScaleLabels(modifier = Modifier.fillMaxWidth().padding(top = OrbitTheme.spacing.x1))
     }
 }
 
@@ -631,7 +631,7 @@ private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x2)
                 .focusRequester(focusRequester)
                 .onFocusChanged { focusState ->
                     if (focusState.isFocused) {
@@ -647,7 +647,7 @@ private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { editing = true }
-                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY)
         ) {
             Text(
                 text = currentName.ifBlank { stringResource(R.string.lists_name_unnamed) },

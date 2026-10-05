@@ -38,7 +38,7 @@ fun OrbitAppBar(
             // font scale (rubric gate G3).
             .heightIn(min = 56.dp)
             .background(if (subtle) Color.Transparent else OrbitTheme.colors.bg)
-            .padding(start = 16.dp, end = 8.dp),
+            .padding(start = OrbitTheme.spacing.x4, end = OrbitTheme.spacing.x2),
     ) {
         if (leading != null) {
             Box { leading() }
@@ -88,7 +88,7 @@ fun OrbitAppBarTextAction(
                     Modifier.semantics { this.contentDescription = contentDescription }
                 } else Modifier,
             )
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = OrbitTheme.spacing.x3),
     ) {
         Text(
             text = text,

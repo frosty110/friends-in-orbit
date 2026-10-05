@@ -205,7 +205,7 @@ private fun DayChipRow(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 2.dp)
+                        .padding(horizontal = OrbitTheme.spacing.hair)
                         .clip(OrbitTheme.shapes.full)
                         .background(bgColor)
                         .then(

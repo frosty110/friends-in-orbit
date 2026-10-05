@@ -24,7 +24,7 @@ fun ResetDataRow(onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         Text(
             text = stringResource(R.string.settings_reset_title),
@@ -33,7 +33,7 @@ fun ResetDataRow(onClick: () -> Unit) {
         Text(
             text = stringResource(R.string.settings_reset_sub),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-            modifier = Modifier.padding(top = 2.dp),
+            modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
         )
     }
 }

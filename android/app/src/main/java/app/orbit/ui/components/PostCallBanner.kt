@@ -74,12 +74,12 @@ fun PostCallBanner(
         Text(
             text = stringResource(R.string.components_post_call_body),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-            modifier = Modifier.padding(start = 30.dp),
+            modifier = Modifier.padding(start = OrbitTheme.spacing.x7),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
         Row(
             horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
-            modifier = Modifier.padding(start = 30.dp),
+            modifier = Modifier.padding(start = OrbitTheme.spacing.x7),
         ) {
             OrbitButton(
                 text = stringResource(R.string.components_post_call_add_note),

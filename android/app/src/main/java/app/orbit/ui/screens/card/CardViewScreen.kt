@@ -864,7 +864,7 @@ private fun UsuallyAnswersCard(contact: Contact, nowHour: Int) {
 @Composable
 private fun HeatStrip(heat: FloatArray, nowHour: Int) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.hair),
         modifier = Modifier
             .fillMaxWidth()
             .height(26.dp)
@@ -893,7 +893,7 @@ private fun HeatStrip(heat: FloatArray, nowHour: Int) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 6.dp),
+            .padding(top = OrbitTheme.spacing.x2),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         // Midnight, 6am, noon, 6pm, midnight (strings_time.xml, shared with a
@@ -950,7 +950,7 @@ internal fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
             text = value,
             color = OrbitTheme.colors.fg,
             style = OrbitTheme.type.statValue,
-            modifier = Modifier.padding(top = 2.dp)
+            modifier = Modifier.padding(top = OrbitTheme.spacing.hair)
         )
     }
 }

@@ -472,8 +472,8 @@ private fun SettingsContent(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScrollContainer()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .padding(bottom = 32.dp),
+                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x1)
+                .padding(bottom = OrbitTheme.spacing.x7),
         ) {
             SettingGroup(title = stringResource(R.string.settings_section_appearance)) {
                 AppearanceSection(
@@ -602,14 +602,14 @@ private fun ImportRangeRow(
         modifier = Modifier
             .fillMaxWidth()
             // 16/14 row padding matches every sibling row in this screen.
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         Text(stringResource(R.string.settings_import_range), style = OrbitTheme.type.body, color = OrbitTheme.colors.fg)
         Text(
             stringResource(R.string.settings_import_range_sub),
             style = OrbitTheme.type.meta,
             color = OrbitTheme.colors.fgMuted,
-            modifier = Modifier.padding(top = 2.dp),
+            modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
         )
         // Wraps instead of squeezing: at larger text a fixed row crushed the
         // last chip to a sliver (caught by the gallery's accessibility audit).
@@ -656,11 +656,11 @@ private fun importRangeLabel(days: Int): String = when (days) {
 private fun ExportEntryRow(onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -670,7 +670,7 @@ private fun ExportEntryRow(onClick: () -> Unit) {
             Text(
                 text = stringResource(R.string.settings_export_sub),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
             )
         }
         PhIcon(name = "caret-right", size = 16.dp, tint = OrbitTheme.colors.fgSubtle)
@@ -686,11 +686,11 @@ private fun ExportEntryRow(onClick: () -> Unit) {
 private fun ImportEntryRow(onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -700,7 +700,7 @@ private fun ImportEntryRow(onClick: () -> Unit) {
             Text(
                 text = stringResource(R.string.settings_import_sub),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
             )
         }
         PhIcon(name = "caret-right", size = 16.dp, tint = OrbitTheme.colors.fgSubtle)
@@ -723,11 +723,11 @@ private fun IgnoredEntryRow(count: Int, onClick: () -> Unit) {
     }
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         PhIcon(name = "eye-slash", size = 18.dp, tint = OrbitTheme.colors.fgMuted)
         Column(Modifier.weight(1f)) {
@@ -738,7 +738,7 @@ private fun IgnoredEntryRow(count: Int, onClick: () -> Unit) {
             Text(
                 text = subtitle,
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
             )
         }
         PhIcon(name = "caret-right", size = 16.dp, tint = OrbitTheme.colors.fgSubtle)
@@ -756,11 +756,11 @@ private fun IgnoredEntryRow(count: Int, onClick: () -> Unit) {
 private fun CallHistoryEntryRow(onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         PhIcon(name = "clock-counter-clockwise", size = 18.dp, tint = OrbitTheme.colors.fgMuted)
         Column(Modifier.weight(1f)) {
@@ -771,7 +771,7 @@ private fun CallHistoryEntryRow(onClick: () -> Unit) {
             Text(
                 text = stringResource(R.string.settings_call_history_sub),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
             )
         }
         PhIcon(name = "caret-right", size = 16.dp, tint = OrbitTheme.colors.fgSubtle)

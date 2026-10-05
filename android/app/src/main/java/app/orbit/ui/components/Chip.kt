@@ -73,7 +73,7 @@ fun OrbitChip(
             // 10dp sits between the 8 and 12 spacing steps; it is the chip's
             // own optical inset from the design kit's Chip primitive, not
             // screen spacing, so it stays local to this component.
-            .padding(horizontal = 10.dp, vertical = OrbitTheme.spacing.x1),
+            .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x1),
     ) {
         Box(
             modifier = Modifier

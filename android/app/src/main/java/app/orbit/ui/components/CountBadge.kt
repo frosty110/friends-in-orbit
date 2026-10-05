@@ -23,7 +23,7 @@ fun CountBadge(count: Int, modifier: Modifier = Modifier) {
             .defaultMinSize(minWidth = 26.dp, minHeight = 26.dp)
             .clip(OrbitTheme.shapes.full)
             .background(OrbitTheme.colors.accent)
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = OrbitTheme.spacing.x2),
     ) {
         Text(
             text = count.toString(),

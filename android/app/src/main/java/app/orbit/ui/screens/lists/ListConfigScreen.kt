@@ -204,7 +204,7 @@ private fun ListConfigContent(
         // surface short-circuited to an AppBar-only screen with no body.
         if (state is ListConfigUiState.NotFound) {
             Box(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
+                modifier = Modifier.fillMaxSize().padding(horizontal = OrbitTheme.spacing.x6),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -258,10 +258,10 @@ private fun ListConfigContent(
 
 @Composable
 internal fun SettingGroup(title: String, content: @Composable () -> Unit) {
-    Column(Modifier.padding(bottom = 20.dp)) {
+    Column(Modifier.padding(bottom = OrbitTheme.spacing.x5)) {
         SectionLabel(
             text = title,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x2, vertical = OrbitTheme.spacing.x3),
         )
         Column(
             modifier = Modifier
@@ -295,7 +295,7 @@ internal fun ToggleRow(
                 role = Role.Switch,
                 onValueChange = onChange,
             )
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -306,7 +306,7 @@ internal fun ToggleRow(
                 Text(
                     text = sub,
                     style = OrbitTheme.type.meta.copy(color = subColor),
-                    modifier = Modifier.padding(top = 2.dp),
+                    modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
                 )
             }
         }

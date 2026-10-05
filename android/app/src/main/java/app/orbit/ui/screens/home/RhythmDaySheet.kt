@@ -90,7 +90,7 @@ fun RhythmDaySheet(
             Text(
                 text = directionSummary(calls).asString(),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
             )
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
             LazyColumn(
@@ -214,7 +214,7 @@ private fun RowAvatar(photoUri: String?, name: String, rim: Color) {
     val ring = Modifier
         .size(40.dp)
         .border(width = 2.dp, color = rim, shape = CircleShape)
-        .padding(2.dp)
+        .padding(OrbitTheme.spacing.hair)
         .clip(CircleShape)
     Box(modifier = ring, contentAlignment = Alignment.Center) {
         Avatar(name = name, size = 36.dp, photoUri = photoUri)
@@ -240,7 +240,7 @@ private fun RhythmDaySheetBodyPreview() {
                 Text(
                     text = directionSummary(previewCalls).asString(),
                     style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                    modifier = Modifier.padding(top = 2.dp),
+                    modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
                 )
                 Spacer(Modifier.height(OrbitTheme.spacing.x3))
                 previewCalls.forEach { call ->

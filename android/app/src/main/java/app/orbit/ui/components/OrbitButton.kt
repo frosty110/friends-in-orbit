@@ -64,7 +64,7 @@ fun OrbitButton(
     val container = if (pressTint == Color.Transparent) pressTint else pressTint.copy(alpha = alpha)
 
     Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             // Min height only — a hard .height() pin clipped two-line labels
@@ -81,7 +81,7 @@ fun OrbitButton(
                 role = Role.Button,
                 onClick = onClick,
             )
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = OrbitTheme.spacing.x5),
     ) {
         if (leadingIcon != null) PhIcon(name = leadingIcon, size = 18.dp, tint = fg)
         Text(text = text, style = OrbitTheme.type.button.copy(color = fg.copy(alpha = alpha)))

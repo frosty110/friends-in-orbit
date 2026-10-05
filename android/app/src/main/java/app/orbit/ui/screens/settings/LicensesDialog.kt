@@ -48,7 +48,7 @@ fun LicensesDialog(onDismiss: () -> Unit) {
                     .heightIn(max = 420.dp),
             ) {
                 items(LICENSE_ENTRIES, key = { it.name }) { entry ->
-                    Column(Modifier.padding(vertical = 8.dp)) {
+                    Column(Modifier.padding(vertical = OrbitTheme.spacing.x2)) {
                         Text(
                             text = entry.name,
                             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
@@ -56,7 +56,7 @@ fun LicensesDialog(onDismiss: () -> Unit) {
                         Text(
                             text = entry.license,
                             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                            modifier = Modifier.padding(top = 2.dp),
+                            modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
                         )
                     }
                 }

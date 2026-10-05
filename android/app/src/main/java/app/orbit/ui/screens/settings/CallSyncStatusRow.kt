@@ -81,7 +81,7 @@ private fun SyncStatusRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY)
     ) {
         val now = System.currentTimeMillis()
         // DateUtils' relative time is already localized; it slots into the
@@ -106,8 +106,8 @@ private fun SyncStatusRow(
         )
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(top = 8.dp)
+            horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
+            modifier = Modifier.padding(top = OrbitTheme.spacing.x2)
         ) {
             OrbitButton(
                 text = stringResource(if (inFlight) R.string.settings_syncing else R.string.settings_sync_now),

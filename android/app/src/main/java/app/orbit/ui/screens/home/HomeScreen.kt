@@ -297,7 +297,7 @@ private fun HomeContent(
             val dateLabel = remember(datePattern) {
                 LocalDate.now().format(DateTimeFormatter.ofPattern(datePattern, Locale.getDefault()))
             }
-            Column(Modifier.padding(horizontal = OrbitTheme.spacing.x5, vertical = 0.dp)) {
+            Column(Modifier.padding(horizontal = OrbitTheme.spacing.x5)) {
                 Text(
                     text = stringResource(R.string.home_date_eyebrow),
                     style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted),
@@ -495,7 +495,7 @@ private fun ListTile(
                     Text(
                         text = memberLabel(tile.memberCount),
                         style = OrbitTheme.type.meta.copy(color = tone.nameFg),
-                        modifier = Modifier.padding(top = 3.dp),
+                        modifier = Modifier.padding(top = OrbitTheme.spacing.x1),
                     )
                 }
             }
@@ -734,7 +734,7 @@ private fun DirectionLegend() {
 private fun LegendSwatch(label: String, rim: Color) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1),
     ) {
         Box(
             Modifier
@@ -783,7 +783,7 @@ private fun DayColumn(
                 },
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(7.dp),
+        verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
     ) {
         Box(
             modifier = Modifier.height(RHYTHM_BAR_AREA),
@@ -877,7 +877,7 @@ private fun ReflectionFooter() {
 private fun CreateListTile(label: String, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2, Alignment.CenterHorizontally),
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp)

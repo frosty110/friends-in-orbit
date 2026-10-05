@@ -102,11 +102,11 @@ private fun RuleRow(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -116,7 +116,7 @@ private fun RuleRow(
             Text(
                 text = sub,
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
             )
         }
         Box(
@@ -157,7 +157,7 @@ private fun RuleTemplatePickerLightPreview() {
         Box(
             modifier = Modifier
                 .background(OrbitTheme.colors.surface)
-                .padding(8.dp),
+                .padding(OrbitTheme.spacing.x2),
         ) {
             RuleTemplatePicker(
                 currentKind = RuleKind.LATE_NIGHT,
@@ -175,7 +175,7 @@ private fun RuleTemplatePickerDarkPreview() {
         Box(
             modifier = Modifier
                 .background(OrbitTheme.colors.surface)
-                .padding(8.dp),
+                .padding(OrbitTheme.spacing.x2),
         ) {
             RuleTemplatePicker(
                 currentKind = RuleKind.LATE_NIGHT,

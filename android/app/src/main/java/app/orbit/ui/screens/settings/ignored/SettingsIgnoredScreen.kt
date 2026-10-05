@@ -146,7 +146,8 @@ private fun EmptyState() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(top = 80.dp),
+            // Empty state sits about a third of the way down (x10 + x2 = 80dp).
+            .padding(top = OrbitTheme.spacing.x10 + OrbitTheme.spacing.x2),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         PhIcon(name = "eye-slash", size = 32.dp, tint = OrbitTheme.colors.fgMuted)

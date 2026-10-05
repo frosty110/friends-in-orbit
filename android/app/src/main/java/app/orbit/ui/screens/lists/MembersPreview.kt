@@ -67,7 +67,7 @@ fun MembersPreview(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 18.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4),
     ) {
         Text(
             text = pluralStringResource(R.plurals.lists_members_count, members.size, members.size),
@@ -79,7 +79,7 @@ fun MembersPreview(
                     if (isSmart) R.string.lists_members_empty_smart else R.string.lists_members_empty_static,
                 ),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(top = 12.dp),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.x3),
             )
         } else {
             // Visual collapse for long lists. The full list is always available
@@ -89,8 +89,8 @@ fun MembersPreview(
             val collapsed = !expanded && members.size > COLLAPSED_VISIBLE_COUNT
             val visible = if (collapsed) members.take(COLLAPSED_VISIBLE_COUNT) else members
             Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(top = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.x3),
             ) {
                 visible.forEach { snapshot ->
                     MemberRow(
@@ -162,7 +162,7 @@ private fun MemberRow(
     val removeDescription = stringResource(R.string.lists_members_remove, snapshot.displayName)
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
             .semantics { contentDescription = snapshot.displayName },
@@ -205,7 +205,7 @@ private fun AddContactsRow(
     val addDescription = stringResource(R.string.lists_members_add_a11y)
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = OrbitTheme.spacing.tapMin)
@@ -237,7 +237,7 @@ private fun AddContactsRow(
 private fun MembersPreviewSmartEmptyLightPreview() {
     OrbitTheme(darkTheme = false) {
         Box(
-            modifier = Modifier.background(OrbitTheme.colors.surface).padding(8.dp),
+            modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2),
         ) {
             MembersPreview(members = emptyList(), isSmart = true)
         }
@@ -249,7 +249,7 @@ private fun MembersPreviewSmartEmptyLightPreview() {
 private fun MembersPreviewStaticEmptyDarkPreview() {
     OrbitTheme(darkTheme = true) {
         Box(
-            modifier = Modifier.background(OrbitTheme.colors.surface).padding(8.dp),
+            modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2),
         ) {
             MembersPreview(members = emptyList(), isSmart = false)
         }
@@ -261,7 +261,7 @@ private fun MembersPreviewStaticEmptyDarkPreview() {
 private fun MembersPreviewPopulatedLightPreview() {
     OrbitTheme(darkTheme = false) {
         Box(
-            modifier = Modifier.background(OrbitTheme.colors.surface).padding(8.dp),
+            modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2),
         ) {
             MembersPreview(
                 members = listOf(

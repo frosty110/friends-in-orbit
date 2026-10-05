@@ -58,7 +58,7 @@ fun SmartRuleEditor(
     onChange: (SmartListRule) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp)) {
+    Column(modifier = modifier.fillMaxWidth().padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4)) {
         when (rule) {
             is SmartListRule.RecentlyAddedNotCalled -> DaysSlider(
                 label = stringResource(R.string.lists_smart_added_within),
@@ -116,10 +116,10 @@ private fun DaysSlider(
             valueRange = range.first.toFloat()..range.last.toFloat(),
             label = label,
             valueDescription = pluralStringResource(R.plurals.lists_smart_days, current.toInt(), current.toInt()),
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = OrbitTheme.spacing.x1),
         )
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = OrbitTheme.spacing.x1),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
@@ -163,10 +163,10 @@ private fun PercentSlider(
             valueRange = 10f..50f,
             label = label,
             valueDescription = stringResource(R.string.lists_smart_percent_a11y, current.toInt()),
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = OrbitTheme.spacing.x1),
         )
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = OrbitTheme.spacing.x1),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
@@ -178,7 +178,7 @@ private fun PercentSlider(
                 style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
             )
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(OrbitTheme.spacing.x1))
         Text(
             text = stringResource(R.string.lists_smart_percent_of_called, current.toInt()),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
@@ -198,10 +198,10 @@ private fun DaysNumberInput(
             text = label,
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
         ) {
             TextField(
                 value = text,
@@ -237,7 +237,7 @@ private fun DaysNumberInput(
 @Composable
 private fun NoParamsPlaceholder() {
     Box(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = OrbitTheme.spacing.x1),
     ) {
         Text(
             text = stringResource(R.string.lists_smart_no_params),
@@ -253,7 +253,7 @@ private fun NoParamsPlaceholder() {
 private fun SmartRuleEditorRecentlyAddedLightPreview() {
     OrbitTheme(darkTheme = false) {
         Box(
-            modifier = Modifier.background(OrbitTheme.colors.surface).padding(8.dp),
+            modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2),
         ) {
             SmartRuleEditor(
                 rule = SmartListRule.RecentlyAddedNotCalled(daysWindow = 30),
@@ -268,7 +268,7 @@ private fun SmartRuleEditorRecentlyAddedLightPreview() {
 private fun SmartRuleEditorNeverCalledDarkPreview() {
     OrbitTheme(darkTheme = true) {
         Box(
-            modifier = Modifier.background(OrbitTheme.colors.surface).padding(8.dp),
+            modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2),
         ) {
             SmartRuleEditor(
                 rule = SmartListRule.NeverCalled,
