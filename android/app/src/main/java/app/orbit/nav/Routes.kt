@@ -24,8 +24,16 @@ object Routes {
     /** IGNORE-06 — Settings → Ignored full nav destination. */
     const val SettingsIgnored = "settings/ignored"
 
-    /** LOG-01 — In-app call log full nav destination. */
+    /** LOG-01: In-app call log full nav destination (everyone's calls). */
     const val CallLog = "call-log"
+
+    /**
+     * LOG-04: the call log's registration pattern. The optional `contactId`
+     * narrows it to one person ("View all calls" on Contact detail). Navigating
+     * to the bare [CallLog] still matches, with the argument absent, so
+     * Settings' entry is unchanged.
+     */
+    const val CallLogPattern = "call-log?contactId={contactId}"
     const val GlobalSearch = "search"
 
     // Onboarding flow (post-2026-04-28 whole-app review):
@@ -108,6 +116,9 @@ object Routes {
             "pick/contacts?targetListId=$targetListId&mode=$mode&sourceListId=$sourceListId"
         }
     fun pickLists(contactId: String) = "pick/lists?contactId=$contactId"
+
+    /** LOG-04: the call log narrowed to one person. */
+    fun callLogFor(contactId: String) = "call-log?contactId=$contactId"
 
     /**
      * CONTACT-07: the picker in Relink mode for one orphaned contact. Its own

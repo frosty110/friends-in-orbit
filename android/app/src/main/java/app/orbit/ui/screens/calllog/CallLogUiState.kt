@@ -4,17 +4,28 @@ import androidx.compose.runtime.Immutable
 
 /**
  * CallLogScreen state contract: calendar-day sections, direction filter,
- * honest pagination remainder.
+ * honest pagination remainder, and the person the log is narrowed to.
  *
- * Sealed interface with three variants:
- *   - [Loading] — initial emission before the combine resolves.
- *   - [Ready]   — at least one correlated call event with a resolvable
- *                 contact; UI renders day-sectioned rows with sticky
- *                 headers. [Ready.sections] may be empty when the active
- *                 direction filter matches nothing — the UI keeps the
- *                 filter row visible and renders a quiet one-liner.
- *   - [Empty]   — no correlated events at all; UI renders the phone-icon
- *                 empty state per UI-SPEC §Layout Patterns.
+ * Every variant carries [scope], so the app bar can say whose calls these are
+ * in every state, including Loading and the error and permission states
+ * (LOG-04). Variants:
+ *   - [Loading]          before the data, and the call-log permission, are
+ *                        known. Renders a quiet skeleton, never "No calls yet".
+ *   - [Ready]            at least one correlated call event with a resolvable
+ *                        contact; UI renders day-sectioned rows with sticky
+ *                        headers. [Ready.sections] may be empty when the active
+ *                        direction filter matches nothing; the UI keeps the
+ *                        filter row visible and renders a quiet one-liner.
+ *                        [Ready.callLogDenied] adds a notice above the rows:
+ *                        what Orbit already recorded is still true, but new
+ *                        calls will not appear until access is back.
+ *   - [Empty]            no correlated events, and Orbit can read the call log,
+ *                        so "No calls yet" is true.
+ *   - [PermissionDenied] no events AND no call-log access (LOG-05). "No calls
+ *                        yet" would be false here: the app simply cannot see
+ *                        them, so the screen explains and offers the fix.
+ *   - [Error]            a data stream failed (rubric 3.5). Says so, with
+ *                        Retry, instead of crashing or showing a false empty.
  *
  * `LOG-01` filters at the DAO layer (`CallEventDao.observeForLog`
  * returns events with `contactId IS NOT NULL`). The VM additionally
@@ -24,8 +35,11 @@ import androidx.compose.runtime.Immutable
  */
 sealed interface CallLogUiState {
 
+    /** Everyone's calls, or one person's (LOG-04). */
+    val scope: CallLogScope
+
     @Immutable
-    data object Loading : CallLogUiState
+    data class Loading(override val scope: CallLogScope = CallLogScope.Everyone) : CallLogUiState
 
     /**
      * @property sections       Day-grouped render-ready rows (LOCAL calendar
@@ -38,16 +52,48 @@ sealed interface CallLogUiState {
      *                          footer label shows
      *                          `min(remainingCount, PAGE_SIZE)` — the honest
      *                          size of the next increment.
+     * @property callLogDenied  READ_CALL_LOG is not granted: the rows are what
+     *                          Orbit recorded before, and new calls won't show.
      */
     @Immutable
     data class Ready(
         val sections: List<CallLogDaySection>,
         val filter: CallLogDirectionFilter = CallLogDirectionFilter.ALL,
         val remainingCount: Int = 0,
+        val callLogDenied: Boolean = false,
+        override val scope: CallLogScope = CallLogScope.Everyone,
     ) : CallLogUiState
 
     @Immutable
-    data object Empty : CallLogUiState
+    data class Empty(override val scope: CallLogScope = CallLogScope.Everyone) : CallLogUiState
+
+    @Immutable
+    data class PermissionDenied(override val scope: CallLogScope = CallLogScope.Everyone) : CallLogUiState
+
+    @Immutable
+    data class Error(override val scope: CallLogScope = CallLogScope.Everyone) : CallLogUiState
+}
+
+/**
+ * Whose calls the log shows (LOG-04). "View all calls" on Contact detail opens
+ * the log narrowed to that person; Settings opens it for everyone.
+ */
+@Immutable
+sealed interface CallLogScope {
+
+    @Immutable
+    data object Everyone : CallLogScope
+
+    /**
+     * @property name The person's display name; blank until their contact row
+     *                has loaded (the app bar stays blank for that moment rather
+     *                than briefly claiming "Call history" for everyone).
+     */
+    @Immutable
+    data class Person(
+        val contactId: Long,
+        val name: String = "",
+    ) : CallLogScope
 }
 
 /**
@@ -111,4 +157,12 @@ data class CallLogRow(
     val directionIconName: String,      // "phone-outgoing" / "phone-incoming" / "check-circle" (manual)
     val timeLabel: String,              // "4:30pm"
     val isIgnored: Boolean,
+    // What happened, for the one-person log (LOG-04), where every row is the
+    // same person and the row leads with the event instead ("You called",
+    // "Sam called"). The screen words it so the privacy curtain can mask the
+    // name; [directionWord] stays for the everyone view's subtitle.
+    val kind: CallLogKind,
 )
+
+/** The kind of event a [CallLogRow] records. */
+enum class CallLogKind { Outgoing, Incoming, Logged, Attempted }
