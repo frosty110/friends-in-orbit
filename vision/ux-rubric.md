@@ -1,10 +1,10 @@
 # Orbit UX rubric
 
-> **Status:** adopted 2026-10-05. The owner asked for my best answer to every open decision; they are recorded under [Decisions](#decisions) with the reasoning, and the plan below is being carried out against them.
+> **Status:** adopted 2026-10-05. The owner asked for my best answer to every open decision; they are recorded under [Decisions](#decisions) with the reasoning. The plan was carried out the same day and Orbit was [re-scored](#re-score-after-the-work): about 2.9 of 4, up from 1.5. **Not AAA yet**: what is left needs a phone and five people, and is listed in the re-score.
 >
 > What "world class" means for Orbit, written so two people scoring the same build land within one point of each other. Every score needs evidence: a screenshot, a recording, a test report, or a `file:line`. A score without evidence does not count.
 
-**Contents:** [How to score](#how-to-score) · [The AAA bar](#the-aaa-bar) · [Hard gates](#hard-gates) · [The 12 dimensions](#the-12-dimensions) · [Where Orbit stands today](#where-orbit-stands-today) · [What is unprofessional today](#what-is-unprofessional-today) · [Plan to reach AAA](#plan-to-reach-aaa) · [Decisions](#decisions)
+**Contents:** [How to score](#how-to-score) · [The AAA bar](#the-aaa-bar) · [Hard gates](#hard-gates) · [The 12 dimensions](#the-12-dimensions) · [Re-score after the work](#re-score-after-the-work) · [Baseline before the work](#baseline-before-the-work) · [What was unprofessional](#what-was-unprofessional) · [Plan to reach AAA](#plan-to-reach-aaa) · [Decisions](#decisions)
 
 ---
 
@@ -242,7 +242,99 @@ Each dimension lists why it matters for Orbit, what a **4** requires (the **must
 
 ---
 
-## Where Orbit stands today
+## Re-score after the work
+
+Scored on 2026-10-05 against `2cf083b`, after the plan below was carried out the same day. Same rules as the baseline: the worst screen sets the score, and a **must** that fails caps a dimension at 2. One person scored it (me), so the two-scorer reconciliation the rules ask for is still owed.
+
+**What the evidence is.** Unlike the baseline, this round was run, not only read:
+
+- **The preview gallery**, rendered on the JVM (Robolectric, native graphics): all 414 previews, covering every `@Preview` in light and dark and at font scales 0.85 to 2.0, then the 319 screen, sheet and dialog previews again on a 360dp phone and in landscape. I looked at the screens the scores lean on.
+- **The gallery's accessibility audit**, which checks every enabled clickable node for a label and a 48dp target: 2,342 controls across 414 previews at the default size, 2,000 across 319 at 360dp and 1,910 across 319 in landscape. The 360dp and landscape passes found three last problems (nudge days 42dp wide on a narrow phone, the thresholds dialog squeezing its steppers to 42dp, the picker's permission card crushing "Grant access" to 6dp); all three are fixed and those screens re-rendered clean. The final full run reports **none**.
+- **`ThemeContrastTest`**: every theme, light and dark, including the Wallpaper theme across the hue wheel: 4.5:1 for text, 3:1 for UI parts, 7:1 for primary text.
+- **The unit suite**: 793 tests in 117 classes pass (2 skipped, both long-standing `@Ignore`s) with no failed attempts in the final run, and `assembleDebug` builds. One flake is still unexplained: `OnboardingDoneViewModelTest`'s first test timed out once in an earlier run today and passed on retry; reading the test ruled out the obvious causes (it uses real time, one DataStore instance), but I did not find the mechanism. Plus `check-conventions.py` (citations, no PII in logs, requirement IDs).
+
+**What is still not evidence.** No device or emulator was available, so nothing here was watched on a phone: no TalkBack or Switch Access walk-through, no Accessibility Scanner, no Macrobenchmark run (the startup benchmark and Baseline Profile generator exist but have never run), no crash matrix, no five-person test. Items that rest on those are marked *(reasoned)* or *unverified*, and they are exactly what stands between Orbit and AAA.
+
+### Hard gates
+
+| Gate | Before | Now | Evidence |
+|---|---|---|---|
+| G1 · No lost work | Fails | **Passes** | Each Card view action carries its own undo token, so Undo can only revert its own person (CARD-02, `CardViewViewModelInteractionTest`). Home, Lists, list settings, Settings, Browse, Search, Contact detail, Call history and the pickers show an error with Try again instead of failing silently. Moves into an archived list now say "Couldn't save your change" instead of an Undo that did nothing. |
+| G2 · Accessible floor | Fails | **Passes in automated checks** | Contrast gates above, in every theme. The audit finds no unlabelled control and none under 48dp at any size it renders. Later and Sooner are named; switches, sliders and headings announce properly. TalkBack itself not run *(reasoned)*. |
+| G3 · Extremes | Fails | **Passes in renders** | Every preview at 200%; the whole gallery at 360dp and in landscape; 40-character names on Card view and Home. Fixed on the way: Card view's landscape layout (CARD-06), Call stacking above Later and Sooner at large text, Home's header stacking on narrow cards, the list chip covering the avatar. One renderer quirk: a hyphenated name breaks mid-word here; Android breaks after the hyphen *(reasoned)*. |
+| G4 · No dead ends | Passes | **Passes** | Every error state has Try again; every empty state offers the next step; unknown deep links are ignored rather than crashing (`OrbitNavHost`). |
+| G5 · Stable | Unknown | **Unknown** | Every screen's data stream now catches its errors into an error state, so a failing query shows a message instead of crashing *(reasoned)*. Not measured: no crash matrix on devices, no production data. |
+| G6 · Promises kept | At risk | **Passes** | Lock-screen nudges carry a public version without names (`NudgeNotification.kt`). The privacy curtain now holds everywhere the gallery can see: a new curtain mode renders every preview with the curtain down and flags any person or list name in text, fields, titles or TalkBack labels. Names showed through the curtain on eight surfaces, all now fixed: Contact detail's overflow label (found by the strings agent, now under `ContactDetailCurtainTest`); the Lists rows, List settings (title, name field, members) and onboarding's people preview (found by reading every screen that shows a name); and the move-to-list sheet, the picker's commit bar and the convert dialog (found by the new check). Card view's title also masked a list as "Contact"; it now says "List". The final curtain run over all 414 previews reports none. Templates do what they say (fixed earlier, B5). |
+
+### Scores
+
+| Dimension | Before | Now | Why, and what keeps it from 4 |
+|---|---|---|---|
+| D1 Core loop | 2 | **3** | Only the labelled Call button dials (CARD-01); Later and Sooner are named and undoable (CARD-02); the card leads with the last note and the pair's rhythm (CARD-04); a confirmed call says "Called Kai" with "Add a note" (CARD-03); Home calls the next person in one tap (HOME-9); a nudge's Call action and the widget open the dialer in one tap. **Short of 4:** the deck still advances by itself after a call (CORE-04, kept on purpose, see below), and the five-second test has not been run. |
+| D2 Navigation and IA | 1 | **3** | Lists has its own icon and Card view's menu is three dots; one create control on Lists (LIST-20); a list opens its cards from Home and Lists alike (LIST-23); "View all calls" shows that person; predictive back is on; one word per concept (voice.md glossary: people, Later, Sooner, nudges). **Short of 4:** no tree test. |
+| D3 Visual craft | 2 | **3** | Inter ships with a full type scale mapped into Material, tabular figures on stats; one accent per screen applied screen by screen; faces with initials fallback everywhere, widgets included; dark mode reviewed per screen in the gallery. **Short of 4:** "meets or beats the prototypes" and "reviewers single it out" need someone other than the author. |
+| D4 System coherence | 1 | **3** | Literal spacing values in product code (padding, gaps, spacers, offsets outside `ui/theme/`) went from 149 to none, and there are no colour or type literals outside `ui/theme/`; menus, snackbars, dialogs, chips, checkboxes, sliders and the time picker are themed; one chip, checkbox, slider, switch, search field, snackbar, state message and avatar (DESIGN.md table). **Short of 4:** the gallery records screenshots but nothing compares them against approved goldens, so it guards nothing in CI yet. |
+| D5 Interaction and motion | 1 | **3** | Directional 250 to 350ms screen transitions; a calm press response on every control (`OrbitPressIndication`); rows animate in and out on Home, Lists and the pickers; haptics when a swipe commits and when a long press opens a menu; everything stills when the system turns animations off. **Short of 4:** no haptic when a call starts, the Home card does not open into Card view (no shared element yet), and nothing was timed frame by frame on a device. |
+| D6 States and resilience | 1 | **3** | Real loading states (no false "No one here yet"), error states with Try again on every data screen, an honest permission-denied state in Call history, no Settings flash; long names, emoji initials and no call history are all handled and previewed. **Short of 4:** 2,000 contacts and right-to-left text were not tested. |
+| D7 Content and voice | 2 | **3** | Every user-facing string is a resource: 733 strings and 65 plurals, with `UiText` from ViewModels and no English in the domain layer; one formatter for time since a call; plain words for every setting; sentence case; no em dashes in copy (`CopyAuditTest` checks nudges). **Short of 4:** nobody has yet read the string export in context against the glossary, and the three fixed-order date patterns are not translatable. |
+| D8 Accessibility | 1 | **3** *(provisional)* | G2 passes in automated checks; primary text at 7:1 (WCAG AAA 1.4.6) in every theme; screen titles are headings and pane titles, so TalkBack announces each new screen; every Undo is a 48dp target (Material's snackbar action was 40dp); no control pretends to be tappable when it is not (note rows were a dead tap); sliders say "Every 14 days"; the card deck works through accessibility actions; animations honour the system setting (AAA 2.3.3). **Provisional because** the must "TalkBack completes every core journey" is reasoned, not observed. If the TalkBack walk-through finds a blocker, this drops to 2. |
+| D9 Android platform | 1 | **3** | Edge-to-edge with per-theme bar icons, predictive back, splash API; nudges with the person's face, a Call action and a private lock-screen version; responsive widgets with real previews; themed icon; "Call next" shortcuts; the phone's 24-hour setting; per-app language wired; a Wallpaper theme; a landscape Card view and a 640dp content cap on wide windows. **Short of 4:** no two-pane tablet layout (out of scope by decision 7). |
+| D10 Performance and stability | 2 | **2** | No placeholder flashes, and a Baseline Profile and startup benchmark exist. **Stays 2:** nothing was measured. G5 is unknown, and a hand-written profile is a guess until the generator runs on a device. |
+| D11 Trust and privacy | 2 | **3** | G6 passes; notifications are asked on Done, in context, after the first list exists (ONB-30), so the user meets their own people after two permission screens instead of three; declining any permission leaves a working app. **Short of 4:** the permission journey has not been reviewed on a device. |
+| D12 Emotional design | 2 | **3** | A brand moment on Welcome (`OrbitMark`, ONB-31) and a themed icon; "Called Kai" after a confirmed call; "All quiet for now." when nobody is due, never "caught up" (CARD-05, HOME-6); no streaks or debts anywhere. **Short of 4:** the desirability study has not been run. |
+
+**Overall: about 2.9 of 4, up from about 1.5.** Eleven dimensions at 3 and one at 2.
+
+### Is it AAA?
+
+**No, not yet, and nothing more can be done about that from a cloud session.** The AAA bar needs Core loop, Visual craft, Interaction and Accessibility at 4, every other dimension at 3, every gate passing and five real users confirming it. What remains is evidence that only a phone and people can produce:
+
+1. **On a device:** a TalkBack and Switch Access walk-through of the five core journeys, and Accessibility Scanner on every screen (D8 to 4, confirms G2).
+2. **Measure:** run `:benchmark`'s startup benchmark and the Baseline Profile generator on a mid-range phone, plus a frame-timing benchmark for the deck and lists (D10 to 3, starts G5).
+3. **Five people:** run [`ux-test-kit.md`](ux-test-kit.md) (the five-second test, the core journeys, the word cards). It is the AAA bar's fourth condition and the last step for D1, D3 and D12.
+4. **Approve the gallery as goldens** and compare against them in CI (D4 to 4).
+5. **Design work still open:** the Home card opening into Card view as one motion (D5), right-to-left and 2,000-contact passes (D6), a human read of the string export (D7).
+6. **One product question for the owner:** D1's "the next person only when the user asks" conflicts with CORE-04, where the deck moves on by itself once the call log confirms a call. I kept CORE-04 because it is a deliberate product decision; changing it is the owner's call.
+
+### The plan, item by item
+
+| # | Status | Where |
+|---|---|---|
+| 0.1 Per-person undo | Done | `468d68d` (CARD-02) |
+| 0.2 Only Call dials | Done | `468d68d` (CARD-01) |
+| 0.3 Labels, roles, headings, 48dp | Done | `468d68d`, `1af5d3e`, `e8c93ae`, `abfae55`, `71dee87` |
+| 0.4 Contrast | Done | `1af5d3e`, `822da7b` |
+| 0.5 Real loading and denied states | Done | `f2918f8`, `0c1f1c8`, `0e58d7f` |
+| 0.6 200% and long names | Done in renders | gallery, `24b936f`, `36d4269` |
+| 0.7 Private lock screen | Done | `dbdb806` |
+| 1.1 Inter, type scale, shapes | Done | `1af5d3e` |
+| 1.2 Theme every Material part | Done | `1af5d3e`, `d8d7db0`, `abfae55` |
+| 1.3 Navigation grammar | Done | `a961e2b`, `0c1f1c8`, `18521c1` |
+| 1.4 One accent per screen | Done | `a961e2b`, `f2918f8`, `abfae55` |
+| 1.5 Motion | Mostly | `1af5d3e`, `2c36fa4`; the Home-to-Card shared element is not built |
+| 1.6 One vocabulary and time formatter | Done | `1d3266f`, `1081f3d`, `912308f`, `7de65ca` |
+| 1.7 One component per job, tokens | Done | `d8d7db0`, `5336b42`, DESIGN.md |
+| 2.1 Home to the design | Done | HOME-5 to HOME-10, `a961e2b`, `2c36fa4` |
+| 2.2 Why now | Done | `468d68d` (CARD-04) |
+| 2.3 After a call, all quiet | Done, with one open question | `468d68d` (CARD-03, CARD-05); CORE-04 above |
+| 2.4 Onboarding | Done | `0e58d7f` (ONB-30, ONB-31) |
+| 3.1 Nudges with a face and Call | Done | `dbdb806` |
+| 3.2 Widgets | Done | `dbdb806` |
+| 3.3 Bars, icon, shortcuts, 24-hour, language | Done | `1af5d3e`, `dbdb806`, `1d3266f`, `165ce7c` |
+| 3.4 Strings into resources | Done | `1081f3d`, `912308f` |
+| 3.5 Error states | Done | `49565af`, `f2918f8`, `557c68a`, `0c1f1c8`, `abfae55` |
+| 3.6 Tablet and landscape | Done to decision 7 | `24b936f` (CARD-06), the 640dp cap; no two-pane |
+| 4.1 Screenshot tests | Partly | the gallery renders everything; no golden comparison |
+| 4.2 Baseline Profile and benchmarks | Written, not run | `6e98188` |
+| 4.3 Automated accessibility checks | Done | `6e98188`, run in this re-score |
+| 4.4 Five-person test | Kit ready, not run | [`ux-test-kit.md`](ux-test-kit.md) |
+
+---
+
+## Baseline before the work
+
+*Kept as the record of where the work started. The re-score above supersedes these scores.*
+
 
 Scored on 2026-10-05 against commit `df3b41b`, from the shipped screenshots in `vision/*/actual-*.png` and four read-only code audits (accessibility and platform, states and feedback, visual system, copy and navigation). Every claim the scores lean on was checked by hand against the code; contrast ratios were computed from the token values. Nothing was run on a device, so items marked *(reasoned)* follow from the code but were not watched happening.
 
@@ -280,9 +372,9 @@ Scored on 2026-10-05 against commit `df3b41b`, from the shipped screenshots in `
 
 ---
 
-## What is unprofessional today
+## What was unprofessional
 
-You asked what is unprofessional or below a world-class bar. Ranked by how much a first-time user would notice.
+You asked what is unprofessional or below a world-class bar. Ranked by how much a first-time user would notice. *All fifteen were addressed in the work that followed; the plan table in the re-score says where.*
 
 1. **The card dials if you touch it.** Tapping the face of the card, the natural way to look closer, places a call. Your own vision notes record an accidental call during review. (`CardViewScreen.kt:490`)
 2. **Primary buttons fail contrast.** White on terracotta is 3.88:1. The design docs promise contrast "is a gate, not a hope", but `ThemeContrastTest` only checks button text against the 3:1 threshold for UI parts, and never checks `fgSubtle` at all.
@@ -304,7 +396,7 @@ You asked what is unprofessional or below a world-class bar. Ranked by how much 
 
 ## Plan to reach AAA
 
-Four phases, ordered so the cheapest, most visible professionalism lands first and nothing built later has to be redone. Sizes: **S** under a day, **M** a few days, **L** a week or more. Each item names the dimension it moves.
+Four phases, ordered so the cheapest, most visible professionalism lands first and nothing built later has to be redone. *Status per item: see [the plan, item by item](#the-plan-item-by-item).* Sizes: **S** under a day, **M** a few days, **L** a week or more. Each item names the dimension it moves.
 
 ### Phase 0 · Fix what is wrong or untrue (gates)
 
