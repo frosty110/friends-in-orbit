@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -29,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.graphics.Color
 import app.orbit.domain.smart.SmartListRule
+import app.orbit.ui.components.OrbitSlider
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -106,19 +105,16 @@ private fun DaysSlider(
             )
             Text(
                 text = "${current.toInt()} days",
-                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.accentPress),
+                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         }
-        Slider(
+        OrbitSlider(
             value = current,
             onValueChange = { current = it },
             onValueChangeFinished = { onCommit(current.toInt()) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
-            colors = SliderDefaults.colors(
-                thumbColor = OrbitTheme.colors.accent,
-                activeTrackColor = OrbitTheme.colors.accent,
-                inactiveTrackColor = OrbitTheme.colors.line,
-            ),
+            label = label,
+            valueDescription = "${current.toInt()} days",
             modifier = Modifier.padding(top = 4.dp),
         )
         Row(
@@ -126,11 +122,11 @@ private fun DaysSlider(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "${range.first}d",
+                text = "${range.first} days",
                 style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
             )
             Text(
-                text = "${range.last}d",
+                text = "${range.last} days",
                 style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
             )
         }
@@ -157,19 +153,16 @@ private fun PercentSlider(
             )
             Text(
                 text = "${current.toInt()}%",
-                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.accentPress),
+                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         }
-        Slider(
+        OrbitSlider(
             value = current,
             onValueChange = { current = it },
             onValueChangeFinished = { onCommit(current.toInt()) },
             valueRange = 10f..50f,
-            colors = SliderDefaults.colors(
-                thumbColor = OrbitTheme.colors.accent,
-                activeTrackColor = OrbitTheme.colors.accent,
-                inactiveTrackColor = OrbitTheme.colors.line,
-            ),
+            label = label,
+            valueDescription = "${current.toInt()} percent ${readoutSuffix.trim()}".trim(),
             modifier = Modifier.padding(top = 4.dp),
         )
         Row(

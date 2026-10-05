@@ -17,6 +17,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
@@ -199,9 +201,10 @@ private fun AddContactsRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onAddContacts)
+            .heightIn(min = OrbitTheme.spacing.tapMin)
+            .clickable(role = Role.Button, onClick = onAddContacts)
             .padding(top = if (hasMembers) 14.dp else 12.dp, bottom = 4.dp)
-            .semantics { contentDescription = "Add contacts to list" },
+            .semantics { contentDescription = "Add people to this list" },
     ) {
         Box(
             contentAlignment = Alignment.Center,
@@ -210,12 +213,12 @@ private fun AddContactsRow(
             PhIcon(
                 name = "user-plus",
                 size = 20.dp,
-                tint = OrbitTheme.colors.accent,
+                tint = OrbitTheme.colors.fg,
             )
         }
         Text(
-            text = "Add contacts",
-            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.accent),
+            text = "Add people",
+            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
         )
     }
 }

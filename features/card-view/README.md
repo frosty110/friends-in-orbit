@@ -42,13 +42,13 @@ As a user, I see one person at a time with just enough context to decide whether
 - **CARD-02: Later and Sooner are named, and each undo is its own.** The side buttons read "Later" and "Sooner" on screen and to TalkBack, and the card face offers Later, Sooner and Call as accessibility actions. Each action's snackbar names the person and says when they come back ("Sarah will come up again tomorrow."). A newer snackbar replaces an older one at once, and Undo carries a token so only the newest action can be undone. (Snackbars used to queue while the undo slot held only the latest action, so Undo on the first of three quick swipes reverted the third person.)
 - **CARD-03: A call is acknowledged once it is real.** When the call log confirms a call placed from the card (the deck moves past the person within 15 seconds of returning), the snackbar says "Called {first name}" with "Add a note", which opens their details. Nothing is said if the call is not confirmed. Any swipe cancels the wait, so a deck that moved for another reason is never credited as a call.
 - **CARD-04: Why now, in human terms.** The face shows how long it has been, the pair's usual rhythm once there are four calls ("You usually talk about every 2 weeks.", the median gap, stated as a fact, never a deadline), and the most recent note from the last 30 days, quoted, ahead of the statistics. The note is hidden under the privacy curtain.
-- **CARD-05: "You're caught up."** When nobody on the list is due, the empty state says so in those words and names who comes up next and when.
+- **CARD-05: "All quiet for now."** When nobody on the list is due, the empty state says so calmly and names who comes up next and when. It never says "caught up" or "done": the queue is continuous by design (HOME-6 in `vision/00-home/00-home.md`, `SurfaceResult.kt`), so nothing should read as a cleared backlog.
 
 **Physics.** Card tilts as dragged — up to ~8°. "Heat strip" grows at the destination edge as drag progresses. Snap-back animation 250ms ease-out, no overshoot > 5%, no bounce. Haptic buzz on swipe commit.
 
 **Cross-list propagation.** Calling from this screen updates last-call state on every list this contact belongs to — immediately, via Flow.
 
-**Empty states.** Teaching empty states as built: `EmptyNoMembers` (the list has no members) and `EmptyNothingEligible` ("You're caught up.", CARD-05, with when the soonest member comes due). The loop stays continuous: there is no terminal state, only a kind word while nobody is due. Voice per `features/_foundations/voice.md`.
+**Empty states.** Teaching empty states as built: `EmptyNoMembers` (the list has no members) and `EmptyNothingEligible` ("All quiet for now.", CARD-05, with when the soonest member comes due). The loop stays continuous: there is no terminal state, only a kind word while nobody is due. Voice per `features/_foundations/voice.md`.
 
 ### Acceptance criteria
 

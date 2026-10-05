@@ -34,6 +34,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewFontScale
@@ -232,10 +238,12 @@ private fun ListsManagerContent(
     onToggleArchived: () -> Unit
 ) {
     OrbitScreen {
+        // LIST-20: one create control per state (rubric D2). The floating "New list"
+        // button when lists exist, the centred button when there are none.
+        // The app bar's "+" was a third, duplicate way in.
         OrbitAppBar(
             title = "Lists",
             leading = { OrbitIconButton("arrow-left", onBack, contentDescription = "Back") },
-            trailing = { OrbitIconButton("plus", onCreate, contentDescription = "New list") }
         )
 
         Box(modifier = Modifier.fillMaxSize()) {
@@ -262,29 +270,33 @@ private fun ListsManagerContent(
                 }
             }
 
-            // FAB anchored bottom-end; UI-SPEC §"Component Inventory" — terracotta accent.
-            ExtendedFloatingActionButton(
-                onClick = onCreate,
-                containerColor = OrbitTheme.colors.accent,
-                contentColor = OrbitTheme.colors.accentFg,
-                shape = OrbitTheme.shapes.full,
-                elevation = FloatingActionButtonDefaults.elevation(
-                    defaultElevation = OrbitTheme.spacing.x1
-                ),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(OrbitTheme.spacing.x4)
-            ) {
-                PhIcon(
-                    name = "plus",
-                    size = OrbitTheme.spacing.x5 - OrbitTheme.spacing.x1,
-                    tint = OrbitTheme.colors.accentFg
-                )
-                Spacer(Modifier.fillMaxWidth(0f))
-                Text(
-                    text = " New list",
-                    style = OrbitTheme.type.button.copy(color = OrbitTheme.colors.accentFg)
-                )
+            // FAB anchored bottom-end; UI-SPEC §"Component Inventory", terracotta
+            // accent. Only with lists on screen: the empty state has its own
+            // centred button, and two accents there broke rules.md §Design 5.
+            if (state is ListsManagerUiState.Ready) {
+                ExtendedFloatingActionButton(
+                    onClick = onCreate,
+                    containerColor = OrbitTheme.colors.accent,
+                    contentColor = OrbitTheme.colors.accentFg,
+                    shape = OrbitTheme.shapes.full,
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = OrbitTheme.spacing.x1
+                    ),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(OrbitTheme.spacing.x4)
+                ) {
+                    PhIcon(
+                        name = "plus",
+                        size = OrbitTheme.spacing.x5 - OrbitTheme.spacing.x1,
+                        tint = OrbitTheme.colors.accentFg
+                    )
+                    Spacer(Modifier.width(OrbitTheme.spacing.x2))
+                    Text(
+                        text = "New list",
+                        style = OrbitTheme.type.button.copy(color = OrbitTheme.colors.accentFg)
+                    )
+                }
             }
 
             SnackbarHost(
@@ -474,7 +486,16 @@ private fun ArchivedSectionHeader(
         modifier = modifier
             .fillMaxWidth()
             .padding(top = OrbitTheme.spacing.x4)
-            .clickable(onClick = onToggle)
+            .heightIn(min = OrbitTheme.spacing.tapMin)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = if (expanded) "Hide archived lists" else "Show archived lists",
+                onClick = onToggle
+            )
+            .semantics {
+                heading()
+                stateDescription = if (expanded) "Expanded" else "Collapsed"
+            }
             .padding(vertical = OrbitTheme.spacing.x2)
     ) {
         PhIcon(

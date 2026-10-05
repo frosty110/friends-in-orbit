@@ -100,6 +100,8 @@ data class NextUp(
     val name: String,
     val photoUri: String?,
     val why: String,
+    // HOME-9: dialed by the Next-up row's Call button; null hides the button.
+    val phone: String? = null,
 )
 
 /**

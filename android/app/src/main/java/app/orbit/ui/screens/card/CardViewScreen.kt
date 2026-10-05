@@ -393,11 +393,13 @@ private fun NothingEligibleShell(
         val who = if (curtain) "Someone" else state.upNextName
         "$who comes up ${state.upNextLabel}."
     } else {
-        "No one needs a call right now. Enjoy the quiet."
+        "No one needs a call right now."
     }
     EmptyShell(
-        // CARD-05: the honest, kind word for "nobody is due".
-        heading = "You're caught up.",
+        // CARD-05: a calm word for "nobody is due right now". Not "caught up":
+        // the queue is continuous by design (HOME-6, SurfaceResult.kt), so
+        // nothing here suggests a backlog was cleared or a task finished.
+        heading = "All quiet for now.",
         body = body,
         primaryText = "Browse this list",
         onPrimary = onBrowse,

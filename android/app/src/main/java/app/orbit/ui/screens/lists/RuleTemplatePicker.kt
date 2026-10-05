@@ -120,11 +120,14 @@ private fun RuleRow(
                 .clip(CircleShape)
                 .border(
                     2.dp,
-                    if (selected) OrbitTheme.colors.accent else OrbitTheme.colors.line,
+                    // Ink, not accent: a selected option is cluster tier
+                    // (rules.md §Design 5). The unselected ring is fgSubtle so
+                    // the control reads at 3:1 (the old `line` ring did not).
+                    if (selected) OrbitTheme.colors.fg else OrbitTheme.colors.fgSubtle,
                     CircleShape,
                 )
                 .background(
-                    if (selected) OrbitTheme.colors.accent else OrbitTheme.colors.surface,
+                    if (selected) OrbitTheme.colors.fg else OrbitTheme.colors.surface,
                 ),
             contentAlignment = Alignment.Center,
         ) {

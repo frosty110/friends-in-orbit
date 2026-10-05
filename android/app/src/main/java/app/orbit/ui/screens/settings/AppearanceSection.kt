@@ -19,8 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +27,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import app.orbit.ui.components.OrbitSlider
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -87,7 +88,10 @@ fun AppearanceSection(
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
                 .padding(top = OrbitTheme.spacing.x3),
-            horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x4),
+            // Tight enough that the sixth swatch (Wallpaper) peeks in at phone
+            // width, which says "this row scrolls". With the old 16dp gap it
+            // started exactly at the card's edge and was invisible.
+            horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
         ) {
             themes.forEach { def ->
                 val swatch = if (isDark) def.dark.accent else def.light.accent
@@ -133,13 +137,16 @@ fun AppearanceSection(
                 modifier = Modifier.weight(1f),
             )
             if (accentHue != null) {
+                // Ink, not accent (rules.md §Design 5), and a full 48dp target
+                // (it was about 26dp tall).
                 Text(
                     "Match theme",
                     style = OrbitTheme.type.meta,
-                    color = OrbitTheme.colors.accent,
+                    color = OrbitTheme.colors.fg,
                     modifier = Modifier
+                        .minimumInteractiveComponentSize()
                         .clip(OrbitTheme.shapes.sm)
-                        .clickable { onAccentHue(null) }
+                        .clickable(role = Role.Button) { onAccentHue(null) }
                         .padding(horizontal = OrbitTheme.spacing.x2, vertical = OrbitTheme.spacing.x1),
                 )
             }
@@ -159,19 +166,14 @@ fun AppearanceSection(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(top = OrbitTheme.spacing.x2),
         ) {
-            Slider(
+            OrbitSlider(
                 value = liveHue,
                 onValueChange = { liveHue = it },
                 onValueChangeFinished = { onAccentHue(liveHue.toInt()) },
                 valueRange = 0f..359f,
-                colors = SliderDefaults.colors(
-                    thumbColor = OrbitTheme.colors.accent,
-                    activeTrackColor = OrbitTheme.colors.accent,
-                    inactiveTrackColor = OrbitTheme.colors.line,
-                ),
-                modifier = Modifier
-                    .weight(1f)
-                    .semantics { contentDescription = "Accent color hue" },
+                label = "Accent colour",
+                valueDescription = hueName(liveHue),
+                modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(OrbitTheme.spacing.x3))
             Box(
@@ -243,4 +245,20 @@ private fun AppearanceSectionPreview() {
             onAccentHue = {},
         )
     }
+}
+
+/**
+ * A colour name for the accent dial, so TalkBack says "Blue" rather than a
+ * number of degrees or a percentage of the track.
+ */
+private fun hueName(hue: Float): String = when (((hue % 360f) + 360f) % 360f) {
+    in 0f..<15f -> "Red"
+    in 15f..<40f -> "Orange"
+    in 40f..<70f -> "Yellow"
+    in 70f..<160f -> "Green"
+    in 160f..<200f -> "Teal"
+    in 200f..<255f -> "Blue"
+    in 255f..<290f -> "Violet"
+    in 290f..<335f -> "Magenta"
+    else -> "Red"
 }

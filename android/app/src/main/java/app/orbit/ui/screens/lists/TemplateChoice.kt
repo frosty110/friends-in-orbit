@@ -108,7 +108,7 @@ data class TemplateChoice(
             TemplateChoice(
                 id = "blank",
                 displayName = "Start from blank",
-                subtitle = "Choose your own cadence.",
+                subtitle = "Choose your own rhythm.",
                 iconName = "plus",
                 type = ListType.STATIC,
                 defaultName = "",

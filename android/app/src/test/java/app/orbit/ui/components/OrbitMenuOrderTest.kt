@@ -36,13 +36,13 @@ class OrbitMenuOrderTest {
         val ordered = listOf(
             action("Add people"),
             action("List settings"),
-            action("Mute prompts"),
+            action("Pause nudges"),
             action("Archive", OrbitMenuTone.Destructive),
             action("Delete", OrbitMenuTone.Destructive),
         ).orderedForMenu()
 
         assertEquals(
-            listOf("Add people", "List settings", "Mute prompts", "Archive", "Delete"),
+            listOf("Add people", "List settings", "Pause nudges", "Archive", "Delete"),
             ordered.map { it.label },
         )
     }

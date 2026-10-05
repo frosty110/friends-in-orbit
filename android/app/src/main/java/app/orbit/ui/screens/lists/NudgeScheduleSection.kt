@@ -20,6 +20,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -110,11 +112,11 @@ internal fun NudgeScheduleSection(
                 PhIcon(
                     name = "plus",
                     size = OrbitTheme.spacing.x5,
-                    tint = OrbitTheme.colors.accent,
+                    tint = OrbitTheme.colors.fg,
                 )
                 Text(
                     text = NotificationCopy.LABEL_ADD_TIME,
-                    style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.accent),
+                    style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                 )
             }
         }
@@ -181,8 +183,10 @@ private fun DayChipRow(
     ) {
         ordered.forEach { (day, label) ->
             val selected = day in selectedDays
-            val bgColor = if (selected) OrbitTheme.colors.accent else OrbitTheme.colors.bgSubtle
-            val labelColor = if (selected) OrbitTheme.colors.accentFg else OrbitTheme.colors.fgMuted
+            // Cluster tier (rules.md §Design 5): a selected day is the soft
+            // tint with an ink ring, not seven accent fills on one screen.
+            val bgColor = if (selected) OrbitTheme.colors.accentTint else OrbitTheme.colors.bgSubtle
+            val labelColor = if (selected) OrbitTheme.colors.fg else OrbitTheme.colors.fgMuted
             val cd = NotificationCopy.a11yDayChip(day.fullName(), selected)
 
             Box(
@@ -192,6 +196,9 @@ private fun DayChipRow(
                     .height(OrbitTheme.spacing.tapMin)
                     .clip(OrbitTheme.shapes.full)
                     .background(bgColor)
+                    .then(
+                        if (selected) Modifier.border(1.5.dp, OrbitTheme.colors.fg, OrbitTheme.shapes.full) else Modifier,
+                    )
                     .clickable { onToggle(day) }
                     .semantics { contentDescription = cd },
             ) {
@@ -334,12 +341,12 @@ private fun MutedBadge() {
         PhIcon(
             name = "speaker-slash",
             size = OrbitTheme.spacing.x4,
-            tint = OrbitTheme.colors.accent,
+            tint = OrbitTheme.colors.fg,
         )
         Spacer(Modifier.width(OrbitTheme.spacing.x1))
         Text(
             text = NotificationCopy.LABEL_MUTED_BADGE,
-            style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.accent),
+            style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fg),
         )
     }
 }

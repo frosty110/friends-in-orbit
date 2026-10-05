@@ -133,6 +133,7 @@ open class HomeFeed @Inject constructor(
                     name = found.contact.displayName,
                     photoUri = found.contact.photoUri,
                     lastCalledAt = last?.occurredAt,
+                    phone = found.contact.phoneNumber,
                 )
             }
             listId to ListEnrichment(nextUp = nextUp, rhythm = buildRhythm(calls, byId))
@@ -263,4 +264,6 @@ data class NextUpRaw(
     val name: String,
     val photoUri: String?,
     val lastCalledAt: Instant?,
+    // HOME-9: the number the card's quiet Call button dials. Never logged.
+    val phone: String? = null,
 )

@@ -19,8 +19,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -49,6 +47,7 @@ import app.orbit.data.entity.RuleKind
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeSchedule
+import app.orbit.ui.components.OrbitSlider
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.PhIcon
@@ -262,7 +261,9 @@ private fun ColumnScope.ListConfigBodySections(
     // like anyone else's, so they need a rhythm. This used to be static-only,
     // which left a smart list with no way to get one.
     run {
-        SettingGroup(title = "Cadence") {
+        // LIST-21: "Rhythm", not "Cadence" (voice.md glossary); no accent spent
+        // on settings in this body, only on the app bar's "Done".
+        SettingGroup(title = "Rhythm") {
             RuleTemplatePicker(
                 currentKind = state.ruleKind,
                 templates = emptyList(),
@@ -272,7 +273,7 @@ private fun ColumnScope.ListConfigBodySections(
 
         val keepInTouch = state.ruleParams as? RuleParams.KeepInTouch
         if (keepInTouch != null) {
-            SettingGroup(title = "Interval") {
+            SettingGroup(title = "How often") {
                 IntervalSliderLocal(
                     currentHours = keepInTouch.cooldownMinHours,
                     onCommit = { hours ->
@@ -291,7 +292,7 @@ private fun ColumnScope.ListConfigBodySections(
             // read as something missing.
             val note = state.ruleKind?.let { rhythmNoteFor(it) }
             if (note != null) {
-                SettingGroup(title = "Interval") {
+                SettingGroup(title = "How often") {
                     Text(
                         text = note,
                         style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
@@ -313,10 +314,11 @@ private fun ColumnScope.ListConfigBodySections(
         )
     }
 
-    SettingGroup(title = "Notifications") {
+    // One word for these notifications: "nudges" (voice.md glossary).
+    SettingGroup(title = "Nudges") {
         ToggleRow(
-            label = "Reminders",
-            sub = "Notify me when I should reach out.",
+            label = "Send nudges",
+            sub = "A gentle notification when someone here is worth a call.",
             value = state.notificationsEnabled,
             onChange = onNotificationsToggle
         )
@@ -334,7 +336,7 @@ private fun ColumnScope.ListConfigBodySections(
     // disabled, not alpha-hidden — so it is unreachable via keyboard or a11y
     // before setup completes (Pitfall 8).
     if (!isOnboarding) {
-        SettingGroup(title = "Nudges") {
+        SettingGroup(title = "When to nudge") {
             NudgeScheduleSection(
                 schedule = state.nudgeSchedule,
                 notificationsEnabled = state.notificationsEnabled,
@@ -367,13 +369,13 @@ private fun ColumnScope.ListConfigBodySections(
     if (state.type == ListType.SMART) {
         Spacer(Modifier.height(8.dp))
         OrbitButton(
-            text = "Convert to static list",
+            text = "Make this a regular list",
             onClick = onShowConvertDialog,
             variant = OrbitButtonVariant.Destructive,
             modifier = Modifier.fillMaxWidth()
         )
         Text(
-            text = "One-time action. The rule will be cleared and current members locked in.",
+            text = "The people here now stay, and the list stops adding people by itself. This can't be undone.",
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgSubtle),
             modifier = Modifier
                 .fillMaxWidth()
@@ -409,7 +411,7 @@ private fun triggerConvertExtracted(
 ) {
     onConfirmConvert()
     scope.launch {
-        snackbarHostState.showSnackbar("List converted — membership locked.")
+        snackbarHostState.showSnackbar("This is now a regular list.")
     }
 }
 
@@ -432,10 +434,10 @@ private fun IntervalSliderLocal(currentHours: Int, onCommit: (Int) -> Unit) {
             val rounded = days.toInt().coerceAtLeast(1)
             Text(
                 text = "$rounded ${if (rounded == 1) "day" else "days"}",
-                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.accentPress)
+                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg)
             )
         }
-        Slider(
+        OrbitSlider(
             value = days,
             onValueChange = { days = it },
             onValueChangeFinished = {
@@ -443,11 +445,8 @@ private fun IntervalSliderLocal(currentHours: Int, onCommit: (Int) -> Unit) {
                 onCommit(intDays * 24)
             },
             valueRange = 1f..60f,
-            colors = SliderDefaults.colors(
-                thumbColor = OrbitTheme.colors.accent,
-                activeTrackColor = OrbitTheme.colors.accent,
-                inactiveTrackColor = OrbitTheme.colors.line
-            ),
+            label = "How often to aim for",
+            valueDescription = days.toInt().coerceAtLeast(1).let { d -> "Every $d ${if (d == 1) "day" else "days"}" },
             modifier = Modifier.padding(top = 4.dp)
         )
         IntervalScaleLabels(modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
@@ -467,10 +466,11 @@ private const val INTERVAL_MIN_DAY = 1
 private const val INTERVAL_MAX_DAY = 60
 
 private val INTERVAL_TICKS: List<Pair<String, Int>> = listOf(
-    "1d" to 1,
-    "2w" to 14,
-    "1m" to 30,
-    "2m" to 60
+    // Words, not "1d / 2w / 1m / 2m" (rubric D7).
+    "1 day" to 1,
+    "2 weeks" to 14,
+    "1 month" to 30,
+    "2 months" to 60
 )
 
 /**
@@ -608,7 +608,7 @@ private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
                     PhIcon(
                         name = "check",
                         size = 20.dp,
-                        tint = OrbitTheme.colors.accent
+                        tint = OrbitTheme.colors.fg
                     )
                 }
             },

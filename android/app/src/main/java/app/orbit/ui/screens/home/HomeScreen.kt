@@ -41,6 +41,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import app.orbit.ui.util.dialPhoneNumber
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -164,9 +167,11 @@ fun HomeScreen(
         onPauseOrDispose { /* prompt state lives in the VM; nothing to clean up */ }
     }
 
+    val context = LocalContext.current
     HomeContent(
         state = state,
         snackbarHostState = snackbarHostState,
+        onCallNextUp = { phone -> context.dialPhoneNumber(phone) },
         onOpenList = onOpenList,
         onOpenSearch = onOpenSearch,
         onOpenSettings = onOpenSettings,
@@ -201,6 +206,7 @@ private fun HomeContent(
     onOpenSettings: () -> Unit,
     onOpenLists: () -> Unit,
     onCreateList: () -> Unit,
+    onCallNextUp: (phone: String) -> Unit = {},
     // Long-press quick-actions — Long listId so the renderer can bind per tile.
     onAddPeople: (Long) -> Unit = {},
     onToggleMute: (listId: Long, currentlyEnabled: Boolean) -> Unit = { _, _ -> },
@@ -239,8 +245,10 @@ private fun HomeContent(
                         onClick = onOpenSearch,
                         contentDescription = "Search",
                     )
+                    // A bulleted list, as in the design: the plain hamburger
+                    // also meant "list options" on Card view (rubric D2).
                     OrbitIconButton(
-                        icon = "list",
+                        icon = "list-bullets",
                         onClick = onOpenLists,
                         contentDescription = "Lists",
                     )
@@ -347,6 +355,7 @@ private fun HomeContent(
                             onArchive = { onArchive(tile.id) },
                             onDelete = { pendingDeleteId = tile.id },
                             onOpenContact = onOpenContact,
+                            onCallNextUp = onCallNextUp,
                         )
                     }
                     item { CreateListTile(label = "New list", onClick = onCreateList) }
@@ -390,6 +399,7 @@ private fun ListTile(
     onArchive: () -> Unit = {},
     onDelete: () -> Unit = {},
     onOpenContact: (contactId: Long) -> Unit = {},
+    onCallNextUp: (phone: String) -> Unit = {},
 ) {
     val curtain = LocalPrivacyCurtain.current
     val isDark = OrbitTheme.colors.isDark
@@ -414,6 +424,7 @@ private fun ListTile(
             // button); long-press opens the manage-this-list quick-actions menu.
             .combinedClickable(
                 onClick = onClick,
+                onClickLabel = "Open list",
                 onLongClickLabel = "Quick actions",
                 onLongClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -432,7 +443,8 @@ private fun ListTile(
                 OrbitMenuAction(label = "Add people", onClick = onAddPeople),
                 OrbitMenuAction(label = "List settings", onClick = onListSettings),
                 OrbitMenuAction(
-                    label = if (tile.notificationsEnabled) "Mute prompts" else "Unmute prompts",
+                    // Glossary (voice.md): these notifications are "nudges".
+                    label = if (tile.notificationsEnabled) "Pause nudges" else "Resume nudges",
                     onClick = onToggleMute,
                 ),
                 OrbitMenuAction(
@@ -449,15 +461,12 @@ private fun ListTile(
         )
 
         Column(Modifier.fillMaxWidth()) {
-            // Zone 1 — tinted header band: list name + Next up, in one row.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(tone.band)
-                    .padding(OrbitTheme.spacing.x4),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.width(118.dp)) {
+            // Zone 1: tinted header band, list name beside Next up. At large
+            // font scales the two stack instead: side by side, the name sat in
+            // a fixed 118dp column and clipped at 200% (rubric gate G3).
+            val stacked = LocalDensity.current.fontScale > 1.3f
+            val nameBlock: @Composable (Modifier) -> Unit = { blockModifier ->
+                Column(blockModifier) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = displayName,
@@ -469,18 +478,50 @@ private fun ListTile(
                         // LIST-07 — smart-list type cue. Type isn't a name, so it
                         // stays visible under the privacy curtain.
                         if (tile.type == ListType.SMART) {
-                            Spacer(Modifier.width(4.dp))
+                            Spacer(Modifier.width(OrbitTheme.spacing.x1))
                             PhIcon(name = "shuffle-angular", size = 13.dp, tint = tone.nameFg)
                         }
                     }
+                    // Full strength, not faded: a 72% alpha member count fell
+                    // under 4.5:1 on the tinted band.
                     Text(
                         text = memberLabel(tile.memberCount),
-                        style = OrbitTheme.type.meta.copy(color = tone.nameFg.copy(alpha = 0.72f)),
+                        style = OrbitTheme.type.meta.copy(color = tone.nameFg),
                         modifier = Modifier.padding(top = 3.dp),
                     )
                 }
-                Spacer(Modifier.width(OrbitTheme.spacing.x3))
-                NextUpRow(nextUp = tile.nextUp, curtain = curtain, modifier = Modifier.weight(1f))
+            }
+            val nextUpRow: @Composable (Modifier) -> Unit = { rowModifier ->
+                NextUpRow(
+                    nextUp = tile.nextUp,
+                    curtain = curtain,
+                    onCall = onCallNextUp,
+                    modifier = rowModifier,
+                )
+            }
+            if (stacked) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(tone.band)
+                        .padding(OrbitTheme.spacing.x4),
+                    verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
+                ) {
+                    nameBlock(Modifier.fillMaxWidth())
+                    nextUpRow(Modifier.fillMaxWidth())
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(tone.band)
+                        .padding(OrbitTheme.spacing.x4),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    nameBlock(Modifier.width(118.dp))
+                    Spacer(Modifier.width(OrbitTheme.spacing.x3))
+                    nextUpRow(Modifier.weight(1f))
+                }
             }
             // Zone 2 — lighter wash under the 7-day rhythm.
             Column(
@@ -540,12 +581,18 @@ private fun rhythmDayLabel(index: Int, size: Int): String = remember(index, size
 
 /** HOME-3 — the recommendation half of the header band. */
 @Composable
-private fun NextUpRow(nextUp: NextUp?, curtain: Boolean, modifier: Modifier = Modifier) {
+private fun NextUpRow(
+    nextUp: NextUp?,
+    curtain: Boolean,
+    onCall: (phone: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         if (nextUp == null) {
             // Rare: list has members but nobody surfaceable right now.
+            // HOME-6: calm, never "caught up" or "no one due".
             Text(
-                text = "No one up next",
+                text = "All quiet for now",
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.weight(1f),
             )
@@ -577,7 +624,21 @@ private fun NextUpRow(nextUp: NextUp?, curtain: Boolean, modifier: Modifier = Mo
             )
         }
         Spacer(Modifier.width(OrbitTheme.spacing.x2))
-        PhIcon(name = "caret-right", size = 20.dp, tint = OrbitTheme.colors.fgSubtle)
+        // HOME-9: one deliberate tap from Home to a call. A labelled, muted
+        // phone button (rules.md §Design 6 allows a quiet dial per person row);
+        // the rest of the card still opens the list's deck. It replaces the
+        // chevron, which only repeated "this card is tappable".
+        val phone = nextUp.phone
+        if (phone != null) {
+            OrbitIconButton(
+                icon = "phone-call",
+                onClick = { onCall(phone) },
+                tint = OrbitTheme.colors.fgMuted,
+                contentDescription = "Call $firstName",
+            )
+        } else {
+            PhIcon(name = "caret-right", size = 20.dp, tint = OrbitTheme.colors.fgSubtle)
+        }
     }
 }
 
@@ -869,12 +930,12 @@ private val previewState: HomeUiState = HomeUiState.Ready(
     lists = listOf(
         ListTileState(
             id = 1L, name = "Inner orbit", dueCount = 3, type = ListType.STATIC, memberCount = 12,
-            nextUp = NextUp(1L, "Kai", null, "3 weeks since you last spoke"),
+            nextUp = NextUp(1L, "Kai", null, "3 weeks since you last spoke", phone = "+1 555 0100"),
             rhythm = previewRhythm(0),
         ),
         ListTileState(
             id = 2L, name = "Late night", dueCount = 0, type = ListType.SMART, memberCount = 5,
-            nextUp = NextUp(2L, "Mara", null, "you haven't spoken yet"),
+            nextUp = NextUp(2L, "Mara", null, "you haven't spoken yet", phone = "+1 555 0101"),
             rhythm = previewRhythm(8),
         ),
     ),

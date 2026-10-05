@@ -235,7 +235,7 @@ Each dimension lists why it matters for Orbit, what a **4** requires (the **must
 **A 4 requires**
 - **Must:** no guilt mechanics: no streaks, and counts read as invitations ("3 ready"), never as debts.
 - A brand moment where it matters: onboarding, the empty states, the app icon.
-- Small, calm rewards for connection: a quiet acknowledgement after a call, "You're caught up" said like a friend.
+- Small, calm rewards for connection: a quiet acknowledgement after a call, and a calm word when nobody is due (never "caught up" or "done": the queue is continuous by design, HOME-6).
 - Five users describe it with warm words unprompted.
 
 **Test:** a desirability study (pick-five word cards) and think-aloud sessions.
@@ -274,7 +274,7 @@ Scored on 2026-10-05 against commit `df3b41b`, from the shipped screenshots in `
 | D9 Android platform | **1** | No predictive back; status-bar icons ignore the in-app theme; nudges are plain text with no Call action; widgets don't resize and show blank previews in the picker; no themed icon, shortcuts, 24-hour time or tablet layout. |
 | D10 Performance and stability | **2** | Unmeasured: no Baseline Profile or benchmarks. The loading flashes above cap it at 2. |
 | D11 Trust and privacy | **2** | Strong promise and honest permission rationales. Weakened by names on the lock screen and all three permissions asked before the user sees a single person. |
-| D12 Emotional design | **2** | The voice is kind and there is no gamification. But there is no brand moment (onboarding is text on cream), nothing acknowledges a call you made, and "You're caught up" never appears; the widget says "No one due". |
+| D12 Emotional design | **2** | The voice is kind and there is no gamification. But there is no brand moment (onboarding is text on cream), nothing acknowledges a call you made, and when nobody is due the app falls back to deadline words ("No one is up next", the widget's "No one due"). |
 
 **Overall: about 1.5 of 4.** AAA needs four dimensions at 4, the rest at 3, and all gates passing.
 
@@ -336,7 +336,7 @@ Four phases, ordered so the cheapest, most visible professionalism lands first a
 |---|---|---|---|
 | 2.1 | Home built to the design prototype: per list, the next person with a face, a human reason and one-tap Call; a composed layout when there is only one list. | D1, D3 | L |
 | 2.2 | "Why now" on the card: the last note, what you talked about, the pattern, ahead of raw statistics. | D1, D12 | M |
-| 2.3 | After a call: "Called Kai" with an optional note, and the next person only when the user asks. "You're caught up" when the list is done. | D1, D5, D12 | M |
+| 2.3 | After a call: "Called Kai" with an optional note, and the next person only when the user asks. A calm "All quiet for now." when nobody is due, never "caught up" (HOME-6). | D1, D5, D12 | M |
 | 2.4 | Onboarding to five taps or fewer before first value; ask for notifications when nudges are first turned on; a real brand moment on Welcome. | D1, D11, D12 | M |
 
 ### Phase 3 · Platform and reach

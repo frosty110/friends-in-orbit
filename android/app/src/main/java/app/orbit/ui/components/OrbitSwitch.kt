@@ -36,9 +36,10 @@ import app.orbit.ui.theme.OrbitTheme
  *
  * Unchecked, the track is outlined and the thumb is subtle text colour, so the
  * control and its state read at 3:1 or better (WCAG 1.4.11); the old pale
- * borderless track was about 1.3:1 on white. Checked, the thumb takes the
- * accent's own foreground, so it stays visible in every theme (Mono dark's
- * light accent made a white thumb vanish).
+ * borderless track was about 1.3:1 on white. Checked, the track is ink and the
+ * thumb the page colour: on/off is unmistakable in every theme and mode, and
+ * a screen of toggles no longer spends the accent once per switch (rules.md
+ * §Design 5; list settings had five accent elements before 2026-10-05).
  */
 @Composable
 fun OrbitSwitch(
@@ -49,11 +50,11 @@ fun OrbitSwitch(
 ) {
     val colors = OrbitTheme.colors
     val track by animateColorAsState(
-        targetValue = if (checked) colors.accent else colors.bgSubtle,
+        targetValue = if (checked) colors.fg else colors.bgSubtle,
         animationSpec = tween(OrbitMotion.DurFastMs, easing = OrbitMotion.EaseOut),
         label = "switch-track",
     )
-    val thumbColor = if (checked) colors.accentFg else colors.fgSubtle
+    val thumbColor = if (checked) colors.bg else colors.fgSubtle
     val thumbSize = if (checked) 20.dp else 16.dp
     val thumbOffset by animateDpAsState(
         targetValue = if (checked) 21.dp else 5.dp,

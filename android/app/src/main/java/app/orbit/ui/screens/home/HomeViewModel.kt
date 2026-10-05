@@ -193,7 +193,8 @@ class HomeViewModel @Inject constructor(
                 contactId = raw.contactId,
                 name = raw.name,
                 photoUri = raw.photoUri,
-                why = recencyWhy(raw.lastCalledAt, now)
+                why = recencyWhy(raw.lastCalledAt, now),
+                phone = raw.phone?.takeIf { it.isNotBlank() }
             )
         },
         rhythm = e?.rhythm ?: emptyList()
