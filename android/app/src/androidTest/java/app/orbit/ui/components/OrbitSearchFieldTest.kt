@@ -34,9 +34,9 @@ import org.junit.runner.RunWith
  * write the reported value straight back into the state it passes as `query` is
  * the bug; this class is the reference for what "wired correctly" looks like.
  *
- * The field is located by [hasSetTextAction] rather than by its placeholder —
- * the placeholder is a sibling [androidx.compose.material3.Text], not the
- * editable node.
+ * The field is located by [hasSetTextAction], the editable node itself. The
+ * placeholder is drawn in the field's decoration, so it merges into that node
+ * as its TalkBack label while the query is empty.
  */
 @RunWith(AndroidJUnit4::class)
 class OrbitSearchFieldTest {

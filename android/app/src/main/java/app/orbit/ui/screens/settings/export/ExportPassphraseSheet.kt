@@ -1,8 +1,6 @@
 package app.orbit.ui.screens.settings.export
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
@@ -28,6 +28,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import app.orbit.R
@@ -92,6 +96,11 @@ private fun ExportPassphraseContent(
     val mismatch = confirm.isNotEmpty() && confirm != password
     val canSubmit = password.length >= 8 && confirm == password
 
+    // Resolved here: semantics blocks are not composable.
+    val passwordLabel = stringResource(R.string.settings_password)
+    val confirmLabel = stringResource(R.string.settings_password_confirm)
+    val tooShortMessage = stringResource(R.string.settings_password_too_short)
+    val mismatchMessage = stringResource(R.string.settings_password_mismatch)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -118,6 +127,9 @@ private fun ExportPassphraseContent(
         Text(
             text = stringResource(R.string.settings_password),
             style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
+            // Spoken as the field's own label instead (below), so TalkBack
+            // says "Password, edit box" rather than an unlabelled edit box.
+            modifier = Modifier.clearAndSetSemantics {},
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         TextField(
@@ -130,7 +142,11 @@ private fun ExportPassphraseContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(OrbitTheme.shapes.md)
-                .background(OrbitTheme.colors.bgSubtle),
+                .background(OrbitTheme.colors.bgSubtle)
+                .semantics {
+                    contentDescription = passwordLabel
+                    if (tooShort) error(tooShortMessage)
+                },
         )
         Text(
             text = stringResource(if (tooShort) R.string.settings_password_too_short else R.string.settings_password_hint),
@@ -145,6 +161,9 @@ private fun ExportPassphraseContent(
         Text(
             text = stringResource(R.string.settings_password_confirm),
             style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
+            // Spoken as the field's own label instead (below), so TalkBack
+            // says "Password, edit box" rather than an unlabelled edit box.
+            modifier = Modifier.clearAndSetSemantics {},
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         TextField(
@@ -157,7 +176,11 @@ private fun ExportPassphraseContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(OrbitTheme.shapes.md)
-                .background(OrbitTheme.colors.bgSubtle),
+                .background(OrbitTheme.colors.bgSubtle)
+                .semantics {
+                    contentDescription = confirmLabel
+                    if (mismatch) error(mismatchMessage)
+                },
         )
         if (mismatch) {
             Text(

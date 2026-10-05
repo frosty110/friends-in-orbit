@@ -51,59 +51,58 @@ fun OrbitSearchField(
     focusRequester: FocusRequester? = null,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
-    Box(
+    // The whole pill is the text field, with the icon, placeholder and clear
+    // control in its decoration. The field used to be a one-line strip
+    // inside the pill (about 19dp of a 48dp target, so a tap above or below
+    // the text did nothing), with the placeholder drawn beside it, so
+    // TalkBack heard an unlabelled edit box. Inside the decoration the
+    // placeholder is the field's label; the clear button keeps its own node.
+    BasicTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        textStyle = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+        cursorBrush = SolidColor(OrbitTheme.colors.accent),
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = OrbitTheme.spacing.tapMin)
             .clip(OrbitTheme.shapes.full)
             .background(OrbitTheme.colors.bgSubtle)
-            .padding(horizontal = OrbitTheme.spacing.x4),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            PhIcon(
-                name = "magnifying-glass",
-                size = 18.dp,
-                tint = OrbitTheme.colors.fgMuted,
-            )
-            Box(modifier = Modifier.weight(1f)) {
-                if (query.isEmpty()) {
-                    Text(
-                        text = placeholder,
-                        style = OrbitTheme.type.body,
-                        color = OrbitTheme.colors.fgSubtle,
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
+        decorationBox = { innerTextField ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = OrbitTheme.spacing.tapMin)
+                    .padding(horizontal = OrbitTheme.spacing.x4),
+            ) {
+                PhIcon(
+                    name = "magnifying-glass",
+                    size = 18.dp,
+                    tint = OrbitTheme.colors.fgMuted,
+                )
+                Box(modifier = Modifier.weight(1f)) {
+                    if (query.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            style = OrbitTheme.type.body,
+                            color = OrbitTheme.colors.fgSubtle,
+                        )
+                    }
+                    innerTextField()
+                }
+                if (query.isNotEmpty()) {
+                    OrbitIconButton(
+                        icon = "x",
+                        onClick = { onQueryChange("") },
+                        contentDescription = stringResource(R.string.components_search_clear),
                     )
                 }
-                BasicTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    textStyle = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
-                    cursorBrush = SolidColor(OrbitTheme.colors.accent),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(
-                            if (focusRequester != null) {
-                                Modifier.focusRequester(focusRequester)
-                            } else {
-                                Modifier
-                            },
-                        ),
-                )
             }
-            if (query.isNotEmpty()) {
-                OrbitIconButton(
-                    icon = "x",
-                    onClick = { onQueryChange("") },
-                    contentDescription = stringResource(R.string.components_search_clear),
-                )
-            }
-        }
-    }
+        },
+    )
 }
