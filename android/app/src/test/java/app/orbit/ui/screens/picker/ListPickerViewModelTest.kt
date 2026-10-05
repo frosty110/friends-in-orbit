@@ -20,6 +20,9 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -378,6 +381,41 @@ class ListPickerViewModelTest {
             assertEquals("Couldn't create the list", awaitItem().message)
         }
         assertTrue(s.listRepo.createCalls.isEmpty())
+    }
+
+    @Test
+    fun `a failing source shows Error, and Retry recovers`() = runTest {
+        val s = fixture(contactIdArg = "c-12")
+        seedReadyFor(s, contactId = 12L)
+        var failing = true
+        val flakyListRepo = object : app.orbit.data.repository.ListRepository by s.listRepo {
+            override fun observeAll(): Flow<List<app.orbit.data.entity.ListEntity>> = flow {
+                if (failing) throw java.io.IOException("simulated read failure")
+                emitAll(s.listRepo.observeAll())
+            }
+        }
+        val vm = ListPickerViewModel(
+            listRepo = flakyListRepo,
+            contactRepo = s.contactRepo,
+            listMembershipDao = s.membershipDao,
+            undoStack = s.undoStack,
+            clock = TestClock(),
+            commitBus = PickerCommitBus(),
+            ruleTemplateRepo = s.templateRepo,
+            appScope = CoroutineScope(SupervisorJob() + mainDispatcherRule.testDispatcher),
+            savedStateHandle = SavedStateHandle(mapOf("contactId" to "c-12")),
+        )
+        vm.uiState.test {
+            var item = awaitItem()
+            while (item.phase == ListPickerViewModel.UiState.Phase.Loading) item = awaitItem()
+            assertEquals(ListPickerViewModel.UiState.Phase.Error, item.phase)
+            failing = false
+            vm.onRetry()
+            var next = awaitItem()
+            while (next.phase != ListPickerViewModel.UiState.Phase.Ready) next = awaitItem()
+            assertTrue(next.lists.isNotEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     // ─── Picker-commit lifecycle ────────────────────────────────────────────

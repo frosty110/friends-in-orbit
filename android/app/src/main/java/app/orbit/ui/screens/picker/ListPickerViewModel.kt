@@ -18,12 +18,17 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -51,6 +56,7 @@ import kotlinx.coroutines.launch
  *     — the user can re-tap and the DAO's `OnConflictStrategy.IGNORE` keeps
  *     the operation idempotent (the list of lists is small).
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class ListPickerViewModel @Inject constructor(
     private val listRepo: ListRepository,
@@ -85,6 +91,9 @@ class ListPickerViewModel @Inject constructor(
     )
     private val _isCommitting = MutableStateFlow(false)
 
+    // PICK-09: bumped by [onRetry]; flatMapLatest re-subscribes every source.
+    private val retryCount = MutableStateFlow(0)
+
     init {
         viewModelScope.launch {
             _selectedListIds.collect {
@@ -100,7 +109,8 @@ class ListPickerViewModel @Inject constructor(
         val lists: List<ListRow>,
         val selectedListIds: Set<Long>,
     ) {
-        enum class Phase { Loading, Ready, Committing, NotFound }
+        // Error (PICK-09): a data stream failed; the screen offers Retry.
+        enum class Phase { Loading, Ready, Committing, NotFound, Error }
 
         data class ListRow(
             val listId: Long,
@@ -135,32 +145,7 @@ class ListPickerViewModel @Inject constructor(
                 ),
             )
         } else {
-            combine(
-                listRepo.observeAll(),
-                contactRepo.observeById(contactId),
-                listRepo.observeMembershipsForContact(contactId),
-                _selectedListIds,
-                _isCommitting,
-            ) { lists, contact, memberships, selected, committing ->
-                val memberListIds: Set<Long> = memberships.map { it.listId }.toSet()
-                UiState(
-                    phase = when {
-                        committing -> UiState.Phase.Committing
-                        else -> UiState.Phase.Ready
-                    },
-                    contactName = contact?.displayName.orEmpty(),
-                    lists = lists
-                        .filter { !it.isArchived }
-                        .map {
-                            UiState.ListRow(
-                                listId = it.id,
-                                name = it.name,
-                                isMember = it.id in memberListIds,
-                            )
-                        },
-                    selectedListIds = selected,
-                )
-            }.stateIn(
+            retryCount.flatMapLatest { listPickerState(contactId) }.stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
                 initialValue = UiState(
@@ -172,7 +157,55 @@ class ListPickerViewModel @Inject constructor(
             )
         }
 
+    /**
+     * PICK-09: a failure in any source becomes [UiState.Phase.Error] with
+     * Retry instead of an uncaught exception in viewModelScope, which crashed
+     * the app. No logging here (rules.md Code 4).
+     */
+    private fun listPickerState(contactId: Long): Flow<UiState> =
+        combine(
+            listRepo.observeAll(),
+            contactRepo.observeById(contactId),
+            listRepo.observeMembershipsForContact(contactId),
+            _selectedListIds,
+            _isCommitting,
+        ) { lists, contact, memberships, selected, committing ->
+            val memberListIds: Set<Long> = memberships.map { it.listId }.toSet()
+            UiState(
+                phase = when {
+                    committing -> UiState.Phase.Committing
+                    else -> UiState.Phase.Ready
+                },
+                contactName = contact?.displayName.orEmpty(),
+                lists = lists
+                    .filter { !it.isArchived }
+                    .map {
+                        UiState.ListRow(
+                            listId = it.id,
+                            name = it.name,
+                            isMember = it.id in memberListIds,
+                        )
+                    },
+                selectedListIds = selected,
+            )
+        }.catch {
+            emit(
+                UiState(
+                    phase = UiState.Phase.Error,
+                    contactName = "",
+                    lists = emptyList(),
+                    selectedListIds = _selectedListIds.value,
+                ),
+            )
+        }
+
     // ─── Public callbacks ───────────────────────────────────────────────────
+
+    /** PICK-09: the Error state's Retry: re-subscribe every source. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
+
     fun onToggleListSelect(id: Long) {
         val current = _selectedListIds.value
         _selectedListIds.value = if (id in current) current - id else current + id

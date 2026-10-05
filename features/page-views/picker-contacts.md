@@ -9,11 +9,13 @@
 What a user expects to see or do here:
 
 - Pick people from the address book into a list (Add / Move / Copy — title reflects mode)
-- Search by name
-- Sort: Alphabetical / Most called / Recently saved
-- Filter by call frequency, recency, list membership; applied filters sit in their own always-visible row
+- Search by name or number, with one clear control
+- Sort: Alphabetical / Most called / Recently called / Recently added, from a 48dp control; the current order is ticked
+- Filter by call frequency, recency, "On a list" and "Not on a list"; applied filters sit in their own always-visible row, each with an x
 - Filters with no matches are disabled and pushed to the end
-- "Select all matching" for the current filter set
+- "Select all 14 matches" for the current filter set
+- Orbit's own chips and check marks, not stock Material parts; only the commit button is in the accent
+- "Couldn't load your contacts" with Try again if reading fails (PICK-09 in [orbit-lists](../orbit-lists/README.md))
 - A docked bottom bar shows the count and commits ("Add N to {list}"); never hides the last row
 - "Skip for now" during onboarding
 - Re-link mode (from an orphaned contact's Re-link, `pick/contacts?mode=relink&relinkContactId={id}`): title "Re-link contact"; pick exactly one person (a new pick replaces the old); no "Select all matching"; only other contacts mirrored from the phone that are not orphaned, ignored or archived are listed; the button reads "Re-link {orphan's name}"; "Contact not found" if the route's contact is missing

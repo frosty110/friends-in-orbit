@@ -1,10 +1,10 @@
 # Page views — user feature expectations
 
 **Status:** active
-**Last reviewed:** 2026-06-08
+**Last reviewed:** 2026-10-05
 **Purpose:** One file per screen, each listing the things a user expects to be able to see or do on it. Expectation-framed (not an implementation spec). For the canonical per-feature PRD/TECH, see [`INDEX.md`](INDEX.md).
 
-> Cross-cutting expectations that hold on every screen: warm, unhurried, sentence-case copy with no gamification; explicit empty states (never a blank screen); destructive/bulk actions are undoable via snackbar; names blur to "Contact" when the app loses focus (privacy curtain); denied permissions degrade gracefully instead of crashing.
+> Cross-cutting expectations that hold on every screen: warm, unhurried, sentence-case copy with no gamification; explicit empty states (never a blank screen, and never a false one while data loads); a failed read says so and offers to try again; destructive/bulk actions are undoable via snackbar; names, photos, list names and notes are masked when the app loses focus (privacy curtain); denied permissions degrade gracefully instead of crashing.
 
 Each page view lives in its own file under [`page-views/`](page-views/). When a screen is added, renamed, or removed, add/rename/remove its file and update this index in the same commit.
 
@@ -51,7 +51,7 @@ Each page view lives in its own file under [`page-views/`](page-views/). When a 
 |---|---|
 | [Settings](page-views/settings.md) | `settings` |
 | [Ignored contacts](page-views/ignored-contacts.md) | `settings/ignored` |
-| [Call history](page-views/call-history.md) | `call-log` |
+| [Call history](page-views/call-history.md) | `call-log`, `call-log?contactId={contactId}` |
 | [Search](page-views/search.md) | `search` |
 
 ---

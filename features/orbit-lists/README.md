@@ -4,6 +4,7 @@
 **Last reviewed:** 2026-10-05
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/ui/screens/lists/` (`ListsManagerScreen`/`ViewModel`, `ListConfigScreen`/`Body`/`ViewModel`, `CreateListBottomSheet`, `TemplateChoice`, `RuleTemplatePicker`, `MembersPreview`, `ActiveHoursEditor`, `SmartRuleEditor`, …); list picker: `android/app/src/main/java/app/orbit/ui/screens/picker/ListPickerScreen.kt` + `ListPickerViewModel.kt`; smart-list membership: `android/app/src/main/java/app/orbit/data/feed/SmartListMembershipSync.kt`
+- Tests (pickers): `android/app/src/test/java/app/orbit/ui/screens/picker/` (`ContactPickerViewModelTest`, `ContactPickerUiStateTest`, `ListPickerViewModelTest`, `PickerModeTitleTest`)
 - Tests: `android/app/src/test/java/app/orbit/ui/screens/lists/` (`ListsManagerViewModelTest`, `ListConfigViewModelTest`, `CreateListTemplateCatalogTest`, `ActiveHoursFormatterTest`, `IntervalScaleLabelsTest`, `SmartRuleEditIntegrationTest`), `android/app/src/test/java/app/orbit/ui/screens/picker/ListPickerViewModelTest.kt`, `android/app/src/test/java/app/orbit/data/feed/SmartListMembershipSyncTest.kt`
 
 ---
@@ -45,6 +46,24 @@ As a user, I create lists that match how I actually think about my people. Each 
 - So smart lists surface wherever static lists do: Home ("Next up", due counts), Card view, Browse and its queue, and nudges. Before, their members existed only inside List settings.
 - A smart list with no cadence is given Keep in touch.
 - Convert to static keeps the current members as a snapshot and ends syncing (the list is no longer smart); a list with no cadence gets Keep in touch.
+
+**Pickers** (`ui/screens/picker/`; page views [Add contacts](../page-views/picker-contacts.md) and [Add to lists](../page-views/picker-lists.md)).
+- The contact picker (BULK-05) files people into a list: search by name or number, sort, filters, an A to Z rail, and a docked bar that commits ("Add 3 to Inner orbit"). The list picker (BULK-06) is the reverse: one person, several lists.
+- One visual system (2026-10-05, UX rubric D4): every filter is the shared `OrbitFilterChip`, every check mark the shared `OrbitCheckbox` (ink, not accent; the row carries the checkbox semantics), and the sort and "On a list" menus are the shared `OrbitDropdownMenu`. They were Material chips, checkboxes and menus with colour overrides. The only accent on either picker is the commit button; the rail's current letter is bold ink.
+- Plain words (rubric D7): "Never called" (sentence case; it was lowercase), "On Inner orbit, Late night" (was "In: ..."), the "Not on a list" filter (was "Unsorted"), "On a list" (was "In list…"), "Select all 14 matches" (was "Select all matching (14)"), "Already added" on a list the person is on (was "added"), "Try removing a filter." (was "Try removing a chip or widening your thresholds in Settings.").
+- The sort control and both "Clear" actions meet the 48dp floor (they were about 36 and 38dp); the search field has one clear control, not two.
+- Privacy curtain: names, photos and list names are masked (list names read "List", or "On 2 lists"), and the list picker's title drops the person's name.
+
+**Picker requirements** (defined 2026-10-05 from what the code already cites for them; PICK-09 is new):
+- **BULK-05: Add people from a list.** The "+" on Browse and "Add contacts" elsewhere open the contact picker for that list (`pick/contacts?targetListId=...`), in Add, Move or Copy mode; the title says which ("Add contacts", "Move 3 contacts").
+- **BULK-06: Add one person to lists.** "Add to lists" on Contact detail and "Add to list" in Search open the list picker for that person, which can also make a new list inline.
+- **PICK-01: Filter by list.** "On a list" filters the candidates to members of one of your other non-archived lists; the applied filter reads "On {list}".
+- **PICK-02: Filters narrow together.** Active filters combine as AND: a contact shows only if it matches every one.
+- **PICK-04: One row per person.** Avatar, name, a call line ("Last called 3 days ago · 4 calls", or "Never called" for no calls, never "0 calls"), the lists they're on, and a check mark; the "Never called" filter reads `callCount == 0` directly.
+- **PICK-05: Search composes.** Search uses the shared `ContactSearch` matcher (name with accents folded, or phone digits) and narrows whatever the filters left.
+- **PICK-06: A docked commit bar.** With anything selected, a bar docked under the list (not floating over it) shows the count, Clear, and the commit button; it never hides the last row.
+- **PICK-08: Ignored people stay out.** Ignored contacts are hidden from the picker unless "Show ignored" is on; shown, they are muted, tagged "Ignored", and offer Unignore instead of selection.
+- **PICK-09: A failed read is an error, not a crash.** Either picker shows "Couldn't load your contacts" / "Couldn't load your lists" with "Try again" when a source fails (the contact picker's address-book read included), instead of an uncaught exception in `viewModelScope`. The selection survives the error.
 
 **Cross-list propagation.**
 - Calling contact X updates last-call state everywhere X appears — home, card-view, browse, widget — via Flow.

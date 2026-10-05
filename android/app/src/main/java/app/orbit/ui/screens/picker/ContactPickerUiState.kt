@@ -107,7 +107,9 @@ data class ContactPickerUiState(
         EmptyDevice,
         Ready,
         Committing,
-        NotFound
+        NotFound,
+        // PICK-09: a data stream failed; the picker shows Retry.
+        Error
     }
 
     /**

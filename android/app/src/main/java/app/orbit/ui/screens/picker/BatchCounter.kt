@@ -1,7 +1,6 @@
 package app.orbit.ui.screens.picker
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -88,14 +87,8 @@ fun BatchCounter(
                 color = OrbitTheme.colors.fg,
                 modifier = Modifier.weight(1f)
             )
-            Text(
-                text = "Clear",
-                style = OrbitTheme.type.button,
-                color = OrbitTheme.colors.fgMuted,
-                modifier = Modifier
-                    .clickable(enabled = !isCommitting, onClick = onClear)
-                    .padding(horizontal = OrbitTheme.spacing.x2, vertical = OrbitTheme.spacing.x2)
-            )
+            // 48dp target and a button role (it was about 38dp; rules.md §Design 3).
+            ClearSelectionAction(enabled = !isCommitting, onClear = onClear)
             OrbitButton(
                 text = ctaCopy,
                 onClick = onCommit,
