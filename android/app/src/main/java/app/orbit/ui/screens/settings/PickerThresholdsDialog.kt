@@ -55,11 +55,11 @@ fun PickerThresholdsDialog(
         title = {
             Column {
                 Text(
-                    text = "Picker thresholds",
+                    text = "Groups when adding people",
                     style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
                 )
                 Text(
-                    text = "These set how the picker chips group your contacts.",
+                    text = "When you add people to a list, Orbit sorts your contacts into these groups. Choose where each one begins.",
                     style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                     modifier = Modifier.padding(top = OrbitTheme.spacing.x1),
                 )
@@ -68,8 +68,8 @@ fun PickerThresholdsDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 ThresholdStepperRow(
-                    label = "Commonly called — top",
-                    helper = "% of contacts with at least one call",
+                    label = "Commonly called: the top",
+                    helper = "Percent of the contacts you've called",
                     unit = "%",
                     value = commonlyTop,
                     minValue = 5,
@@ -78,8 +78,8 @@ fun PickerThresholdsDialog(
                 )
                 HorizontalDivider(color = OrbitTheme.colors.lineSoft)
                 ThresholdStepperRow(
-                    label = "Rarely called — bottom",
-                    helper = "% of contacts with at least one call",
+                    label = "Rarely called: the bottom",
+                    helper = "Percent of the contacts you've called",
                     unit = "%",
                     value = rarelyBottom,
                     minValue = 10,
@@ -89,7 +89,7 @@ fun PickerThresholdsDialog(
                 HorizontalDivider(color = OrbitTheme.colors.lineSoft)
                 ThresholdStepperRow(
                     label = "Recently added",
-                    helper = "Days since first seen by Orbit",
+                    helper = "Days since Orbit first saw them",
                     unit = "days",
                     value = recentlyAdded,
                     minValue = 1,
@@ -99,7 +99,7 @@ fun PickerThresholdsDialog(
                 HorizontalDivider(color = OrbitTheme.colors.lineSoft)
                 ThresholdStepperRow(
                     label = "Long gap",
-                    helper = "Days since last call",
+                    helper = "Days since your last call",
                     unit = "days",
                     value = longGap,
                     minValue = 1,

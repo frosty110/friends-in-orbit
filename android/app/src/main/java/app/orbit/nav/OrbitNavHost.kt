@@ -332,11 +332,17 @@ private fun OrbitNavGraph(
         }
         composable(Routes.OnboardPermCallLog) {
             LaunchedEffect(Unit) { appPrefs.setLastOnboardingStep(OnboardingStep.PermCallLog.name) }
+            // ONB-30: notifications are no longer asked up front. Three
+            // permission screens stood between Welcome and the user's own
+            // people; nudges are asked for on the Done screen, where the
+            // first list (and what a nudge is) now exists.
             OnboardingPermCallLogScreen(
                 onBack = { nav.popBackStack() },
-                onContinue = { nav.navigate(Routes.OnboardPermNotifs) }
+                onContinue = { nav.navigate(Routes.OnboardSync) }
             )
         }
+        // Kept for installs that saved this step before ONB-30, so a resume
+        // still lands somewhere real; nothing navigates here any more.
         composable(Routes.OnboardPermNotifs) {
             LaunchedEffect(
                 Unit

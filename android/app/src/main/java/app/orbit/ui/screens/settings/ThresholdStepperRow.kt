@@ -86,7 +86,7 @@ fun ThresholdStepperRow(
 private fun ThresholdStepperRowLightPreview() {
     OrbitTheme(darkTheme = false) {
         ThresholdStepperRow(
-            label = "Commonly called — top",
+            label = "Commonly called: the top",
             helper = "% of contacts with at least one call",
             unit = "%",
             value = 20,

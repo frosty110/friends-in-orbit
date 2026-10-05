@@ -5,28 +5,28 @@ package app.orbit.ui.theme
 // load-bearing for the pre-Compose splash bootstrap (Android framework reads them
 // before Compose initializes). Do NOT consolidate into OrbitColors.
 
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.graphics.Color
-import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.runtime.remember
-import androidx.compose.material3.Typography
-import androidx.compose.material3.Shapes
-import androidx.compose.material.ripple.RippleAlpha
-import androidx.compose.material3.RippleConfiguration
-import androidx.compose.material3.LocalRippleConfiguration
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ColorScheme
-import androidx.compose.foundation.LocalIndication
-import android.provider.Settings
 import android.content.Context
+import android.provider.Settings
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.ripple.RippleAlpha
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RippleConfiguration
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 
 object OrbitTheme {
     val colors: OrbitColors

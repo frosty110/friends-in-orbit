@@ -24,9 +24,11 @@ import androidx.compose.runtime.Immutable
  */
 @Immutable
 enum class OnboardingStep(val ordinal1: Int, val total: Int) {
-    PermContacts(1, 5),
-    PermCallLog(2, 5),
-    PermNotifications(3, 5),
-    Sync(4, 5),
-    FirstList(5, 5),
+    PermContacts(1, 4),
+    PermCallLog(2, 4),
+    // Retired from the flow by ONB-30 (asked on the Done screen instead);
+    // kept so a saved resume step still parses. Shares Sync's position.
+    PermNotifications(3, 4),
+    Sync(3, 4),
+    FirstList(4, 4),
 }

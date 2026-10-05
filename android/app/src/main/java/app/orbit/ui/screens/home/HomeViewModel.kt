@@ -7,9 +7,6 @@ import app.orbit.data.feed.ListEnrichment
 import app.orbit.data.repository.ListRepository
 import app.orbit.domain.clock.Clock
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.Instant
-import java.time.temporal.ChronoUnit
-import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +22,9 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.temporal.ChronoUnit
+import javax.inject.Inject
 
 /**
  * One-shot snackbar event for the home long-press quick-actions menu.

@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import app.orbit.ui.components.OrbitMark
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -44,13 +45,16 @@ fun OnboardingWelcomeScreen(
             onClick = onContinue,
         ),
     ) {
-        Spacer(Modifier.height(OrbitTheme.spacing.x10))
+        Spacer(Modifier.height(OrbitTheme.spacing.x6))
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth(),
         ) {
+            // The brand moment (rubric D12): the mark settles into place once.
+            OrbitMark()
+            Spacer(Modifier.height(OrbitTheme.spacing.x5))
             Text(
                 text = "Orbit",
                 style = OrbitTheme.type.hero.copy(color = OrbitTheme.colors.fg),
@@ -68,11 +72,11 @@ fun OnboardingWelcomeScreen(
             // mailto. The mailto was the
             // most colorful element on screen and sold nothing; a Settings
             // placement is a separate decision.
-            ValueBeat("Not all contacts are friends — you choose who matters.")
+            ValueBeat("Not every contact is a friend. You choose who matters.")
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
             ValueBeat("One name at a time, with enough context to say yes.")
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
-            ValueBeat("Everything stays on your phone — no cloud, no tracking.")
+            ValueBeat("Everything stays on your phone: no cloud, no tracking.")
         }
     }
 }

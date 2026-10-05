@@ -1,5 +1,9 @@
 package app.orbit.ui.screens.onboarding
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -14,17 +18,24 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.orbit.ui.components.OrbitButton
+import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 
@@ -43,11 +54,34 @@ fun OnboardingDoneScreen(
     vm: OnboardingDoneViewModel = hiltViewModel(),
 ) {
     val completed by vm.completed.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    // ONB-30: the notifications ask lives here, after the first list exists,
+    // instead of as a third permission screen before the user saw anyone.
+    // Screen-local, one owner (rules.md Code 7).
+    var nudges by rememberSaveable {
+        mutableStateOf(
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                NudgeAsk.On
+            } else {
+                NudgeAsk.Ask
+            },
+        )
+    }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        nudges = if (granted) NudgeAsk.On else NudgeAsk.Declined
+    }
     OnboardingDoneContent(
         completed = completed,
         onFinish = onFinish,
+        nudges = nudges,
+        onAllowNudges = { launcher.launch(Manifest.permission.POST_NOTIFICATIONS) },
     )
 }
+
+/** Where the Done screen's nudge ask stands. */
+internal enum class NudgeAsk { Ask, On, Declined }
 
 /**
  * Stateless inner extracted so `@PreviewLightDark` +
@@ -58,6 +92,8 @@ fun OnboardingDoneScreen(
 private fun OnboardingDoneContent(
     completed: Boolean,
     onFinish: () -> Unit,
+    nudges: NudgeAsk = NudgeAsk.Ask,
+    onAllowNudges: () -> Unit = {},
 ) {
     OnboardingScaffold(
         step = null,
@@ -82,7 +118,8 @@ private fun OnboardingDoneContent(
                     .clip(OrbitTheme.shapes.full)
                     .background(OrbitTheme.colors.positiveTint),
             ) {
-                PhIcon(name = "check", size = 32.dp, tint = OrbitTheme.colors.positive)
+                // positiveText, not positive: the glyph must clear 3:1 on its tint.
+                PhIcon(name = "check", size = 32.dp, tint = OrbitTheme.colors.positiveText)
             }
             Spacer(Modifier.height(OrbitTheme.spacing.x6))
             Text(
@@ -93,13 +130,53 @@ private fun OnboardingDoneContent(
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
             // Teach the core loop (one card, yes or no), not list-browsing.
             Text(
-                text = "Orbit hands you one name at a time. Call, or pass — they'll come back around.",
+                text = "Orbit hands you one name at a time. Call them, or choose Later and they'll come back around.",
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4),
             )
             Spacer(Modifier.height(OrbitTheme.spacing.x8))
             SwipeHint()
+            Spacer(Modifier.height(OrbitTheme.spacing.x8))
+            NudgeAskCard(state = nudges, onAllow = onAllowNudges)
+        }
+    }
+}
+
+/**
+ * ONB-30: the one place onboarding asks for notifications, after the user has
+ * a list and has just read what Orbit does. A Secondary button, so "Open
+ * Orbit" keeps the screen's single accent. Once answered it becomes a plain
+ * line, never a second ask.
+ */
+@Composable
+private fun NudgeAskCard(state: NudgeAsk, onAllow: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(OrbitTheme.shapes.lg)
+            .background(OrbitTheme.colors.surface)
+            .padding(OrbitTheme.spacing.x4),
+    ) {
+        PhIcon(name = "bell", size = 22.dp, tint = OrbitTheme.colors.fgMuted)
+        Spacer(Modifier.height(OrbitTheme.spacing.x2))
+        Text(
+            text = when (state) {
+                NudgeAsk.Ask -> "Want a gentle nudge when someone is worth a call?"
+                NudgeAsk.On -> "Nudges are on. Each list can change when they come."
+                NudgeAsk.Declined -> "No nudges for now. You can turn them on in Settings."
+            },
+            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
+            textAlign = TextAlign.Center,
+        )
+        if (state == NudgeAsk.Ask) {
+            Spacer(Modifier.height(OrbitTheme.spacing.x3))
+            OrbitButton(
+                text = "Allow nudges",
+                onClick = onAllow,
+                variant = OrbitButtonVariant.Secondary,
+            )
         }
     }
 }
@@ -170,5 +247,13 @@ private fun OnboardingDoneContentPreview() {
             completed = true,
             onFinish = {},
         )
+    }
+}
+
+@PreviewLightDark
+@Composable
+private fun OnboardingDoneNudgesOnPreview() {
+    OrbitTheme {
+        OnboardingDoneContent(completed = true, onFinish = {}, nudges = NudgeAsk.On)
     }
 }

@@ -1,8 +1,8 @@
 package app.orbit.ui.components
 
-import java.io.File
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * Guards the icon set that PhIcon draws from.

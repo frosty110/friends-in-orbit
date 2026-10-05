@@ -20,6 +20,10 @@ As a user, I come to Settings rarely: to manage ignored contacts, to resync the 
 
 ### Behavior
 
+**Appearance and loading** (2026-10-05).
+- **SET-09: No flash of wrong values.** Until the saved settings load, the screen shows only its app bar. It used to render defaults first (Warm theme, "Not allowed" for every permission, 90 days) and then jump to the real values (UX rubric D6). Same quiet-chrome policy as Home (ADR 0006).
+- **SET-10: Plain words.** The picker-groups row reads "Groups when adding people", with "Where Commonly called, Rarely called and the others begin"; its dialog explains the groups in a sentence. It used to read "Picker thresholds / Edit chip-match thresholds". The accent dial is the shared `OrbitSlider` and tells TalkBack a colour name; "Match theme" is a 48dp target. Six themes: the five curated ones and Wallpaper (`DESIGN.md`), spaced so the sixth peeks in at phone width.
+
 **Permissions section.**
 - One status row per permission (Contacts, Call log, Notifications). The trailing action matches the actual state: **Granted** → quiet "Allowed" label, no button; **Denied** → "Allow" button that fires the runtime permission launcher directly; **Permanently denied** → "Open Android Settings" deep link (the only honest action once the OS auto-denies).
 

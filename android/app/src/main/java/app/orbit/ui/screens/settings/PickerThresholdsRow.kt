@@ -47,11 +47,13 @@ fun PickerThresholdsRow(
         )
         Column(Modifier.weight(1f)) {
             Text(
-                text = "Picker thresholds",
+                // Plain words (rubric D7): the row used to read "Picker
+                // thresholds / Edit chip-match thresholds".
+                text = "Groups when adding people",
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             Text(
-                text = "Edit chip-match thresholds",
+                text = "Where Commonly called, Rarely called and the others begin",
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.padding(top = 2.dp),
             )

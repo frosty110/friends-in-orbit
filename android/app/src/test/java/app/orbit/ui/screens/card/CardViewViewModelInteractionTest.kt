@@ -22,13 +22,6 @@ import app.orbit.domain.usecase.SurfaceNextUseCase
 import app.orbit.domain.usecase.SurfaceQueueUseCase
 import app.orbit.domain.usecase.SurfaceSoonerUseCase
 import app.orbit.testutil.MainDispatcherRule
-import java.time.Duration
-import java.time.Instant
-import java.time.ZoneId
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -36,6 +29,13 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Interaction-loop tests for [CardViewViewModel] — the swipe / mark-called /

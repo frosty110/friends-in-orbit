@@ -8,7 +8,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureScreenRoboImage
-import java.io.File
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,6 +17,7 @@ import org.robolectric.annotation.GraphicsMode
 import sergio.sastre.composable.preview.scanner.android.AndroidComposablePreviewScanner
 import sergio.sastre.composable.preview.scanner.android.AndroidPreviewInfo
 import sergio.sastre.composable.preview.scanner.core.preview.ComposablePreview
+import java.io.File
 
 /**
  * Renders every `@Preview` in the app to a PNG on the JVM, so visual changes

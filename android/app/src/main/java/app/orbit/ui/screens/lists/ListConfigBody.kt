@@ -47,14 +47,14 @@ import app.orbit.data.entity.RuleKind
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeSchedule
-import app.orbit.ui.components.OrbitSlider
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
+import app.orbit.ui.components.OrbitSlider
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
-import java.time.LocalTime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import java.time.LocalTime
 
 /**
  * ONB-20 — production-and-onboarding body for List Configuration.

@@ -1,6 +1,5 @@
 package app.orbit.ui.theme
 
-import app.orbit.R
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
@@ -9,6 +8,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import app.orbit.R
 
 // Inter, the typeface the design is drawn in. Bundled 2026-10-05 as TTFs in
 // res/font, converted from design/fonts/*.woff2 and subset to Latin, Greek and

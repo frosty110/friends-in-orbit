@@ -1,8 +1,8 @@
 package app.orbit.ui.components
 
+import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import org.junit.Test
 
 /**
  * Pins the menu-ordering contract every options menu in Orbit renders through

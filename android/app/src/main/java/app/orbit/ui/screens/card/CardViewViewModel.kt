@@ -22,15 +22,8 @@ import app.orbit.domain.usecase.SurfaceSoonerUseCase
 import app.orbit.ui.util.formatAbsolute
 import app.orbit.ui.util.formatRelative
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.Duration
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.TextStyle
-import java.util.Locale
-import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -42,6 +35,13 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.TextStyle
+import java.util.Locale
+import javax.inject.Inject
 
 /**
  * Card View VM — thin subscriber to [CardFeed] plus the card-loop interaction
