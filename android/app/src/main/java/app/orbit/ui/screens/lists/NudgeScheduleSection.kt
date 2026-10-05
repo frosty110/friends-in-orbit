@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -184,46 +185,75 @@ private fun DayChipRow(
     // No spacing between cells: each cell is an equal seventh of the row, so
     // the touch target is the full cell (about 49dp on a phone) while the
     // visible pill is inset to keep the gaps. With 8dp gaps the cells were
-    // 42dp wide, under the 48dp floor (rules.md §Design 3).
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        ordered.forEach { (day, label) ->
-            val selected = day in selectedDays
-            // Cluster tier (rules.md §Design 5): a selected day is the soft
-            // tint with an ink ring, not seven accent fills on one screen.
-            val bgColor = if (selected) OrbitTheme.colors.accentTint else OrbitTheme.colors.bgSubtle
-            val labelColor = if (selected) OrbitTheme.colors.fg else OrbitTheme.colors.fgMuted
-            val cd = stringResource(
-                if (selected) R.string.lists_nudge_day_selected else R.string.lists_nudge_day_unselected,
-                day.fullName(),
-            )
-
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(OrbitTheme.spacing.tapMin)
-                    .toggleable(value = selected, role = Role.Checkbox, onValueChange = { onToggle(day) })
-                    .semantics { contentDescription = cd },
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = OrbitTheme.spacing.hair)
-                        .clip(OrbitTheme.shapes.full)
-                        .background(bgColor)
-                        .then(
-                            if (selected) Modifier.border(1.5.dp, OrbitTheme.colors.fg, OrbitTheme.shapes.full) else Modifier,
-                        ),
-                ) {
-                    Text(
-                        text = label,
-                        style = OrbitTheme.type.body.copy(color = labelColor),
-                    )
+    // 42dp wide, under the 48dp floor (rules.md §Design 3). Where a seventh is
+    // still under 48dp (a 360dp phone, or a narrow window) the days wrap into
+    // two rows, four then three, rather than shrink (rubric gate G3).
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val rows = if (maxWidth / ordered.size >= OrbitTheme.spacing.tapMin) {
+            listOf(ordered)
+        } else {
+            listOf(ordered.take(4), ordered.drop(4))
+        }
+        val perRow = rows.first().size
+        Column(verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1)) {
+            rows.forEach { rowDays ->
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    rowDays.forEach { (day, label) ->
+                        DayCell(
+                            day = day,
+                            label = label,
+                            selected = day in selectedDays,
+                            onToggle = onToggle,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    // A short last row keeps the first row's cell width.
+                    repeat(perRow - rowDays.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DayCell(
+    day: DayOfWeek,
+    label: String,
+    selected: Boolean,
+    onToggle: (DayOfWeek) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // Cluster tier (rules.md §Design 5): a selected day is the soft
+    // tint with an ink ring, not seven accent fills on one screen.
+    val bgColor = if (selected) OrbitTheme.colors.accentTint else OrbitTheme.colors.bgSubtle
+    val labelColor = if (selected) OrbitTheme.colors.fg else OrbitTheme.colors.fgMuted
+    val cd = stringResource(
+        if (selected) R.string.lists_nudge_day_selected else R.string.lists_nudge_day_unselected,
+        day.fullName(),
+    )
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .height(OrbitTheme.spacing.tapMin)
+            .toggleable(value = selected, role = Role.Checkbox, onValueChange = { onToggle(day) })
+            .semantics { contentDescription = cd },
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = OrbitTheme.spacing.hair)
+                .clip(OrbitTheme.shapes.full)
+                .background(bgColor)
+                .then(
+                    if (selected) Modifier.border(1.5.dp, OrbitTheme.colors.fg, OrbitTheme.shapes.full) else Modifier,
+                ),
+        ) {
+            Text(
+                text = label,
+                style = OrbitTheme.type.body.copy(color = labelColor),
+            )
         }
     }
 }

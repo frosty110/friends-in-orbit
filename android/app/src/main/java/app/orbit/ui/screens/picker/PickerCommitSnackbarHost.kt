@@ -1,12 +1,8 @@
 package app.orbit.ui.screens.picker
 
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -23,15 +19,17 @@ import androidx.lifecycle.repeatOnLifecycle
 import app.orbit.R
 import app.orbit.di.ApplicationScope
 import app.orbit.domain.undo.UndoStack
+import app.orbit.ui.components.OrbitSnackbar
+import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.asString
 import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Picker-commit lifecycle — ViewModel behind [PickerCommitSnackbarHost].
@@ -106,23 +104,21 @@ fun PickerCommitSnackbarHost(
         }
     }
 
-    SnackbarHost(hostState = snackbarHostState, modifier = modifier)
+    OrbitSnackbarHost(hostState = snackbarHostState, modifier = modifier)
 }
 
 // ─── Previews ──────────────────────────────────────────────────────────────────
 
 // The host itself renders nothing until an event arrives, so the preview shows
-// the Material 3 snackbar with the locked commit copy + Undo affordance.
+// Orbit's snackbar with the locked commit copy + Undo affordance.
 @PreviewLightDark
 @Composable
 private fun PickerCommitSnackbarPreview() {
     OrbitTheme {
-        Snackbar(
-            action = {
-                TextButton(onClick = {}) { Text(stringResource(R.string.components_action_undo)) }
-            },
-        ) {
-            Text(pluralStringResource(R.plurals.picker_snackbar_added, 3, 3, "In touch"))
-        }
+        OrbitSnackbar(
+            message = pluralStringResource(R.plurals.picker_snackbar_added, 3, 3, "In touch"),
+            actionLabel = stringResource(R.string.components_action_undo),
+            onAction = {},
+        )
     }
 }

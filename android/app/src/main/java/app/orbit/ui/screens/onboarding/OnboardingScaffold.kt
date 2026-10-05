@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -24,6 +23,7 @@ import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -89,7 +89,7 @@ fun OnboardingScaffold(
                 content = content
             )
             if (snackbarHostState != null) {
-                SnackbarHost(
+                OrbitSnackbarHost(
                     hostState = snackbarHostState,
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )

@@ -67,6 +67,8 @@
     <string name="components_post_call_body">Add a note while it\'s fresh</string>
     <string name="components_post_call_add_note">Add a note</string>
     <string name="components_post_call_dismiss">Dismiss</string>
+    <!-- TalkBack label for the X that closes a snackbar. -->
+    <string name="components_snackbar_dismiss">Dismiss</string>
 
     <!-- A person row in Browse and Search. %1$s: the person's first name. -->
     <string name="components_browse_row_call">Call %1$s</string>

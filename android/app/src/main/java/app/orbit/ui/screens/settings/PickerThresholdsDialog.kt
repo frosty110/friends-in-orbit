@@ -5,6 +5,8 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -70,7 +72,10 @@ fun PickerThresholdsDialog(
             }
         },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            // Scrolls when the window is short (landscape): an AlertDialog's
+            // text slot does not, so the rows were squeezed and the last
+            // steppers fell under 48dp (gate G3).
+            Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                 ThresholdStepperRow(
                     label = stringResource(R.string.settings_thresholds_commonly),
                     helper = stringResource(R.string.settings_thresholds_percent_helper),

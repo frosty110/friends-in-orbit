@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,10 @@ fun OrbitAppBar(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
+            // The title is the screen's pane title, so TalkBack announces the
+            // new screen when navigation swaps it in. In one activity there is
+            // no window change for it to announce otherwise (rubric D8).
+            .semantics { if (title.isNotBlank()) paneTitle = title }
             // Min, not fixed: a fixed 56dp clipped two-line titles at 200%
             // font scale (rubric gate G3).
             .heightIn(min = 56.dp)
@@ -51,7 +56,7 @@ fun OrbitAppBar(
             ),
             modifier = Modifier
                 .weight(1f)
-                .padding(start = if (leading != null) 4.dp else 0.dp, top = 8.dp, bottom = 8.dp)
+                .padding(start = if (leading != null) OrbitTheme.spacing.x1 else 0.dp, top = OrbitTheme.spacing.x2, bottom = OrbitTheme.spacing.x2)
                 // The screen title is a heading, so TalkBack users can jump
                 // to it and hear where they are.
                 .semantics { heading() },

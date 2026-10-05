@@ -27,7 +27,6 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
@@ -78,6 +77,7 @@ import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSearchField
+import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.screens.contact.sections.PauseSheet
 import app.orbit.ui.screens.picker.SnackbarEvent
@@ -552,7 +552,7 @@ private fun BrowseContent(
             }
 
             // Snackbar host (bottom).
-            SnackbarHost(
+            OrbitSnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )

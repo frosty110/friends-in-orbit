@@ -29,7 +29,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
@@ -82,6 +81,7 @@ import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
+import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.PostCallBanner
 import app.orbit.ui.screens.lists.DeleteListDialog
@@ -399,7 +399,7 @@ private fun HomeContent(
         }
       }
 
-      SnackbarHost(
+      OrbitSnackbarHost(
           hostState = snackbarHostState,
           modifier = Modifier.align(Alignment.BottomCenter),
       )

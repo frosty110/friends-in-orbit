@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
@@ -42,6 +41,7 @@ import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.theme.OrbitTheme
@@ -130,7 +130,7 @@ private fun SettingsIgnoredContent(
                 SettingsIgnoredUiState.Empty -> EmptyState()
                 is SettingsIgnoredUiState.Ready -> ReadyList(state.ignored, onUnignore)
             }
-            SnackbarHost(
+            OrbitSnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)

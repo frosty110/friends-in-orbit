@@ -31,17 +31,16 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,21 +68,23 @@ import app.orbit.data.Contact
 import app.orbit.data.NoteRow
 import app.orbit.domain.model.PauseDuration
 import app.orbit.domain.rule.RuleParams
-import app.orbit.ui.components.InfoTip
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.ContactStatsPanel
+import app.orbit.ui.components.InfoTip
+import app.orbit.ui.components.ListContextChip
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
-import app.orbit.ui.components.ListContextChip
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
+import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.PhIcon
+import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.components.StatEntry
 import app.orbit.ui.screens.contact.sections.LogConnectionSheet
 import app.orbit.ui.screens.contact.sections.NotesSection
@@ -91,7 +92,6 @@ import app.orbit.ui.screens.contact.sections.PauseSheet
 import app.orbit.ui.screens.contact.sections.RuleOverrideSection
 import app.orbit.ui.screens.contact.sections.UnpauseBanner
 import app.orbit.ui.theme.OrbitMotion
-import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.asString
@@ -438,7 +438,7 @@ private fun ContactDetailContent(
                 onDismiss = { showLogConnectionSheet = false }
             )
         }
-        SnackbarHost(
+        OrbitSnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter)
         )

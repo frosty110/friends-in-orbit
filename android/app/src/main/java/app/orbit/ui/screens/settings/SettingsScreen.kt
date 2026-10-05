@@ -26,7 +26,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -61,6 +60,7 @@ import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
+import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.lists.SettingGroup
 import app.orbit.ui.screens.settings.export.ExportPassphraseSheet
@@ -368,7 +368,7 @@ fun SettingsScreen(
             onSelectDarkMode = vm::onSelectDarkMode,
             onAccentHue = vm::onAccentHue,
         )
-        SnackbarHost(
+        OrbitSnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)

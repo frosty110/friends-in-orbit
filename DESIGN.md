@@ -82,6 +82,8 @@ Reach for these before building a one-off; each exists because one-offs drifted.
 | `OrbitSwitch` | On/off rows (`onCheckedChange = null` inside a `toggleable` row) | Announced as a switch; ink when on, so toggles never spend the accent |
 | `OrbitSlider` | Any range | Ink track, round thumb, and a `valueDescription` TalkBack reads in words ("Every 14 days") |
 | `OrbitSearchField` | Search boxes (Browse, Search, the picker) | The whole 48dp pill is the field; the placeholder is its TalkBack label while empty; clear control has its own 48dp target |
+| `OrbitAppBar` | Every screen's top bar | The title is a heading and the screen's pane title, so TalkBack announces each new screen; grows for two-line titles at 200% |
+| `OrbitSnackbarHost` / `OrbitSnackbar` | Every snackbar | Material's snackbar, themed, with its action (Undo) held to 48dp; the default was 40dp |
 | `SectionLabel` | The small label over a group | A heading for TalkBack navigation |
 | `InfoTip` | "What does this mean?" | Tappable (not long-press only), 48dp, Phosphor "info" |
 | `OrbitMark` | Brand moments | Drawn from tokens, settles once, static with animations off |

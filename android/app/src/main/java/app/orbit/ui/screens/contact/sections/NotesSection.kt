@@ -11,6 +11,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,25 +30,28 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.orbit.R
 import app.orbit.data.NoteRow
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
-import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitMenuAction
@@ -341,17 +345,28 @@ private fun NoteRowItem(
                         )
                     }
                 } else {
+                    val editNoteLabel = stringResource(R.string.contact_notes_edit_note)
                     Text(
                         text = if (curtain) stringResource(R.string.contact_notes_hidden) else note.body,
                         style = OrbitTheme.type.body.copy(
                             color = if (curtain) OrbitTheme.colors.fgMuted else OrbitTheme.colors.fg,
                         ),
+                        // Long press is a shortcut to Edit, which the note's
+                        // menu offers visibly. It used to be a combinedClickable
+                        // with an empty onClick, so TalkBack announced a tap
+                        // that did nothing, on a 19dp-tall target. Now there is
+                        // no tap, only the long press, which TalkBack offers as
+                        // its own action ("double-tap and hold to edit note").
                         modifier = Modifier
                             .fillMaxWidth()
-                            .combinedClickable(
-                                onClick = {},
-                                onLongClick = { if (!curtain) editing = true },
-                                onLongClickLabel = stringResource(R.string.contact_notes_edit_note),
+                            .then(
+                                if (curtain) {
+                                    Modifier
+                                } else {
+                                    Modifier
+                                        .pointerInput(note.id) { detectTapGestures(onLongPress = { editing = true }) }
+                                        .semantics { onLongClick(label = editNoteLabel) { editing = true; true } }
+                                },
                             ),
                     )
                 }

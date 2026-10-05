@@ -21,7 +21,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,6 +54,7 @@ import app.orbit.notify.NudgeSchedule
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitSlider
+import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 import kotlinx.coroutines.CoroutineScope
@@ -178,7 +178,7 @@ internal fun ListConfigBody(
                 )
             }
 
-            SnackbarHost(
+            OrbitSnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
