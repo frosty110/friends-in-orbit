@@ -31,6 +31,6 @@ sealed interface OnboardingPreviewUiState {
 data class PreviewCandidate(
     val contactId: Long,
     val displayName: String,
-    // "Called {when}" built by the VM; {when} is DateUtils' localized relative time.
+    // "Called {when}" built by the VM; {when} is formatRelative's "4 days ago".
     val lastCallRelative: UiText,
 )

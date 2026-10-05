@@ -1,6 +1,5 @@
 package app.orbit.ui.screens.onboarding
 
-import android.text.format.DateUtils
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.orbit.R
@@ -9,14 +8,15 @@ import app.orbit.data.repository.CallAgg
 import app.orbit.data.repository.CallEventRepository
 import app.orbit.data.repository.ContactRepository
 import app.orbit.ui.util.UiText
+import app.orbit.ui.util.formatRelative
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.Duration
-import java.time.Instant
-import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import java.time.Duration
+import java.time.Instant
+import javax.inject.Inject
 
 /**
  * ONB-19 — ranks contacts by recency × frequency and surfaces 5–10
@@ -95,15 +95,9 @@ class OnboardingPreviewViewModel @Inject constructor(
             }
     }
 
-    private fun relativeTime(lastAt: Instant, now: Instant): UiText {
-        val rel = DateUtils.getRelativeTimeSpanString(
-            lastAt.toEpochMilli(),
-            now.toEpochMilli(),
-            DateUtils.MINUTE_IN_MILLIS,
-            DateUtils.FORMAT_ABBREV_RELATIVE,
-        ).toString()
-        // Voice-rule prefix for the row meta line. Sentence case, no
-        // exclamation; "Called {rel}" → e.g. "Called 4 days ago".
-        return UiText.res(R.string.onb_preview_called, rel)
-    }
+    // The glossary's one formatter for "time since" (voice.md). This used
+    // DateUtils, which switches to a date past a week ("Called Sep 12") and
+    // abbreviates short spans, where every other screen says "3 weeks ago".
+    private fun relativeTime(lastAt: Instant, now: Instant): UiText =
+        UiText.res(R.string.onb_preview_called, formatRelative(lastAt, now))
 }

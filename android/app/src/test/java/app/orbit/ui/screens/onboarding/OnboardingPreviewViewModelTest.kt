@@ -266,8 +266,8 @@ class OnboardingPreviewViewModelTest {
 
     // ============================================================================
     // Test 8 — the meta line is the VM's pre-formatted relative-time string
-    // ("Called …") rather than a raw timestamp. We assert the voice-rule prefix
-    // without pinning the exact DateUtils wording (locale/host dependent).
+    // ("Called …") rather than a raw timestamp, worded by formatRelative like
+    // every other "time since" in the app (voice.md glossary).
     // ============================================================================
 
     @Test
@@ -284,6 +284,25 @@ class OnboardingPreviewViewModelTest {
         assertTrue(
             ready.candidates.all { it.lastCallRelative.asString(context).startsWith("Called ") },
             "every meta line must lead with the 'Called ' voice prefix",
+        )
+    }
+
+    @Test
+    fun `an older call reads in weeks, like every other screen`() = runTest {
+        // DateUtils (used here before) switched to a date past a week
+        // ("Called Sep 12"); formatRelative keeps the span in words.
+        val contacts = FakeContactRepository(
+            (1L..3L).map { contactFixture(id = it) },
+        )
+        val events = FakeCallEventRepository(
+            (1L..3L).map { callEventFixture(id = it, contactId = it, occurredAt = daysAgo(21)) },
+        )
+        val vm = buildVm(contacts, events)
+
+        val ready = vm.uiState.awaitReady()
+        assertEquals(
+            listOf("Called 3 weeks ago"),
+            ready.candidates.map { it.lastCallRelative.asString(context) }.distinct(),
         )
     }
 
