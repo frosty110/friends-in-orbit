@@ -36,7 +36,11 @@ import app.orbit.ui.theme.OrbitTheme
  *     #19 due-dot/status word + meta last-call) → trailing phone icon
  *   - Position number renders blank when [queuePosition] is null (GlobalSearch
  *     consumers + Browse's "Other members" section); default preserves the legacy
- *     call site. Accent when [isHead] (queue head), else fgMuted.
+ *     call site. The queue head ([isHead]) reads in fg, the rest in fgMuted.
+ *     It was accent until 2026-10-05; with the due dots that put two kinds of
+ *     accent element on Browse (rules.md §Design 5). The due dot is now the
+ *     screen's one accent element: it marks who is ready, which is what Browse
+ *     is for.
  *   - The position column is independent of the #19 due-dot — a row can show a
  *     queue position AND a due dot at once.
  *   - Row min-height = 48dp (tap target floor — rules.md §Design 3)
@@ -75,7 +79,12 @@ fun BrowseRow(
     statusLabel: String? = null,
     showCallMeta: Boolean = true,
     queuePosition: Int? = null, // null → render blank 24dp column (GlobalSearch + "Other members" rows)
-    isHead: Boolean = false // queue head (position 1) → accent color on the position number
+    isHead: Boolean = false, // queue head (position 1) → fg (not muted) on the position number
+    // False hides the dial button and its "Call" accessibility action. Browse's
+    // multi-select passes false: the button used to stay visible but inert
+    // there, a dead control (vision BROWSE-3). Defaults to true, so existing
+    // callers are unchanged.
+    showDial: Boolean = true
 ) {
     val curtain = LocalPrivacyCurtain.current
     val displayName = if (curtain) "Contact" else contact.name
@@ -94,12 +103,14 @@ fun BrowseRow(
             )
             .semantics {
                 customActions = buildList {
-                    add(
-                        CustomAccessibilityAction(label = "Call $firstName") {
-                            onDial()
-                            true
-                        }
-                    )
+                    if (showDial) {
+                        add(
+                            CustomAccessibilityAction(label = "Call $firstName") {
+                                onDial()
+                                true
+                            }
+                        )
+                    }
                     if (onTap != null) {
                         add(
                             CustomAccessibilityAction(label = "Open details") {
@@ -119,7 +130,7 @@ fun BrowseRow(
         Text(
             text = queuePosition?.let { "$it" } ?: "",
             style = OrbitTheme.type.statValue,
-            color = if (isHead) OrbitTheme.colors.accent else OrbitTheme.colors.fgMuted,
+            color = if (isHead) OrbitTheme.colors.fg else OrbitTheme.colors.fgMuted,
             textAlign = TextAlign.End,
             modifier = Modifier.widthIn(min = 24.dp)
         )
@@ -167,24 +178,26 @@ fun BrowseRow(
         // Trailing phone icon: a separate tap target ≥48dp. Muted, not accent:
         // it repeats on every row, and an accent icon per row spent the
         // screen's one accent element N times (rules.md Design 5). The row's
-        // accent is reserved for the queue head's number and the due dot.
-        Box(
-            modifier = Modifier
-                .defaultMinSize(
-                    minWidth = OrbitTheme.spacing.tapMin,
-                    minHeight = OrbitTheme.spacing.tapMin
+        // accent is reserved for the due dot.
+        if (showDial) {
+            Box(
+                modifier = Modifier
+                    .defaultMinSize(
+                        minWidth = OrbitTheme.spacing.tapMin,
+                        minHeight = OrbitTheme.spacing.tapMin
+                    )
+                    // Named, so TalkBack says "Call Avery, button" rather than
+                    // "unlabelled" (rubric gate G2). Muted per rules.md Design 6.
+                    .clickable(onClickLabel = "Call $firstName", role = Role.Button, onClick = onDial)
+                    .semantics { contentDescription = "Call $firstName" },
+                contentAlignment = Alignment.Center
+            ) {
+                PhIcon(
+                    name = "phone-call",
+                    size = 22.dp,
+                    tint = OrbitTheme.colors.fgMuted
                 )
-                // Named, so TalkBack says "Call Avery, button" rather than
-                // "unlabelled" (rubric gate G2). Muted per rules.md Design 6.
-                .clickable(onClickLabel = "Call $firstName", role = Role.Button, onClick = onDial)
-                .semantics { contentDescription = "Call $firstName" },
-            contentAlignment = Alignment.Center
-        ) {
-            PhIcon(
-                name = "phone-call",
-                size = 22.dp,
-                tint = OrbitTheme.colors.fgMuted
-            )
+            }
         }
     }
 }

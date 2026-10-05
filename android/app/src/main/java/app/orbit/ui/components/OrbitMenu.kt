@@ -9,6 +9,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import app.orbit.ui.theme.OrbitTheme
 
@@ -40,6 +42,10 @@ enum class OrbitMenuTone { Default, Destructive }
  * @param icon optional Phosphor icon name rendered leading the label.
  * @param supporting optional second line — used where a destructive action
  *   needs to say what it actually does.
+ * @param selected marks the current choice in a menu of options (the picker's
+ *   sort order): a trailing check in fg, and "selected" for TalkBack. Added
+ *   2026-10-05 so option menus stop needing a stock Material menu with an
+ *   accent tick; defaults to false, so existing callers are unchanged.
  */
 data class OrbitMenuAction(
     val label: String,
@@ -48,6 +54,7 @@ data class OrbitMenuAction(
     val icon: String? = null,
     val supporting: String? = null,
     val enabled: Boolean = true,
+    val selected: Boolean = false,
 )
 
 /**
@@ -119,11 +126,17 @@ fun OrbitDropdownMenu(
                         )
                     }
                 },
+                trailingIcon = if (action.selected) {
+                    { PhIcon(name = "check", size = 18.dp, tint = OrbitTheme.colors.fg) }
+                } else {
+                    null
+                },
                 enabled = action.enabled,
                 onClick = {
                     onDismissRequest()
                     action.onClick()
                 },
+                modifier = if (action.selected) Modifier.semantics { selected = true } else Modifier,
             )
         }
     }
