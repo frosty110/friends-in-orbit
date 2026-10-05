@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -25,6 +26,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.data.Contact
 import app.orbit.ui.theme.OrbitTheme
 
@@ -78,8 +80,12 @@ fun BrowseRow(
     isHead: Boolean = false // queue head (position 1) → accent color on the position number
 ) {
     val curtain = LocalPrivacyCurtain.current
-    val displayName = if (curtain) "Contact" else contact.name
+    val displayName = if (curtain) stringResource(R.string.components_curtain_contact) else contact.name
     val firstName = displayName.substringBefore(' ').ifBlank { displayName }
+    // Resolved here: the semantics blocks below are not composable.
+    val callLabel = stringResource(R.string.components_browse_row_call, firstName)
+    val openDetailsLabel = stringResource(R.string.components_browse_row_open_details)
+    val dueDescription = stringResource(R.string.components_browse_row_due)
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -95,14 +101,14 @@ fun BrowseRow(
             .semantics {
                 customActions = buildList {
                     add(
-                        CustomAccessibilityAction(label = "Call $firstName") {
+                        CustomAccessibilityAction(label = callLabel) {
                             onDial()
                             true
                         }
                     )
                     if (onTap != null) {
                         add(
-                            CustomAccessibilityAction(label = "Open details") {
+                            CustomAccessibilityAction(label = openDetailsLabel) {
                                 onTap()
                                 true
                             }
@@ -143,7 +149,7 @@ fun BrowseRow(
                             .size(8.dp)
                             .clip(OrbitTheme.shapes.full)
                             .background(OrbitTheme.colors.accent)
-                            .semantics { contentDescription = "Due" }
+                            .semantics { contentDescription = dueDescription }
                     )
                 }
                 if (statusLabel != null) {
@@ -156,7 +162,11 @@ fun BrowseRow(
             }
             if (showCallMeta) {
                 val lastCalled = contact.lastCalledLabel
-                val secondaryText = if (lastCalled.isBlank()) "Never called" else "Last call: $lastCalled"
+                val secondaryText = if (lastCalled.isBlank()) {
+                    stringResource(R.string.components_browse_row_never_called)
+                } else {
+                    stringResource(R.string.components_browse_row_last_call, lastCalled)
+                }
                 Text(
                     text = secondaryText,
                     style = OrbitTheme.type.meta,
@@ -176,8 +186,8 @@ fun BrowseRow(
                 )
                 // Named, so TalkBack says "Call Avery, button" rather than
                 // "unlabelled" (rubric gate G2). Muted per rules.md Design 6.
-                .clickable(onClickLabel = "Call $firstName", role = Role.Button, onClick = onDial)
-                .semantics { contentDescription = "Call $firstName" },
+                .clickable(onClickLabel = callLabel, role = Role.Button, onClick = onDial)
+                .semantics { contentDescription = callLabel },
             contentAlignment = Alignment.Center
         ) {
             PhIcon(

@@ -1,6 +1,8 @@
 package app.orbit.ui.screens.onboarding
 
 import androidx.compose.runtime.Immutable
+import app.orbit.R
+import app.orbit.ui.util.UiText
 
 /**
  * ONB-19 — preview UI contract.
@@ -20,7 +22,8 @@ sealed interface OnboardingPreviewUiState {
     @Immutable
     data class Ready(
         val candidates: List<PreviewCandidate>,
-        val defaultName: String = "In touch",
+        // The suggested list's starting name, resolved when the user accepts.
+        val defaultName: UiText = UiText.res(R.string.onb_preview_default_name),
     ) : OnboardingPreviewUiState
 }
 
@@ -28,5 +31,6 @@ sealed interface OnboardingPreviewUiState {
 data class PreviewCandidate(
     val contactId: Long,
     val displayName: String,
-    val lastCallRelative: String, // pre-formatted by VM (DateUtils relative-time)
+    // "Called {when}" built by the VM; {when} is DateUtils' localized relative time.
+    val lastCallRelative: UiText,
 )

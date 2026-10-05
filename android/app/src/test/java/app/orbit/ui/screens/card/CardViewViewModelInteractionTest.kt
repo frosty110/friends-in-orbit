@@ -203,9 +203,15 @@ class CardViewViewModelInteractionTest {
                 setup.vm.onSwipeLeft(contactId = 1L)
                 val event = awaitItem()
                 assertTrue(event is CardMessage.Undoable, "expected an undoable message, got $event")
+                // The copy is a string resource; assert which sentence was chosen and that
+                // it names Sarah and carries a "when" ("Sarah will come up again {when}.").
+                val text = event.text
                 assertTrue(
-                    event.text.startsWith("Sarah will come up again"),
-                    "expected the snackbar to name Sarah and say when, got ${event.text}",
+                    text is app.orbit.ui.util.UiText.Res &&
+                        text.id == app.orbit.R.string.card_later_named_when &&
+                        text.args.first() == "Sarah" &&
+                        text.args.size == 2,
+                    "expected the snackbar to name Sarah and say when, got $text",
                 )
                 cancelAndIgnoreRemainingEvents()
             }
@@ -262,9 +268,14 @@ class CardViewViewModelInteractionTest {
                 setup.vm.onSwipeRight(contactId = 1L)
                 val event = awaitItem()
                 assertTrue(event is CardMessage.Undoable, "expected an undoable message, got $event")
+                // "Sarah is now due {when}." from strings_card.xml.
+                val text = event.text
                 assertTrue(
-                    event.text.startsWith("Sarah is now due"),
-                    "expected the snackbar to name Sarah and say when, got ${event.text}",
+                    text is app.orbit.ui.util.UiText.Res &&
+                        text.id == app.orbit.R.string.card_sooner_named_when &&
+                        text.args.first() == "Sarah" &&
+                        text.args.size == 2,
+                    "expected the snackbar to name Sarah and say when, got $text",
                 )
                 cancelAndIgnoreRemainingEvents()
             }
@@ -452,7 +463,11 @@ class CardViewViewModelInteractionTest {
         setup.vm.uiState.test(timeout = 2.seconds) {
             val state = awaitItem()
             assertTrue(state is CardViewUiState.Ready, "expected Ready, got $state")
-            assertEquals("It's been 3 days.", state.whyNowLine)
+            // "It's been {3 days}." from strings_card.xml; the span still comes from formatSpan.
+            assertEquals(
+                app.orbit.ui.util.UiText.res(app.orbit.R.string.card_why_span, "3 days"),
+                state.whyNowLine,
+            )
             assertTrue(!state.isAheadOfToday, "past nextDueAt → due today, not ahead")
             cancelAndIgnoreRemainingEvents()
         }

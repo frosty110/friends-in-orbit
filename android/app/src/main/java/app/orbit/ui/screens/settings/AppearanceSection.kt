@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,12 +31,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.OrbitSlider
 import app.orbit.ui.theme.OrbitDarkMode
 import app.orbit.ui.theme.OrbitTheme
@@ -76,9 +79,9 @@ fun AppearanceSection(
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         // ---- Theme ----
-        Text("Theme", style = OrbitTheme.type.body, color = OrbitTheme.colors.fg)
+        Text(stringResource(R.string.settings_appearance_theme), style = OrbitTheme.type.body, color = OrbitTheme.colors.fg)
         Text(
-            "Pick a color that feels like you",
+            stringResource(R.string.settings_appearance_theme_sub),
             style = OrbitTheme.type.meta,
             color = OrbitTheme.colors.fgMuted,
             modifier = Modifier.padding(top = 2.dp),
@@ -96,7 +99,7 @@ fun AppearanceSection(
             themes.forEach { def ->
                 val swatch = if (isDark) def.dark.accent else def.light.accent
                 ThemeSwatch(
-                    label = def.id.displayName,
+                    label = stringResource(def.id.displayNameRes),
                     color = swatch,
                     selected = def.id == themeId,
                     onClick = { onSelectTheme(def.id) },
@@ -107,7 +110,7 @@ fun AppearanceSection(
         Spacer(Modifier.size(OrbitTheme.spacing.x5))
 
         // ---- Light / Dark / System ----
-        Text("Light & dark", style = OrbitTheme.type.body, color = OrbitTheme.colors.fg)
+        Text(stringResource(R.string.settings_appearance_light_dark), style = OrbitTheme.type.body, color = OrbitTheme.colors.fg)
         Row(
             modifier = Modifier.padding(top = OrbitTheme.spacing.x2),
             horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
@@ -116,7 +119,7 @@ fun AppearanceSection(
                 FilterChip(
                     selected = darkMode == mode,
                     onClick = { onSelectDarkMode(mode) },
-                    label = { Text(mode.displayName) },
+                    label = { Text(stringResource(mode.displayNameRes)) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = OrbitTheme.colors.accentTint,
                         selectedLabelColor = OrbitTheme.colors.fg,
@@ -131,7 +134,7 @@ fun AppearanceSection(
         // ---- Accent dial ----
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Accent",
+                stringResource(R.string.settings_appearance_accent),
                 style = OrbitTheme.type.body,
                 color = OrbitTheme.colors.fg,
                 modifier = Modifier.weight(1f),
@@ -140,7 +143,7 @@ fun AppearanceSection(
                 // Ink, not accent (rules.md §Design 5), and a full 48dp target
                 // (it was about 26dp tall).
                 Text(
-                    "Match theme",
+                    stringResource(R.string.settings_appearance_match_theme),
                     style = OrbitTheme.type.meta,
                     color = OrbitTheme.colors.fg,
                     modifier = Modifier
@@ -152,7 +155,11 @@ fun AppearanceSection(
             }
         }
         Text(
-            if (accentHue == null) "Using the ${themeId.displayName} accent" else "Custom accent",
+            if (accentHue == null) {
+                stringResource(R.string.settings_appearance_accent_from_theme, stringResource(themeId.displayNameRes))
+            } else {
+                stringResource(R.string.settings_appearance_accent_custom)
+            },
             style = OrbitTheme.type.meta,
             color = OrbitTheme.colors.fgMuted,
             modifier = Modifier.padding(top = 2.dp),
@@ -171,8 +178,8 @@ fun AppearanceSection(
                 onValueChange = { liveHue = it },
                 onValueChangeFinished = { onAccentHue(liveHue.toInt()) },
                 valueRange = 0f..359f,
-                label = "Accent colour",
-                valueDescription = hueName(liveHue),
+                label = stringResource(R.string.settings_appearance_accent_slider),
+                valueDescription = stringResource(hueName(liveHue)),
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(OrbitTheme.spacing.x3))
@@ -193,13 +200,18 @@ private fun ThemeSwatch(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    // Resolved here: the semantics block below is not composable.
+    val description = stringResource(
+        if (selected) R.string.settings_appearance_theme_selected_a11y else R.string.settings_appearance_theme_a11y,
+        label,
+    )
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(56.dp)
             .clip(OrbitTheme.shapes.md)
             .clickable(onClick = onClick)
-            .semantics { contentDescription = "$label theme${if (selected) ", selected" else ""}" }
+            .semantics { contentDescription = description }
             .padding(vertical = OrbitTheme.spacing.x1),
     ) {
         Box(
@@ -251,14 +263,15 @@ private fun AppearanceSectionPreview() {
  * A colour name for the accent dial, so TalkBack says "Blue" rather than a
  * number of degrees or a percentage of the track.
  */
-private fun hueName(hue: Float): String = when (((hue % 360f) + 360f) % 360f) {
-    in 0f..<15f -> "Red"
-    in 15f..<40f -> "Orange"
-    in 40f..<70f -> "Yellow"
-    in 70f..<160f -> "Green"
-    in 160f..<200f -> "Teal"
-    in 200f..<255f -> "Blue"
-    in 255f..<290f -> "Violet"
-    in 290f..<335f -> "Magenta"
-    else -> "Red"
+@StringRes
+private fun hueName(hue: Float): Int = when (((hue % 360f) + 360f) % 360f) {
+    in 0f..<15f -> R.string.settings_hue_red
+    in 15f..<40f -> R.string.settings_hue_orange
+    in 40f..<70f -> R.string.settings_hue_yellow
+    in 70f..<160f -> R.string.settings_hue_green
+    in 160f..<200f -> R.string.settings_hue_teal
+    in 200f..<255f -> R.string.settings_hue_blue
+    in 255f..<290f -> R.string.settings_hue_violet
+    in 290f..<335f -> R.string.settings_hue_magenta
+    else -> R.string.settings_hue_red
 }

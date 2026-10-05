@@ -23,9 +23,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.ui.components.OrbitSlider
 import app.orbit.ui.theme.OrbitTheme
@@ -58,25 +61,23 @@ fun SmartRuleEditor(
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp)) {
         when (rule) {
             is SmartListRule.RecentlyAddedNotCalled -> DaysSlider(
-                label = "Added within the last",
+                label = stringResource(R.string.lists_smart_added_within),
                 value = rule.daysWindow,
                 range = 7..180,
                 onCommit = { onChange(rule.copy(daysWindow = it)) },
             )
             is SmartListRule.LongGap -> DaysNumberInput(
-                label = "No call in the last",
+                label = stringResource(R.string.lists_smart_no_call_in),
                 value = rule.daysThreshold,
                 onCommit = { onChange(rule.copy(daysThreshold = it)) },
             )
             is SmartListRule.CommonlyCalled -> PercentSlider(
-                label = "Top",
-                readoutSuffix = " of contacts with call history",
+                label = stringResource(R.string.lists_smart_top),
                 value = rule.topPercent,
                 onCommit = { onChange(rule.copy(topPercent = it)) },
             )
             is SmartListRule.RarelyCalled -> PercentSlider(
-                label = "Bottom",
-                readoutSuffix = " of contacts with call history",
+                label = stringResource(R.string.lists_smart_bottom),
                 value = rule.bottomPercent,
                 onCommit = { onChange(rule.copy(bottomPercent = it)) },
             )
@@ -104,7 +105,7 @@ private fun DaysSlider(
                 modifier = Modifier.weight(1f),
             )
             Text(
-                text = "${current.toInt()} days",
+                text = pluralStringResource(R.plurals.lists_smart_days, current.toInt(), current.toInt()),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         }
@@ -114,7 +115,7 @@ private fun DaysSlider(
             onValueChangeFinished = { onCommit(current.toInt()) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
             label = label,
-            valueDescription = "${current.toInt()} days",
+            valueDescription = pluralStringResource(R.plurals.lists_smart_days, current.toInt(), current.toInt()),
             modifier = Modifier.padding(top = 4.dp),
         )
         Row(
@@ -122,11 +123,11 @@ private fun DaysSlider(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "${range.first} days",
+                text = pluralStringResource(R.plurals.lists_smart_days, range.first, range.first),
                 style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
             )
             Text(
-                text = "${range.last} days",
+                text = pluralStringResource(R.plurals.lists_smart_days, range.last, range.last),
                 style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
             )
         }
@@ -136,7 +137,6 @@ private fun DaysSlider(
 @Composable
 private fun PercentSlider(
     label: String,
-    readoutSuffix: String,
     value: Int,
     onCommit: (Int) -> Unit,
 ) {
@@ -152,7 +152,7 @@ private fun PercentSlider(
                 modifier = Modifier.weight(1f),
             )
             Text(
-                text = "${current.toInt()}%",
+                text = stringResource(R.string.lists_smart_percent, current.toInt()),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         }
@@ -162,7 +162,7 @@ private fun PercentSlider(
             onValueChangeFinished = { onCommit(current.toInt()) },
             valueRange = 10f..50f,
             label = label,
-            valueDescription = "${current.toInt()} percent ${readoutSuffix.trim()}".trim(),
+            valueDescription = stringResource(R.string.lists_smart_percent_a11y, current.toInt()),
             modifier = Modifier.padding(top = 4.dp),
         )
         Row(
@@ -170,17 +170,17 @@ private fun PercentSlider(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "10%",
+                text = stringResource(R.string.lists_smart_percent, 10),
                 style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
             )
             Text(
-                text = "50%",
+                text = stringResource(R.string.lists_smart_percent, 50),
                 style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
             )
         }
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "${current.toInt()}%$readoutSuffix",
+            text = stringResource(R.string.lists_smart_percent_of_called, current.toInt()),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
         )
     }
@@ -226,7 +226,8 @@ private fun DaysNumberInput(
                 modifier = Modifier.width(96.dp),
             )
             Text(
-                text = "days",
+                // The unit agrees with the number in the field (1 day, 2 days).
+                text = pluralStringResource(R.plurals.lists_smart_days_unit, value, value),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             )
         }
@@ -239,7 +240,7 @@ private fun NoParamsPlaceholder() {
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
         Text(
-            text = "No parameters to tune. This list shows everyone you haven't called yet.",
+            text = stringResource(R.string.lists_smart_no_params),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
         )
     }

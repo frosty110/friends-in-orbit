@@ -14,10 +14,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.theme.OrbitTheme
 import kotlinx.coroutines.launch
 
@@ -36,7 +38,7 @@ import kotlinx.coroutines.launch
 fun InfoTip(
     text: String,
     modifier: Modifier = Modifier,
-    label: String = "About this",
+    label: String = stringResource(R.string.components_info_tip_label),
 ) {
     val state = rememberTooltipState(isPersistent = true)
     val scope = rememberCoroutineScope()

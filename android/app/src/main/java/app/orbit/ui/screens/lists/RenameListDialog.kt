@@ -20,8 +20,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -70,7 +72,7 @@ fun RenameListDialog(
         containerColor = OrbitTheme.colors.surface,
         title = {
             Text(
-                text = "Rename list",
+                text = stringResource(R.string.lists_rename_title),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         },
@@ -92,14 +94,14 @@ fun RenameListDialog(
         },
         confirmButton = {
             OrbitButton(
-                text = "Save",
+                text = stringResource(R.string.components_action_save),
                 onClick = { commit() },
                 variant = OrbitButtonVariant.Primary,
             )
         },
         dismissButton = {
             OrbitButton(
-                text = "Cancel",
+                text = stringResource(R.string.components_action_cancel),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
             )

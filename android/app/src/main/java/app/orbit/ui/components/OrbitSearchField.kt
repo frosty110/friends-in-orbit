@@ -19,8 +19,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -96,7 +98,7 @@ fun OrbitSearchField(
                 OrbitIconButton(
                     icon = "x",
                     onClick = { onQueryChange("") },
-                    contentDescription = "Clear search",
+                    contentDescription = stringResource(R.string.components_search_clear),
                 )
             }
         }

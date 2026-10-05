@@ -19,18 +19,23 @@
 // read by the caller ([deviceAccentHue]) because this registry has no Context.
 package app.orbit.ui.theme
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import app.orbit.R
 
-/** Stable, persisted theme identifiers. `key` is the DataStore value. */
-enum class OrbitThemeId(val key: String, val displayName: String) {
-    WARM("warm", "Warm"),
-    COOL("cool", "Cool"),
-    FOREST("forest", "Forest"),
-    PLUM("plum", "Plum"),
-    MONO("mono", "Mono"),
-    DEVICE("device", "Wallpaper"),
+/**
+ * Stable, persisted theme identifiers. `key` is the DataStore value;
+ * [displayNameRes] is the name Settings shows (strings_settings.xml).
+ */
+enum class OrbitThemeId(val key: String, @StringRes val displayNameRes: Int) {
+    WARM("warm", R.string.settings_theme_warm),
+    COOL("cool", R.string.settings_theme_cool),
+    FOREST("forest", R.string.settings_theme_forest),
+    PLUM("plum", R.string.settings_theme_plum),
+    MONO("mono", R.string.settings_theme_mono),
+    DEVICE("device", R.string.settings_theme_wallpaper),
     ;
 
     companion object {
@@ -39,11 +44,11 @@ enum class OrbitThemeId(val key: String, val displayName: String) {
     }
 }
 
-/** Light/dark control, independent of theme choice. */
-enum class OrbitDarkMode(val key: String, val displayName: String) {
-    SYSTEM("system", "System"),
-    LIGHT("light", "Light"),
-    DARK("dark", "Dark"),
+/** Light/dark control, independent of theme choice. [displayNameRes] as above. */
+enum class OrbitDarkMode(val key: String, @StringRes val displayNameRes: Int) {
+    SYSTEM("system", R.string.settings_dark_mode_system),
+    LIGHT("light", R.string.settings_dark_mode_light),
+    DARK("dark", R.string.settings_dark_mode_dark),
     ;
 
     companion object {

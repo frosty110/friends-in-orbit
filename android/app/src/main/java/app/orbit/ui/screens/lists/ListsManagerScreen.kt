@@ -37,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -49,6 +51,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import app.orbit.R
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitIconButton
@@ -57,6 +60,7 @@ import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.home.HomeSnackbarEvent
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
+import app.orbit.ui.util.asString
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
@@ -106,6 +110,8 @@ fun ListsManagerScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
+    val restoredMessage = stringResource(R.string.lists_snackbar_restored)
 
     // H4 fix — surface VM mutation failures via the same SnackbarHostState.
     // The collector mirrors the ContactPickerScreen / ContactDetailScreen
@@ -131,8 +137,8 @@ fun ListsManagerScreen(
             vm.snackbarEvents.collectLatest { event ->
                 try {
                     val result = snackbarHostState.showSnackbar(
-                        message = event.message,
-                        actionLabel = event.actionLabel,
+                        message = event.message.asString(context),
+                        actionLabel = event.actionLabel?.asString(context),
                         duration = SnackbarDuration.Short
                     )
                     if (result == SnackbarResult.ActionPerformed) {
@@ -193,7 +199,7 @@ fun ListsManagerScreen(
         onRestore = { id ->
             vm.unarchiveList(id)
             scope.launch {
-                snackbarHostState.showSnackbar("List restored.")
+                snackbarHostState.showSnackbar(restoredMessage)
             }
         },
         onToggleArchived = vm::toggleArchivedExpanded
@@ -242,8 +248,10 @@ private fun ListsManagerContent(
         // button when lists exist, the centred button when there are none.
         // The app bar's "+" was a third, duplicate way in.
         OrbitAppBar(
-            title = "Lists",
-            leading = { OrbitIconButton("arrow-left", onBack, contentDescription = "Back") },
+            title = stringResource(R.string.lists_title),
+            leading = {
+                OrbitIconButton("arrow-left", onBack, contentDescription = stringResource(R.string.components_action_back))
+            },
         )
 
         Box(modifier = Modifier.fillMaxSize()) {
@@ -293,7 +301,7 @@ private fun ListsManagerContent(
                     )
                     Spacer(Modifier.width(OrbitTheme.spacing.x2))
                     Text(
-                        text = "New list",
+                        text = stringResource(R.string.lists_new_list),
                         style = OrbitTheme.type.button.copy(color = OrbitTheme.colors.accentFg)
                     )
                 }
@@ -425,7 +433,7 @@ private fun ReadyContent(
         // Footer hint — verbatim copy locked by the copywriting contract.
         item(key = "footer") {
             Text(
-                text = "Drag to reorder. Lists higher up show first on home.",
+                text = stringResource(R.string.lists_footer_hint),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgSubtle),
                 textAlign = TextAlign.Center,
                 modifier = Modifier
@@ -480,6 +488,8 @@ private fun ArchivedSectionHeader(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Resolved here: the semantics block below is not composable.
+    val stateLabel = stringResource(if (expanded) R.string.lists_archived_expanded else R.string.lists_archived_collapsed)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
@@ -489,12 +499,14 @@ private fun ArchivedSectionHeader(
             .heightIn(min = OrbitTheme.spacing.tapMin)
             .clickable(
                 role = Role.Button,
-                onClickLabel = if (expanded) "Hide archived lists" else "Show archived lists",
+                onClickLabel = stringResource(
+                    if (expanded) R.string.lists_archived_hide else R.string.lists_archived_show,
+                ),
                 onClick = onToggle
             )
             .semantics {
                 heading()
-                stateDescription = if (expanded) "Expanded" else "Collapsed"
+                stateDescription = stateLabel
             }
             .padding(vertical = OrbitTheme.spacing.x2)
     ) {
@@ -504,7 +516,7 @@ private fun ArchivedSectionHeader(
             tint = OrbitTheme.colors.fgMuted
         )
         Text(
-            text = "Archived ($count)",
+            text = stringResource(R.string.lists_archived_header, count),
             style = OrbitTheme.type.h2.copy(color = OrbitTheme.colors.fg)
         )
     }
@@ -521,16 +533,16 @@ private fun EmptyState(onCreate: () -> Unit) {
     ) {
         Spacer(Modifier.height(OrbitTheme.spacing.x8))
         Text(
-            text = "No lists yet",
+            text = stringResource(R.string.lists_empty_title),
             style = OrbitTheme.type.h2.copy(color = OrbitTheme.colors.fg)
         )
         Text(
-            text = "Add a list to start grouping the people you want to stay in touch with.",
+            text = stringResource(R.string.lists_empty_body),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             textAlign = TextAlign.Center
         )
         OrbitButton(
-            text = "New list",
+            text = stringResource(R.string.lists_new_list),
             onClick = onCreate,
             leadingIcon = "plus"
         )

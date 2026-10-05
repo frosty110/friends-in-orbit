@@ -16,7 +16,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
@@ -57,7 +59,13 @@ fun OnboardingScaffold(
             title = "",
             subtle = true,
             leading = if (onBack != null) {
-                { OrbitIconButton("arrow-left", onBack, contentDescription = "Back") }
+                {
+                    OrbitIconButton(
+                        "arrow-left",
+                        onBack,
+                        contentDescription = stringResource(R.string.components_action_back),
+                    )
+                }
             } else {
                 null
             },

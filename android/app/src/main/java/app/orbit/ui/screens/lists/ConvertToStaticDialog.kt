@@ -6,10 +6,15 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 
 /**
  * Confirmation dialog for the one-way SMART → STATIC conversion (LIST-08).
@@ -41,17 +46,18 @@ fun ConvertToStaticDialog(
         containerColor = OrbitTheme.colors.surface,
         title = {
             Text(
-                text = "Convert to a static list?",
+                text = stringResource(R.string.lists_convert_title),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         },
         text = {
-            val noun = if (memberCount == 1) "person" else "people"
-            val sentence =
-                "This snapshots $memberCount $noun as permanent members. " +
-                    "The rule will no longer update membership."
-            val previewLine = buildPreviewLine(memberCount, firstNames)
-            val body = if (previewLine != null) "$sentence\n\n$previewLine" else sentence
+            val sentence = pluralStringResource(R.plurals.lists_convert_body, memberCount, memberCount)
+            val previewLine = buildPreviewLine(memberCount, firstNames)?.asString()
+            val body = if (previewLine != null) {
+                stringResource(R.string.lists_convert_body_with_preview, sentence, previewLine)
+            } else {
+                sentence
+            }
             Text(
                 text = body,
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
@@ -59,14 +65,14 @@ fun ConvertToStaticDialog(
         },
         confirmButton = {
             OrbitButton(
-                text = "Convert",
+                text = stringResource(R.string.lists_convert_confirm),
                 onClick = onConfirm,
                 variant = OrbitButtonVariant.Destructive,
             )
         },
         dismissButton = {
             OrbitButton(
-                text = "Cancel",
+                text = stringResource(R.string.components_action_cancel),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
             )
@@ -80,12 +86,15 @@ fun ConvertToStaticDialog(
  * no names to show (matches "Body (preview list, optional)" in the spec — the
  * preview is omitted entirely when membership is empty).
  */
-internal fun buildPreviewLine(memberCount: Int, firstNames: List<String>): String? {
+internal fun buildPreviewLine(memberCount: Int, firstNames: List<String>): UiText? {
     if (firstNames.isEmpty()) return null
     val head = firstNames.take(3).joinToString(", ")
     val remainder = memberCount - 3
-    val tail = if (remainder > 0) " and $remainder more" else ""
-    return "Including: $head$tail"
+    return if (remainder > 0) {
+        UiText.plural(R.plurals.lists_convert_preview_more, remainder, head, remainder)
+    } else {
+        UiText.res(R.string.lists_convert_preview, head)
+    }
 }
 
 // region Previews

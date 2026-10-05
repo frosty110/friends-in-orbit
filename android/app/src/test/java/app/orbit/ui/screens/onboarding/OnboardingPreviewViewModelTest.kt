@@ -1,6 +1,7 @@
 package app.orbit.ui.screens.onboarding
 
 import android.app.Application
+import androidx.test.core.app.ApplicationProvider
 import app.orbit.domain.FakeCallEventRepository
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.callEventFixture
@@ -58,6 +59,9 @@ class OnboardingPreviewViewModelTest {
     // recency arm is stable regardless of the sub-second drift between fixture
     // construction and the VM's internal Instant.now().
     private val now: Instant = Instant.now()
+
+    // Copy is UiText (strings_onboarding.xml); resolve it against real resources.
+    private val context = ApplicationProvider.getApplicationContext<Application>()
 
     private fun daysAgo(days: Long): Instant = now.minus(days, ChronoUnit.DAYS)
 
@@ -278,7 +282,7 @@ class OnboardingPreviewViewModelTest {
 
         val ready = vm.uiState.awaitReady()
         assertTrue(
-            ready.candidates.all { it.lastCallRelative.startsWith("Called ") },
+            ready.candidates.all { it.lastCallRelative.asString(context).startsWith("Called ") },
             "every meta line must lead with the 'Called ' voice prefix",
         )
     }
@@ -299,6 +303,6 @@ class OnboardingPreviewViewModelTest {
         val vm = buildVm(contacts, events)
 
         val ready = vm.uiState.awaitReady()
-        assertEquals("In touch", ready.defaultName)
+        assertEquals("In touch", ready.defaultName.asString(context))
     }
 }

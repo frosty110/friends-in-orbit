@@ -3,10 +3,12 @@ package app.orbit.ui.screens.onboarding
 import android.text.format.DateUtils
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.repository.CallAgg
 import app.orbit.data.repository.CallEventRepository
 import app.orbit.data.repository.ContactRepository
+import app.orbit.ui.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Duration
 import java.time.Instant
@@ -93,7 +95,7 @@ class OnboardingPreviewViewModel @Inject constructor(
             }
     }
 
-    private fun relativeTime(lastAt: Instant, now: Instant): String {
+    private fun relativeTime(lastAt: Instant, now: Instant): UiText {
         val rel = DateUtils.getRelativeTimeSpanString(
             lastAt.toEpochMilli(),
             now.toEpochMilli(),
@@ -102,6 +104,6 @@ class OnboardingPreviewViewModel @Inject constructor(
         ).toString()
         // Voice-rule prefix for the row meta line. Sentence case, no
         // exclamation; "Called {rel}" → e.g. "Called 4 days ago".
-        return "Called $rel"
+        return UiText.res(R.string.onb_preview_called, rel)
     }
 }

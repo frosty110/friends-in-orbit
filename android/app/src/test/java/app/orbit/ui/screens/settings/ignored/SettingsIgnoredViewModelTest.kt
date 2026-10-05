@@ -1,6 +1,7 @@
 package app.orbit.ui.screens.settings.ignored
 
 import app.cash.turbine.test
+import app.orbit.R
 import app.orbit.data.dao.RecordingListMembershipDao
 import app.orbit.data.dao.TestListDaoStub
 import app.orbit.data.db.TransactionRunner
@@ -12,6 +13,7 @@ import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
 import app.orbit.testutil.MainDispatcherRule
+import app.orbit.ui.util.UiText
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -120,7 +122,8 @@ class SettingsIgnoredViewModelTest {
         val row = ready.ignored[0]
         assertEquals(42L, row.id)
         assertEquals("Alex Chen", row.name)
-        assertEquals("Ignored today", row.ignoredRelativeLabel)
+        // "Ignored {today}" (strings_settings.xml); the span comes from formatRelative.
+        assertEquals(UiText.res(R.string.settings_ignored_relative, "today"), row.ignoredRelativeLabel)
     }
 
     // ============================================================================

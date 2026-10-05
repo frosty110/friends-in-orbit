@@ -14,8 +14,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
 
@@ -45,9 +47,9 @@ fun PostCallBanner(
     modifier: Modifier = Modifier,
 ) {
     val displayHeading = if (curtain || contactName.isNullOrBlank()) {
-        "You just made a call"
+        stringResource(R.string.components_post_call_heading_generic)
     } else {
-        "You just called $contactName"
+        stringResource(R.string.components_post_call_heading_named, contactName)
     }
     Column(
         modifier = modifier
@@ -70,7 +72,7 @@ fun PostCallBanner(
         // Inset = PhIcon size (18) + Row spacing (x3 = 12) = 30dp so the body
         // and buttons align under the heading text rather than the icon.
         Text(
-            text = "Add a note while it's fresh",
+            text = stringResource(R.string.components_post_call_body),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
             modifier = Modifier.padding(start = 30.dp),
         )
@@ -80,12 +82,12 @@ fun PostCallBanner(
             modifier = Modifier.padding(start = 30.dp),
         ) {
             OrbitButton(
-                text = "Add a note",
+                text = stringResource(R.string.components_post_call_add_note),
                 onClick = onAddNote,
                 variant = OrbitButtonVariant.Primary,
             )
             OrbitButton(
-                text = "Dismiss",
+                text = stringResource(R.string.components_post_call_dismiss),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
             )

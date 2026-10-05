@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,8 +11,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -55,7 +58,7 @@ fun PermissionsRow(
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             Text(
-                text = status.label,
+                text = stringResource(status.labelRes),
                 style = OrbitTheme.type.meta.copy(color = status.color()),
                 modifier = Modifier.padding(top = 2.dp),
             )
@@ -63,12 +66,12 @@ fun PermissionsRow(
         when (status.rowAction()) {
             PermissionRowAction.None -> Unit
             PermissionRowAction.Request -> OrbitButton(
-                text = "Allow",
+                text = stringResource(R.string.settings_perm_allow),
                 onClick = onRequestPermission,
                 variant = OrbitButtonVariant.Ghost,
             )
             PermissionRowAction.OpenSettings -> OrbitButton(
-                text = "Open Android Settings",
+                text = stringResource(R.string.settings_perm_open_android_settings),
                 onClick = onOpenAndroidSettings,
                 variant = OrbitButtonVariant.Ghost,
             )
@@ -82,13 +85,14 @@ fun PermissionsRow(
  * [app.orbit.calllog.CallLogPermissionState] so the existing
  * ContentObserverController plumbing keeps compiling unchanged.
  *
- * `PermanentlyDenied.label` names the recovery path explicitly because the
- * Open-Android-Settings button is the only way out of that state.
+ * `PermanentlyDenied.labelRes` names the recovery path explicitly because the
+ * Open-Android-Settings button is the only way out of that state. Labels are
+ * string resources (strings_settings.xml).
  */
-enum class PermissionStatus(val label: String) {
-    Granted("Allowed"),
-    Denied("Not allowed"),
-    PermanentlyDenied("Off in your phone's settings"),
+enum class PermissionStatus(@StringRes val labelRes: Int) {
+    Granted(R.string.settings_perm_status_allowed),
+    Denied(R.string.settings_perm_status_not_allowed),
+    PermanentlyDenied(R.string.settings_perm_status_off),
 }
 
 /** What the trailing slot of a [PermissionsRow] should do. */
@@ -117,19 +121,19 @@ private fun PermissionsRowPreview() {
     OrbitTheme {
         Column {
             PermissionsRow(
-                label = "Contacts",
+                label = stringResource(R.string.settings_perm_contacts),
                 status = PermissionStatus.Granted,
                 onRequestPermission = {},
                 onOpenAndroidSettings = {},
             )
             PermissionsRow(
-                label = "Call log",
+                label = stringResource(R.string.settings_perm_call_log),
                 status = PermissionStatus.Denied,
                 onRequestPermission = {},
                 onOpenAndroidSettings = {},
             )
             PermissionsRow(
-                label = "Notifications",
+                label = stringResource(R.string.settings_perm_notifications),
                 status = PermissionStatus.PermanentlyDenied,
                 onRequestPermission = {},
                 onOpenAndroidSettings = {},

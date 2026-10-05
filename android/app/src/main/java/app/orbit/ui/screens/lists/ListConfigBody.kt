@@ -1,5 +1,7 @@
 package app.orbit.ui.screens.lists
 
+import androidx.annotation.PluralsRes
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,10 +40,13 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.data.entity.ListType
 import app.orbit.data.entity.RuleKind
 import app.orbit.domain.rule.RuleParams
@@ -112,6 +117,7 @@ internal fun ListConfigBody(
 ) {
     var showConvertDialog by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val convertedMessage = stringResource(R.string.lists_converted_snackbar)
 
     if (isOnboarding) {
         // F-1 fix (2026-04-30 hot-fix-260430-hs4): drop the inner
@@ -188,7 +194,8 @@ internal fun ListConfigBody(
                 triggerConvertExtracted(
                     onConfirmConvert = onConfirmConvert,
                     scope = scope,
-                    snackbarHostState = snackbarHostState
+                    snackbarHostState = snackbarHostState,
+                    message = convertedMessage
                 )
             },
             onDismiss = { showConvertDialog = false }
@@ -224,7 +231,7 @@ private fun ColumnScope.ListConfigBodySections(
         // can satisfy ONB-11 ("no empty/unnamed lists can leave
         // onboarding"). Production path skips this — the production
         // list name is set by CreateListBottomSheet before nav.
-        SettingGroup(title = "Name") {
+        SettingGroup(title = stringResource(R.string.lists_section_name)) {
             // Local typing buffer prevents the async VM round-trip
             // from racing the IME — without it, fast typing drops the
             // first keystroke (Room write → Flow emit → recompose lags
@@ -249,7 +256,7 @@ private fun ColumnScope.ListConfigBodySections(
         // into an OutlinedTextField. Save paths: IME "Done", focus loss,
         // or trailing check icon. Empty names revert silently — the VM
         // setter is never invoked when the trimmed buffer is blank.
-        SettingGroup(title = "Name") {
+        SettingGroup(title = stringResource(R.string.lists_section_name)) {
             ListNameRenameRow(
                 currentName = state.name,
                 onCommit = onNameChange
@@ -263,7 +270,7 @@ private fun ColumnScope.ListConfigBodySections(
     run {
         // LIST-21: "Rhythm", not "Cadence" (voice.md glossary); no accent spent
         // on settings in this body, only on the app bar's "Done".
-        SettingGroup(title = "Rhythm") {
+        SettingGroup(title = stringResource(R.string.lists_section_rhythm)) {
             RuleTemplatePicker(
                 currentKind = state.ruleKind,
                 templates = emptyList(),
@@ -273,7 +280,7 @@ private fun ColumnScope.ListConfigBodySections(
 
         val keepInTouch = state.ruleParams as? RuleParams.KeepInTouch
         if (keepInTouch != null) {
-            SettingGroup(title = "How often") {
+            SettingGroup(title = stringResource(R.string.lists_section_how_often)) {
                 IntervalSliderLocal(
                     currentHours = keepInTouch.cooldownMinHours,
                     onCommit = { hours ->
@@ -292,9 +299,9 @@ private fun ColumnScope.ListConfigBodySections(
             // read as something missing.
             val note = state.ruleKind?.let { rhythmNoteFor(it) }
             if (note != null) {
-                SettingGroup(title = "How often") {
+                SettingGroup(title = stringResource(R.string.lists_section_how_often)) {
                     Text(
-                        text = note,
+                        text = stringResource(note),
                         style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -305,7 +312,7 @@ private fun ColumnScope.ListConfigBodySections(
         }
     }
 
-    SettingGroup(title = "Active hours") {
+    SettingGroup(title = stringResource(R.string.lists_section_active_hours)) {
         ActiveHoursEditor(
             start = state.activeHoursStart,
             end = state.activeHoursEnd,
@@ -315,10 +322,10 @@ private fun ColumnScope.ListConfigBodySections(
     }
 
     // One word for these notifications: "nudges" (voice.md glossary).
-    SettingGroup(title = "Nudges") {
+    SettingGroup(title = stringResource(R.string.lists_section_nudges)) {
         ToggleRow(
-            label = "Send nudges",
-            sub = "A gentle notification when someone here is worth a call.",
+            label = stringResource(R.string.lists_send_nudges),
+            sub = stringResource(R.string.lists_send_nudges_sub),
             value = state.notificationsEnabled,
             onChange = onNotificationsToggle
         )
@@ -336,7 +343,7 @@ private fun ColumnScope.ListConfigBodySections(
     // disabled, not alpha-hidden — so it is unreachable via keyboard or a11y
     // before setup completes (Pitfall 8).
     if (!isOnboarding) {
-        SettingGroup(title = "When to nudge") {
+        SettingGroup(title = stringResource(R.string.lists_section_when_to_nudge)) {
             NudgeScheduleSection(
                 schedule = state.nudgeSchedule,
                 notificationsEnabled = state.notificationsEnabled,
@@ -348,7 +355,7 @@ private fun ColumnScope.ListConfigBodySections(
     if (state.type == ListType.SMART) {
         val rule = state.smartRule
         if (rule != null) {
-            SettingGroup(title = "Smart rule") {
+            SettingGroup(title = stringResource(R.string.lists_section_smart_rule)) {
                 SmartRuleEditor(
                     rule = rule,
                     onChange = onSmartRuleChange
@@ -357,7 +364,7 @@ private fun ColumnScope.ListConfigBodySections(
         }
     }
 
-    SettingGroup(title = "Members preview") {
+    SettingGroup(title = stringResource(R.string.lists_section_members)) {
         MembersPreview(
             members = state.members,
             isSmart = state.type == ListType.SMART,
@@ -369,13 +376,13 @@ private fun ColumnScope.ListConfigBodySections(
     if (state.type == ListType.SMART) {
         Spacer(Modifier.height(8.dp))
         OrbitButton(
-            text = "Make this a regular list",
+            text = stringResource(R.string.lists_convert_button),
             onClick = onShowConvertDialog,
             variant = OrbitButtonVariant.Destructive,
             modifier = Modifier.fillMaxWidth()
         )
         Text(
-            text = "The people here now stay, and the list stops adding people by itself. This can't be undone.",
+            text = stringResource(R.string.lists_convert_note),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgSubtle),
             modifier = Modifier
                 .fillMaxWidth()
@@ -390,7 +397,7 @@ private fun ColumnScope.ListConfigBodySections(
     if (onDone != null) {
         Spacer(Modifier.height(24.dp))
         OrbitButton(
-            text = "Done",
+            text = stringResource(R.string.components_action_done),
             onClick = onDone,
             modifier = Modifier.fillMaxWidth()
         )
@@ -407,11 +414,12 @@ private fun ColumnScope.ListConfigBodySections(
 private fun triggerConvertExtracted(
     onConfirmConvert: () -> Unit,
     scope: CoroutineScope,
-    snackbarHostState: SnackbarHostState
+    snackbarHostState: SnackbarHostState,
+    message: String
 ) {
     onConfirmConvert()
     scope.launch {
-        snackbarHostState.showSnackbar("This is now a regular list.")
+        snackbarHostState.showSnackbar(message)
     }
 }
 
@@ -427,13 +435,13 @@ private fun IntervalSliderLocal(currentHours: Int, onCommit: (Int) -> Unit) {
     Column(Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = "Aim for every",
+                text = stringResource(R.string.lists_interval_aim),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                 modifier = Modifier.weight(1f)
             )
             val rounded = days.toInt().coerceAtLeast(1)
             Text(
-                text = "$rounded ${if (rounded == 1) "day" else "days"}",
+                text = pluralStringResource(R.plurals.lists_interval_days, rounded, rounded),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg)
             )
         }
@@ -445,8 +453,10 @@ private fun IntervalSliderLocal(currentHours: Int, onCommit: (Int) -> Unit) {
                 onCommit(intDays * 24)
             },
             valueRange = 1f..60f,
-            label = "How often to aim for",
-            valueDescription = days.toInt().coerceAtLeast(1).let { d -> "Every $d ${if (d == 1) "day" else "days"}" },
+            label = stringResource(R.string.lists_interval_label),
+            valueDescription = days.toInt().coerceAtLeast(1).let { d ->
+                pluralStringResource(R.plurals.lists_interval_every_days, d, d)
+            },
             modifier = Modifier.padding(top = 4.dp)
         )
         IntervalScaleLabels(modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
@@ -465,12 +475,15 @@ private fun IntervalSliderLocal(currentHours: Int, onCommit: (Int) -> Unit) {
 private const val INTERVAL_MIN_DAY = 1
 private const val INTERVAL_MAX_DAY = 60
 
-private val INTERVAL_TICKS: List<Pair<String, Int>> = listOf(
+/** One tick under the interval slider: where it sits, and its words. */
+private data class IntervalTick(val day: Int, @PluralsRes val label: Int, val count: Int)
+
+private val INTERVAL_TICKS: List<IntervalTick> = listOf(
     // Words, not "1d / 2w / 1m / 2m" (rubric D7).
-    "1 day" to 1,
-    "2 weeks" to 14,
-    "1 month" to 30,
-    "2 months" to 60
+    IntervalTick(day = 1, label = R.plurals.lists_interval_days, count = 1),
+    IntervalTick(day = 14, label = R.plurals.lists_interval_tick_weeks, count = 2),
+    IntervalTick(day = 30, label = R.plurals.lists_interval_tick_months, count = 1),
+    IntervalTick(day = 60, label = R.plurals.lists_interval_tick_months, count = 2)
 )
 
 /**
@@ -490,9 +503,9 @@ private fun IntervalScaleLabels(modifier: Modifier = Modifier) {
     Layout(
         modifier = modifier,
         content = {
-            INTERVAL_TICKS.forEach { (label, _) ->
+            INTERVAL_TICKS.forEach { tick ->
                 Text(
-                    text = label,
+                    text = pluralStringResource(tick.label, tick.count, tick.count),
                     style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle)
                 )
             }
@@ -507,7 +520,7 @@ private fun IntervalScaleLabels(modifier: Modifier = Modifier) {
         val height = placeables.maxOfOrNull { it.height } ?: 0
         layout(width, height) {
             placeables.forEachIndexed { index, p ->
-                val day = INTERVAL_TICKS[index].second
+                val day = INTERVAL_TICKS[index].day
                 val fraction = intervalLabelFraction(day, INTERVAL_MIN_DAY, INTERVAL_MAX_DAY)
                 val centered = (fraction * width).toInt() - p.width / 2
                 val x = centered.coerceIn(0, (width - p.width).coerceAtLeast(0))
@@ -529,10 +542,11 @@ private fun IntervalScaleLabels(modifier: Modifier = Modifier) {
  * with the strongest call-driven resets. Returns null for keep in touch,
  * which renders the slider instead.
  */
-private fun rhythmNoteFor(kind: RuleKind): String? = when (kind) {
+@StringRes
+private fun rhythmNoteFor(kind: RuleKind): Int? = when (kind) {
     RuleKind.KEEP_IN_TOUCH -> null
-    RuleKind.LATE_NIGHT -> "This list keeps the late night rhythm on its own — slower and more patient, with nothing to set."
-    RuleKind.ENERGIZE -> "This list keeps the energize rhythm on its own — quicker, with nothing to set."
+    RuleKind.LATE_NIGHT -> R.string.lists_rhythm_note_late_night
+    RuleKind.ENERGIZE -> R.string.lists_rhythm_note_energize
 }
 
 /**
@@ -566,6 +580,9 @@ private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
     var nameText by rememberSaveable(editing) { mutableStateOf(currentName) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    // Resolved here: the semantics blocks below are not composable.
+    val saveDescription = stringResource(R.string.lists_name_save)
+    val renameDescription = stringResource(R.string.lists_name_rename)
 
     fun commit() {
         val trimmed = nameText.trim()
@@ -602,7 +619,7 @@ private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
                             commit()
                             focusManager.clearFocus()
                         }
-                        .semantics { contentDescription = "Save list name" },
+                        .semantics { contentDescription = saveDescription },
                     contentAlignment = Alignment.Center
                 ) {
                     PhIcon(
@@ -633,7 +650,7 @@ private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
                 .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
             Text(
-                text = currentName.ifBlank { "Unnamed list" },
+                text = currentName.ifBlank { stringResource(R.string.lists_name_unnamed) },
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                 modifier = Modifier.weight(1f)
             )
@@ -641,7 +658,7 @@ private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
                 modifier = Modifier
                     .size(OrbitTheme.spacing.tapMin)
                     .clickable { editing = true }
-                    .semantics { contentDescription = "Rename list" },
+                    .semantics { contentDescription = renameDescription },
                 contentAlignment = Alignment.Center
             ) {
                 PhIcon(

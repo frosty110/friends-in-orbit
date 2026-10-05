@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.home
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,14 +27,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.data.entity.CallDirection
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 
 /**
  * HOME-8 — the day behind a rhythm bar.
@@ -83,7 +88,7 @@ fun RhythmDaySheet(
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
             Text(
-                text = directionSummary(calls),
+                text = directionSummary(calls).asString(),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.padding(top = 2.dp),
             )
@@ -111,22 +116,28 @@ fun RhythmDaySheet(
 }
 
 /**
- * "You called 2 · They called 1" — both sides in one line, same weight. Drops
+ * "You called 2 · They called 1": both sides in one line, same weight. Drops
  * the empty half rather than printing a zero, so a one-sided day reads as a
- * fact instead of a shortfall.
+ * fact instead of a shortfall. [UiText] so it stays pure (and testable) and
+ * the composables resolve it.
  */
-internal fun directionSummary(calls: List<RhythmCall>): String {
+internal fun directionSummary(calls: List<RhythmCall>): UiText {
     val out = calls.count { it.direction == CallDirection.OUTGOING }
     val incoming = calls.size - out
-    return buildList {
-        if (out > 0) add("You called $out")
-        if (incoming > 0) add("They called $incoming")
-    }.joinToString(" · ").ifEmpty { "No calls" }
+    val youCalled = UiText.plural(R.plurals.home_direction_you_called_count, out, out)
+    val theyCalled = UiText.plural(R.plurals.home_direction_they_called_count, incoming, incoming)
+    return when {
+        out > 0 && incoming > 0 -> UiText.res(R.string.home_direction_both, youCalled, theyCalled)
+        out > 0 -> youCalled
+        incoming > 0 -> theyCalled
+        else -> UiText.res(R.string.home_direction_none)
+    }
 }
 
 /** Human-readable direction, used by both the sheet row and its a11y label. */
-internal fun directionWord(direction: CallDirection): String =
-    if (direction == CallDirection.OUTGOING) "You called" else "They called"
+@StringRes
+internal fun directionWord(direction: CallDirection): Int =
+    if (direction == CallDirection.OUTGOING) R.string.home_direction_you_called else R.string.home_direction_they_called
 
 @Composable
 internal fun directionColor(direction: CallDirection): Color =
@@ -142,7 +153,7 @@ private fun RhythmCallRow(
     curtain: Boolean,
     onClick: () -> Unit,
 ) {
-    val name = if (curtain) "Someone" else call.contactName
+    val name = if (curtain) stringResource(R.string.components_curtain_someone) else call.contactName
     val rim = directionColor(call.direction)
 
     Row(
@@ -173,11 +184,12 @@ private fun RhythmCallRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = listOf(
-                    directionWord(call.direction),
+                text = stringResource(
+                    R.string.home_rhythm_call_meta,
+                    stringResource(directionWord(call.direction)),
                     call.durationLabel,
                     call.timeLabel,
-                ).joinToString(" · "),
+                ),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -226,7 +238,7 @@ private fun RhythmDaySheetBodyPreview() {
                     style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
                 )
                 Text(
-                    text = directionSummary(previewCalls),
+                    text = directionSummary(previewCalls).asString(),
                     style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                     modifier = Modifier.padding(top = 2.dp),
                 )

@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.onboarding
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -24,6 +26,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import app.orbit.R
 import app.orbit.data.entity.ListType
 import app.orbit.data.entity.RuleKind
 import app.orbit.domain.JsonProvider
@@ -132,12 +135,12 @@ fun OnboardingFirstListScreen(
         step = OnboardingStep.FirstList,
         onBack = null, // first list is required (E1)
         primary = OnboardingAction(
-            label = "Done",
+            label = stringResource(R.string.components_action_done),
             onClick = onDone,
             enabled = canFinish
         ),
         secondary = OnboardingAction(
-            label = "Add another list",
+            label = stringResource(R.string.onb_first_list_add_another),
             onClick = onAddAnother,
             enabled = canFinish
         ),
@@ -161,7 +164,7 @@ fun OnboardingFirstListScreen(
             hasContactsPermission = hasContacts
         )?.let { helper ->
             Text(
-                text = helper,
+                text = stringResource(helper),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4)
             )
@@ -223,34 +226,38 @@ internal fun firstListCanFinish(
 ): Boolean = name.isNotBlank() && (!hasContactsPermission || memberCount >= 3)
 
 /**
- * Helper line rendered above the list-config body. Null = nothing to say
- * (gate satisfied, contacts granted). In the denied state the helper sets
- * the expectation for the empty members picker instead of nudging toward a
- * threshold the user cannot meet.
+ * Helper line rendered above the list-config body, as a string resource id.
+ * Null = nothing to say (gate satisfied, contacts granted). In the denied
+ * state the helper sets the expectation for the empty members picker instead
+ * of nudging toward a threshold the user cannot meet.
  */
+@StringRes
 internal fun firstListHelperText(
     name: String,
     memberCount: Int,
     hasContactsPermission: Boolean
-): String? = when {
-    !hasContactsPermission && name.isBlank() ->
-        "Give your list a name to finish. You can add people once Orbit can see your contacts."
-    !hasContactsPermission ->
-        "You can add people once Orbit can see your contacts — grant access any time in Settings."
-    name.isBlank() || memberCount < 3 ->
-        "Add a name and pick at least 3 people to finish."
+): Int? = when {
+    !hasContactsPermission && name.isBlank() -> R.string.onb_first_list_helper_no_contacts_no_name
+    !hasContactsPermission -> R.string.onb_first_list_helper_no_contacts
+    name.isBlank() || memberCount < 3 -> R.string.onb_first_list_helper_threshold
     else -> null
 }
 
 /**
- * Quiet placeholder rendered while [ListConfigUiState.Loading] — the section
- * labels the real body will use, each over a muted bar, so the screen reads
- * as settling rather than broken.
+ * Quiet placeholder rendered while [ListConfigUiState.Loading]: the section
+ * labels the real body will use (the same string resources), each over a
+ * muted bar, so the screen reads as settling rather than broken.
  */
 @Composable
 private fun FirstListLoadingSkeleton() {
-    listOf("Name", "Cadence", "Active hours", "Notifications", "Members preview").forEach { title ->
-        SettingGroup(title = title) {
+    listOf(
+        R.string.lists_section_name,
+        R.string.lists_section_rhythm,
+        R.string.lists_section_active_hours,
+        R.string.lists_section_nudges,
+        R.string.lists_section_members,
+    ).forEach { title ->
+        SettingGroup(title = stringResource(title)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -286,8 +293,16 @@ private fun OnboardingFirstListScreenPreviewBody(
     OnboardingScaffold(
         step = OnboardingStep.FirstList,
         onBack = null,
-        primary = OnboardingAction(label = "Done", onClick = {}, enabled = canFinish),
-        secondary = OnboardingAction(label = "Add another list", onClick = {}, enabled = canFinish)
+        primary = OnboardingAction(
+            label = stringResource(R.string.components_action_done),
+            onClick = {},
+            enabled = canFinish,
+        ),
+        secondary = OnboardingAction(
+            label = stringResource(R.string.onb_first_list_add_another),
+            onClick = {},
+            enabled = canFinish,
+        )
     ) {
         firstListHelperText(
             name = state.name,
@@ -295,7 +310,7 @@ private fun OnboardingFirstListScreenPreviewBody(
             hasContactsPermission = hasContactsPermission
         )?.let { helper ->
             Text(
-                text = helper,
+                text = stringResource(helper),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4)
             )
@@ -325,8 +340,16 @@ private fun OnboardingFirstListLoadingPreview() {
         OnboardingScaffold(
             step = OnboardingStep.FirstList,
             onBack = null,
-            primary = OnboardingAction(label = "Done", onClick = {}, enabled = false),
-            secondary = OnboardingAction(label = "Add another list", onClick = {}, enabled = false)
+            primary = OnboardingAction(
+                label = stringResource(R.string.components_action_done),
+                onClick = {},
+                enabled = false,
+            ),
+            secondary = OnboardingAction(
+                label = stringResource(R.string.onb_first_list_add_another),
+                onClick = {},
+                enabled = false,
+            )
         ) {
             FirstListLoadingSkeleton()
         }

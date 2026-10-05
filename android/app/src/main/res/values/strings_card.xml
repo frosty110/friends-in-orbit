@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Card view: one person at a time from a list, with Call, Later and Sooner.
+    Keys are area_what (features/_foundations/voice.md, "Where copy lives").
+    Glossary: "Later" moves a person further out on this list, "Sooner" brings them forward.
+-->
+<resources>
+
+    <!-- App bar menu of list actions. -->
+    <string name="card_list_options">List options</string>
+    <string name="card_menu_browse">Browse people</string>
+    <string name="card_menu_add_contacts">Add contacts</string>
+    <string name="card_menu_edit_list">Edit list</string>
+
+    <!-- Notice while the call log permission is off. -->
+    <string name="card_call_log_denied">Orbit can\'t see your calls, so cards won\'t move on by themselves.</string>
+    <string name="card_open_settings">Open settings</string>
+
+    <!-- Empty list. -->
+    <string name="card_no_members_heading">No one is in this list yet.</string>
+    <string name="card_no_members_body">Add a few people to start surfacing names.</string>
+    <string name="card_add_contacts">Add contacts</string>
+    <string name="card_go_home">Go home</string>
+
+    <!-- Nobody to suggest right now. Calm, never "caught up". -->
+    <string name="card_quiet_heading">All quiet for now.</string>
+    <!-- %1$s: the person's name, %2$s: when, for example "tomorrow" or "in 2 weeks". -->
+    <string name="card_quiet_body_up_next">%1$s comes up %2$s.</string>
+    <string name="card_quiet_body">No one needs a call right now.</string>
+    <string name="card_browse_list">Browse this list</string>
+
+    <string name="card_error_heading">Something\'s off here.</string>
+    <string name="card_error_body">Pull back and try this list again in a moment.</string>
+
+    <!-- Screen-reader hint: tapping the card opens the person's details. -->
+    <string name="card_open_details">Open details</string>
+    <!-- The Call button and its screen-reader action. %1$s: the person's first name. -->
+    <string name="card_call">Call %1$s</string>
+    <string name="card_later">Later</string>
+    <string name="card_sooner">Sooner</string>
+    <string name="card_view_details">View details</string>
+
+    <!-- Small label above the person's name. -->
+    <string name="card_due_today">Due today</string>
+    <string name="card_not_due_yet">Not due yet</string>
+
+    <!-- The user's most recent note about this person, in quotation marks. Use your
+         language's quotation marks. %1$s: the note. -->
+    <string name="card_last_note_quoted">“%1$s”</string>
+    <!-- %1$s: when the note was written, for example "12 days ago". -->
+    <string name="card_last_note_meta">Your note, %1$s</string>
+
+    <string name="card_no_call_history">No call history yet</string>
+    <!-- When this person tends to pick up, from past calls. -->
+    <string name="card_usually_answers">Usually answers</string>
+    <string name="card_usually_tooltip">Based on when you usually answer or call this contact.</string>
+    <string name="card_usually_tooltip_label">About usually answers</string>
+    <string name="card_answer_good">Good time to call</string>
+    <string name="card_answer_sometimes">Sometimes answers now</string>
+    <string name="card_answer_rarely">Rarely answers now</string>
+
+    <!-- Three small stats at the foot of the card. -->
+    <string name="card_stat_last_called">Last called</string>
+    <string name="card_stat_never">Never</string>
+    <string name="card_stat_avg_length">Avg length</string>
+    <string name="card_stat_calls">Calls</string>
+    <!-- Stands in for a stat that has no value yet. A short dash. -->
+    <string name="card_stat_none">–</string>
+
+    <!-- Snackbar action after a call: open the person to write a note. -->
+    <string name="card_snackbar_add_note">Add a note</string>
+
+    <!-- Snackbars after Later or Sooner. %1$s: the person's first name, %2$s: when they come
+         back, for example "tomorrow", "on Tuesday" or "in 2 weeks". The "They" versions are
+         for when the name isn't known. -->
+    <string name="card_later_named_when">%1$s will come up again %2$s.</string>
+    <string name="card_later_unnamed_when">They will come up again %1$s.</string>
+    <string name="card_later_named">%1$s moved to later.</string>
+    <string name="card_later_unnamed">They moved to later.</string>
+    <string name="card_sooner_named_when">%1$s is now due %2$s.</string>
+    <string name="card_sooner_unnamed_when">They are now due %1$s.</string>
+    <string name="card_sooner_named">%1$s moved sooner.</string>
+    <string name="card_sooner_unnamed">They moved sooner.</string>
+
+    <!-- Failures, with what to do. %1$s: the person's first name. -->
+    <string name="card_later_failed_named">Couldn\'t move %1$s to later. Try again.</string>
+    <string name="card_later_failed_unnamed">Couldn\'t move them to later. Try again.</string>
+    <string name="card_sooner_failed_named">Couldn\'t move %1$s sooner. Try again.</string>
+    <string name="card_sooner_failed_unnamed">Couldn\'t move them sooner. Try again.</string>
+    <string name="card_undo_failed">Couldn\'t undo that. Try again.</string>
+
+    <!-- After the call log confirms a call placed from the card. %1$s: first name. -->
+    <string name="card_called_named">Called %1$s</string>
+    <string name="card_call_logged">Call logged</string>
+
+    <!-- Lowercase phrases for when someone comes back; they slot into the sentences above. -->
+    <string name="card_due_later_today">later today</string>
+    <string name="card_due_tomorrow">tomorrow</string>
+    <!-- %1$s: a weekday, for example "on Tuesday". -->
+    <string name="card_due_on_day">on %1$s</string>
+    <!-- %1$s: a span, for example "in 3 weeks". -->
+    <string name="card_due_in_span">in %1$s</string>
+
+    <!-- "Why now" line under the name: how long since the last call. Honest, never blame. -->
+    <string name="card_why_today">You talked today.</string>
+    <string name="card_why_yesterday">You talked yesterday.</string>
+    <!-- %1$s: a span, for example "3 weeks". -->
+    <string name="card_why_span">It\'s been %1$s.</string>
+    <!-- Joins the line above with the rhythm line below it. -->
+    <string name="card_why_two_lines" translatable="false">%1$s\n%2$s</string>
+
+    <!-- The pair's usual gap between calls, stated as a fact, never a deadline. -->
+    <string name="card_rhythm_daily">You usually talk about every day.</string>
+    <string name="card_rhythm_weekly">You usually talk about every week.</string>
+    <plurals name="card_rhythm_days">
+        <item quantity="one">You usually talk about every %1$d day.</item>
+        <item quantity="other">You usually talk about every %1$d days.</item>
+    </plurals>
+    <plurals name="card_rhythm_weeks">
+        <item quantity="one">You usually talk about every %1$d week.</item>
+        <item quantity="other">You usually talk about every %1$d weeks.</item>
+    </plurals>
+    <plurals name="card_rhythm_months">
+        <item quantity="one">You usually talk about every %1$d month.</item>
+        <item quantity="other">You usually talk about every %1$d months.</item>
+    </plurals>
+
+</resources>

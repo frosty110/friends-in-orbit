@@ -25,17 +25,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.notify.NotificationCopy
 import app.orbit.notify.NudgeSchedule
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 import java.time.DayOfWeek
 import java.time.LocalTime
+import java.time.format.TextStyle
+import java.util.Locale
 
 /**
  * NOTIF-10 — Nudge schedule editor hosted inside ListConfigBody's
@@ -170,16 +174,9 @@ private fun DayChipRow(
     selectedDays: Set<DayOfWeek>,
     onToggle: (DayOfWeek) -> Unit,
 ) {
-    // Display order: S M T W T F S (Sunday first, locale-agnostic per D-05 spec)
-    val ordered = listOf(
-        DayOfWeek.SUNDAY to "S",
-        DayOfWeek.MONDAY to "M",
-        DayOfWeek.TUESDAY to "T",
-        DayOfWeek.WEDNESDAY to "W",
-        DayOfWeek.THURSDAY to "T",
-        DayOfWeek.FRIDAY to "F",
-        DayOfWeek.SATURDAY to "S",
-    )
+    // Display order: S M T W T F S (Sunday first, locale-agnostic per D-05 spec).
+    // The letters are the locale's narrow day names, as on Home's rhythm strip.
+    val ordered = SUNDAY_FIRST.map { day -> day to day.getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
 
     // No spacing between cells: each cell is an equal seventh of the row, so
     // the touch target is the full cell (about 49dp on a phone) while the
@@ -248,7 +245,11 @@ private fun TimeChipRow(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .clickable(onClickLabel = "Change time", role = Role.Button, onClick = onTap)
+                .clickable(
+                    onClickLabel = stringResource(R.string.lists_nudge_change_time),
+                    role = Role.Button,
+                    onClick = onTap,
+                )
                 .padding(horizontal = OrbitTheme.spacing.x4),
         ) {
             PhIcon(
@@ -337,7 +338,7 @@ internal fun OnboardingNudgeSummary(schedule: NudgeSchedule?) {
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fg),
         )
         Text(
-            text = "Change the days or time any time in this list's settings.",
+            text = stringResource(R.string.lists_nudge_onboarding_hint),
             style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
         )
     }
@@ -370,16 +371,19 @@ private fun MutedBadge() {
 
 // ── Pure helpers ───────────────────────────────────────────────────────────────
 
-/** Returns the full English day name for accessibility content descriptions. */
-private fun DayOfWeek.fullName(): String = when (this) {
-    DayOfWeek.SUNDAY -> "Sunday"
-    DayOfWeek.MONDAY -> "Monday"
-    DayOfWeek.TUESDAY -> "Tuesday"
-    DayOfWeek.WEDNESDAY -> "Wednesday"
-    DayOfWeek.THURSDAY -> "Thursday"
-    DayOfWeek.FRIDAY -> "Friday"
-    DayOfWeek.SATURDAY -> "Saturday"
-}
+/** Sunday-first display order shared by the chip row and the summary line. */
+private val SUNDAY_FIRST: List<DayOfWeek> = listOf(
+    DayOfWeek.SUNDAY,
+    DayOfWeek.MONDAY,
+    DayOfWeek.TUESDAY,
+    DayOfWeek.WEDNESDAY,
+    DayOfWeek.THURSDAY,
+    DayOfWeek.FRIDAY,
+    DayOfWeek.SATURDAY,
+)
+
+/** The locale's full day name, for accessibility content descriptions. */
+private fun DayOfWeek.fullName(): String = getDisplayName(TextStyle.FULL, Locale.getDefault())
 
 /**
  * Returns the D-06 day-group label for the given set of days.
@@ -388,29 +392,20 @@ private fun DayOfWeek.fullName(): String = when (this) {
  *  - All 7 days → "Every day"
  *  - Mon–Fri only → "Weekdays"
  *  - Sat–Sun only → "Weekends"
- *  - Otherwise → short names joined by commas (e.g. "Mon, Wed, Fri")
+ *  - Otherwise → the locale's short day names joined by commas (e.g. "Mon, Wed, Fri")
  */
+@Composable
 private fun dayGroupLabel(days: Set<DayOfWeek>): String {
     val allSevenDays = DayOfWeek.values().toSet()
     val weekdays = setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)
     val weekend = setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)
     return when (days) {
-        allSevenDays -> "Every day"
-        weekdays -> "Weekdays"
-        weekend -> "Weekends"
-        else -> {
-            // Short names in Sun→Sat display order
-            val ordered = listOf(
-                DayOfWeek.SUNDAY to "Sun",
-                DayOfWeek.MONDAY to "Mon",
-                DayOfWeek.TUESDAY to "Tue",
-                DayOfWeek.WEDNESDAY to "Wed",
-                DayOfWeek.THURSDAY to "Thu",
-                DayOfWeek.FRIDAY to "Fri",
-                DayOfWeek.SATURDAY to "Sat",
-            )
-            ordered.filter { (day, _) -> day in days }.joinToString(", ") { (_, name) -> name }
-        }
+        allSevenDays -> stringResource(R.string.lists_nudge_every_day)
+        weekdays -> stringResource(R.string.lists_nudge_weekdays)
+        weekend -> stringResource(R.string.lists_nudge_weekends)
+        // Short names in Sun→Sat display order
+        else -> SUNDAY_FIRST.filter { it in days }
+            .joinToString(", ") { it.getDisplayName(TextStyle.SHORT, Locale.getDefault()) }
     }
 }
 

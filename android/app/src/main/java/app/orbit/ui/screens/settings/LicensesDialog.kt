@@ -11,8 +11,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -35,7 +37,7 @@ fun LicensesDialog(onDismiss: () -> Unit) {
         containerColor = OrbitTheme.colors.surface,
         title = {
             Text(
-                text = "Open source licenses",
+                text = stringResource(R.string.settings_about_licenses),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         },
@@ -62,7 +64,7 @@ fun LicensesDialog(onDismiss: () -> Unit) {
         },
         confirmButton = {
             OrbitButton(
-                text = "Close",
+                text = stringResource(R.string.settings_licenses_close),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
             )
@@ -74,6 +76,8 @@ fun LicensesDialog(onDismiss: () -> Unit) {
 private data class LicenseEntry(val name: String, val license: String)
 
 // Runtime dependencies per android/gradle/libs.versions.toml (2026-06-09).
+// Kept in code, not string resources: these are library names and license
+// titles, which are not translated.
 private val LICENSE_ENTRIES: List<LicenseEntry> = listOf(
     LicenseEntry("AndroidX (Compose, Room, DataStore, WorkManager, Navigation, Lifecycle, Glance, Core)", "Apache License 2.0"),
     LicenseEntry("Kotlin and kotlinx (coroutines, serialization)", "Apache License 2.0"),

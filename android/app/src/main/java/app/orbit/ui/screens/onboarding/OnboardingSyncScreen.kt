@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -77,17 +78,19 @@ private fun OnboardingSyncContent(
         step = OnboardingStep.Sync,
         onBack = null,
         primary = OnboardingAction(
-            label = when {
-                canContinue -> "Continue"
-                retryFailed -> "Continue anyway"
-                else -> "Continue"
-            },
+            label = stringResource(
+                when {
+                    canContinue -> R.string.components_action_continue
+                    retryFailed -> R.string.onb_sync_continue_anyway
+                    else -> R.string.components_action_continue
+                },
+            ),
             onClick = onContinue,
             enabled = canContinue || retryFailed,
         ),
         secondary = if (ready?.syncState is SyncState.Failed) {
             OnboardingAction(
-                label = if (retryFailed) "Try one more time" else "Try again",
+                label = stringResource(if (retryFailed) R.string.onb_sync_try_once_more else R.string.onb_sync_try_again),
                 onClick = onRetry,
             )
         } else {
@@ -96,15 +99,16 @@ private fun OnboardingSyncContent(
     ) {
         val skipped = ready?.syncState is SyncState.Skipped
         Text(
-            text = if (skipped) "Starting fresh" else "Reading your call history",
+            text = stringResource(if (skipped) R.string.onb_sync_title_skipped else R.string.onb_sync_title),
             style = OrbitTheme.type.title.copy(color = OrbitTheme.colors.fg),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
             text = if (skipped) {
-                "Without call history, Orbit starts from what you tell it."
+                stringResource(R.string.onb_sync_body_skipped)
             } else {
-                "Reading your last ${ready?.importDays ?: 90} days of calls — never leaves your device."
+                val days = ready?.importDays ?: 90
+                pluralStringResource(R.plurals.onb_sync_body, days, days)
             },
             // Plain body copy reads fgMuted; `info` is reserved
             // for semantic emphasis, not paragraph text.
@@ -163,31 +167,32 @@ private fun SyncProgressCard(state: SyncState, ready: OnboardingSyncUiState.Read
             }
             SyncState.Empty -> {
                 Text(
-                    text = "We'll learn as you go.",
+                    text = stringResource(R.string.onb_sync_learn),
                     style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                 )
                 Spacer(Modifier.height(OrbitTheme.spacing.x1))
+                val days = ready?.importDays ?: 90
                 Text(
-                    text = "No calls found in the last ${ready?.importDays ?: 90} days. That's okay.",
+                    text = pluralStringResource(R.plurals.onb_sync_empty, days, days),
                     style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 )
             }
             SyncState.Skipped -> {
                 Text(
-                    text = "We'll learn as you go.",
+                    text = stringResource(R.string.onb_sync_learn),
                     style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                 )
                 Spacer(Modifier.height(OrbitTheme.spacing.x1))
                 Text(
-                    text = "Orbit doesn't have call history access. You can grant it any time in Settings.",
+                    text = stringResource(R.string.onb_sync_no_access),
                     style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 )
             }
             is SyncState.Failed -> {
                 val (title, sub) = if (state.retryCount >= 1) {
-                    "Couldn't finish the sync." to "We'll try again later in the background."
+                    stringResource(R.string.onb_sync_failed_final) to stringResource(R.string.onb_sync_failed_final_sub)
                 } else {
-                    "Couldn't finish the sync. Try again?" to ""
+                    stringResource(R.string.onb_sync_failed_retry) to ""
                 }
                 Text(text = title, style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg))
                 if (sub.isNotEmpty()) {
@@ -204,7 +209,7 @@ private fun FriendlyCount(callCount: Int, contactCount: Int) {
     val callsFragment = pluralStringResource(R.plurals.onb_sync_calls, callCount, callCount)
     val contactsFragment = pluralStringResource(R.plurals.onb_sync_contacts, contactCount, contactCount)
     Text(
-        text = "Counted $callsFragment over $contactsFragment",
+        text = stringResource(R.string.onb_sync_counted, callsFragment, contactsFragment),
         style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
     )
 }
@@ -224,7 +229,7 @@ private fun ImportRangeChips(
 ) {
     Column(Modifier.fillMaxWidth()) {
         Text(
-            text = "How far back should Orbit look?",
+            text = stringResource(R.string.onb_sync_range_question),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
         )
         Row(
@@ -235,7 +240,7 @@ private fun ImportRangeChips(
                 FilterChip(
                     selected = selectedDays == days,
                     onClick = { onSelect(days) },
-                    label = { Text("$days days") },
+                    label = { Text(pluralStringResource(R.plurals.onb_sync_range_days, days, days)) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = OrbitTheme.colors.accentTint,
                         selectedLabelColor = OrbitTheme.colors.fg,
@@ -259,7 +264,7 @@ private fun SlowTipCard() {
             .padding(OrbitTheme.spacing.x3),
     ) {
         Text(
-            text = "Some phones have years of call history. We'll get there.",
+            text = stringResource(R.string.onb_sync_slow_tip),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
         )
     }

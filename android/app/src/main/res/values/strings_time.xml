@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Time-of-day copy shared by several screens.
+    Keys are area_what (features/_foundations/voice.md, "Where copy lives").
+-->
+<resources>
+
+    <!-- Tick labels under a 24-hour strip (Card view's "usually answers" heat strip and a
+         list's active hours bar). Midnight, 6 in the morning, noon, 6 in the evening,
+         midnight. Keep them as short as possible: five sit side by side on a phone. -->
+    <string name="time_axis_midnight">12a</string>
+    <string name="time_axis_6am">6a</string>
+    <string name="time_axis_noon">12p</string>
+    <string name="time_axis_6pm">6p</string>
+
+</resources>

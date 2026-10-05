@@ -11,8 +11,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 
@@ -49,11 +51,11 @@ fun PickerThresholdsRow(
             Text(
                 // Plain words (rubric D7): the row used to read "Picker
                 // thresholds / Edit chip-match thresholds".
-                text = "Groups when adding people",
+                text = stringResource(R.string.settings_thresholds_title),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             Text(
-                text = "Where Commonly called, Rarely called and the others begin",
+                text = stringResource(R.string.settings_thresholds_row_sub),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.padding(top = 2.dp),
             )

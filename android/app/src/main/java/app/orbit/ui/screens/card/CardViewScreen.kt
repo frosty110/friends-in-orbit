@@ -45,6 +45,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
@@ -59,6 +60,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.orbit.R
 import app.orbit.data.ChipTone
 import app.orbit.data.Contact
 import app.orbit.data.NoteRow
@@ -79,14 +81,14 @@ import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
 import app.orbit.ui.theme.orbitHeroShadow
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 import app.orbit.ui.util.dialPhoneNumber
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.abs
-
-private const val USUALLY_TOOLTIP = "Based on when you usually answer or call this contact."
 
 // Card View — drag to defer/surface, tap to call.
 // 2026-06-09 card-loop revision: hydrated stats + heat, swipe undo snackbars,
@@ -164,15 +166,15 @@ private fun ListActionsMenu(
         OrbitIconButton(
             icon = "dots-three-vertical",
             onClick = { expanded = true },
-            contentDescription = "List options"
+            contentDescription = stringResource(R.string.card_list_options)
         )
         OrbitDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             actions = listOf(
-                OrbitMenuAction(label = "Browse people", onClick = onBrowse, icon = "list-bullets"),
-                OrbitMenuAction(label = "Add contacts", onClick = onAddContacts, icon = "plus"),
-                OrbitMenuAction(label = "Edit list", onClick = onEditList, icon = "pencil-simple")
+                OrbitMenuAction(label = stringResource(R.string.card_menu_browse), onClick = onBrowse, icon = "list-bullets"),
+                OrbitMenuAction(label = stringResource(R.string.card_menu_add_contacts), onClick = onAddContacts, icon = "plus"),
+                OrbitMenuAction(label = stringResource(R.string.card_menu_edit_list), onClick = onEditList, icon = "pencil-simple")
             )
         )
     }
@@ -196,8 +198,9 @@ private fun CardViewContent(
     onOpenContact: (contactId: Long) -> Unit
 ) {
     val curtain = LocalPrivacyCurtain.current
+    val context = LocalContext.current
     val appBarTitle = when (state) {
-        is CardViewUiState.Ready -> if (curtain) "Contact" else state.listContext
+        is CardViewUiState.Ready -> if (curtain) stringResource(R.string.components_curtain_contact) else state.listContext
         else -> ""
     }
 
@@ -213,12 +216,12 @@ private fun CardViewContent(
         messages.collectLatest { message ->
             snackbarHostState.currentSnackbarData?.dismiss()
             val actionLabel = when (message) {
-                is CardMessage.Undoable -> "Undo"
-                is CardMessage.Called -> "Add a note"
+                is CardMessage.Undoable -> context.getString(R.string.components_action_undo)
+                is CardMessage.Called -> context.getString(R.string.card_snackbar_add_note)
                 is CardMessage.Failed -> null
             }
             val result = snackbarHostState.showSnackbar(
-                message = message.text,
+                message = message.text.asString(context),
                 actionLabel = actionLabel,
                 duration = if (actionLabel != null) SnackbarDuration.Long else SnackbarDuration.Short,
                 withDismissAction = false
@@ -236,7 +239,9 @@ private fun CardViewContent(
     OrbitScreen {
         OrbitAppBar(
             title = appBarTitle,
-            leading = { OrbitIconButton("arrow-left", onBack, contentDescription = "Back") },
+            leading = {
+                OrbitIconButton("arrow-left", onBack, contentDescription = stringResource(R.string.components_action_back))
+            },
             trailing = {
                 ListActionsMenu(
                     onBrowse = { onBrowse(listId) },
@@ -306,14 +311,14 @@ private fun CallLogDeniedNotice(onOpenSettings: () -> Unit) {
             .padding(start = OrbitTheme.spacing.x3)
     ) {
         Text(
-            text = "Orbit can't see your calls, so cards won't move on by themselves.",
+            text = stringResource(R.string.card_call_log_denied),
             style = OrbitTheme.type.meta,
             color = OrbitTheme.colors.fgMuted,
             modifier = Modifier
                 .weight(1f)
                 .padding(vertical = OrbitTheme.spacing.x2)
         )
-        InlineTextAction(text = "Open settings", onClick = onOpenSettings)
+        InlineTextAction(text = stringResource(R.string.card_open_settings), onClick = onOpenSettings)
     }
 }
 
@@ -366,11 +371,11 @@ private fun CallLogDeniedNoticePreview() {
 @Composable
 private fun NoMembersShell(onAddContacts: () -> Unit, onGoHome: () -> Unit) {
     EmptyShell(
-        heading = "No one is in this list yet.",
-        body = "Add a few people to start surfacing names.",
-        primaryText = "Add contacts",
+        heading = stringResource(R.string.card_no_members_heading),
+        body = stringResource(R.string.card_no_members_body),
+        primaryText = stringResource(R.string.card_add_contacts),
         onPrimary = onAddContacts,
-        secondaryText = "Go home",
+        secondaryText = stringResource(R.string.card_go_home),
         onSecondary = onGoHome
     )
 }
@@ -390,20 +395,20 @@ private fun NothingEligibleShell(
 ) {
     val curtain = LocalPrivacyCurtain.current
     val body = if (state.upNextName != null && state.upNextLabel != null) {
-        val who = if (curtain) "Someone" else state.upNextName
-        "$who comes up ${state.upNextLabel}."
+        val who = if (curtain) stringResource(R.string.components_curtain_someone) else state.upNextName
+        stringResource(R.string.card_quiet_body_up_next, who, state.upNextLabel.asString())
     } else {
-        "No one needs a call right now."
+        stringResource(R.string.card_quiet_body)
     }
     EmptyShell(
         // CARD-05: a calm word for "nobody is due right now". Not "caught up":
         // the queue is continuous by design (HOME-6, SurfaceResult.kt), so
         // nothing here suggests a backlog was cleared or a task finished.
-        heading = "All quiet for now.",
+        heading = stringResource(R.string.card_quiet_heading),
         body = body,
-        primaryText = "Browse this list",
+        primaryText = stringResource(R.string.card_browse_list),
         onPrimary = onBrowse,
-        secondaryText = "Go home",
+        secondaryText = stringResource(R.string.card_go_home),
         onSecondary = onGoHome
     )
 }
@@ -451,9 +456,9 @@ private fun EmptyShell(
 @Composable
 private fun ErrorShell(cause: String, onGoHome: () -> Unit) {
     EmptyShell(
-        heading = "Something's off here.",
-        body = "Pull back and try this list again in a moment.",
-        primaryText = "Go home",
+        heading = stringResource(R.string.card_error_heading),
+        body = stringResource(R.string.card_error_body),
+        primaryText = stringResource(R.string.card_go_home),
         onPrimary = onGoHome
     )
     // Keep `cause` referenced so the parameter isn't elided; surface only
@@ -475,7 +480,8 @@ private fun ReadyCard(
     val frameState = remember { CardSwipeFrameState() }
     val curtain = LocalPrivacyCurtain.current
     // Masked like the face and app bar: "Call Contact" under the curtain.
-    val firstName = (if (curtain) "Contact" else contact.name).substringBefore(' ')
+    val maskedName = stringResource(R.string.components_curtain_contact)
+    val firstName = (if (curtain) maskedName else contact.name).substringBefore(' ')
 
     Column(modifier = Modifier.fillMaxSize()) {
         CardSwipeFrame(
@@ -503,7 +509,11 @@ private fun ReadyCard(
                 label = "card face",
                 modifier = Modifier.fillMaxSize()
             ) { face ->
-                val faceFirst = (if (curtain) "Contact" else face.contact.name).substringBefore(' ')
+                val faceFirst = (if (curtain) maskedName else face.contact.name).substringBefore(' ')
+                // Resolved here: the semantics block below is not composable.
+                val callLabel = stringResource(R.string.card_call, faceFirst)
+                val laterLabel = stringResource(R.string.card_later)
+                val soonerLabel = stringResource(R.string.card_sooner)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -515,7 +525,7 @@ private fun ReadyCard(
                         // placed a call (one was placed by accident in review).
                         // A call reaches another person and can't be undone, so
                         // only the labelled Call button dials.
-                        .clickable(onClickLabel = "Open details", role = Role.Button) {
+                        .clickable(onClickLabel = stringResource(R.string.card_open_details), role = Role.Button) {
                             onOpenContact(face.contactId)
                         }
                         // The swipes, and the call, as named actions on the node
@@ -523,11 +533,11 @@ private fun ReadyCard(
                         // non-focusable frame, out of reach).
                         .semantics {
                             customActions = listOf(
-                                CustomAccessibilityAction("Call $faceFirst") {
+                                CustomAccessibilityAction(callLabel) {
                                     onTapToCall(face.contactId, face.contact.phone); true
                                 },
-                                CustomAccessibilityAction("Later") { frameState.requestSwipeLeft(); true },
-                                CustomAccessibilityAction("Sooner") { frameState.requestSwipeRight(); true },
+                                CustomAccessibilityAction(laterLabel) { frameState.requestSwipeLeft(); true },
+                                CustomAccessibilityAction(soonerLabel) { frameState.requestSwipeRight(); true },
                             )
                         }
                 ) {
@@ -559,15 +569,15 @@ private fun ReadyCard(
             // haptic as a drag) instead of mutating with zero motion. CARD-02:
             // they carry their names, "Later" and "Sooner", on screen and to
             // TalkBack; the bare arrows were unlabelled.
-            CircleSideButton("arrow-left", label = "Later", onClick = frameState::requestSwipeLeft)
+            CircleSideButton("arrow-left", label = stringResource(R.string.card_later), onClick = frameState::requestSwipeLeft)
             OrbitButton(
-                text = "Call $firstName",
+                text = stringResource(R.string.card_call, firstName),
                 onClick = { onTapToCall(contactId, contact.phone) },
                 leadingIcon = "phone-call",
                 height = 56.dp,
                 modifier = Modifier.weight(1f)
             )
-            CircleSideButton("arrow-right", label = "Sooner", onClick = frameState::requestSwipeRight)
+            CircleSideButton("arrow-right", label = stringResource(R.string.card_sooner), onClick = frameState::requestSwipeRight)
         }
 
         // A visible way in for anyone who doesn't guess the card is tappable.
@@ -580,7 +590,7 @@ private fun ReadyCard(
                 .padding(bottom = OrbitTheme.spacing.x3)
         ) {
             Text(
-                text = "View details",
+                text = stringResource(R.string.card_view_details),
                 style = OrbitTheme.type.skipAffordance,
                 color = OrbitTheme.colors.fgMuted,
                 textAlign = TextAlign.Center,
@@ -615,7 +625,7 @@ private fun BoxScope.GhostHints(offsetFraction: Float) {
                 .background(OrbitTheme.colors.swipeGhostSooner.copy(alpha = absFrac * 0.18f))
                 .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x1)
         ) {
-            OrbitChip(label = "Sooner", tone = ChipTone.Sage)
+            OrbitChip(label = stringResource(R.string.card_sooner), tone = ChipTone.Sage)
         }
     } else {
         Box(
@@ -627,7 +637,7 @@ private fun BoxScope.GhostHints(offsetFraction: Float) {
                 .background(OrbitTheme.colors.swipeGhostDefer.copy(alpha = absFrac * 0.18f))
                 .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x1)
         ) {
-            OrbitChip(label = "Later", tone = ChipTone.Stone)
+            OrbitChip(label = stringResource(R.string.card_later), tone = ChipTone.Stone)
         }
     }
 }
@@ -667,7 +677,7 @@ internal fun ContactCardFace(
     listContext: String,
     nowHour: Int,
     isAheadOfToday: Boolean,
-    whyNowLine: String,
+    whyNowLine: UiText?,
     lastNote: NoteRow? = null
 ) {
     // 200% font-scale fix (2026-06-09 a11y sweep) — at default scale the
@@ -681,7 +691,7 @@ internal fun ContactCardFace(
     // surface does; the app bar above already reads "Contact" under the curtain,
     // and a real name (or real initials) on the card below it was the leak.
     val curtain = LocalPrivacyCurtain.current
-    val shownName = if (curtain) "Contact" else contact.name
+    val shownName = if (curtain) stringResource(R.string.components_curtain_contact) else contact.name
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -706,7 +716,7 @@ internal fun ContactCardFace(
             // due yet" past the waterline. Sentence case per voice.md (it was
             // lowercase "due today" / "ahead of today", which read as a typo).
             Text(
-                text = if (isAheadOfToday) "Not due yet" else "Due today",
+                text = stringResource(if (isAheadOfToday) R.string.card_not_due_yet else R.string.card_due_today),
                 style = OrbitTheme.type.eyebrow,
                 color = OrbitTheme.colors.fgMuted
             )
@@ -718,10 +728,10 @@ internal fun ContactCardFace(
             )
             // 2026-06-09 — why-now line from the last connected call
             // ("It's been 3 weeks."). Hidden when there's no history.
-            if (whyNowLine.isNotBlank()) {
+            if (whyNowLine != null) {
                 Spacer(Modifier.height(OrbitTheme.spacing.x1))
                 Text(
-                    text = whyNowLine,
+                    text = whyNowLine.asString(),
                     style = OrbitTheme.type.meta,
                     color = OrbitTheme.colors.fgMuted,
                     textAlign = TextAlign.Center
@@ -733,7 +743,7 @@ internal fun ContactCardFace(
             if (lastNote != null && !curtain) {
                 Spacer(Modifier.height(OrbitTheme.spacing.x3))
                 Text(
-                    text = "\u201C${lastNote.body}\u201D",
+                    text = stringResource(R.string.card_last_note_quoted, lastNote.body),
                     style = OrbitTheme.type.body,
                     color = OrbitTheme.colors.fg,
                     textAlign = TextAlign.Center,
@@ -741,7 +751,7 @@ internal fun ContactCardFace(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Your note, ${lastNote.relativeTimestamp}",
+                    text = stringResource(R.string.card_last_note_meta, lastNote.relativeTimestamp),
                     style = OrbitTheme.type.meta,
                     color = OrbitTheme.colors.fgMuted
                 )
@@ -787,7 +797,7 @@ private fun NoCallHistoryPanel() {
             .padding(OrbitTheme.spacing.x4)
     ) {
         Text(
-            text = "No call history yet",
+            text = stringResource(R.string.card_no_call_history),
             style = OrbitTheme.type.meta,
             color = OrbitTheme.colors.fgMuted
         )
@@ -821,13 +831,16 @@ private fun UsuallyAnswersCard(contact: Contact, nowHour: Int) {
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = "Usually answers",
+                    text = stringResource(R.string.card_usually_answers),
                     style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted),
                     // Shrinks before the info button does, so the button
                     // survives 200% font scale.
                     modifier = Modifier.weight(1f, fill = false)
                 )
-                InfoTip(text = USUALLY_TOOLTIP, label = "About usually answers")
+                InfoTip(
+                    text = stringResource(R.string.card_usually_tooltip),
+                    label = stringResource(R.string.card_usually_tooltip_label),
+                )
             }
             Text(
                 text = contact.bestWindowLabel,
@@ -840,11 +853,11 @@ private fun UsuallyAnswersCard(contact: Contact, nowHour: Int) {
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         val peak = contact.heat.getOrNull(nowHour) ?: 0f
         val (tone, label) = when {
-            peak >= 0.6f -> ChipTone.Sage to "Good time to call"
-            peak >= 0.3f -> ChipTone.Amber to "Sometimes answers now"
-            else -> ChipTone.Stone to "Rarely answers now"
+            peak >= 0.6f -> ChipTone.Sage to R.string.card_answer_good
+            peak >= 0.3f -> ChipTone.Amber to R.string.card_answer_sometimes
+            else -> ChipTone.Stone to R.string.card_answer_rarely
         }
-        OrbitChip(label = label, tone = tone)
+        OrbitChip(label = stringResource(label), tone = tone)
     }
 }
 
@@ -883,8 +896,16 @@ private fun HeatStrip(heat: FloatArray, nowHour: Int) {
             .padding(top = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        listOf("12a", "6a", "12p", "6p", "12a").forEach {
-            Text(it, style = OrbitTheme.type.timelineAxis, color = OrbitTheme.colors.fgSubtle)
+        // Midnight, 6am, noon, 6pm, midnight (strings_time.xml, shared with a
+        // list's active hours bar).
+        listOf(
+            R.string.time_axis_midnight,
+            R.string.time_axis_6am,
+            R.string.time_axis_noon,
+            R.string.time_axis_6pm,
+            R.string.time_axis_midnight,
+        ).forEach {
+            Text(stringResource(it), style = OrbitTheme.type.timelineAxis, color = OrbitTheme.colors.fgSubtle)
         }
     }
 }
@@ -901,13 +922,15 @@ private fun StatRow(contact: Contact) {
         // placeholders. "Pickup" was dropped: call_events stores connected
         // calls only, so a pickup rate is not computable — "Calls" (total
         // recorded) is the truthful third stat.
-        Stat("Last called", contact.lastCalledLabel.ifBlank { "Never" }, Modifier.weight(1f))
+        val none = stringResource(R.string.card_stat_none)
+        val never = stringResource(R.string.card_stat_never)
+        Stat(stringResource(R.string.card_stat_last_called), contact.lastCalledLabel.ifBlank { never }, Modifier.weight(1f))
         Divider(28.dp)
-        Stat("Avg length", contact.avgLengthLabel.ifBlank { "—" }, Modifier.weight(1f))
+        Stat(stringResource(R.string.card_stat_avg_length), contact.avgLengthLabel.ifBlank { none }, Modifier.weight(1f))
         Divider(28.dp)
         Stat(
-            "Calls",
-            if (contact.totalCalls > 0) "${contact.totalCalls}" else "—",
+            stringResource(R.string.card_stat_calls),
+            if (contact.totalCalls > 0) "${contact.totalCalls}" else none,
             Modifier.weight(1f)
         )
     }
@@ -978,7 +1001,11 @@ private val previewState: CardViewUiState = CardViewUiState.Ready(
         )
     ),
     nowHour = 19,
-    whyNowLine = "It's been 11 days.\nYou usually talk about every 2 weeks."
+    whyNowLine = UiText.res(
+        R.string.card_why_two_lines,
+        UiText.res(R.string.card_why_span, "11 days"),
+        UiText.plural(R.plurals.card_rhythm_weeks, 2, 2),
+    )
 )
 
 private val previewStateAhead: CardViewUiState = CardViewUiState.Ready(
@@ -989,7 +1016,7 @@ private val previewStateAhead: CardViewUiState = CardViewUiState.Ready(
     recentNotes = emptyList(),
     nowHour = 19,
     isAheadOfToday = true,
-    whyNowLine = "You talked yesterday."
+    whyNowLine = UiText.res(R.string.card_why_yesterday)
 )
 
 @Composable
@@ -1052,7 +1079,7 @@ private fun CardViewContentNothingEligiblePreview() {
         PreviewContent(
             state = CardViewUiState.EmptyNothingEligible(
                 upNextName = "Avery Quinn",
-                upNextLabel = "on Tuesday"
+                upNextLabel = UiText.res(R.string.card_due_on_day, "Tuesday")
             )
         )
     }

@@ -35,8 +35,8 @@ Long-press on a list tile opens an anchored menu of manage-this-list actions. Th
 
 - Menu items, in order:
   1. **Add people** — routes to the contact picker scoped to this list (`Routes.pickContacts(listId)`).
-  2. **Mute prompts** / **Unmute prompts** — toggles the list's notification reminders *in place*, no navigation. Label and effect reflect the list's current `notificationsEnabled`. Confirms with a brief snackbar ("Prompts muted." / "Prompts on.").
-  3. **List settings** — opens List Configuration (`Routes.listConfig(listId)`).
+  2. **List settings**: opens List Configuration (`Routes.listConfig(listId)`).
+  3. **Pause nudges** / **Resume nudges**: pauses or resumes the list's nudges *in place*, no navigation. Label and effect reflect the list's current `notificationsEnabled`. Confirms with a brief snackbar ("Nudges paused." / "Nudges on.").
   4. — divider —
   5. **Archive** — removes the list from home, reversible. Reuses the existing "List archived." + Undo snackbar.
   6. **Delete**: destructive. Opens the existing confirmation dialog ("This removes the list. People stay in your contacts."), then deletes **with an Undo snackbar** (see decision below).
@@ -68,8 +68,8 @@ The strip under each card shows the list's last 7 days, one stacked bar per qual
 - [ ] Dark mode + 200% font scale + TalkBack pass.
 - [ ] Tap target minimum 48×48dp for every tile.
 - [ ] Long-press a list tile opens the quick-actions menu; a plain tap still routes to Card View (unchanged).
-- [ ] Menu order is exactly: Add people · Mute/Unmute prompts · List settings · (divider) · Archive · Delete.
-- [ ] "Mute prompts" / "Unmute prompts" label matches the list's current `notificationsEnabled`; tapping it flips the flag in place with a confirming snackbar and no navigation.
+- [ ] Menu order is exactly: Add people · List settings · Pause/Resume nudges · (divider) · Archive · Delete.
+- [ ] "Pause nudges" / "Resume nudges" label matches the list's current `notificationsEnabled`; tapping it flips the flag in place with a confirming snackbar ("Nudges paused." / "Nudges on.") and no navigation.
 - [ ] Delete opens the confirmation dialog, then deletes with an Undo snackbar; Archive's existing Undo is unchanged.
 - [ ] Only one quick-actions menu is open at a time; long-pressing another tile or tapping out dismisses it.
 - [ ] Long-press carries an `onLongClickLabel` ("Quick actions") and every menu item is ≥ 48dp with a TalkBack-readable label.
@@ -130,7 +130,7 @@ Navigation callbacks stay in the NavHost. The two non-navigation actions (mute t
 
 Reads: `ListEntity` (name, order, archived flag) joined with computed due-count. Due-count computed by rule-engine (`features/rule-engine/README.md`) over `ContactEntity` × `CallStatEntity` for members of each list.
 
-The home `ListTileState` (`ui/screens/home/HomeUiState.kt`) carries `notificationsEnabled: Boolean` (sourced straight from `ListEntity.notificationsEnabled`, so the long-press menu renders "Mute prompts" vs "Unmute prompts" without a second read) and `memberCount: Int?` (hydrated from `ListRepository.observeMemberCountsByListId()` for the tile subtitle; null = not yet hydrated, subtitle stays quiet).
+The home `ListTileState` (`ui/screens/home/HomeUiState.kt`) carries `notificationsEnabled: Boolean` (sourced straight from `ListEntity.notificationsEnabled`, so the long-press menu renders "Pause nudges" vs "Resume nudges" without a second read) and `memberCount: Int?` (hydrated from `ListRepository.observeMemberCountsByListId()` for the tile subtitle; null = not yet hydrated, subtitle stays quiet).
 
 ### Permissions / integrations
 

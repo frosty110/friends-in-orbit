@@ -5,9 +5,11 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.orbit.R
 import app.orbit.data.Contact
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -48,7 +50,7 @@ class CardFaceCurtainTest {
                         listContext = "Inner orbit",
                         nowHour = 19,
                         isAheadOfToday = false,
-                        whyNowLine = "It's been 11 days.",
+                        whyNowLine = UiText.res(R.string.card_why_span, "11 days"),
                     )
                 }
             }

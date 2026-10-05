@@ -74,15 +74,15 @@ class ThemeContrastTest {
     @Test
     fun `every curated theme clears WCAG AA in both modes`() {
         for (def in OrbitThemes.all) {
-            checkPalette("${def.id.displayName} light", def.light)
-            checkPalette("${def.id.displayName} dark", def.dark)
+            checkPalette("${def.id.name} light", def.light)
+            checkPalette("${def.id.name} dark", def.dark)
         }
         assertNoFailures()
     }
 
     @Test
     fun `snackbars keep their text and action legible in every theme`() {
-        for (def in OrbitThemes.all) checkInverse(def.id.displayName, ThemeSettings(themeId = def.id))
+        for (def in OrbitThemes.all) checkInverse(def.id.name, ThemeSettings(themeId = def.id))
         assertNoFailures()
     }
 
@@ -110,7 +110,7 @@ class ThemeContrastTest {
                     listOf("terracotta" to terracotta, "sage" to sage, "amber" to amber, "brick" to brick, "stone" to stone)
                 }
                 for ((slot, t) in chips) {
-                    assertContrast("${def.id.displayName} $label chip:$slot", t.fg, t.bg, uiAA)
+                    assertContrast("${def.id.name} $label chip:$slot", t.fg, t.bg, uiAA)
                 }
             }
         }

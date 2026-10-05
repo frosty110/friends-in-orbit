@@ -78,6 +78,9 @@ class ListsManagerViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
+    // Rule summaries and snackbar copy are UiText; resolve them against real resources.
+    private val context = ApplicationProvider.getApplicationContext<Context>()
+
     private fun firstReady(
         items: suspend () -> ListsManagerUiState
     ): suspend () -> ListsManagerUiState = items
@@ -218,7 +221,7 @@ class ListsManagerViewModelTest {
             if (first is ListsManagerUiState.Loading) first = awaitItem()
             val ready = first as ListsManagerUiState.Ready
             val tile = ready.active.single()
-            assertEquals("Recently added · 30 days", tile.ruleSummary)
+            assertEquals("Recently added · 30 days", tile.ruleSummary?.asString(context))
             assertEquals(ListType.SMART, tile.type)
             cancelAndIgnoreRemainingEvents()
         }
@@ -456,8 +459,8 @@ class ListsManagerViewModelTest {
         vm.snackbarEvents.test(timeout = 2.seconds) {
             vm.deleteList(9L)
             val event = awaitItem()
-            assertEquals("List deleted.", event.message)
-            assertEquals("Undo", event.actionLabel)
+            assertEquals("List deleted.", event.message.asString(context))
+            assertEquals("Undo", event.actionLabel?.asString(context))
             assertEquals(HomeSnackbarEvent.Kind.DELETE_UNDO, event.kind)
             assertEquals(9L, event.payloadListId)
             cancelAndIgnoreRemainingEvents()

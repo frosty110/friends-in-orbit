@@ -17,9 +17,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import app.orbit.BuildConfig
+import app.orbit.R
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 
@@ -47,12 +49,12 @@ fun AboutSection(
 
     Column {
         AboutRow(
-            primary = "Orbit",
-            secondary = "Version ${BuildConfig.VERSION_NAME}",
+            primary = stringResource(R.string.app_name),
+            secondary = stringResource(R.string.settings_about_version, BuildConfig.VERSION_NAME),
             onClick = null,
         )
         AboutRow(
-            primary = "Send feedback",
+            primary = stringResource(R.string.settings_about_feedback),
             secondary = "hello@bearlumen.com",
             onClick = {
                 val intent = Intent(
@@ -63,8 +65,8 @@ fun AboutSection(
             },
         )
         AboutRow(
-            primary = "Privacy policy",
-            secondary = "Read how Orbit handles your data",
+            primary = stringResource(R.string.settings_about_privacy),
+            secondary = stringResource(R.string.settings_about_privacy_sub),
             onClick = {
                 val intent = Intent(
                     Intent.ACTION_VIEW,
@@ -74,13 +76,13 @@ fun AboutSection(
             },
         )
         AboutRow(
-            primary = "Source code",
+            primary = stringResource(R.string.settings_about_source),
             secondary = "github.com/frosty110/friends-in-orbit",
             onClick = onSourceCode,
         )
         AboutRow(
-            primary = "Open source licenses",
-            secondary = "What we built on",
+            primary = stringResource(R.string.settings_about_licenses),
+            secondary = stringResource(R.string.settings_about_licenses_sub),
             onClick = { showLicenses = true },
         )
     }

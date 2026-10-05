@@ -3,6 +3,7 @@ package app.orbit.ui.screens.card
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.NoteRow
 import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.ListMembershipEntity
@@ -19,6 +20,7 @@ import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.SkipContactUseCase
 import app.orbit.domain.usecase.SurfaceResult
 import app.orbit.domain.usecase.SurfaceSoonerUseCase
+import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatAbsolute
 import app.orbit.ui.util.formatRelative
 import app.orbit.ui.util.formatSpan
@@ -138,7 +140,13 @@ class CardViewViewModel @Inject constructor(
     fun onSwipeLeft(contactId: Long) = viewModelScope.launch {
         callAckJob?.cancel()
         val name = firstNameOf(contactId)
-        runMutation("Couldn't move ${name ?: "them"} to later. Try again.") {
+        runMutation(
+            if (name != null) {
+                UiText.res(R.string.card_later_failed_named, name)
+            } else {
+                UiText.res(R.string.card_later_failed_unnamed)
+            },
+        ) {
             val prior = captureSchedule(contactId)
             skipContact(contactId = contactId, listId = listId)
             val newDue = focusedDueAfterMutation(contactId)
@@ -150,7 +158,13 @@ class CardViewViewModel @Inject constructor(
     fun onSwipeRight(contactId: Long) = viewModelScope.launch {
         callAckJob?.cancel()
         val name = firstNameOf(contactId)
-        runMutation("Couldn't move ${name ?: "them"} sooner. Try again.") {
+        runMutation(
+            if (name != null) {
+                UiText.res(R.string.card_sooner_failed_named, name)
+            } else {
+                UiText.res(R.string.card_sooner_failed_unnamed)
+            },
+        ) {
             val prior = captureSchedule(contactId)
             surfaceSooner(contactId = contactId, listId = listId)
             val newDue = focusedDueAfterMutation(contactId)
@@ -211,7 +225,12 @@ class CardViewViewModel @Inject constructor(
                 uiState.first { state -> state !is CardViewUiState.Loading && (state as? CardViewUiState.Ready)?.contactId != contactId }
             }
             if (moved != null) {
-                _messages.tryEmit(CardMessage.Called(text = if (name != null) "Called $name" else "Call logged", contactId = contactId))
+                val text = if (name != null) {
+                    UiText.res(R.string.card_called_named, name)
+                } else {
+                    UiText.res(R.string.card_call_logged)
+                }
+                _messages.tryEmit(CardMessage.Called(text = text, contactId = contactId))
             }
         }
     }
@@ -223,7 +242,7 @@ class CardViewViewModel @Inject constructor(
      */
     fun onUndo(token: Long) = viewModelScope.launch {
         if (token != undoToken) return@launch
-        runMutation("Couldn't undo that. Try again.") { undoStack.take()?.inverse?.invoke() }
+        runMutation(UiText.res(R.string.card_undo_failed)) { undoStack.take()?.inverse?.invoke() }
     }
 
     // ─── Swipe-undo internals ────────────────────────────────────────────────
@@ -249,8 +268,12 @@ class CardViewViewModel @Inject constructor(
      * Stage the inverse (exact `nextDueAt` + `skipCount` restore per touched
      * membership) on the depth-1 [UndoStack] and emit the snackbar. The
      * recompute keeps `lists.dueCount` consistent after the restore.
+     *
+     * [label] is the snackbar's text and travels as [UiText] in [CardMessage].
+     * `UndoStack.PendingUndo.label` is a domain String nothing reads, so it
+     * gets a fixed, non-copy tag rather than English.
      */
-    private fun stageUndo(prior: List<ListMembershipEntity>, label: String) {
+    private fun stageUndo(prior: List<ListMembershipEntity>, label: UiText) {
         val inverse: suspend () -> Unit = {
             prior.forEach { membership ->
                 listRepo.restoreMembershipSchedule(
@@ -262,7 +285,7 @@ class CardViewViewModel @Inject constructor(
                 listRepo.recomputeDueCountForList(membership.listId, clock.now())
             }
         }
-        undoStack.put(UndoStack.PendingUndo(inverse, label))
+        undoStack.put(UndoStack.PendingUndo(inverse, UNDO_TAG))
         val token = ++undoToken
         _messages.tryEmit(CardMessage.Undoable(text = label, token = token))
     }
@@ -274,15 +297,27 @@ class CardViewViewModel @Inject constructor(
             ?.contact?.name?.trim()?.substringBefore(' ')?.ifBlank { null }
 
     // CARD-02: the snackbar names the person and says when they come back, in
-    // the app's two verbs for this, Later and Sooner (voice.md glossary).
-    private fun laterMessage(name: String?, newDue: Instant?): String {
-        val who = name ?: "They"
-        return newDue?.let { "$who will come up again ${futureDueLabel(it, clock.now())}." } ?: "$who moved to later."
+    // the app's two verbs for this, Later and Sooner (voice.md glossary). A
+    // separate sentence for an unknown name, so no language has to fit "They"
+    // into a slot meant for a name.
+    private fun laterMessage(name: String?, newDue: Instant?): UiText {
+        val `when` = newDue?.let { futureDueLabel(it, clock.now()) }
+        return when {
+            name != null && `when` != null -> UiText.res(R.string.card_later_named_when, name, `when`)
+            name != null -> UiText.res(R.string.card_later_named, name)
+            `when` != null -> UiText.res(R.string.card_later_unnamed_when, `when`)
+            else -> UiText.res(R.string.card_later_unnamed)
+        }
     }
 
-    private fun soonerMessage(name: String?, newDue: Instant?): String {
-        val who = name ?: "They"
-        return newDue?.let { "$who is now due ${futureDueLabel(it, clock.now())}." } ?: "$who moved sooner."
+    private fun soonerMessage(name: String?, newDue: Instant?): UiText {
+        val `when` = newDue?.let { futureDueLabel(it, clock.now()) }
+        return when {
+            name != null && `when` != null -> UiText.res(R.string.card_sooner_named_when, name, `when`)
+            name != null -> UiText.res(R.string.card_sooner_named, name)
+            `when` != null -> UiText.res(R.string.card_sooner_unnamed_when, `when`)
+            else -> UiText.res(R.string.card_sooner_unnamed)
+        }
     }
 
     /**
@@ -290,7 +325,7 @@ class CardViewViewModel @Inject constructor(
      * instead of silently dropping them inside `viewModelScope.launch`.
      * CancellationException is rethrown so structured concurrency stays intact.
      */
-    private suspend fun runMutation(failureLabel: String, block: suspend () -> Unit) {
+    private suspend fun runMutation(failureLabel: UiText, block: suspend () -> Unit) {
         try {
             block()
         } catch (t: Throwable) {
@@ -338,23 +373,25 @@ class CardViewViewModel @Inject constructor(
 
     /**
      * Honest one-line framing from the most recent call event (manual marks
-     * count — the user told us they talked): "It's been 3 weeks." Empty when
+     * count, the user told us they talked): "It's been 3 weeks." Null when
      * there is no history at all — the screen's neutral "No call history yet"
-     * panel covers that case instead.
+     * panel covers that case instead. formatSpan still returns English; it
+     * slots into the resource sentence until RelativeTime returns UiText.
      */
-    private fun whyNowLine(recentCalls: List<CallEventEntity>, now: Instant): String {
+    private fun whyNowLine(recentCalls: List<CallEventEntity>, now: Instant): UiText? {
         val lastCallAt = recentCalls
             .maxByOrNull { it.occurredAt }
             ?.occurredAt
-            ?: return ""
+            ?: return null
         val days = Duration.between(lastCallAt, now).toDays().coerceAtLeast(0L)
         val since = when (days) {
-            0L -> "You talked today."
-            1L -> "You talked yesterday."
-            else -> "It's been ${formatSpan(days)}."
+            0L -> UiText.res(R.string.card_why_today)
+            1L -> UiText.res(R.string.card_why_yesterday)
+            else -> UiText.res(R.string.card_why_span, formatSpan(days))
         }
         // Two short lines read better than one that wraps mid-phrase.
-        return listOfNotNull(since, rhythmSentence(recentCalls)).joinToString("\n")
+        val rhythm = rhythmSentence(recentCalls) ?: return since
+        return UiText.res(R.string.card_why_two_lines, since, rhythm)
     }
 
     /**
@@ -364,35 +401,37 @@ class CardViewViewModel @Inject constructor(
      * there are four calls (three gaps), because a rhythm from two calls is
      * a guess. Stated as a fact, never as a deadline (voice.md: no guilt).
      */
-    private fun rhythmSentence(recentCalls: List<CallEventEntity>): String? {
+    private fun rhythmSentence(recentCalls: List<CallEventEntity>): UiText? {
         val times = recentCalls.map { it.occurredAt }.distinct().sorted()
         if (times.size < 4) return null
         val gaps = times.zipWithNext { a, b -> Duration.between(a, b).toDays() }.filter { it > 0 }.sorted()
         if (gaps.size < 3) return null
         val median = gaps[gaps.size / 2]
-        val every = when {
-            median <= 1L -> "every day"
-            median < 7L -> "every $median days"
-            median < 11L -> "every week"
-            median < 60L -> "every ${(median + 3) / 7} weeks"
-            else -> "every ${(median + 15) / 30} months"
+        return when {
+            median <= 1L -> UiText.res(R.string.card_rhythm_daily)
+            median < 7L -> median.toInt().let { UiText.plural(R.plurals.card_rhythm_days, it, it) }
+            median < 11L -> UiText.res(R.string.card_rhythm_weekly)
+            median < 60L -> ((median + 3) / 7).toInt().let { UiText.plural(R.plurals.card_rhythm_weeks, it, it) }
+            else -> ((median + 15) / 30).toInt().let { UiText.plural(R.plurals.card_rhythm_months, it, it) }
         }
-        return "You usually talk about $every."
     }
 
     /**
      * Forward-looking phrase for snackbars and the up-next hint:
      * "later today" / "tomorrow" / "on Tuesday" / "in 12 days" / "in 3 weeks"
-     * / "in 2 months". Lowercase fragment so it slots mid-sentence.
+     * / "in 2 months". Lowercase fragment so it slots mid-sentence (a nested
+     * [UiText] argument of the snackbar and up-next sentences).
      */
-    private fun futureDueLabel(due: Instant, now: Instant): String {
+    private fun futureDueLabel(due: Instant, now: Instant): UiText {
         val days = Duration.between(now, due).toDays()
         return when {
-            days <= 0L -> "later today"
-            days == 1L -> "tomorrow"
-            days < 7L -> "on " + due.atZone(zoneId).dayOfWeek
-                .getDisplayName(TextStyle.FULL, Locale.getDefault())
-            else -> "in ${formatSpan(days)}"
+            days <= 0L -> UiText.res(R.string.card_due_later_today)
+            days == 1L -> UiText.res(R.string.card_due_tomorrow)
+            days < 7L -> UiText.res(
+                R.string.card_due_on_day,
+                due.atZone(zoneId).dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()),
+            )
+            else -> UiText.res(R.string.card_due_in_span, formatSpan(days))
         }
     }
 
@@ -412,3 +451,6 @@ class CardViewViewModel @Inject constructor(
 
 /** How long to wait for the call log to confirm a call before saying nothing. */
 private const val CALL_ACK_WAIT_MS = 15_000L
+
+/** Non-copy tag for `UndoStack.PendingUndo.label`; see [CardViewViewModel.stageUndo]. */
+private const val UNDO_TAG = "card-later-sooner"

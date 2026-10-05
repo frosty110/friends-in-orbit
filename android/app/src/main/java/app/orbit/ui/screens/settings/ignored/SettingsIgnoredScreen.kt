@@ -26,12 +26,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.orbit.R
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
@@ -42,6 +44,7 @@ import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.asString
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -109,12 +112,12 @@ private fun SettingsIgnoredContent(
 
     OrbitScreen {
         OrbitAppBar(
-            title = "Ignored",
+            title = stringResource(R.string.settings_ignored_title),
             leading = {
                 OrbitIconButton(
                     icon = "arrow-left",
                     onClick = onBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.components_action_back),
                 )
             },
         )
@@ -149,12 +152,12 @@ private fun EmptyState() {
         PhIcon(name = "eye-slash", size = 32.dp, tint = OrbitTheme.colors.fgMuted)
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
         Text(
-            text = "No ignored contacts",
+            text = stringResource(R.string.settings_ignored_none),
             style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x3))
         Text(
-            text = "Hidden from surfacing — history kept",
+            text = stringResource(R.string.settings_ignored_empty_body),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             textAlign = TextAlign.Center,
             modifier = Modifier.widthIn(max = 280.dp),
@@ -179,7 +182,7 @@ private fun IgnoredContactRowComposable(
     onUnignore: (Long, String) -> Unit,
 ) {
     val curtain = LocalPrivacyCurtain.current
-    val displayName = if (curtain) "Contact" else row.name
+    val displayName = if (curtain) stringResource(R.string.components_curtain_contact) else row.name
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -202,12 +205,12 @@ private fun IgnoredContactRowComposable(
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             Text(
-                text = row.ignoredRelativeLabel,
+                text = row.ignoredRelativeLabel.asString(),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
             )
         }
         OrbitButton(
-            text = "Un-ignore",
+            text = stringResource(R.string.settings_ignored_unignore),
             onClick = { onUnignore(row.id, row.name) },
             variant = OrbitButtonVariant.Secondary,
         )

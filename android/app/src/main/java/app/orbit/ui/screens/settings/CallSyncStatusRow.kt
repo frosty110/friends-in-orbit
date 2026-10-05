@@ -13,7 +13,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -82,15 +84,21 @@ private fun SyncStatusRow(
             .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
         val now = System.currentTimeMillis()
-        val rel = remember(lastSyncedAtMs, now) {
+        // DateUtils' relative time is already localized; it slots into the
+        // resource sentence ("Last synced {5 minutes ago}").
+        val relative = remember(lastSyncedAtMs, now) {
             if (lastSyncedAtMs <= 0L) {
-                "Never synced."
+                null
             } else {
-                "Last synced " +
-                    DateUtils.getRelativeTimeSpanString(
-                        lastSyncedAtMs, now, DateUtils.MINUTE_IN_MILLIS
-                    ).toString().lowercase()
+                DateUtils.getRelativeTimeSpanString(
+                    lastSyncedAtMs, now, DateUtils.MINUTE_IN_MILLIS
+                ).toString().lowercase()
             }
+        }
+        val rel = if (relative == null) {
+            stringResource(R.string.settings_sync_never)
+        } else {
+            stringResource(R.string.settings_sync_last, relative)
         }
         Text(
             text = rel,
@@ -102,7 +110,7 @@ private fun SyncStatusRow(
             modifier = Modifier.padding(top = 8.dp)
         ) {
             OrbitButton(
-                text = if (inFlight) "Syncing…" else "Sync now",
+                text = stringResource(if (inFlight) R.string.settings_syncing else R.string.settings_sync_now),
                 onClick = onSyncNow,
                 enabled = enabled && !inFlight,
                 variant = OrbitButtonVariant.Secondary

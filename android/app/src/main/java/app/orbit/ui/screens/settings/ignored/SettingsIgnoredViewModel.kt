@@ -2,6 +2,7 @@ package app.orbit.ui.screens.settings.ignored
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.repository.ContactRepository
 import app.orbit.domain.clock.Clock
@@ -9,6 +10,7 @@ import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
 import app.orbit.ui.screens.picker.SnackbarEvent
+import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatRelative
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Instant
@@ -110,7 +112,9 @@ class SettingsIgnoredViewModel @Inject constructor(
             name = displayName,
             photoUri = photoUri,
             ignoredAtMs = ignoredInstant.toEpochMilli(),
-            ignoredRelativeLabel = "Ignored " + formatRelative(ignoredInstant, now)
+            // formatRelative still returns English; it slots into the resource
+            // sentence until RelativeTime returns UiText.
+            ignoredRelativeLabel = UiText.res(R.string.settings_ignored_relative, formatRelative(ignoredInstant, now))
         )
     }
 }

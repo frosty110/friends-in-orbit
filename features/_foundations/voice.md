@@ -63,3 +63,14 @@ Added 2026-10-05 ([UX rubric](../../vision/ux-rubric.md) D7). The same idea had 
 
 **Time since a call** is always worded by one formatter, the same way everywhere: "today", "yesterday", "3 days ago", "2 weeks ago", "3 months ago". Never "27 days ago" on one screen and "3 weeks" on another. Times of day follow the phone's 12 or 24 hour setting.
 
+## Where copy lives
+
+Added 2026-10-05 ([UX rubric](../../vision/ux-rubric.md) 3.4: every string can be translated). The words above are decided here; the strings themselves live in Android resources, never as literals in Kotlin.
+
+- **One file per area** in `android/app/src/main/res/values/`: `strings_home.xml`, `strings_card.xml`, `strings_lists.xml`, `strings_onboarding.xml`, `strings_settings.xml`, `strings_time.xml` (time-of-day words shared by several screens) and `strings_components.xml` (shared components, plus the chrome words every screen uses: Back, Cancel, Save, Done, Continue, Undo, Archive, Delete, and the privacy curtain's "Contact", "List" and "Someone"). `strings.xml` keeps the app name and the widget copy. Content descriptions, click labels, custom accessibility actions and snackbars are copy too.
+- **Keys are `area_what`** in snake_case, the area being the file's: `card_call`, `lists_snackbar_archived`, `home_menu_pause_nudges`, `components_action_undo`.
+- **Positional arguments** (`%1$s`, `%2$d`), and **`<plurals>` wherever a count appears** ("1 person", "12 people"), even where English doesn't change, because other languages do. Keep a sentence whole and put the variable part in an argument; don't build copy by joining fragments. A short XML comment tells the translator what an argument is or where a string shows when that isn't obvious.
+- **Composables** call `stringResource` / `pluralStringResource`. Text for a `semantics { }` block or another non-composable lambda is resolved in composition first and captured.
+- **ViewModels never hold a Context.** User-facing text in UI state and one-off events (snackbars) is `UiText` (`ui/util/UiText.kt`): `UiText.res(R.string.x, args)` or `UiText.plural(R.plurals.x, count, args)`, resolved by the composable with `asString()` (or `asString(context)` inside a snackbar collector). An argument may itself be a `UiText` ("Sarah will come up again {in 2 weeks}"). `UiText.Plain` is only for user data, such as a name the user typed; English copy is never wrapped in it. Tests either compare `UiText` values or resolve them against Robolectric resources (`ApplicationProvider.getApplicationContext()`).
+- **Not copy**, so it stays in code: log tags, routes, DataStore keys, test tags, preview fixtures, and library and license names.
+

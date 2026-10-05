@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.PhIcon
@@ -99,7 +101,7 @@ private fun OnboardingDoneContent(
         step = null,
         onBack = null,
         primary = OnboardingAction(
-            label = "Open Orbit",
+            label = stringResource(R.string.onb_done_cta),
             onClick = onFinish,
             enabled = completed,
         ),
@@ -123,14 +125,14 @@ private fun OnboardingDoneContent(
             }
             Spacer(Modifier.height(OrbitTheme.spacing.x6))
             Text(
-                text = "You're set up.",
+                text = stringResource(R.string.onb_done_title),
                 style = OrbitTheme.type.title.copy(color = OrbitTheme.colors.fg),
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
             // Teach the core loop (one card, yes or no), not list-browsing.
             Text(
-                text = "Orbit hands you one name at a time. Call them, or choose Later and they'll come back around.",
+                text = stringResource(R.string.onb_done_body),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4),
@@ -162,18 +164,20 @@ private fun NudgeAskCard(state: NudgeAsk, onAllow: () -> Unit) {
         PhIcon(name = "bell", size = 22.dp, tint = OrbitTheme.colors.fgMuted)
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
-            text = when (state) {
-                NudgeAsk.Ask -> "Want a gentle nudge when someone is worth a call?"
-                NudgeAsk.On -> "Nudges are on. Each list can change when they come."
-                NudgeAsk.Declined -> "No nudges for now. You can turn them on in Settings."
-            },
+            text = stringResource(
+                when (state) {
+                    NudgeAsk.Ask -> R.string.onb_done_nudge_ask
+                    NudgeAsk.On -> R.string.onb_done_nudge_on
+                    NudgeAsk.Declined -> R.string.onb_done_nudge_declined
+                },
+            ),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             textAlign = TextAlign.Center,
         )
         if (state == NudgeAsk.Ask) {
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
             OrbitButton(
-                text = "Allow nudges",
+                text = stringResource(R.string.onb_done_allow_nudges),
                 onClick = onAllow,
                 variant = OrbitButtonVariant.Secondary,
             )
@@ -190,14 +194,16 @@ private fun NudgeAskCard(state: NudgeAsk, onAllow: () -> Unit) {
  */
 @Composable
 private fun SwipeHint() {
+    val swipeDescription = stringResource(R.string.onb_done_swipe_a11y)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x5),
         modifier = Modifier.clearAndSetSemantics {
-            contentDescription = "Swipe left for later, swipe right for sooner."
+            contentDescription = swipeDescription
         },
     ) {
-        SwipeHintSide(icon = "arrow-left", label = "Later")
+        // The same words Card view commits under (strings_card.xml).
+        SwipeHintSide(icon = "arrow-left", label = stringResource(R.string.card_later))
         // Mini card: a quiet surface with an avatar dot and a name-length
         // bar — just enough to read as "a person's card".
         Column(
@@ -222,7 +228,7 @@ private fun SwipeHint() {
                     .background(OrbitTheme.colors.lineSoft),
             )
         }
-        SwipeHintSide(icon = "arrow-right", label = "Sooner")
+        SwipeHintSide(icon = "arrow-right", label = stringResource(R.string.card_sooner))
     }
 }
 
