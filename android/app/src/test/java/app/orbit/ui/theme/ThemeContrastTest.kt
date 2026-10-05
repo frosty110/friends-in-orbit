@@ -23,6 +23,7 @@ import org.junit.Test
 class ThemeContrastTest {
 
     private val bodyAA = 4.5f
+    private val enhanced = 7.0f
     private val uiAA = 3.0f
 
     // Collected, not thrown at the first miss, so one run names every failing
@@ -46,6 +47,10 @@ class ThemeContrastTest {
             assertContrast("$name fgMuted/$surfaceName", c.fgMuted, surface, bodyAA)
             assertContrast("$name fgSubtle/$surfaceName", c.fgSubtle, surface, bodyAA)
         }
+        // Primary text meets WCAG AAA 1.4.6 (7:1), the enhanced-contrast
+        // criterion the UX rubric adopts for reading (decision 1).
+        assertContrast("$name fg/bg (AAA)", c.fg, c.bg, enhanced)
+        assertContrast("$name fg/surface (AAA)", c.fg, c.surface, enhanced)
         // Button labels are text: 4.5, at rest and pressed.
         assertContrast("$name accentFg/accent", c.accentFg, c.accent, bodyAA)
         assertContrast("$name accentFg/accentPress", c.accentFg, c.accentPress, bodyAA)

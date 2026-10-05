@@ -53,7 +53,8 @@ pressed (`accentFg` on `accent` / `accentPress`), the accent used as text, green
 status text (`positiveText`, never `positive`), destructive labels, and a
 snackbar's text and action on its inverse bar. 3:1 for UI parts that are not
 text: the accent against the surface, the outline that marks a text field,
-checkbox or unchecked switch. `ThemeContrastTest` fails the build if any curated
+checkbox or unchecked switch. Primary text (`fg`) also clears 7:1 on `bg` and
+`surface` (WCAG AAA 1.4.6, UX rubric decision 1). `ThemeContrastTest` fails the build if any curated
 theme, the Wallpaper theme at any hue, or the accent dial at any hue misses one
 of these in either mode. A new theme ships only when that test passes.
 (Tightened 2026-10-05: button labels were held to 3:1, which let white on Warm's
