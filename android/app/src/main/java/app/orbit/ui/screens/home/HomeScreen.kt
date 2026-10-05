@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -44,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -82,8 +84,8 @@ import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.PostCallBanner
 import app.orbit.ui.screens.lists.DeleteListDialog
-import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.LocalReducedMotion
+import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
 import app.orbit.ui.util.UiText
@@ -349,10 +351,13 @@ private fun HomeContent(
             }
         } else {
             // HOME-5 — single column of full-width tonal cards.
+            // 12dp side margins below 380dp (16dp otherwise), so seven
+            // rhythm days get 48dp each on a 360dp phone.
+            val sideMargin = if (LocalConfiguration.current.screenWidthDp < 380) OrbitTheme.spacing.x3 else OrbitTheme.spacing.x4
             LazyColumn(
                 contentPadding = PaddingValues(
-                    start = OrbitTheme.spacing.x4,
-                    end = OrbitTheme.spacing.x4,
+                    start = sideMargin,
+                    end = sideMargin,
                     top = OrbitTheme.spacing.x3,
                     bottom = OrbitTheme.spacing.x6,
                 ),
@@ -492,7 +497,7 @@ private fun ListTile(
             // Zone 1: tinted header band, list name beside Next up. At large
             // font scales the two stack instead: side by side, the name sat in
             // a fixed 118dp column and clipped at 200% (rubric gate G3).
-            val stacked = LocalDensity.current.fontScale > 1.3f
+            val largeText = LocalDensity.current.fontScale > 1.3f
             val nameBlock: @Composable (Modifier) -> Unit = { blockModifier ->
                 Column(blockModifier) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -527,28 +532,34 @@ private fun ListTile(
                     modifier = rowModifier,
                 )
             }
-            if (stacked) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(tone.band)
-                        .padding(OrbitTheme.spacing.x4),
-                    verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
-                ) {
-                    nameBlock(Modifier.fillMaxWidth())
-                    nextUpRow(Modifier.fillMaxWidth())
-                }
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(tone.band)
-                        .padding(OrbitTheme.spacing.x4),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    nameBlock(Modifier.width(118.dp))
-                    Spacer(Modifier.width(OrbitTheme.spacing.x3))
-                    nextUpRow(Modifier.weight(1f))
+            // Also stacked on a narrow card: on a 360dp phone, side by side
+            // left "Next up" about 54dp for its text, so "3 weeks since you
+            // last spoke" truncated to "3 week..." (found rendering at w360dp).
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val stacked = largeText || maxWidth < NARROW_CARD
+                if (stacked) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(tone.band)
+                            .padding(OrbitTheme.spacing.x4),
+                        verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
+                    ) {
+                        nameBlock(Modifier.fillMaxWidth())
+                        nextUpRow(Modifier.fillMaxWidth())
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(tone.band)
+                            .padding(OrbitTheme.spacing.x4),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        nameBlock(Modifier.width(118.dp))
+                        Spacer(Modifier.width(OrbitTheme.spacing.x3))
+                        nextUpRow(Modifier.weight(1f))
+                    }
                 }
             }
             // Zone 2 — lighter wash under the 7-day rhythm.
@@ -557,15 +568,17 @@ private fun ListTile(
                     .fillMaxWidth()
                     .background(tone.wash)
                     .padding(
-                        start = OrbitTheme.spacing.x4,
-                        end = OrbitTheme.spacing.x4,
                         top = OrbitTheme.spacing.x3,
                         bottom = OrbitTheme.spacing.x4,
                     ),
             ) {
+                // The day columns span the card's full width (the header row
+                // keeps its inset), so each day is a wider target: 42dp per
+                // day on a 360dp phone was under the 48dp floor.
                 RhythmStrip(
                     rhythm = tile.rhythm,
                     onDayClick = { index -> openDayIndex = index },
+                    headerPadding = OrbitTheme.spacing.x4,
                 )
             }
         }
@@ -687,7 +700,11 @@ private fun NextUpRow(
  *     calls: who, which way, how long, when.
  */
 @Composable
-private fun RhythmStrip(rhythm: List<RhythmDay>, onDayClick: (index: Int) -> Unit) {
+private fun RhythmStrip(
+    rhythm: List<RhythmDay>,
+    onDayClick: (index: Int) -> Unit,
+    headerPadding: Dp = 0.dp,
+) {
     val labels = remember {
         val today = LocalDate.now()
         (0..6).map { offset ->
@@ -700,7 +717,7 @@ private fun RhythmStrip(rhythm: List<RhythmDay>, onDayClick: (index: Int) -> Uni
 
     Column(Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = headerPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -1039,3 +1056,6 @@ private fun HomeContentErrorPreview() {
         )
     }
 }
+
+/** Below this card width the list header stacks name over Next up. */
+private val NARROW_CARD = 360.dp

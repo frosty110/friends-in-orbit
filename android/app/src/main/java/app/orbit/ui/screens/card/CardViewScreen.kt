@@ -13,13 +13,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -483,123 +486,167 @@ private fun ReadyCard(
     val maskedName = stringResource(R.string.components_curtain_contact)
     val firstName = (if (curtain) maskedName else contact.name).substringBefore(' ')
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        CardSwipeFrame(
-            contactKey = contactId,
-            emissionKey = state,
-            frameState = frameState,
-            onSwipeLeft = { onSwipeLeft(contactId) },
-            onSwipeRight = { onSwipeRight(contactId) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x3),
-            ghostOverlay = { offsetFraction -> GhostHints(offsetFraction) }
-        ) {
-            // Crossfade keyed on contactId: the outgoing face fades while the
-            // incoming face fades in, so card advancement reads as one quiet
-            // motion instead of a teleporting snap-back (2026-06-09 fix).
-            AnimatedContent(
-                targetState = state,
-                transitionSpec = {
-                    fadeIn(tween(OrbitMotion.DurBaseMs, easing = OrbitMotion.EaseOut)) togetherWith
-                        fadeOut(tween(OrbitMotion.DurBaseMs, easing = OrbitMotion.EaseOut))
-                },
-                contentKey = { it.contactId },
-                label = "card face",
-                modifier = Modifier.fillMaxSize()
-            ) { face ->
-                val faceFirst = (if (curtain) maskedName else face.contact.name).substringBefore(' ')
-                // Resolved here: the semantics block below is not composable.
-                val callLabel = stringResource(R.string.card_call, faceFirst)
-                val laterLabel = stringResource(R.string.card_later)
-                val soonerLabel = stringResource(R.string.card_sooner)
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .orbitHeroShadow(OrbitTheme.shapes.xl, OrbitTheme.colors.isDark)
-                        .clip(OrbitTheme.shapes.xl)
-                        .background(OrbitTheme.colors.surface)
-                        // CARD-01: tapping the face opens the person's details.
-                        // It used to dial, so the natural "look closer" tap
-                        // placed a call (one was placed by accident in review).
-                        // A call reaches another person and can't be undone, so
-                        // only the labelled Call button dials.
-                        .clickable(onClickLabel = stringResource(R.string.card_open_details), role = Role.Button) {
-                            onOpenContact(face.contactId)
-                        }
-                        // The swipes, and the call, as named actions on the node
-                        // TalkBack actually focuses (they used to sit on the
-                        // non-focusable frame, out of reach).
-                        .semantics {
-                            customActions = listOf(
-                                CustomAccessibilityAction(callLabel) {
-                                    onTapToCall(face.contactId, face.contact.phone); true
-                                },
-                                CustomAccessibilityAction(laterLabel) { frameState.requestSwipeLeft(); true },
-                                CustomAccessibilityAction(soonerLabel) { frameState.requestSwipeRight(); true },
-                            )
-                        }
-                ) {
-                    ContactCardFace(
-                        contact = face.contact,
-                        listContext = face.listContext,
-                        nowHour = face.nowHour,
-                        isAheadOfToday = face.isAheadOfToday,
-                        whyNowLine = face.whyNowLine,
-                        lastNote = face.recentNotes.firstOrNull()
-                    )
+    // CARD-06: in landscape on a phone (short and wide) the card and its
+    // actions sit side by side. Stacked, the card face got about 120dp of
+    // height and showed only the top of the avatar (rubric gate G3, found by
+    // rendering at w740dp-h360dp). Portrait is unchanged.
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val sideBySide = maxWidth > maxHeight && maxHeight < LANDSCAPE_MAX_HEIGHT
+        val frame: @Composable (Modifier) -> Unit = { frameModifier ->
+            CardSwipeFrame(
+                contactKey = contactId,
+                emissionKey = state,
+                frameState = frameState,
+                onSwipeLeft = { onSwipeLeft(contactId) },
+                onSwipeRight = { onSwipeRight(contactId) },
+                modifier = frameModifier
+                    .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x3),
+                ghostOverlay = { offsetFraction -> GhostHints(offsetFraction) }
+            ) {
+                // Crossfade keyed on contactId: the outgoing face fades while the
+                // incoming face fades in, so card advancement reads as one quiet
+                // motion instead of a teleporting snap-back (2026-06-09 fix).
+                AnimatedContent(
+                    targetState = state,
+                    transitionSpec = {
+                        fadeIn(tween(OrbitMotion.DurBaseMs, easing = OrbitMotion.EaseOut)) togetherWith
+                            fadeOut(tween(OrbitMotion.DurBaseMs, easing = OrbitMotion.EaseOut))
+                    },
+                    contentKey = { it.contactId },
+                    label = "card face",
+                    modifier = Modifier.fillMaxSize()
+                ) { face ->
+                    val faceFirst = (if (curtain) maskedName else face.contact.name).substringBefore(' ')
+                    // Resolved here: the semantics block below is not composable.
+                    val callLabel = stringResource(R.string.card_call, faceFirst)
+                    val laterLabel = stringResource(R.string.card_later)
+                    val soonerLabel = stringResource(R.string.card_sooner)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .orbitHeroShadow(OrbitTheme.shapes.xl, OrbitTheme.colors.isDark)
+                            .clip(OrbitTheme.shapes.xl)
+                            .background(OrbitTheme.colors.surface)
+                            // CARD-01: tapping the face opens the person's details.
+                            // It used to dial, so the natural "look closer" tap
+                            // placed a call (one was placed by accident in review).
+                            // A call reaches another person and can't be undone, so
+                            // only the labelled Call button dials.
+                            .clickable(onClickLabel = stringResource(R.string.card_open_details), role = Role.Button) {
+                                onOpenContact(face.contactId)
+                            }
+                            // The swipes, and the call, as named actions on the node
+                            // TalkBack actually focuses (they used to sit on the
+                            // non-focusable frame, out of reach).
+                            .semantics {
+                                customActions = listOf(
+                                    CustomAccessibilityAction(callLabel) {
+                                        onTapToCall(face.contactId, face.contact.phone); true
+                                    },
+                                    CustomAccessibilityAction(laterLabel) { frameState.requestSwipeLeft(); true },
+                                    CustomAccessibilityAction(soonerLabel) { frameState.requestSwipeRight(); true },
+                                )
+                            }
+                    ) {
+                        ContactCardFace(
+                            contact = face.contact,
+                            listContext = face.listContext,
+                            nowHour = face.nowHour,
+                            isAheadOfToday = face.isAheadOfToday,
+                            whyNowLine = face.whyNowLine,
+                            lastNote = face.recentNotes.firstOrNull()
+                        )
+                    }
                 }
             }
         }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
-            verticalAlignment = Alignment.Top,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = OrbitTheme.spacing.x4,
-                    end = OrbitTheme.spacing.x4,
-                    top = OrbitTheme.spacing.x4,
-                    bottom = OrbitTheme.spacing.x2
+        val actions: @Composable () -> Unit = {
+            val laterButton: @Composable () -> Unit = {
+                CircleSideButton("arrow-left", label = stringResource(R.string.card_later), onClick = frameState::requestSwipeLeft)
+            }
+            val soonerButton: @Composable () -> Unit = {
+                CircleSideButton("arrow-right", label = stringResource(R.string.card_sooner), onClick = frameState::requestSwipeRight)
+            }
+            val callButton: @Composable (Modifier) -> Unit = { callModifier ->
+                OrbitButton(
+                    text = stringResource(R.string.card_call, firstName),
+                    onClick = { onTapToCall(contactId, contact.phone) },
+                    leadingIcon = "phone-call",
+                    height = 56.dp,
+                    modifier = callModifier
                 )
-        ) {
+            }
+            val rowPadding = Modifier.padding(
+                start = OrbitTheme.spacing.x4,
+                end = OrbitTheme.spacing.x4,
+                top = OrbitTheme.spacing.x4,
+                bottom = OrbitTheme.spacing.x2
+            )
             // Buttons animate the card to its anchor (same settle path +
             // haptic as a drag) instead of mutating with zero motion. CARD-02:
             // they carry their names, "Later" and "Sooner", on screen and to
             // TalkBack; the bare arrows were unlabelled.
-            CircleSideButton("arrow-left", label = stringResource(R.string.card_later), onClick = frameState::requestSwipeLeft)
-            OrbitButton(
-                text = stringResource(R.string.card_call, firstName),
-                onClick = { onTapToCall(contactId, contact.phone) },
-                leadingIcon = "phone-call",
-                height = 56.dp,
-                modifier = Modifier.weight(1f)
-            )
-            CircleSideButton("arrow-right", label = stringResource(R.string.card_sooner), onClick = frameState::requestSwipeRight)
-        }
+            if (LocalDensity.current.fontScale > 1.3f) {
+                // Large text (CARD-06): Call gets its own full-width row. Between
+                // the two labelled side buttons it was left too narrow for one
+                // word, and at 200% read "Cal / l / Av / ery".
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
+                    modifier = Modifier.fillMaxWidth().then(rowPadding),
+                ) {
+                    callButton(Modifier.fillMaxWidth())
+                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        laterButton()
+                        soonerButton()
+                    }
+                }
+            } else {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
+                    verticalAlignment = Alignment.Top,
+                    modifier = Modifier.fillMaxWidth().then(rowPadding),
+                ) {
+                    laterButton()
+                    callButton(Modifier.weight(1f))
+                    soonerButton()
+                }
+            }
 
-        // A visible way in for anyone who doesn't guess the card is tappable.
-        // "Skip" used to sit here too; it did exactly what Later does, under a
-        // third name for the same thing.
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = OrbitTheme.spacing.x3)
-        ) {
-            Text(
-                text = stringResource(R.string.card_view_details),
-                style = OrbitTheme.type.skipAffordance,
-                color = OrbitTheme.colors.fgMuted,
-                textAlign = TextAlign.Center,
+            // A visible way in for anyone who doesn't guess the card is tappable.
+            // "Skip" used to sit here too; it did exactly what Later does, under a
+            // third name for the same thing.
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .defaultMinSize(minWidth = 96.dp, minHeight = OrbitTheme.spacing.tapMin)
-                    .clip(OrbitTheme.shapes.md)
-                    .clickable(role = Role.Button) { onOpenContact(contactId) }
-                    .padding(OrbitTheme.spacing.x3)
-            )
+                    .fillMaxWidth()
+                    .padding(bottom = OrbitTheme.spacing.x3)
+            ) {
+                Text(
+                    text = stringResource(R.string.card_view_details),
+                    style = OrbitTheme.type.skipAffordance,
+                    color = OrbitTheme.colors.fgMuted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .defaultMinSize(minWidth = 96.dp, minHeight = OrbitTheme.spacing.tapMin)
+                        .clip(OrbitTheme.shapes.md)
+                        .clickable(role = Role.Button) { onOpenContact(contactId) }
+                        .padding(OrbitTheme.spacing.x3)
+                )
+            }
+        }
+        if (sideBySide) {
+            Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                frame(Modifier.weight(1f).fillMaxHeight())
+                Column(
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.width(LANDSCAPE_ACTIONS_WIDTH),
+                ) { actions() }
+            }
+        } else {
+            Column(modifier = Modifier.fillMaxSize()) {
+                frame(Modifier.fillMaxWidth().weight(1f))
+                actions()
+            }
         }
     }
 }
@@ -680,96 +727,87 @@ internal fun ContactCardFace(
     whyNowLine: UiText?,
     lastNote: NoteRow? = null
 ) {
-    // 200% font-scale fix (2026-06-09 a11y sweep) — at default scale the
-    // weight spacer pins StatRow to the card's bottom edge; at large font
-    // scales the content outgrows the fixed card and the stats clipped
-    // off the bottom. Above the threshold the column scrolls instead
-    // (vertical scroll is cross-axis to CardSwipeFrame's horizontal drag,
-    // so swipe handling is unaffected). Default-scale layout is untouched.
-    val scrollForFontScale = LocalDensity.current.fontScale > 1.3f
+    // The face always scrolls when its content does not fit, and otherwise
+    // pins StatRow to the bottom edge (SpaceBetween over a min height of the
+    // card). It used to scroll only above 130% font scale, so at 130% on a
+    // 360dp phone the stats and pattern panel were crushed and clipped
+    // (rubric gate G3, found by rendering at w360dp). Vertical scroll is
+    // cross-axis to CardSwipeFrame's horizontal drag, so swiping is unaffected.
     // PRIV-03: the face renders contact.name, so it masks it like every other
     // surface does; the app bar above already reads "Contact" under the curtain,
     // and a real name (or real initials) on the card below it was the leak.
     val curtain = LocalPrivacyCurtain.current
     val shownName = if (curtain) stringResource(R.string.components_curtain_contact) else contact.name
-    Box(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier
-                .fillMaxSize()
-                .then(
-                    if (scrollForFontScale) {
-                        Modifier.verticalScroll(
-                            rememberScrollState()
-                        )
-                    } else {
-                        Modifier
-                    }
-                )
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
                 .padding(horizontal = OrbitTheme.spacing.x6, vertical = OrbitTheme.spacing.x6)
         ) {
-            Spacer(Modifier.height(OrbitTheme.spacing.x6))
-            Avatar(name = shownName, size = 104.dp, photoUri = if (curtain) null else contact.photoUri)
-            Spacer(Modifier.height(OrbitTheme.spacing.x3))
-            // Tide marker (2026-05-08): small framing line above the contact
-            // name. "Due today" when the engine's nextDueAt has arrived; "Not
-            // due yet" past the waterline. Sentence case per voice.md (it was
-            // lowercase "due today" / "ahead of today", which read as a typo).
-            Text(
-                text = stringResource(if (isAheadOfToday) R.string.card_not_due_yet else R.string.card_due_today),
-                style = OrbitTheme.type.eyebrow,
-                color = OrbitTheme.colors.fgMuted
-            )
-            Spacer(Modifier.height(OrbitTheme.spacing.x1))
-            Text(
-                text = shownName,
-                style = OrbitTheme.type.contactName,
-                color = OrbitTheme.colors.fg
-            )
-            // 2026-06-09 — why-now line from the last connected call
-            // ("It's been 3 weeks."). Hidden when there's no history.
-            if (whyNowLine != null) {
-                Spacer(Modifier.height(OrbitTheme.spacing.x1))
-                Text(
-                    text = whyNowLine.asString(),
-                    style = OrbitTheme.type.meta,
-                    color = OrbitTheme.colors.fgMuted,
-                    textAlign = TextAlign.Center
-                )
-            }
-            // CARD-04: the last thing you noted is the best reason to call,
-            // so it leads the context, ahead of the statistics. Note bodies
-            // are private, so the curtain hides it.
-            if (lastNote != null && !curtain) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Spacer(Modifier.height(OrbitTheme.spacing.x6))
+                Avatar(name = shownName, size = 104.dp, photoUri = if (curtain) null else contact.photoUri)
                 Spacer(Modifier.height(OrbitTheme.spacing.x3))
+                // Tide marker (2026-05-08): small framing line above the contact
+                // name. "Due today" when the engine's nextDueAt has arrived; "Not
+                // due yet" past the waterline. Sentence case per voice.md (it was
+                // lowercase "due today" / "ahead of today", which read as a typo).
                 Text(
-                    text = stringResource(R.string.card_last_note_quoted, lastNote.body),
-                    style = OrbitTheme.type.body,
-                    color = OrbitTheme.colors.fg,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = stringResource(R.string.card_last_note_meta, lastNote.relativeTimestamp),
-                    style = OrbitTheme.type.meta,
+                    text = stringResource(if (isAheadOfToday) R.string.card_not_due_yet else R.string.card_due_today),
+                    style = OrbitTheme.type.eyebrow,
                     color = OrbitTheme.colors.fgMuted
                 )
+                Spacer(Modifier.height(OrbitTheme.spacing.x1))
+                Text(
+                    text = shownName,
+                    style = OrbitTheme.type.contactName,
+                    color = OrbitTheme.colors.fg
+                )
+                // 2026-06-09 — why-now line from the last connected call
+                // ("It's been 3 weeks."). Hidden when there's no history.
+                if (whyNowLine != null) {
+                    Spacer(Modifier.height(OrbitTheme.spacing.x1))
+                    Text(
+                        text = whyNowLine.asString(),
+                        style = OrbitTheme.type.meta,
+                        color = OrbitTheme.colors.fgMuted,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                // CARD-04: the last thing you noted is the best reason to call,
+                // so it leads the context, ahead of the statistics. Note bodies
+                // are private, so the curtain hides it.
+                if (lastNote != null && !curtain) {
+                    Spacer(Modifier.height(OrbitTheme.spacing.x3))
+                    Text(
+                        text = stringResource(R.string.card_last_note_quoted, lastNote.body),
+                        style = OrbitTheme.type.body,
+                        color = OrbitTheme.colors.fg,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = stringResource(R.string.card_last_note_meta, lastNote.relativeTimestamp),
+                        style = OrbitTheme.type.meta,
+                        color = OrbitTheme.colors.fgMuted
+                    )
+                }
+                Spacer(Modifier.height(OrbitTheme.spacing.x4))
+                // The pattern panel needs real signal — below the connected-call
+                // floor the heat array stays all-zero and we show a neutral line
+                // instead of a false "Rarely answers now" chip (2026-06-09 fix).
+                if (contact.heat.any { it > 0f }) {
+                    UsuallyAnswersCard(contact, nowHour)
+                } else {
+                    NoCallHistoryPanel()
+                }
             }
-            Spacer(Modifier.height(OrbitTheme.spacing.x4))
-            // The pattern panel needs real signal — below the connected-call
-            // floor the heat array stays all-zero and we show a neutral line
-            // instead of a false "Rarely answers now" chip (2026-06-09 fix).
-            if (contact.heat.any { it > 0f }) {
-                UsuallyAnswersCard(contact, nowHour)
-            } else {
-                NoCallHistoryPanel()
-            }
-            if (scrollForFontScale) {
-                Spacer(Modifier.height(OrbitTheme.spacing.x6))
-            } else {
-                Spacer(Modifier.weight(1f))
-            }
+            Spacer(Modifier.height(OrbitTheme.spacing.x6))
             StatRow(contact)
         }
         // List-context chip, top-right; respects privacy curtain via wrapper.
@@ -1084,3 +1122,9 @@ private fun CardViewContentNothingEligiblePreview() {
         )
     }
 }
+
+/** Card view switches to side by side below this height when wider than tall (CARD-06). */
+private val LANDSCAPE_MAX_HEIGHT = 480.dp
+
+/** Width of the actions column in side-by-side Card view. */
+private val LANDSCAPE_ACTIONS_WIDTH = 320.dp

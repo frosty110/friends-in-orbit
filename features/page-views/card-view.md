@@ -19,3 +19,4 @@ What a user expects to see or do here:
 - After a call the log confirms, see "Called {name}" with "Add a note" (CARD-03)
 - The three-dots menu: Browse people, Add contacts, Edit list
 - When nobody is due, a calm "All quiet for now." with who comes up next and when (CARD-05)
+- In landscape on a phone, the card on the left and its actions beside it; with large text, Call on its own row (CARD-06)

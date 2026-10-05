@@ -17,6 +17,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import sergio.sastre.composable.preview.scanner.android.AndroidComposablePreviewScanner
@@ -52,6 +53,9 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
         val night = (info.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         val fontScale = if (info.fontScale > 0f) info.fontScale else 1f
 
+        // -Porbit.screenshots.qualifiers=w360dp-h740dp (or a landscape set)
+        // renders at another size, for gate G3 (360dp phones, landscape).
+        qualifiers?.let { RuntimeEnvironment.setQualifiers(it) }
         // A focused text field blinks its cursor forever, so Compose never
         // reports idle. Drive the clock by hand instead: long enough for every
         // finite entry animation to land, then capture.
@@ -123,6 +127,7 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
 
     companion object {
         private const val SETTLE_MS = 2_000L
+        private val qualifiers: String? = System.getProperty("orbit.screenshots.qualifiers")?.takeIf { it.isNotBlank() }
         private const val TAP_MIN_DP = 48f
 
         private val a11yDir: File by lazy { File(outputDir, "a11y").apply { mkdirs() } }
@@ -175,7 +180,8 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
             val mode = if (night) "dark" else "light"
             val scale = if (fontScale != 1f) "-font${fontScale.toString().replace('.', '_')}" else ""
             val index = p.previewIndex?.takeIf { it > 0 }?.let { "-$it" }.orEmpty()
-            return "$owner.${p.methodName}$index-$mode$scale.png"
+            val size = qualifiers?.let { "-" + it.replace(Regex("[^A-Za-z0-9]+"), "_") }.orEmpty()
+            return "$owner.${p.methodName}$index-$mode$scale$size.png"
         }
 
         @JvmStatic

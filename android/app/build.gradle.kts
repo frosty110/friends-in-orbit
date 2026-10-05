@@ -210,6 +210,7 @@ tasks.withType<Test>().configureEach {
         systemProperty("roborazzi.test.record", "true")
         systemProperty("orbit.screenshots.dir", layout.buildDirectory.dir("screenshots").get().asFile.absolutePath)
         (project.findProperty("orbit.screenshots.only") as String?)?.let { systemProperty("orbit.screenshots.only", it) }
+        (project.findProperty("orbit.screenshots.qualifiers") as String?)?.let { systemProperty("orbit.screenshots.qualifiers", it) }
         // -Porbit.a11y.strict fails a preview on any accessibility finding.
         if (project.hasProperty("orbit.a11y.strict")) systemProperty("orbit.a11y.strict", "true")
         retry { maxRetries.set(0) }
