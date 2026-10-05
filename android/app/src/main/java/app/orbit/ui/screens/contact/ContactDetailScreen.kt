@@ -263,7 +263,11 @@ private fun ContactDetailContent(
     // Manual connection log — same rememberSaveable rationale as PauseSheet.
     var showLogConnectionSheet by rememberSaveable { mutableStateOf(false) }
 
-    val readyContactName: String? = (state as? ContactDetailUiState.Ready)?.contact?.name
+    // PRIV-03: the overflow's TalkBack label names the person, so it is
+    // masked with every other name. Under the curtain it read "More actions
+    // for Avery Quinn" (ContactDetailCurtainTest).
+    val curtain = LocalPrivacyCurtain.current
+    val readyContactName: String? = (state as? ContactDetailUiState.Ready)?.contact?.name?.takeUnless { curtain }
 
     Box(modifier = Modifier.fillMaxSize()) {
         OrbitScreen {
@@ -1084,7 +1088,7 @@ private fun formatPhone(raw: String): String {
 // Preview fixture for the stateless ContactDetailContent.
 private val previewContact: app.orbit.data.Contact = app.orbit.data.Contact(
     id = "preview-1",
-    name = "Avery Quinn",
+    name = CURTAIN_FIXTURE_NAME,
     phone = "+1 555 0100",
     lastCalledLabel = UiText.plural(R.plurals.time_ago_days, 11, 11),
     avgLengthLabel = formatDuration(14 * 60),
@@ -1187,10 +1191,23 @@ private fun ContactDetailNewPersonPreview() {
 @PreviewLightDark
 @Composable
 private fun ContactDetailCurtainPreview() {
+    ContactDetailCurtainContent()
+}
+
+/**
+ * The curtained screen over the preview person ([CURTAIN_FIXTURE_NAME]).
+ * `internal` so ContactDetailCurtainTest can check the name reaches no text
+ * and no TalkBack label (the precedent is CardFaceCurtainTest's face).
+ */
+@Composable
+internal fun ContactDetailCurtainContent() {
     CompositionLocalProvider(LocalPrivacyCurtain provides true) {
         ContactDetailPreviewHost(previewState)
     }
 }
+
+/** The preview person's name, which must never show under the curtain. */
+internal const val CURTAIN_FIXTURE_NAME = "Avery Quinn"
 
 @PreviewLightDark
 @Composable
