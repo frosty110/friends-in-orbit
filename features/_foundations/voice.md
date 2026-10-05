@@ -62,6 +62,8 @@ Added 2026-10-05 ([UX rubric](../../vision/ux-rubric.md) D7). The same idea had 
 | **Note** | Something the user wrote about a person. | Memo, comment |
 | **Pause** | Stop nudges for a person or list for a while. | Mute (for people), suspend |
 
+**Stat labels** read the same on every screen: "Last call", "Total calls", "Average length", "Longest gap". No abbreviations ("Avg"), and "Last called" only inside a sentence ("Last called 3 weeks ago").
+
 **Time since a call** is always worded by one formatter (`ui/util/RelativeTime.kt`), the same way everywhere: "today", "yesterday", "3 days ago", "2 weeks ago", "3 months ago". Never "27 days ago" on one screen and "3 weeks" on another. Times of day follow the phone's 12 or 24 hour setting, and so do the tick labels under a 24-hour strip ("12a 6a 12p 6p" or "00 06 12 18") and the time picker's dial; the am/pm marker is the language's own.
 
 **People, not contacts.** The people in Orbit are "people" ("Add people", "Ignored 3 people", "Move 1 person"). "Contacts" means only the phone's own address book ("Contacts access is off", "Open in Contacts", "Re-link to a phone contact").

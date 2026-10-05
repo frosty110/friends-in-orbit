@@ -60,9 +60,9 @@
     <string name="card_answer_rarely">Rarely answers now</string>
 
     <!-- Three small stats at the foot of the card. -->
-    <string name="card_stat_last_called">Last called</string>
+    <string name="card_stat_last_called">Last call</string>
     <string name="card_stat_never">Never</string>
-    <string name="card_stat_avg_length">Avg length</string>
+    <string name="card_stat_avg_length">Average length</string>
     <string name="card_stat_calls">Calls</string>
     <!-- Stands in for a stat that has no value yet. A short dash. -->
     <string name="card_stat_none">–</string>

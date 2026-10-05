@@ -50,10 +50,10 @@
     <!-- Screen-reader name of the call button. %1$s: the person's first name. -->
     <string name="home_next_up_call">Call %1$s</string>
 
-    <!-- Lowercase line under the next person's name: warm context, never blame. -->
-    <string name="home_why_never">you haven\'t spoken yet</string>
-    <string name="home_why_today">you spoke today</string>
-    <string name="home_why_yesterday">you spoke yesterday</string>
+    <!-- The line under the next person's name: warm context, never blame. Sentence case (voice.md); it read as a typo starting lowercase on its own line. -->
+    <string name="home_why_never">You haven\'t spoken yet</string>
+    <string name="home_why_today">You spoke today</string>
+    <string name="home_why_yesterday">You spoke yesterday</string>
     <!-- %1$s: how long it has been, for example "3 weeks". -->
     <string name="home_why_span">%1$s since you last spoke</string>
 
