@@ -57,7 +57,8 @@ Added 2026-10-05 ([UX rubric](../../vision/ux-rubric.md) D7). The same idea had 
 | **Nudge** | The notification Orbit sends when someone on a list is worth a call. | Reminder, prompt, notification (in UI copy), alert |
 | **List** | A group of people the user keeps in touch with, with its own rhythm. | Orbit (as a noun for a list), group, circle |
 | **Rhythm** | How often the user means to talk to people on a list ("every 2 weeks"), and the 7-day strip on Home. | Cadence, frequency, interval, threshold |
-| **Call** | A phone call. "Log a call" for one Orbit couldn't see. | Connection (in UI copy), interaction |
+| **Call** | A phone call, which Orbit sees in the call log. | Interaction, touchpoint |
+| **Connection** | A conversation Orbit couldn't see (WhatsApp, a visit), added by hand with "Log a connection". Only for those. | Using it for a phone call |
 | **Note** | Something the user wrote about a person. | Memo, comment |
 | **Pause** | Stop nudges for a person or list for a while. | Mute (for people), suspend |
 

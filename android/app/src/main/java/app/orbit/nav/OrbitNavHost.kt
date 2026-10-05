@@ -83,9 +83,12 @@ import kotlinx.coroutines.launch
  *   in [MainActivity] so a recomposition does not re-navigate. The route is a
  *   fully-formed path ("card/{listId}", "search") built from [Routes].
  *
- *   Security: nav.navigate only resolves against declared Routes — an unknown or
- *   malformed string is a no-op (T-10-21). The PendingIntents are FLAG_IMMUTABLE so
- *   no external app can inject an arbitrary string (T-10-20).
+ *   Security: nav.navigate only resolves against declared Routes. It throws for an
+ *   unknown or malformed string, so the effect below ignores that case (T-10-21).
+ *   Orbit's own PendingIntents are FLAG_IMMUTABLE (T-10-20), but MainActivity is
+ *   exported, so another app can still start it with any extra; this guard is
+ *   what makes that harmless. (Until 2026-10-05 this said "a no-op", which was
+ *   wrong: an unknown route crashed the app.)
  * @param onNavigateToConsumed Callback invoked after navigation so the Activity
  *   clears the navigateTo state and prevents re-navigation on recomposition.
  */
@@ -105,7 +108,16 @@ fun OrbitNavHost(
     // re-navigation on config changes or recompositions.
     LaunchedEffect(navigateTo) {
         if (!navigateTo.isNullOrBlank()) {
-            nav.navigate(navigateTo)
+            // MainActivity is exported, so any app can hand it a route.
+            // Navigation throws IllegalArgumentException for a route outside
+            // the graph; an unknown route from outside is ignored (the app
+            // simply opens where it is) rather than crashing. Only that
+            // exception: anything else is a real bug and must surface.
+            try {
+                nav.navigate(navigateTo)
+            } catch (_: IllegalArgumentException) {
+                // Not a destination in this graph: nothing to open.
+            }
             onNavigateToConsumed()
         }
     }

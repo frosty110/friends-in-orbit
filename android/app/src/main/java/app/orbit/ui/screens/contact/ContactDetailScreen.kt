@@ -107,8 +107,9 @@ import kotlinx.coroutines.delay
  * can't see). The phone-number row is also tappable to dial.
  *
  * Privacy curtain (PRIV-03): hero name + lists-on chip labels render the
- * literal "Contact" when [LocalPrivacyCurtain] is true (focus-loss). Phone
- * number is intentionally NOT curtained (the PRIV-03 consumer set).
+ * literal "Contact" when [LocalPrivacyCurtain] is true (focus-loss). The
+ * phone number is masked too ("Number hidden", PRIV-07): a number identifies
+ * a person as surely as a name, and it used to show through the curtain.
  */
 @Composable
 fun ContactDetailScreen(
@@ -603,13 +604,14 @@ private fun ContactBodyLazyColumn(
                 )
                 // FINDING A — tappable phone row. ACTION_DIAL via the shared
                 // Dialer util (never CALL_PHONE); 48dp target per design rule 3.
-                val formattedPhone = formatPhone(contact.phone)
+                // PRIV-07: masked under the curtain like the name and photo.
+                val formattedPhone = if (curtain) "Number hidden" else formatPhone(contact.phone)
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
                         .clip(OrbitTheme.shapes.md)
-                        .clickable(enabled = hasPhone) { context.dialPhoneNumber(contact.phone) }
+                        .clickable(enabled = hasPhone && !curtain) { context.dialPhoneNumber(contact.phone) }
                         .semantics {
                             role = Role.Button
                             contentDescription = "Call $formattedPhone"
