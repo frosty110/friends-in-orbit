@@ -81,6 +81,8 @@ Status is about *sequencing and confidence*, not priority ranking. A "Later" can
 
 **Reviewing how the app flows?** Start with [Flows](./flows/flows.md): all 24 screens and 10 journeys as a clickable prototype built from the current code, with a stable ID per screen so feedback can name exactly what it is about.
 
+**Judging UX quality?** [ux-rubric.md](./ux-rubric.md) defines what world class means for Orbit, scores the app today against it, and lays out the plan to get there.
+
 | # | Surface | Intent in one line | Headline move | Status |
 |---|---------|--------------------|---------------|--------|
 | 00 | [Home](./00-home/00-home.md) | The front door — always hand you someone to call | "Next up" on every card; retire the "due/caught up" framing | Now |
