@@ -70,6 +70,23 @@ Material You's dynamic schemes repaint every surface. Orbit's calm comes from it
 
 ---
 
+## Shared components that carry the rules (2026-10-05)
+
+Reach for these before building a one-off; each exists because one-offs drifted.
+
+| Component | Use it for | The rule it carries |
+|---|---|---|
+| `Avatar(name, size, photoUri)` | Every person, everywhere | Photo with initials fallback, always a circle, hidden from TalkBack (the name is beside it), initials sized in dp so they fit at 200% |
+| `OrbitButton` / `OrbitIconButton` | Actions | 48dp, `Role.Button`, Primary is the screen's one accent, press overlay on every variant |
+| `OrbitSwitch` | On/off rows (`onCheckedChange = null` inside a `toggleable` row) | Announced as a switch; ink when on, so toggles never spend the accent |
+| `OrbitSlider` | Any range | Ink track, round thumb, and a `valueDescription` TalkBack reads in words ("Every 14 days") |
+| `SectionLabel` | The small label over a group | A heading for TalkBack navigation |
+| `InfoTip` | "What does this mean?" | Tappable (not long-press only), 48dp, Phosphor "info" |
+| `OrbitMark` | Brand moments | Drawn from tokens, settles once, static with animations off |
+| `OrbitScreen` | Every full screen | Insets (bars, cutouts, keyboard) and the 640dp content cap for wide windows |
+| `UiText` (`ui/util`) | Text a ViewModel or worker produces | Copy lives in resources; only user data is plain |
+| `formatSpan` / `formatRelative` / `formatClockTime` (`ui/util`) | Any duration or time | One wording for "time since", the phone's 12/24-hour setting |
+
 ## Known gaps
 
 - ~~**Inter is not bundled.**~~ Resolved 2026-10-05: Inter Regular, Medium, SemiBold and Bold ship as subset `.ttf` files in `res/font/` (SIL OFL 1.1, licence in `design/fonts/OFL.txt` and the in-app licences dialog). Numbers that change or line up (stats, badges, the timeline axis) use tabular figures.
