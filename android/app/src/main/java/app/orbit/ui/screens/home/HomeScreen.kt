@@ -57,6 +57,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.Dp
@@ -1003,6 +1004,36 @@ private fun HomeContentPreview() {
     OrbitTheme {
         HomeContent(
             state = previewState,
+            onOpenList = {},
+            onOpenSearch = {},
+            onOpenSettings = {},
+            onOpenLists = {},
+            onCreateList = {},
+        )
+    }
+}
+
+// Gate G3: a 40-character person and list name, at 100% and 200% text.
+@PreviewLightDark
+@Preview(name = "200%", fontScale = 2f)
+@Composable
+private fun HomeContentLongNamesPreview() {
+    OrbitTheme {
+        HomeContent(
+            state = HomeUiState.Ready(
+                lists = listOf(
+                    ListTileState(
+                        id = 1L, name = "Old friends from the climbing gym crew", dueCount = 12, type = ListType.STATIC, memberCount = 48,
+                        nextUp = NextUp(
+                            1L, "Bartholomew Montgomery-Featherstonehaugh", null,
+                            UiText.res(R.string.home_why_span, "3 weeks"), phone = "+1 555 0100",
+                        ),
+                        rhythm = previewRhythm(0),
+                    ),
+                ),
+                hasPermissions = true,
+                dueContactCount = 12,
+            ),
             onOpenList = {},
             onOpenSearch = {},
             onOpenSettings = {},

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,6 +56,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.Dp
@@ -746,10 +748,30 @@ internal fun ContactCardFace(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .heightIn(min = maxHeight)
-                .padding(horizontal = OrbitTheme.spacing.x6, vertical = OrbitTheme.spacing.x6)
+                .padding(
+                    start = OrbitTheme.spacing.x6,
+                    end = OrbitTheme.spacing.x6,
+                    top = OrbitTheme.spacing.x3,
+                    bottom = OrbitTheme.spacing.x6,
+                )
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                Spacer(Modifier.height(OrbitTheme.spacing.x6))
+                // List-context chip, top right. In the column's flow rather than
+                // overlaid on the face: overlaid, a long list name at 200% text
+                // wrapped over the avatar (gate G3). The offset keeps it 12dp
+                // from the card's edge, where it always sat.
+                if (listContext.isNotBlank()) {
+                    ListContextChip(
+                        listName = listContext,
+                        tone = ChipTone.Terracotta,
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .offset(x = OrbitTheme.spacing.x3)
+                    )
+                    Spacer(Modifier.height(OrbitTheme.spacing.x3))
+                } else {
+                    Spacer(Modifier.height(OrbitTheme.spacing.x6 + OrbitTheme.spacing.x3))
+                }
                 Avatar(name = shownName, size = 104.dp, photoUri = if (curtain) null else contact.photoUri)
                 Spacer(Modifier.height(OrbitTheme.spacing.x3))
                 // Tide marker (2026-05-08): small framing line above the contact
@@ -765,7 +787,8 @@ internal fun ContactCardFace(
                 Text(
                     text = shownName,
                     style = OrbitTheme.type.contactName,
-                    color = OrbitTheme.colors.fg
+                    color = OrbitTheme.colors.fg,
+                    textAlign = TextAlign.Center
                 )
                 // 2026-06-09 — why-now line from the last connected call
                 // ("It's been 3 weeks."). Hidden when there's no history.
@@ -809,16 +832,6 @@ internal fun ContactCardFace(
             }
             Spacer(Modifier.height(OrbitTheme.spacing.x6))
             StatRow(contact)
-        }
-        // List-context chip, top-right; respects privacy curtain via wrapper.
-        if (listContext.isNotBlank()) {
-            ListContextChip(
-                listName = listContext,
-                tone = ChipTone.Terracotta,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(OrbitTheme.spacing.x3)
-            )
         }
     }
 }
@@ -1083,6 +1096,21 @@ private fun PreviewContent(state: CardViewUiState, callLogDenied: Boolean = fals
 private fun CardViewContentPreview() {
     OrbitTheme {
         PreviewContent(state = previewState)
+    }
+}
+
+// Gate G3: a 40-character name and list name, at 100% and 200% text.
+@PreviewLightDark
+@Preview(name = "200%", fontScale = 2f)
+@Composable
+private fun CardViewContentLongNamesPreview() {
+    OrbitTheme {
+        PreviewContent(
+            state = (previewState as CardViewUiState.Ready).copy(
+                contact = previewContact.copy(name = "Bartholomew Montgomery-Featherstonehaugh"),
+                listContext = "Old friends from the climbing gym crew",
+            )
+        )
     }
 }
 
