@@ -76,7 +76,7 @@ object WidgetUpdateScheduler {
      * Settings "delete all data" path) so orphaned WorkManager records do not
      * fire after a full data reset (RESEARCH §Pitfall 6). ResetService pairs
      * this with one final [scheduleImmediate] after the wipe so placed widgets
-     * immediately re-render "No one due" (review WR-06).
+     * immediately re-render the empty state, "All quiet for now." (review WR-06).
      */
     fun cancelAll(context: Context) {
         val wm = WorkManager.getInstance(context)

@@ -69,8 +69,8 @@ class MinimalModeTest {
 
     /**
      * When minimal mode is on, the avatar silhouette flag is set.
-     * [Widget2x2State.Contact.avatarIsMinimal] drives the [ContactAvatar] composable
-     * to render the system silhouette instead of the contact initial (T-11-04 / WIDGET-04).
+     * [Widget2x2State.Contact.avatarIsMinimal] means the widget draws a
+     * silhouette instead of the person's photo or initials (T-11-04 / WIDGET-04).
      */
     @Test
     fun minimalModeOn_masksAvatarToSilhouette() {

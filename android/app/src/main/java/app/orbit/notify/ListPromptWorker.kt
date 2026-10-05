@@ -1,20 +1,31 @@
 package app.orbit.notify
 
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import androidx.core.app.NotificationCompat
+import android.content.res.Configuration
+import android.graphics.Bitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.app.NotificationManagerCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import app.orbit.MainActivity
-import app.orbit.R
+import app.orbit.data.AppPrefs
+import app.orbit.data.entity.ContactEntity
+import app.orbit.data.entity.ListEntity
 import app.orbit.data.repository.ListRepository
-import app.orbit.nav.Routes
+import app.orbit.domain.usecase.SurfaceNextUseCase
+import app.orbit.domain.usecase.SurfaceResult
+import app.orbit.nav.AppLinks
+import app.orbit.ui.components.AvatarBitmaps
+import app.orbit.ui.theme.OrbitThemes
+import app.orbit.ui.theme.ResolvedTheme
+import app.orbit.ui.theme.deviceAccentHue
+import app.orbit.ui.theme.themeSettingsSnapshot
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.time.LocalTime
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 /**
@@ -37,9 +48,15 @@ import timber.log.Timber
  * when an unhandled exception escapes the gate block. A DND night or empty-due-count day
  * can NEVER silently kill the chain.
  *
+ * ### What it posts (NOTIF-13, NOTIF-14, NOTIF-15)
+ * [NudgeNotification] builds the nudge. It names the list's next person, the
+ * head [SurfaceNextUseCase] gives Card view, with their face and a "Call"
+ * action, unless the previous nudge for this list already named them
+ * ([nudgeSubject]). Every nudge carries a name-free lock-screen version.
+ *
  * ### Tap navigation
- * Tapping the notification opens [MainActivity] with extra
- * `"app.orbit.extra.NAVIGATE_TO"` carrying `Routes.card(listId.toString())`. MainActivity
+ * Tapping the notification opens [app.orbit.MainActivity] with extra
+ * [AppLinks.EXTRA_NAVIGATE_TO] carrying `Routes.card(listId.toString())`. MainActivity
  * reads this extra after NavHost composition and navigates. `FLAG_IMMUTABLE` prevents
  * another app from rewriting the tap target (T-10-09).
  */
@@ -48,7 +65,9 @@ open class ListPromptWorker @AssistedInject constructor(
     @Assisted private val appContext: Context,
     @Assisted params: WorkerParameters,
     private val nudgeScheduler: NudgeScheduler,
-    private val listRepo: ListRepository
+    private val listRepo: ListRepository,
+    private val surfaceNext: SurfaceNextUseCase,
+    private val appPrefs: AppPrefs,
 ) : CoroutineWorker(appContext, params) {
 
     companion object {
@@ -56,7 +75,7 @@ open class ListPromptWorker @AssistedInject constructor(
         const val KEY_LIST_ID = "list_id"
 
         /** Intent extra key for the tap-destination route. */
-        const val EXTRA_NAVIGATE_TO = "app.orbit.extra.NAVIGATE_TO"
+        const val EXTRA_NAVIGATE_TO = AppLinks.EXTRA_NAVIGATE_TO
 
         private const val TAG = "nudge"
     }
@@ -119,7 +138,7 @@ open class ListPromptWorker @AssistedInject constructor(
         }
 
         // All gates passed — post the nudge notification
-        postNudge(listId = listId, listName = list.name, dueCount = dueCount)
+        postNudge(list = list, dueCount = dueCount)
         return Result.success()
     }
 
@@ -156,49 +175,66 @@ open class ListPromptWorker @AssistedInject constructor(
 
     // ─── Notification post ────────────────────────────────────────────────────
 
-    private fun postNudge(listId: Long, listName: String, dueCount: Int) {
-        val pendingIntent = buildTapIntent(listId)
+    private suspend fun postNudge(list: ListEntity, dueCount: Int) {
+        val head = (surfaceNext(list.id).first() as? SurfaceResult.Found)?.contact
+        val subject = nudgeSubject(head, appPrefs.nudgeLastNamedContactId(list.id))
+        val theme = resolveTheme()
 
-        val notification = NotificationCompat.Builder(
-            appContext,
-            OrbitNotifications.CHANNEL_LIST_PROMPT
+        val notification = NudgeNotification.build(
+            context = appContext,
+            listId = list.id,
+            listName = list.name,
+            dueCount = dueCount,
+            subject = subject,
+            face = subject?.let { face(it, theme) },
+            accent = theme.colors.accent.toArgb(),
         )
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(NotificationCopy.nudgeTitle(listName))
-            .setContentText(NotificationCopy.nudgeBody(listName, dueCount))
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .build()
 
         // Double-check system gate before calling notify() (belt + suspenders vs race).
         if (appContext.areNotificationsEnabled()) {
             NotificationManagerCompat.from(appContext)
-                .notify(NotificationIds.listPrompt(listId), notification)
-            Timber.tag(TAG).i("posted list=%d due=%d", listId, dueCount)
+                .notify(NotificationIds.listPrompt(list.id), notification)
+            // NOTIF-15: remember who was named, only once they really were.
+            if (subject != null) appPrefs.setNudgeLastNamedContactId(list.id, subject.id)
+            Timber.tag(TAG).i("posted list=%d due=%d named=%b", list.id, dueCount, subject != null)
         }
     }
 
     /**
-     * Builds the tap PendingIntent for the nudge notification.
-     *
-     * - Target: [MainActivity] with extra [EXTRA_NAVIGATE_TO] = [Routes.card(listId)]
-     * - Flags: [PendingIntent.FLAG_IMMUTABLE] | [PendingIntent.FLAG_UPDATE_CURRENT] (T-10-09)
-     * - [FLAG_ACTIVITY_SINGLE_TOP] | [FLAG_ACTIVITY_CLEAR_TOP]: if MainActivity is already
-     *   running, brings it to front and delivers the intent without a new instance.
-     * - requestCode = [NotificationIds.listPrompt(listId)] so per-list intents do not collide.
+     * The app's theme in the mode it is showing, so the face in the shade has
+     * the colours the same person's avatar has in the app.
      */
-    private fun buildTapIntent(listId: Long): PendingIntent {
-        val intent = Intent(appContext, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_NAVIGATE_TO, Routes.card(listId.toString()))
-        }
-        return PendingIntent.getActivity(
-            appContext,
-            NotificationIds.listPrompt(listId),
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+    private suspend fun resolveTheme(): ResolvedTheme {
+        val settings = appPrefs.themeSettingsSnapshot()
+        val uiMode = appContext.resources.configuration.uiMode
+        val night = (uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        return OrbitThemes.resolve(
+            settings,
+            isDark = OrbitThemes.effectiveDark(settings, night),
+            deviceHue = deviceAccentHue(appContext),
         )
     }
+
+    /**
+     * NOTIF-14: the large icon. Their photo when they have one, otherwise the
+     * monogram on the palette colour the in-app avatar gives the same name.
+     * The photo is read from the address book, so on the IO dispatcher.
+     */
+    private suspend fun face(contact: ContactEntity, theme: ResolvedTheme): Bitmap =
+        withContext(Dispatchers.IO) {
+            val size = appContext.resources
+                .getDimensionPixelSize(android.R.dimen.notification_large_icon_width)
+            AvatarBitmaps.photo(appContext, contact.photoUri, contact.phoneContactId, size)
+                ?: theme.tones.avatarPalette(contact.displayName).let { (background, foreground) ->
+                    AvatarBitmaps.initials(
+                        appContext,
+                        contact.displayName,
+                        size,
+                        background.toArgb(),
+                        foreground.toArgb(),
+                    )
+                }
+        }
 
     // ─── Re-enqueue (MUST live in finally block) ──────────────────────────────
 

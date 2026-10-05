@@ -4,8 +4,10 @@ package app.orbit.notify
  * Centralized notification copy for Orbit — NOTIF-05 / NOTIF-09.
  *
  * All strings produced by this object are voice-gated: sentence case, no shame
- * framing, no exclamation marks, no contact names in nudge bodies. The companion
- * [CopyAuditTest] enforces these invariants programmatically on every CI run.
+ * framing, no exclamation marks. A nudge names at most one person, the list's
+ * next (NOTIF-14), and the lock-screen version names no one (NOTIF-13). The
+ * companion [CopyAuditTest] enforces these invariants programmatically on every
+ * CI run.
  *
  * This object has **zero Android imports** so it can be exercised in plain JVM
  * unit tests without Robolectric.
@@ -13,6 +15,8 @@ package app.orbit.notify
  * ### Notification templates (D-18)
  * - List nudge title: [nudgeTitle] — raw list name, never truncated here
  * - List nudge body: [nudgeBody] — opportunity framing, name-free; singular/plural by due count
+ * - Named nudge: [nudgeNamedBody] + [callActionLabel], built from [firstNameOf]
+ * - Lock-screen version: [PUBLIC_TITLE] / [PUBLIC_BODY]
  *
  * ### Channel strings (D-16)
  * - [CHANNEL_LABEL_LIST_PROMPTS] / [CHANNEL_DESC_LIST_PROMPTS] — orbit.list_prompt channel
@@ -52,6 +56,41 @@ object NotificationCopy {
         } else {
             "A few people in $listName are ready when you are. Start with one?"
         }
+
+    /**
+     * NOTIF-14: body of a nudge that hands over the list's next person by name.
+     *
+     * The same invitation as [nudgeBody], said about one person: who is ready
+     * when you are, never how long it has been. No count, because a name is
+     * the whole suggestion; the plural "start with one" framing has nothing to
+     * add once the one is chosen.
+     */
+    fun nudgeNamedBody(firstName: String): String =
+        "$firstName is ready when you are. Want to call?"
+
+    /**
+     * NOTIF-14: label of the nudge's call action. It opens the dialer with
+     * the number filled in; the user places the call there (PRIV-05).
+     */
+    fun callActionLabel(firstName: String): String = "Call $firstName"
+
+    /**
+     * The name a nudge uses for a person: the first word of their display
+     * name, as Card view's "Called {first name}" does. A one-word name ("Mom")
+     * is used whole.
+     */
+    fun firstNameOf(displayName: String): String = displayName.trim().substringBefore(' ')
+
+    /**
+     * NOTIF-13: the lock-screen version of every nudge. Android shows this in
+     * place of the nudge on a secure lock screen whenever the user's settings
+     * hide sensitive content, so it carries no person, no list name, no note
+     * and no face: only that someone is ready.
+     */
+    const val PUBLIC_TITLE = "Someone is ready when you are"
+
+    /** NOTIF-13: body of the lock-screen version. */
+    const val PUBLIC_BODY = "Want to call?"
 
     // -------------------------------------------------------------------------
     // Channel labels + descriptions (D-16)

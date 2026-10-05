@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WIDGET-08: the Call button's shape on a widget: a pill, or a circle when
+     the button is square (the radius is clamped to half the shorter side).
+     White, tinted with the theme's accent where it is used. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@android:color/white" />
+    <corners android:radius="100dp" />
+</shape>

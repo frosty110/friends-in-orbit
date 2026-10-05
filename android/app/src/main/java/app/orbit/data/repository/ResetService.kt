@@ -33,7 +33,7 @@ import kotlinx.coroutines.withContext
  *   4. Wipe DataStore ([AppPrefs.resetAll] — every key including the
  *      onboarding flag).
  *   5. Schedule ONE final widget refresh (review WR-06) so placed widgets
- *      re-render "No one due" within ~30s instead of showing the wiped
+ *      re-render the empty state ("All quiet for now.") within ~30s instead of showing the wiped
  *      contact's name until the next cold start.
  *
  * After this returns the caller is responsible for landing the user

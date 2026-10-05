@@ -33,6 +33,27 @@ class CopyAuditTest {
         assertEquals("Late night", NotificationCopy.nudgeTitle(listName = "Late night"))
     }
 
+    /** NOTIF-14: the named nudge, in the same invitation the name-free one uses. */
+    @Test
+    fun namedNudge_goldenStrings() {
+        assertEquals("Kai is ready when you are. Want to call?", NotificationCopy.nudgeNamedBody("Kai"))
+        assertEquals("Call Kai", NotificationCopy.callActionLabel("Kai"))
+    }
+
+    @Test
+    fun firstNameOf_takesTheFirstWord_orTheWholeOneWordName() {
+        assertEquals("Kai", NotificationCopy.firstNameOf("Kai Nakamura"))
+        assertEquals("Kai", NotificationCopy.firstNameOf("  Kai Nakamura "))
+        assertEquals("Mom", NotificationCopy.firstNameOf("Mom"))
+    }
+
+    /** NOTIF-13: the lock-screen version is fixed copy, with nothing to fill in. */
+    @Test
+    fun lockScreenVersion_goldenStrings() {
+        assertEquals("Someone is ready when you are", NotificationCopy.PUBLIC_TITLE)
+        assertEquals("Want to call?", NotificationCopy.PUBLIC_BODY)
+    }
+
     // --- Forbidden-pattern audit ---
 
     @Test
@@ -41,6 +62,10 @@ class CopyAuditTest {
             NotificationCopy.nudgeTitle(listName = "Late night"),
             NotificationCopy.nudgeBody(listName = "Late night", dueCount = 3),
             NotificationCopy.nudgeBody(listName = "Late night", dueCount = 1),
+            NotificationCopy.nudgeNamedBody(firstName = "Kai"),
+            NotificationCopy.callActionLabel(firstName = "Kai"),
+            NotificationCopy.PUBLIC_TITLE,
+            NotificationCopy.PUBLIC_BODY,
             NotificationCopy.LABEL_ADD_TIME,
             NotificationCopy.LABEL_MUTED_BADGE,
             NotificationCopy.CHANNEL_LABEL_LIST_PROMPTS,
@@ -57,6 +82,8 @@ class CopyAuditTest {
             "level",
             "achievement",
             "you missed",
+            "due",
+            "caught up",
         )
         allCopyStrings.forEach { copy ->
             forbiddenPatterns.forEach { pattern ->

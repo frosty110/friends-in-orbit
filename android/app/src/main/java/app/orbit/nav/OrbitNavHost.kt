@@ -77,12 +77,11 @@ import kotlinx.coroutines.launch
  *   composable + one `@Inject` on MainActivity.
  */
 /**
- * @param navigateTo Optional route string produced by a notification PendingIntent.
- *   When non-null the [LaunchedEffect] inside this composable
+ * @param navigateTo Optional route string from a nudge, a widget or a launcher
+ *   shortcut ([AppLinks]). When non-null the [LaunchedEffect] inside this composable
  *   calls [nav.navigate] and then invokes [onNavigateToConsumed] to clear the value
- *   in [MainActivity] so a recomposition does not re-navigate. The extra carries a
- *   fully-formed route ("card/{listId}" or "contact/{contactId}") built by
- *   Routes.card/Routes.contact in the notification workers.
+ *   in [MainActivity] so a recomposition does not re-navigate. The route is a
+ *   fully-formed path ("card/{listId}", "search") built from [Routes].
  *
  *   Security: nav.navigate only resolves against declared Routes — an unknown or
  *   malformed string is a no-op (T-10-21). The PendingIntents are FLAG_IMMUTABLE so

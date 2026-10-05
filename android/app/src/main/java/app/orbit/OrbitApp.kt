@@ -9,6 +9,7 @@ import app.orbit.data.AppPrefs
 import app.orbit.data.feed.HomeFeed
 import app.orbit.data.feed.SmartListMembershipSync
 import app.orbit.data.keystore.DatabaseKeyProvider
+import app.orbit.launcher.LauncherShortcuts
 import app.orbit.logging.OrbitDebugTree
 import app.orbit.notify.NudgeScheduler
 import app.orbit.notify.OrbitNotifications
@@ -118,6 +119,11 @@ class OrbitApp : Application(), Configuration.Provider, ImageLoaderFactory {
         // catches active-hours boundary transitions (~60min staleness upper bound)
         // without requiring any user interaction.
         WidgetUpdateScheduler.schedulePeriodic(applicationContext)
+
+        // LAUNCH-01: the long-press shortcuts ("Call next", "Search"). Off the
+        // main thread because ShortcutManager is a binder call; idempotent, and
+        // it writes only when the published set differs.
+        appScope.launch(Dispatchers.IO) { LauncherShortcuts.publish(applicationContext) }
 
         // Pre-warm the Keystore-wrapped passphrase off the
         // Main thread so the synchronous `runBlocking { ... }` gate inside

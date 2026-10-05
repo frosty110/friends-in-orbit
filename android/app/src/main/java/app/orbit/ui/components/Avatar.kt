@@ -66,18 +66,16 @@ fun Avatar(
 private fun Initials(name: String, size: Dp, modifier: Modifier = Modifier) {
     // 15-05b L6 — cache the deterministic palette pick + initials derivation
     // per name so recomposition skips the hash loop and split when name is
-    // unchanged. Keyed on `palettes` too so a theme switch re-picks the avatar
-    // color (THEMING 2026-06-22).
-    val palettes = OrbitTheme.tones.avatarPalettes
-    val (bg, fg, initials) = remember(name, palettes) {
-        var hash = 0
-        for (c in name) hash = (hash * 31 + c.code)
-        val (palBg, palFg) = palettes[(hash and Int.MAX_VALUE) % palettes.size]
-        val rendered = name.split(' ')
-            .filter { it.isNotBlank() }
-            .take(2)
-            .joinToString("") { it.first().uppercase() }
-        Triple(palBg, palFg, rendered)
+    // unchanged. Keyed on the theme's tones too so a theme switch re-picks the
+    // avatar color (THEMING 2026-06-22).
+    //
+    // The palette pick and the letters are shared with the widgets and the
+    // nudge's large icon (OrbitTones.avatarPalette, avatarInitials), so a person
+    // looks the same on the home screen, in the shade and in the app.
+    val tones = OrbitTheme.tones
+    val (bg, fg, initials) = remember(name, tones) {
+        val (palBg, palFg) = tones.avatarPalette(name)
+        Triple(palBg, palFg, avatarInitials(name))
     }
     // Dp.toSp() divides out the font scale, so the drawn size tracks the circle.
     val fontSize = with(LocalDensity.current) { (size * INITIALS_SCALE).toSp() }
@@ -100,4 +98,5 @@ private fun Initials(name: String, size: Dp, modifier: Modifier = Modifier) {
     }
 }
 
-private const val INITIALS_SCALE = 0.36f
+/** Monogram height as a share of the circle; [AvatarBitmaps] draws to the same ratio. */
+internal const val INITIALS_SCALE = 0.36f

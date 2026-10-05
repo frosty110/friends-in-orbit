@@ -27,7 +27,10 @@ import app.orbit.calllog.ContentObserverController
 import app.orbit.data.AppPrefs
 import app.orbit.data.feed.HomeFeed
 import app.orbit.data.repository.ListRepository
+import app.orbit.domain.usecase.WidgetSurfaceUseCase
+import app.orbit.nav.AppLinks
 import app.orbit.nav.OrbitNavHost
+import app.orbit.nav.Routes
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.theme.OrbitDarkMode
 import app.orbit.ui.theme.OrbitTheme
@@ -35,6 +38,7 @@ import app.orbit.ui.theme.OrbitThemes
 import app.orbit.ui.theme.ThemeSettings
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
@@ -80,11 +84,23 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var appPrefs: AppPrefs
 
     /**
-     * D-17 — the NAVIGATE_TO route string from a notification
-     * PendingIntent tap. Seeded from the launch Intent on cold start and
+     * LAUNCH-01: who "Call next" opens: the same cross-list head the widgets
+     * show first, read once at the moment of the tap.
+     */
+    @Inject lateinit var nextPeople: WidgetSurfaceUseCase
+
+    /**
+     * D-17: the NAVIGATE_TO route string from a notification, widget or
+     * launcher-shortcut tap. Seeded from the launch Intent in [onCreate] and
      * updated on warm re-entry via [onNewIntent]. Consumed once by
      * OrbitNavHost's LaunchedEffect, then cleared to null so a config
      * change (rotation, theme switch) does not re-navigate.
+     *
+     * It starts null and is filled in [onCreate], not from `intent` here: a
+     * property initialiser runs in the constructor, before Android attaches
+     * the launch Intent, so `intent` was always null at this point and a tap
+     * that cold-started the app (the usual case for a nudge) opened Home
+     * instead of the list.
      *
      * De-duplication approach: [OrbitNavHost] receives the current value;
      * its `LaunchedEffect(navigateTo)` calls [nav.navigate] when non-null,
@@ -93,9 +109,7 @@ class MainActivity : ComponentActivity() {
      * body so the NavController is in scope and the navigation has already
      * been dispatched before the value is erased.
      */
-    private var navigateTo: String? by mutableStateOf(
-        intent?.getStringExtra("app.orbit.extra.NAVIGATE_TO"),
-    )
+    private var navigateTo: String? by mutableStateOf<String?>(null)
 
     /**
      * Called by [OrbitNavHost] after it has consumed the [navigateTo] value.
@@ -116,7 +130,33 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        navigateTo = intent.getStringExtra("app.orbit.extra.NAVIGATE_TO")
+        routeFrom(intent)
+    }
+
+    /**
+     * Turns a launch Intent into a route for [navigateTo]. A notification or a
+     * widget names its route in [AppLinks.EXTRA_NAVIGATE_TO]; a launcher
+     * shortcut names an action, resolved here (LAUNCH-01).
+     *
+     * Shortcuts exist from install, so their routes wait for onboarding to be
+     * done: before that there is no list to open, and a search screen over
+     * the welcome flow would strand the user. The app simply opens.
+     */
+    private fun routeFrom(intent: Intent?) {
+        intent ?: return
+        intent.getStringExtra(AppLinks.EXTRA_NAVIGATE_TO)?.let { route ->
+            navigateTo = route
+            return
+        }
+        val action = intent.action
+        if (action != AppLinks.ACTION_CALL_NEXT && action != AppLinks.ACTION_SEARCH) return
+        lifecycleScope.launch {
+            if (!appPrefs.isOnboardingComplete.first()) return@launch
+            navigateTo = when (action) {
+                AppLinks.ACTION_CALL_NEXT -> AppLinks.callNextRoute(nextPeople())
+                else -> Routes.GlobalSearch
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -132,6 +172,11 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        // D-17: a fresh launch carries its route; a recreation (rotation,
+        // process restore) does not re-open it, because the first one was
+        // already consumed.
+        if (savedInstanceState == null) routeFrom(intent)
 
         // PRIV-04: redact release screenshots/screen-recordings; debug variant unchanged for the screenshot-review workflow.
         if (!BuildConfig.DEBUG) {

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    WIDGET-11: the frame a widget shows for the moment between being placed
+    and Orbit's first render. The widget card with the Orbit glyph, in the
+    theme's muted tone, instead of Glance's default grey spinner, so the
+    first frame already looks like Orbit and never shows a stand-in person.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_preview_background">
+
+    <ImageView
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_gravity="center"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ic_notification"
+        android:tint="@color/widget_preview_fg_muted" />
+</FrameLayout>

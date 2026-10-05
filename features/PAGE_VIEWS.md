@@ -57,4 +57,4 @@ Each page view lives in its own file under [`page-views/`](page-views/). When a 
 ---
 
 ## Not in this build
-- **Home-screen widgets (2×2 / 4×2):** specced in `INDEX.md` but no `app/orbit/widget/` providers exist yet — no widget page view ships today.
+- **Home-screen widgets, nudges and launcher shortcuts:** they ship, but they are not screens of the app, so they have no page view. What each owes the user is in [`widgets/README.md`](widgets/README.md) and [`notifications/README.md`](notifications/README.md).

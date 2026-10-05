@@ -1,22 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  AppWidgetProviderInfo for the 4×2 "Call suggestions" widget.
+  WIDGET-02: AppWidgetProviderInfo for the "Call suggestions" widget.
 
-  Dimensions: 250dp × 110dp — two standard Android grid cells wide × one cell tall.
-  resizeMode="horizontal" — users can expand the widget width on their launcher.
-  updatePeriodMillis="0" — WorkManager owns all update timing (WidgetUpdateScheduler).
-  initialLayout — glance_default_loading_layout ships with the Glance library and
-                  displays a spinner while provideGlance runs for the first time.
+  Size (WIDGET-07): placed at 4×2 (targetCell*, Android 12+; minWidth and
+  minHeight are the 4×2 fallback, 70n - 30dp per cell). Resizable both ways:
+  down to one row or a small square (it then shows one person, like "Next
+  call"), up to 4×3 and beyond, where the others get their own rows. Each size
+  has its own arrangement (WidgetLayouts.kt, SizeMode.Responsive).
 
-  SPIKE VERDICT: Glance 1.1.1 has no LazyRow or horizontal scroll primitive.
-  This widget ships as a static three-column layout only. Swipe is deferred to v1.1.
+  Previews (WIDGET-09), initialLayout (WIDGET-11) and updatePeriodMillis="0"
+  as in widget_info_2x2.xml.
+
+  Glance 1.1.1 has no horizontal scroll, so the others are a static list,
+  not a carousel.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:initialLayout="@layout/glance_default_loading_layout"
+    android:description="@string/widget_4x2_description"
+    android:initialLayout="@layout/widget_loading"
+    android:previewLayout="@layout/widget_preview_suggestions"
+    android:previewImage="@drawable/widget_preview_4x2"
     android:minWidth="250dp"
     android:minHeight="110dp"
-    android:resizeMode="horizontal"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="56dp"
+    android:maxResizeWidth="530dp"
+    android:maxResizeHeight="450dp"
+    android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:previewImage="@drawable/widget_preview_4x2"
-    android:description="@string/widget_4x2_description"
     android:updatePeriodMillis="0" />

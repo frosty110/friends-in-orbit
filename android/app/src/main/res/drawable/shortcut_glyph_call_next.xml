@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    "Call next" launcher shortcut glyph (LAUNCH-01): Phosphor Regular "phone"
+    (ph_phone.xml's path, the app's one icon family, rules.md Design 6) placed
+    on the 108dp adaptive-icon canvas. 44dp of glyph inside the 66dp safe zone.
+    Terracotta on cream like the launcher icon; the themed variant reuses this
+    shape through ic_shortcut_call_next's monochrome layer.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="32"
+        android:translateY="32"
+        android:scaleX="0.171875"
+        android:scaleY="0.171875">
+        <path
+            android:pathData="M164.39,145.34a8,8,0,0,1,7.59-.69l47.16,21.13a8,8,0,0,1,4.8,8.3A48.33,48.33,0,0,1,176,216,136,136,0,0,1,40,80,48.33,48.33,0,0,1,81.92,32.06a8,8,0,0,1,8.3,4.8l21.13,47.2a8,8,0,0,1-.66,7.53L89.32,117a7.93,7.93,0,0,0-.54,7.81c8.27,16.93,25.77,34.22,42.75,42.41a7.92,7.92,0,0,0,7.83-.59Z"
+            android:fillColor="#00000000"
+            android:strokeColor="@color/terracotta"
+            android:strokeWidth="16"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

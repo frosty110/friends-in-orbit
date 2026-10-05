@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Monochrome notification icon — phone/orbit symbol.
-    Android requires a single-channel alpha icon for the notification tray.
-    Uses a simple filled circle with a phone handle silhouette (Material Symbols).
+    Status-bar icon for nudges: the Orbit glyph (two rings round a dot), the
+    same shape as the launcher icon and its themed monochrome layer, so the
+    status bar says who the nudge is from. It used to be a phone handset,
+    which read as the dialer's own missed-call icon.
+    Android draws only the alpha channel of a small icon: white on clear.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
@@ -10,6 +12,16 @@
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
+        android:fillColor="#00000000"
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="1.75"
+        android:pathData="M12,12m-9,0a9,9 0,1 0,18 0a9,9 0,1 0,-18 0" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="1.75"
+        android:pathData="M12,12m-5,0a5,5 0,1 0,10 0a5,5 0,1 0,-10 0" />
+    <path
         android:fillColor="@android:color/white"
-        android:pathData="M6.6,10.8C7.8,13.2 9.8,15.2 12.2,16.4L14.2,14.4C14.5,14.1 14.9,14 15.3,14.2C16.6,14.6 18,14.9 19.5,14.9C20.3,14.9 20.9,15.5 20.9,16.3V19.5C20.9,20.3 20.3,20.9 19.5,20.9C10.5,20.9 3.1,13.5 3.1,4.5C3.1,3.7 3.7,3.1 4.5,3.1H7.8C8.6,3.1 9.2,3.7 9.2,4.5C9.2,6 9.5,7.4 9.9,8.7C10.1,9.1 10,9.5 9.7,9.8L6.6,10.8Z" />
+        android:pathData="M12,12m-1.75,0a1.75,1.75 0,1 0,3.5 0a1.75,1.75 0,1 0,-3.5 0" />
 </vector>

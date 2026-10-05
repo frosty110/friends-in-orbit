@@ -1,22 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    WIDGET-01 — AppWidgetProviderInfo for the 2×2 "Next call" widget.
+    WIDGET-01: AppWidgetProviderInfo for the "Next call" widget.
 
-    Dimensions: 110dp × 110dp.
-    resizeMode="none" — fixed single-cell widget.
-    updatePeriodMillis="0" — all update timing is driven by WidgetUpdateWorker
+    Size (WIDGET-07): placed at 2×2 (targetCell*, Android 12+; minWidth and
+    minHeight are the 2×2 fallback). Resizable both ways, from one row
+    (minResizeHeight 56dp: the shortest row that still holds a 48dp Call
+    button) to a wide card. Each size has its own arrangement
+    (WidgetLayouts.kt, SizeMode.Responsive).
+
+    Previews (WIDGET-09): previewLayout is the live preview Android 12+
+    pickers draw, in the picker's light or dark mode. previewImage is a
+    rendering of the same layout for launchers that only show images (the
+    PNG used to be a blank 440×440 placeholder).
+
+    initialLayout (WIDGET-11) is the Orbit-glyph card shown until the first
+    render, not Glance's default spinner.
+
+    updatePeriodMillis="0": all update timing is driven by WidgetUpdateWorker
     (WorkManager); system-floor 30-min polling is disabled (WIDGET-05 / WIDGET-06).
-
-    PREVIEW NOTE: widget_preview_2x2.png is a 440×440px placeholder (110dp at
-    xxhdpi ×4) generated for build-time compilation. Production-fidelity screenshot
-    replacement is a deferred on-device step in UAT.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:initialLayout="@layout/glance_default_loading_layout"
+    android:description="@string/widget_2x2_description"
+    android:initialLayout="@layout/widget_loading"
+    android:previewLayout="@layout/widget_preview_next_call"
+    android:previewImage="@drawable/widget_preview_2x2"
     android:minWidth="110dp"
     android:minHeight="110dp"
-    android:resizeMode="none"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="56dp"
+    android:maxResizeWidth="530dp"
+    android:maxResizeHeight="450dp"
+    android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:previewImage="@drawable/widget_preview_2x2"
-    android:description="@string/widget_2x2_description"
     android:updatePeriodMillis="0" />

@@ -66,8 +66,8 @@ class OrbitWidget4x2Test {
      * When alternatives list is empty, the primary card takes the full widget
      * width — no divider, no alternatives column (WIDGET-02 edge case,
      * review WR-03). Asserted via the [Widget4x2State.isFullWidth] layout
-     * seam, which mirrors the `alternatives.isEmpty()` branch in
-     * [OrbitWidget4x2Content].
+     * seam, which mirrors [suggestionsLayout] giving the lead the whole width
+     * when there is nobody else.
      */
     @Test
     fun zeroAlternatives_primaryTakesFullWidth() {
@@ -84,7 +84,7 @@ class OrbitWidget4x2Test {
     }
 
     /**
-     * The empty state ("No one due") also renders full-width — not squeezed
+     * The empty state ("All quiet for now.") also renders full-width, not squeezed
      * into the left column beside a dangling divider (review WR-03).
      */
     @Test

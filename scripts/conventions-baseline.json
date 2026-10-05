@@ -1,6 +1,6 @@
 {
   "_comment": "Ratchet baseline for scripts/check-conventions.py. Requirement IDs cited in Kotlin but defined in no spec. This number may fall, never rise \u2014 see features/_foundations/rules.md 'Known documentation debt'.",
-  "undocumented_requirement_ids": 117,
+  "undocumented_requirement_ids": 101,
   "prefixes": [
     "BROWSE",
     "BULK",
@@ -16,15 +16,12 @@
     "LOG",
     "MOVE",
     "NOTE",
-    "NOTIF",
     "ONB",
     "P03",
     "PICK",
-    "PRIV",
     "SET",
     "SMART",
-    "THEME",
-    "WIDGET"
+    "THEME"
   ],
   "ids": [
     "BROWSE-01",
@@ -95,14 +92,6 @@
     "NOTE-01",
     "NOTE-02",
     "NOTE-03",
-    "NOTIF-01",
-    "NOTIF-03",
-    "NOTIF-05",
-    "NOTIF-06",
-    "NOTIF-08",
-    "NOTIF-09",
-    "NOTIF-10",
-    "NOTIF-11",
     "ONB-04",
     "ONB-09",
     "ONB-11",
@@ -121,8 +110,6 @@
     "PICK-06",
     "PICK-07",
     "PICK-08",
-    "PRIV-04",
-    "PRIV-05",
     "SET-04",
     "SET-05",
     "SET-06",
@@ -137,12 +124,6 @@
     "SMART-08",
     "THEME-02",
     "THEME-04",
-    "THEME-05",
-    "WIDGET-01",
-    "WIDGET-02",
-    "WIDGET-03",
-    "WIDGET-04",
-    "WIDGET-05",
-    "WIDGET-06"
+    "THEME-05"
   ]
 }

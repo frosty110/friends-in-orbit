@@ -13,6 +13,7 @@ import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
@@ -319,6 +320,25 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
     }
 
     /**
+     * NOTIF-15: the contact the most recent nudge for [listId] named, or null
+     * when no nudge for that list has named anyone yet. An id, never a name:
+     * this DataStore is not encrypted (only the Room database is), so it holds
+     * nothing that identifies a person (features/privacy-and-lock/README.md).
+     *
+     * One key per list rather than a map in one key: a list's record is read
+     * and written only by that list's nudge, so per-list keys never contend.
+     * [resetAll] clears them with everything else; a deleted list leaves one
+     * stale long behind, which nothing reads.
+     */
+    suspend fun nudgeLastNamedContactId(listId: Long): Long? =
+        context.dataStore.data.first()[nudgeLastNamedKey(listId)]
+
+    /** NOTIF-15: setter companion to [nudgeLastNamedContactId]. */
+    suspend fun setNudgeLastNamedContactId(listId: Long, contactId: Long) {
+        context.dataStore.edit { it[nudgeLastNamedKey(listId)] = contactId }
+    }
+
+    /**
      * SET-06 — destructive wipe of every key in the DataStore. Used by
      * [app.orbit.data.repository.ResetService] in the user-confirmed Reset path.
      *
@@ -363,6 +383,9 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
         // [setLastOnboardingStep].
         private val KEY_LAST_ONBOARDING_STEP = stringPreferencesKey("last_onboarding_step")
         private val KEY_ONBOARDING_LIST_ID = longPreferencesKey("onboarding_list_id")
+
+        // NOTIF-15: per-list record of who the last nudge named.
+        private fun nudgeLastNamedKey(listId: Long) = longPreferencesKey("nudge_last_named_$listId")
     }
 }
 
