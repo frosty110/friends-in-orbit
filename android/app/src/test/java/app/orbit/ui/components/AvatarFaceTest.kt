@@ -37,7 +37,7 @@ class AvatarFaceTest {
 
     @Test
     fun `initials take whole code points, so emoji names are not split`() {
-        // U+1F33B SUNFLOWER is two UTF-16 chars; the old first() kept one.
+        // U+1F33B SUNFLOWER is a surrogate pair; the old first() kept half.
         assertEquals("\uD83C\uDF3BS", avatarInitials("\uD83C\uDF3B Sam"))
     }
 }

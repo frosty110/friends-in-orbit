@@ -16,5 +16,5 @@ fun avatarInitials(name: String): String =
         .filter { it.isNotBlank() }
         .take(2)
         // First code point, not first char: a name starting with an emoji or
-        // another non-BMP character drew half a glyph.
+        // another character outside the basic plane drew half a glyph.
         .joinToString("") { word -> word.substring(0, Character.charCount(word.codePointAt(0))).uppercase() }
