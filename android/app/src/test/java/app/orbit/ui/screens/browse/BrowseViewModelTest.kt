@@ -9,8 +9,6 @@ import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListType
 import app.orbit.data.feed.BrowseFeed
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 import app.orbit.domain.FakeCallEventRepository
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
@@ -21,7 +19,6 @@ import app.orbit.domain.listFixture
 import app.orbit.domain.membershipFixture
 import app.orbit.domain.ruleTemplateFixture
 import app.orbit.domain.undo.UndoStack
-import app.orbit.domain.usecase.SurfaceQueueUseCase
 import app.orbit.domain.usecase.BulkIgnoreUseCase
 import app.orbit.domain.usecase.BulkPauseUseCase
 import app.orbit.domain.usecase.BulkRemoveFromListUseCase
@@ -29,6 +26,7 @@ import app.orbit.domain.usecase.CopyContactsUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MoveContactsUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
+import app.orbit.domain.usecase.SurfaceQueueUseCase
 import app.orbit.testutil.MainDispatcherRule
 import java.time.Instant
 import kotlin.test.assertEquals
@@ -37,6 +35,8 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -90,13 +90,13 @@ class BrowseViewModelTest {
         override suspend fun updateTypeAndSmartRuleJson(
             id: Long,
             type: ListType,
-            smartRuleJson: String?,
+            smartRuleJson: String?
         ) {}
         override suspend fun updateRuleTemplate(id: Long, templateId: Long) {}
         override suspend fun updateActiveHours(
             id: Long,
             start: java.time.LocalTime?,
-            end: java.time.LocalTime?,
+            end: java.time.LocalTime?
         ) {}
         override suspend fun updateNotificationsEnabled(id: Long, enabled: Boolean) {}
         override suspend fun updateName(id: Long, name: String) {}
@@ -109,7 +109,7 @@ class BrowseViewModelTest {
 
     private fun makeVm(
         savedStateListId: String? = "1",
-        ruleTemplateRepo: FakeRuleTemplateRepository = FakeRuleTemplateRepository(),
+        ruleTemplateRepo: FakeRuleTemplateRepository = FakeRuleTemplateRepository()
     ): Setup {
         val contactRepo = FakeContactRepository()
         val listRepo = FakeListRepository()
@@ -140,14 +140,14 @@ class BrowseViewModelTest {
             callEventRepo = callEventRepo,
             ruleTemplateRepo = ruleTemplateRepo,
             clock = clock,
-            json = JsonProvider.json,
+            json = JsonProvider.json
         )
         val browseFeed = BrowseFeed(
             listRepo = listRepo,
             contactRepo = contactRepo,
             callEventRepo = callEventRepo,
             surfaceQueueUseCase = surfaceQueueUseCase,
-            scope = CoroutineScope(UnconfinedTestDispatcher()),
+            scope = CoroutineScope(UnconfinedTestDispatcher())
         )
         val vm = BrowseViewModel(
             contactRepo = contactRepo,
@@ -156,25 +156,60 @@ class BrowseViewModelTest {
             clock = clock,
             moveUseCase = MoveContactsUseCase(passThruTx, recDao, noopListDao, listRepo, clock),
             copyUseCase = CopyContactsUseCase(passThruTx, recDao, noopListDao, listRepo, clock),
-            bulkRemoveFromListUseCase = BulkRemoveFromListUseCase(passThruTx, recDao, listRepo, clock),
+            bulkRemoveFromListUseCase = BulkRemoveFromListUseCase(
+                passThruTx,
+                recDao,
+                listRepo,
+                clock
+            ),
             bulkIgnoreUseCase = BulkIgnoreUseCase(passThruTx, recContactDao),
             bulkPauseUseCase = BulkPauseUseCase(passThruTx, recContactDao, clock),
             // Single-row Ignore + Pause use cases. IgnoreContactUseCase
             // takes the same passThruTx + recDao so the inverse closure round-trips
             // through the FakeContactRepository state without a real Room transaction.
-            ignoreContactUseCase = IgnoreContactUseCase(passThruTx, contactRepo, recDao, listRepo, clock),
+            ignoreContactUseCase = IgnoreContactUseCase(
+                passThruTx,
+                contactRepo,
+                recDao,
+                listRepo,
+                clock
+            ),
             pauseContactUseCase = PauseContactUseCase(contactRepo, clock),
             undoStack = undoStack,
-            savedStateHandle = savedState,
+            savedStateHandle = savedState
         )
-        return Setup(vm, contactRepo, listRepo)
+        return Setup(vm, contactRepo, listRepo, undoStack)
     }
 
     private data class Setup(
         val vm: BrowseViewModel,
         val contactRepo: FakeContactRepository,
         val listRepo: FakeListRepository,
+        val undoStack: UndoStack = UndoStack()
     )
+
+    @Test
+    fun `onSingleRowUnpause clears the pause and Undo restores it`() = runTest {
+        // Regression: Browse offered Pause on a paused row and nothing else, so
+        // an indefinite pause could never be undone once its snackbar was gone.
+        val sentinel = app.orbit.domain.usecase.PauseContactUseCase.INDEFINITE_PAUSE_SENTINEL
+        val s = makeVm()
+        s.contactRepo.seed(
+            listOf(contactFixture(id = 7L, displayName = "Kai", pausedUntil = sentinel))
+        )
+
+        s.vm.onSingleRowUnpause(7L, "Kai")
+
+        assertEquals(null, s.contactRepo.getById(7L)?.pausedUntil)
+        val undo = s.undoStack.take()
+        assertEquals("Unpaused Kai", undo?.label)
+        undo!!.inverse()
+        assertEquals(
+            sentinel,
+            s.contactRepo.getById(7L)?.pausedUntil,
+            "Undo restores the exact prior pause"
+        )
+    }
 
     // ============================================================================
     // Carryover tests — 2 of these have known failures (allowlisted). Their
@@ -197,8 +232,8 @@ class BrowseViewModelTest {
             listOf(
                 contactFixture(id = 1L, displayName = "Alex"),
                 contactFixture(id = 2L, displayName = "Bailey"),
-                contactFixture(id = 3L, displayName = "Cam"),
-            ),
+                contactFixture(id = 3L, displayName = "Cam")
+            )
         )
         // BrowseViewModel filters by membership join, so the
         // test must seed memberships for the same listId the SavedStateHandle
@@ -208,8 +243,8 @@ class BrowseViewModelTest {
             listOf(
                 app.orbit.domain.membershipFixture(contactId = 1L, listId = 1L),
                 app.orbit.domain.membershipFixture(contactId = 2L, listId = 1L),
-                app.orbit.domain.membershipFixture(contactId = 3L, listId = 1L),
-            ),
+                app.orbit.domain.membershipFixture(contactId = 3L, listId = 1L)
+            )
         )
         vm.uiState.test(timeout = 2.seconds) {
             val next = awaitReady(this)
@@ -246,15 +281,15 @@ class BrowseViewModelTest {
             listOf(
                 contactFixture(id = 1L, displayName = "Alex"),
                 contactFixture(id = 2L, displayName = "Bailey"),
-                contactFixture(id = 3L, displayName = "Cam"),
-            ),
+                contactFixture(id = 3L, displayName = "Cam")
+            )
         )
         listRepo.seedMemberships(
             listOf(
                 membershipFixture(contactId = 1L, listId = 1L),
                 membershipFixture(contactId = 2L, listId = 1L),
-                membershipFixture(contactId = 3L, listId = 1L),
-            ),
+                membershipFixture(contactId = 3L, listId = 1L)
+            )
         )
         vm.uiState.test(timeout = 2.seconds) {
             // Drain until we get a Ready with all 3 positions populated.
@@ -281,15 +316,15 @@ class BrowseViewModelTest {
             listOf(
                 contactFixture(id = 1L, displayName = "Alex"),
                 contactFixture(id = 2L, displayName = "Bailey"),
-                contactFixture(id = 3L, displayName = "Cam"),
-            ),
+                contactFixture(id = 3L, displayName = "Cam")
+            )
         )
         listRepo.seedMemberships(
             listOf(
                 app.orbit.domain.membershipFixture(contactId = 1L, listId = 1L),
                 app.orbit.domain.membershipFixture(contactId = 2L, listId = 1L),
-                app.orbit.domain.membershipFixture(contactId = 3L, listId = 1L),
-            ),
+                app.orbit.domain.membershipFixture(contactId = 3L, listId = 1L)
+            )
         )
         // Search needs a substring unique to one name — "A" alone matches
         // all three (Alex, b**a**iley, c**a**m) under the case-insensitive
@@ -330,7 +365,9 @@ class BrowseViewModelTest {
         // tracked via _isMultiSelect/_selectedIds internally) or Ready (overlay
         // applied). We verify by triggering the combine pipeline through a
         // contacts seed.
-        @Suppress("UNUSED_VARIABLE") val _state = state
+
+        @Suppress("UNUSED_VARIABLE")
+        val _state = state
         // The deterministic assertion: after seeding contacts, Ready must
         // reflect the selection. We do that here.
         val s2 = makeVmWithContacts()
@@ -365,7 +402,7 @@ class BrowseViewModelTest {
     fun onToggleSelect_to_empty_auto_exits_multiSelect() = runTest {
         val s = makeVmWithContacts()
         s.vm.onEnterMultiSelect(initialId = 1L)
-        s.vm.onToggleSelect(1L)  // toggle off the only selected
+        s.vm.onToggleSelect(1L) // toggle off the only selected
         s.vm.uiState.test(timeout = 2.seconds) {
             val ready = awaitReady(this)
             assertEquals(false, ready.isMultiSelect)
@@ -410,7 +447,7 @@ class BrowseViewModelTest {
             val event = awaitItem()
             assertTrue(
                 event.message.startsWith("Removed 2 from"),
-                "expected 'Removed 2 from <list>', got ${event.message}",
+                "expected 'Removed 2 from <list>', got ${event.message}"
             )
             assertEquals("Undo", event.actionLabel)
             cancel()
@@ -429,7 +466,7 @@ class BrowseViewModelTest {
 
     @Test
     fun `listName emits the real list name`() = runTest {
-        val s = makeVmWithContactsAndMembership()   // seeds list id=1 "Inner orbit"
+        val s = makeVmWithContactsAndMembership() // seeds list id=1 "Inner orbit"
         s.vm.listName.test(timeout = 2.seconds) {
             // Drain the initial "" (stateIn initialValue) if it surfaces first.
             while (true) {
@@ -449,18 +486,34 @@ class BrowseViewModelTest {
                 contactFixture(id = 1L, displayName = "Alex"),
                 contactFixture(id = 2L, displayName = "Bailey"),
                 contactFixture(id = 3L, displayName = "Cam", pausedUntil = now.plusSeconds(86_400)),
-                contactFixture(id = 4L, displayName = "Dana", isIgnored = true),
-            ),
+                contactFixture(id = 4L, displayName = "Dana", isIgnored = true)
+            )
         )
         listRepo.seedMemberships(
             listOf(
                 // Past nextDueAt → due; future → not due. Paused/ignored rows
                 // carry a past nextDueAt too but must NOT read as due.
-                app.orbit.domain.membershipFixture(contactId = 1L, listId = 1L, nextDueAt = now.minusSeconds(3_600)),
-                app.orbit.domain.membershipFixture(contactId = 2L, listId = 1L, nextDueAt = now.plusSeconds(3_600)),
-                app.orbit.domain.membershipFixture(contactId = 3L, listId = 1L, nextDueAt = now.minusSeconds(3_600)),
-                app.orbit.domain.membershipFixture(contactId = 4L, listId = 1L, nextDueAt = now.minusSeconds(3_600)),
-            ),
+                app.orbit.domain.membershipFixture(
+                    contactId = 1L,
+                    listId = 1L,
+                    nextDueAt = now.minusSeconds(3_600)
+                ),
+                app.orbit.domain.membershipFixture(
+                    contactId = 2L,
+                    listId = 1L,
+                    nextDueAt = now.plusSeconds(3_600)
+                ),
+                app.orbit.domain.membershipFixture(
+                    contactId = 3L,
+                    listId = 1L,
+                    nextDueAt = now.minusSeconds(3_600)
+                ),
+                app.orbit.domain.membershipFixture(
+                    contactId = 4L,
+                    listId = 1L,
+                    nextDueAt = now.minusSeconds(3_600)
+                )
+            )
         )
         vm.uiState.test(timeout = 2.seconds) {
             val ready = awaitReadyWhere(this) { it.contacts.size == 4 }
@@ -498,7 +551,7 @@ class BrowseViewModelTest {
 
     @Test
     fun `filters excluding everyone emit FilteredEmpty and clearing restores Ready`() = runTest {
-        val s = makeVmWithContacts()   // zero call events → nobody "called recently"
+        val s = makeVmWithContacts() // zero call events → nobody "called recently"
         s.vm.onToggleFilter(BrowseFilter.CalledRecently)
         s.vm.uiState.test(timeout = 2.seconds) {
             while (true) {
@@ -520,14 +573,14 @@ class BrowseViewModelTest {
         contactRepo.seed(
             listOf(
                 contactFixture(id = 1L, displayName = "José"),
-                contactFixture(id = 2L, displayName = "Bailey"),
-            ),
+                contactFixture(id = 2L, displayName = "Bailey")
+            )
         )
         listRepo.seedMemberships(
             listOf(
                 app.orbit.domain.membershipFixture(contactId = 1L, listId = 1L),
-                app.orbit.domain.membershipFixture(contactId = 2L, listId = 1L),
-            ),
+                app.orbit.domain.membershipFixture(contactId = 2L, listId = 1L)
+            )
         )
         vm.onSearchChanged("jose")
         vm.uiState.test(timeout = 2.seconds) {
@@ -544,14 +597,14 @@ class BrowseViewModelTest {
             listOf(
                 // contactFixture default phone: +1555555<id padded to 4>.
                 contactFixture(id = 1L, displayName = "Alex"),
-                contactFixture(id = 2L, displayName = "Bailey"),
-            ),
+                contactFixture(id = 2L, displayName = "Bailey")
+            )
         )
         listRepo.seedMemberships(
             listOf(
                 app.orbit.domain.membershipFixture(contactId = 1L, listId = 1L),
-                app.orbit.domain.membershipFixture(contactId = 2L, listId = 1L),
-            ),
+                app.orbit.domain.membershipFixture(contactId = 2L, listId = 1L)
+            )
         )
         vm.onSearchChanged("0002")
         vm.uiState.test(timeout = 2.seconds) {
@@ -574,16 +627,16 @@ class BrowseViewModelTest {
                 contactFixture(id = 1L, displayName = "Alex"),
                 contactFixture(id = 2L, displayName = "Bailey"),
                 contactFixture(id = 3L, displayName = "Cam"),
-                contactFixture(id = 4L, displayName = "Dana"),
-            ),
+                contactFixture(id = 4L, displayName = "Dana")
+            )
         )
         s.listRepo.seedMemberships(
             listOf(
                 app.orbit.domain.membershipFixture(contactId = 1L, listId = 1L),
                 app.orbit.domain.membershipFixture(contactId = 2L, listId = 1L),
                 app.orbit.domain.membershipFixture(contactId = 3L, listId = 1L),
-                app.orbit.domain.membershipFixture(contactId = 4L, listId = 1L),
-            ),
+                app.orbit.domain.membershipFixture(contactId = 4L, listId = 1L)
+            )
         )
         return s
     }
@@ -592,15 +645,15 @@ class BrowseViewModelTest {
         val s = makeVmWithContacts()
         s.listRepo.seed(
             listOf(
-                app.orbit.domain.listFixture(id = 1L, name = "Inner orbit"),
-            ),
+                app.orbit.domain.listFixture(id = 1L, name = "Inner orbit")
+            )
         )
         return s
     }
 
     /** Skips Loading and returns the first Ready emission. */
     private suspend fun awaitReady(
-        flow: app.cash.turbine.ReceiveTurbine<BrowseUiState>,
+        flow: app.cash.turbine.ReceiveTurbine<BrowseUiState>
     ): BrowseUiState.Ready {
         while (true) {
             val item = flow.awaitItem()
@@ -611,7 +664,7 @@ class BrowseViewModelTest {
     /** Drains intermediate Ready emissions until [predicate] holds. */
     private suspend fun awaitReadyWhere(
         flow: app.cash.turbine.ReceiveTurbine<BrowseUiState>,
-        predicate: (BrowseUiState.Ready) -> Boolean,
+        predicate: (BrowseUiState.Ready) -> Boolean
     ): BrowseUiState.Ready {
         while (true) {
             val item = flow.awaitItem()

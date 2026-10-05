@@ -45,7 +45,7 @@ class AppViewModel @Inject constructor(
     private val appPrefs: AppPrefs,
     private val callEventRepo: CallEventRepository,
     private val contactRepo: ContactRepository,
-    private val clock: Clock,
+    private val clock: Clock
 ) : ViewModel() {
 
     private val _startDestination = MutableStateFlow<String?>(null)
@@ -79,7 +79,7 @@ class AppViewModel @Inject constructor(
     data class PostCallPromptState(
         val callEventId: Long,
         val contactId: Long,
-        val contactName: String,
+        val contactName: String
     )
 
     private val dismissedCallEventIds = mutableSetOf<Long>()
@@ -113,12 +113,12 @@ class AppViewModel @Inject constructor(
             combine(
                 appPrefs.colorTheme,
                 appPrefs.darkMode,
-                appPrefs.accentHue,
+                appPrefs.accentHue
             ) { themeKey, darkKey, hue ->
                 ThemeSettings(
                     themeId = OrbitThemeId.fromKey(themeKey),
                     darkMode = OrbitDarkMode.fromKey(darkKey),
-                    accentHue = if (hue < 0) null else hue,
+                    accentHue = if (hue < 0) null else hue
                 )
             }.collect { _themeSettings.value = it }
         }
@@ -137,25 +137,29 @@ class AppViewModel @Inject constructor(
      * constant. Unknown / null / blank values fall back to
      * [Routes.OnboardWelcome] (defensive — a corrupted DataStore should not
      * strand the user). The OnboardFirstList route requires a `{listId}` path
-     * arg which is NOT recoverable from prefs alone — if the persisted step
+     * arg, which a start destination cannot carry. If the persisted step
      * is `FirstList`, fall back to [Routes.OnboardSync] so the user re-enters
-     * at the sync gate (the closest re-runnable step) and the Preview screen
-     * will re-create a list before re-routing forward.
+     * at the sync gate (the closest re-runnable step). Sync then continues
+     * straight into the list already being built
+     * ([app.orbit.ui.screens.onboarding.OnboardingListStarter.pendingListId]),
+     * so the resume never creates a second one.
      */
     private suspend fun resolveOnboardingResume(): String {
         val name = runCatching { appPrefs.lastOnboardingStep.first() }.getOrNull().orEmpty()
         val step = OnboardingStep.entries.firstOrNull { it.name == name }
         return when (step) {
-            OnboardingStep.PermContacts      -> Routes.OnboardPermContacts
-            OnboardingStep.PermCallLog       -> Routes.OnboardPermCallLog
+            OnboardingStep.PermContacts -> Routes.OnboardPermContacts
+            OnboardingStep.PermCallLog -> Routes.OnboardPermCallLog
             OnboardingStep.PermNotifications -> Routes.OnboardPermNotifs
-            OnboardingStep.Sync              -> Routes.OnboardSync
-            OnboardingStep.FirstList         -> Routes.OnboardSync   // listId not recoverable
-            null                             -> Routes.OnboardWelcome
+            OnboardingStep.Sync -> Routes.OnboardSync
+            OnboardingStep.FirstList -> Routes.OnboardSync // Sync continues into the saved list
+            null -> Routes.OnboardWelcome
         }
     }
 
-    fun onForegroundChanged(foreground: Boolean) { _isForeground.value = foreground }
+    fun onForegroundChanged(foreground: Boolean) {
+        _isForeground.value = foreground
+    }
 
     /**
      * NOTE-02 — re-derive [postCallPrompt] from disk. Called from
@@ -187,7 +191,7 @@ class AppViewModel @Inject constructor(
             _postCallPrompt.value = PostCallPromptState(
                 callEventId = event.id,
                 contactId = event.contactId,
-                contactName = contact.displayName,
+                contactName = contact.displayName
             )
         }
     }

@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Application
 import android.content.Context
 import androidx.lifecycle.SavedStateHandle
+import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import app.orbit.data.AppPrefs
@@ -11,6 +12,8 @@ import app.orbit.data.android.ContactsReader
 import app.orbit.data.android.PhoneContact
 import app.orbit.data.dao.RecordingListMembershipDao
 import app.orbit.data.dao.TestListDaoStub
+import app.orbit.data.db.OrbitDatabase
+import app.orbit.data.db.RoomTransactionRunner
 import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.domain.FakeCallEventRepository
@@ -23,6 +26,7 @@ import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.CopyContactsUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MoveContactsUseCase
+import app.orbit.domain.usecase.RelinkContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
 import app.orbit.testutil.MainDispatcherRule
 import java.time.Instant
@@ -30,6 +34,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -70,6 +75,23 @@ class ContactPickerViewModelTest {
         override suspend fun <T> withTransaction(block: suspend () -> T): T = block()
     }
 
+    /**
+     * Real Room for the Relink merge (CONTACT-07): its foreign keys and unique
+     * number index are what the merge has to get right, so it is not faked.
+     */
+    private val db: OrbitDatabase =
+        Room.inMemoryDatabaseBuilder(
+            ApplicationProvider.getApplicationContext<Context>(),
+            OrbitDatabase::class.java
+        )
+            .allowMainThreadQueries()
+            .build()
+
+    @After
+    fun closeDb() {
+        db.close()
+    }
+
     /** Device address book stub — the ignore flows never touch the provider. */
     private class FakeContactsReader(context: Context) : ContactsReader(context) {
         override suspend fun readAll(): List<PhoneContact> = emptyList()
@@ -81,13 +103,14 @@ class ContactPickerViewModelTest {
         val membershipDao: RecordingListMembershipDao,
         val undoStack: UndoStack,
         val commitBus: PickerCommitBus,
-        val savedState: SavedStateHandle,
+        val savedState: SavedStateHandle
     )
 
     private fun fixture(
         membershipDao: RecordingListMembershipDao = RecordingListMembershipDao(),
         mode: String = "add",
         sourceListId: String? = null,
+        relinkContactId: String? = null
     ): Setup {
         val app = ApplicationProvider.getApplicationContext<Application>()
         Shadows.shadowOf(app).grantPermissions(Manifest.permission.READ_CONTACTS)
@@ -96,7 +119,7 @@ class ContactPickerViewModelTest {
         val listRepo = FakeListRepository()
         val lists = listOf(
             listFixture(id = 1L, name = "Inner orbit"),
-            listFixture(id = 2L, name = "Late night"),
+            listFixture(id = 2L, name = "Late night")
         )
         listRepo.seed(lists)
         val listDao = TestListDaoStub(lists = lists)
@@ -104,9 +127,11 @@ class ContactPickerViewModelTest {
         val undoStack = UndoStack()
         val commitBus = PickerCommitBus()
         val savedStateArgs = buildMap<String, Any?> {
-            put("targetListId", "1")
+            // A Relink route carries the orphan, not a list (Routes.relinkContact).
+            if (mode != "relink") put("targetListId", "1")
             put("mode", mode)
             if (sourceListId != null) put("sourceListId", sourceListId)
+            if (relinkContactId != null) put("relinkContactId", relinkContactId)
         }
         val savedState = SavedStateHandle(savedStateArgs)
 
@@ -119,16 +144,34 @@ class ContactPickerViewModelTest {
             appPrefs = AppPrefs(app),
             moveUseCase = MoveContactsUseCase(passThruTx, membershipDao, listDao, listRepo, clock),
             copyUseCase = CopyContactsUseCase(passThruTx, membershipDao, listDao, listRepo, clock),
-            ignoreUseCase = IgnoreContactUseCase(passThruTx, contactRepo, membershipDao, listRepo, clock),
+            relinkUseCase = RelinkContactUseCase(
+                RoomTransactionRunner(db),
+                db.contactDao(),
+                db.listMembershipDao(),
+                listRepo,
+                clock
+            ),
+            ignoreUseCase = IgnoreContactUseCase(
+                passThruTx,
+                contactRepo,
+                membershipDao,
+                listRepo,
+                clock
+            ),
             unignoreUseCase = UnignoreContactUseCase(
-                passThruTx, contactRepo, listDao, membershipDao, listRepo, clock,
+                passThruTx,
+                contactRepo,
+                listDao,
+                membershipDao,
+                listRepo,
+                clock
             ),
             undoStack = undoStack,
             contactsReader = FakeContactsReader(app),
             clock = clock,
             commitBus = commitBus,
             appScope = CoroutineScope(SupervisorJob() + mainDispatcherRule.testDispatcher),
-            savedStateHandle = savedState,
+            savedStateHandle = savedState
         )
         return Setup(vm, contactRepo, membershipDao, undoStack, commitBus, savedState)
     }
@@ -155,11 +198,11 @@ class ContactPickerViewModelTest {
         assertEquals(
             "the four-column flip must land via ContactRepository.markIgnored",
             true,
-            s.contactRepo.getById(12L)?.isIgnored,
+            s.contactRepo.getById(12L)?.isIgnored
         )
         assertFalse(
             "an ignored contact must not ride along into a later commit",
-            12L in selectedIdsIn(s.savedState),
+            12L in selectedIdsIn(s.savedState)
         )
     }
 
@@ -181,7 +224,9 @@ class ContactPickerViewModelTest {
     @Test
     fun `onIgnore failure publishes couldn't save and records no undo`() = runTest {
         val throwingDao = object : RecordingListMembershipDao() {
-            override suspend fun getMembershipsForContact(contactId: Long): List<ListMembershipEntity> =
+            override suspend fun getMembershipsForContact(
+                contactId: Long
+            ): List<ListMembershipEntity> =
                 throw IllegalStateException("simulated cipher read failure")
         }
         val s = fixture(membershipDao = throwingDao)
@@ -204,13 +249,21 @@ class ContactPickerViewModelTest {
         s.contactRepo.seed(
             listOf(
                 contactFixture(id = 12L, displayName = "Sarah"),
-                contactFixture(id = 13L, displayName = "Marcus"),
-            ),
+                contactFixture(id = 13L, displayName = "Marcus")
+            )
         )
         // Source-side membership rows so the use case's inverse can snapshot them.
         s.membershipDao.seed(
-            ListMembershipEntity(contactId = 12L, listId = 2L, addedAt = Instant.parse("2026-01-01T00:00:00Z")),
-            ListMembershipEntity(contactId = 13L, listId = 2L, addedAt = Instant.parse("2026-01-01T00:00:00Z")),
+            ListMembershipEntity(
+                contactId = 12L,
+                listId = 2L,
+                addedAt = Instant.parse("2026-01-01T00:00:00Z")
+            ),
+            ListMembershipEntity(
+                contactId = 13L,
+                listId = 2L,
+                addedAt = Instant.parse("2026-01-01T00:00:00Z")
+            )
         )
         s.vm.onToggleSelect(12L)
         s.vm.onToggleSelect(13L)
@@ -239,27 +292,122 @@ class ContactPickerViewModelTest {
         val restored = s.membershipDao.insertCalls.single().memberships
         assertEquals(
             setOf(12L to 2L, 13L to 2L),
-            restored.map { it.contactId to it.listId }.toSet(),
+            restored.map { it.contactId to it.listId }.toSet()
         )
     }
 
     @Test
-    fun `Move commit without a sourceListId surfaces a failure instead of a silent no-op`() = runTest {
-        // The init guard routes this VM to NotFound, so the commit bar never
-        // renders — but a direct onCommit must still fail loudly, not drop the
-        // selection on the floor.
-        val s = fixture(mode = "move", sourceListId = null)
-        s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
-        s.vm.onToggleSelect(12L)
+    fun `Move commit without a sourceListId surfaces a failure instead of a silent no-op`() =
+        runTest {
+            // The init guard routes this VM to NotFound, so the commit bar never
+            // renders — but a direct onCommit must still fail loudly, not drop the
+            // selection on the floor.
+            val s = fixture(mode = "move", sourceListId = null)
+            s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
+            s.vm.onToggleSelect(12L)
+
+            s.commitBus.events.test {
+                s.vm.onCommit()
+                val event = awaitItem()
+                assertEquals("Couldn't save that", event.message)
+                assertNull("failure toast carries no action", event.actionLabel)
+            }
+            assertTrue("no move dispatch without a source", s.membershipDao.moveCalls.isEmpty())
+            assertNull("no undo entry for a failed move", s.undoStack.peek())
+        }
+
+    // ─── Relink mode (CONTACT-07) ────────────────────────────
+
+    @Test
+    fun `Relink selection is single - a new pick replaces the old one`() = runTest {
+        val s = fixture(mode = "relink", relinkContactId = "10")
+
+        s.vm.onToggleSelect(20L)
+        s.vm.onToggleSelect(21L)
+        assertEquals(setOf(21L), selectedIdsIn(s.savedState))
+
+        s.vm.onToggleSelect(21L)
+        assertTrue("tapping the pick again clears it", selectedIdsIn(s.savedState).isEmpty())
+    }
+
+    @Test
+    fun `Relink refuses select-all so a stale tap cannot stage a multi-contact merge`() = runTest {
+        val s = fixture(mode = "relink", relinkContactId = "10")
+
+        s.vm.onSelectAllMatching(setOf(20L, 21L, 22L))
+
+        assertTrue(selectedIdsIn(s.savedState).isEmpty())
+    }
+
+    @Test
+    fun `Relink commit merges, publishes Re-linked with Undo, and never touches a list`() =
+        runTest {
+            val s = fixture(mode = "relink", relinkContactId = "10")
+            val first = Instant.parse("2026-01-01T00:00:00Z")
+            db.contactDao().insert(
+                contactFixture(
+                    id = 10L,
+                    displayName = "Mum (old)",
+                    phoneContactId = 100L,
+                    isOrphaned = true,
+                    firstSeenByAppAt = first
+                )
+            )
+            db.contactDao().insert(
+                contactFixture(
+                    id = 20L,
+                    displayName = "Mum",
+                    phoneContactId = 200L,
+                    firstSeenByAppAt = first
+                )
+            )
+            s.vm.onToggleSelect(20L)
+
+            s.commitBus.events.test {
+                s.vm.onCommit()
+                val event = awaitItem()
+                assertEquals("Re-linked to Mum", event.message)
+                assertEquals("Undo", event.actionLabel)
+            }
+
+            assertEquals("Mum", db.contactDao().get(10L)?.displayName)
+            assertFalse(db.contactDao().get(10L)!!.isOrphaned)
+            assertNull("the picked row was merged away", db.contactDao().get(20L))
+            assertEquals("Re-linked to Mum", s.undoStack.peek()?.label)
+            assertTrue(
+                "Regression: Re-link used to insert memberships into a list " +
+                    "sharing the contact's id",
+                s.membershipDao.insertCalls.isEmpty()
+            )
+        }
+
+    @Test
+    fun `Relink commit the merge refuses surfaces a failure and records no undo`() = runTest {
+        val s = fixture(mode = "relink", relinkContactId = "10")
+        // Not orphaned (a sync restored it), so there is nothing to re-link.
+        db.contactDao().insert(contactFixture(id = 10L, phoneContactId = 100L))
+        db.contactDao().insert(contactFixture(id = 20L, phoneContactId = 200L))
+        s.vm.onToggleSelect(20L)
 
         s.commitBus.events.test {
             s.vm.onCommit()
             val event = awaitItem()
             assertEquals("Couldn't save that", event.message)
-            assertNull("failure toast carries no action", event.actionLabel)
+            assertNull(event.actionLabel)
         }
-        assertTrue("no move dispatch without a source", s.membershipDao.moveCalls.isEmpty())
-        assertNull("no undo entry for a failed move", s.undoStack.peek())
+        assertNull(s.undoStack.peek())
+        assertEquals(2, db.contactDao().getAllOnce().size)
+    }
+
+    @Test
+    fun `a Relink route without the orphan id commits nothing`() = runTest {
+        val s = fixture(mode = "relink", relinkContactId = null)
+        s.vm.onToggleSelect(20L)
+
+        s.vm.onCommit()
+
+        assertNull(s.undoStack.peek())
+        assertTrue(s.membershipDao.insertCalls.isEmpty())
     }
 
     // ─── EmptyDevice phase resolution ────────────────────────
@@ -277,8 +425,8 @@ class ContactPickerViewModelTest {
                 basePhase = ContactPickerUiState.Phase.Ready,
                 isCommitting = false,
                 deviceEmpty = true,
-                hasAnyContacts = false,
-            ),
+                hasAnyContacts = false
+            )
         )
         // Read not finished yet (null) → stay Ready, no skeleton lie.
         assertEquals(
@@ -287,8 +435,8 @@ class ContactPickerViewModelTest {
                 basePhase = ContactPickerUiState.Phase.Ready,
                 isCommitting = false,
                 deviceEmpty = null,
-                hasAnyContacts = false,
-            ),
+                hasAnyContacts = false
+            )
         )
         // Device empty but store still projects pickable contacts
         // (call-log-only rows) → stay Ready.
@@ -298,8 +446,8 @@ class ContactPickerViewModelTest {
                 basePhase = ContactPickerUiState.Phase.Ready,
                 isCommitting = false,
                 deviceEmpty = true,
-                hasAnyContacts = true,
-            ),
+                hasAnyContacts = true
+            )
         )
         // Permission surfaces are never overridden.
         assertEquals(
@@ -308,8 +456,8 @@ class ContactPickerViewModelTest {
                 basePhase = ContactPickerUiState.Phase.PermissionRationale,
                 isCommitting = false,
                 deviceEmpty = true,
-                hasAnyContacts = false,
-            ),
+                hasAnyContacts = false
+            )
         )
         // Committing wins over everything.
         assertEquals(
@@ -318,8 +466,8 @@ class ContactPickerViewModelTest {
                 basePhase = ContactPickerUiState.Phase.Ready,
                 isCommitting = true,
                 deviceEmpty = true,
-                hasAnyContacts = false,
-            ),
+                hasAnyContacts = false
+            )
         )
     }
 
@@ -331,12 +479,12 @@ class ContactPickerViewModelTest {
         s.vm.onToggleFilter(PickerFilter.Starred)
         assertEquals(
             listOf("Starred"),
-            s.savedState.get<Array<String>>("activeFilters")?.toList(),
+            s.savedState.get<Array<String>>("activeFilters")?.toList()
         )
         s.vm.onToggleFilter(PickerFilter.Starred)
         assertEquals(
             emptyList<String>(),
-            s.savedState.get<Array<String>>("activeFilters")?.toList(),
+            s.savedState.get<Array<String>>("activeFilters")?.toList()
         )
     }
 
@@ -349,8 +497,8 @@ class ContactPickerViewModelTest {
             s.contactRepo.seed(
                 listOf(
                     contactFixture(id = 12L, displayName = "Sarah"),
-                    contactFixture(id = 13L, displayName = "Marcus"),
-                ),
+                    contactFixture(id = 13L, displayName = "Marcus")
+                )
             )
             s.vm.onToggleSelect(12L)
             s.vm.onToggleSelect(13L)
@@ -366,7 +514,7 @@ class ContactPickerViewModelTest {
             assertEquals(
                 "Add commit inserts one membership row per selected contact onto the target list",
                 setOf(12L to 1L, 13L to 1L),
-                insert.memberships.map { it.contactId to it.listId }.toSet(),
+                insert.memberships.map { it.contactId to it.listId }.toSet()
             )
             assertTrue("commit clears the selection", selectedIdsIn(s.savedState).isEmpty())
         }
@@ -428,8 +576,8 @@ class ContactPickerViewModelTest {
         s.contactRepo.seed(
             listOf(
                 contactFixture(id = 12L, displayName = "Sarah"),
-                contactFixture(id = 13L, displayName = "Marcus"),
-            ),
+                contactFixture(id = 13L, displayName = "Marcus")
+            )
         )
         s.vm.onToggleSelect(12L)
         s.vm.onToggleSelect(13L)
@@ -444,7 +592,7 @@ class ContactPickerViewModelTest {
         val insert = s.membershipDao.insertCalls.single()
         assertEquals(
             setOf(12L to 1L, 13L to 1L),
-            insert.memberships.map { it.contactId to it.listId }.toSet(),
+            insert.memberships.map { it.contactId to it.listId }.toSet()
         )
         assertTrue("commit clears the selection", selectedIdsIn(s.savedState).isEmpty())
         assertNotNull("copy must record a depth-1 undo", s.undoStack.peek())
@@ -471,7 +619,7 @@ class ContactPickerViewModelTest {
         assertEquals(
             "select-all unions, never replaces",
             setOf(12L, 13L, 14L),
-            selectedIdsIn(s.savedState),
+            selectedIdsIn(s.savedState)
         )
     }
 
@@ -512,13 +660,13 @@ class ContactPickerViewModelTest {
         s.vm.onToggleFilter(PickerFilter.CommonlyCalled)
         assertEquals(
             listOf("CommonlyCalled"),
-            s.savedState.get<Array<String>>("activeFilters")?.toList(),
+            s.savedState.get<Array<String>>("activeFilters")?.toList()
         )
         // Activating Rarely clears Commonly — single-select group.
         s.vm.onToggleFilter(PickerFilter.RarelyCalled)
         assertEquals(
             listOf("RarelyCalled"),
-            s.savedState.get<Array<String>>("activeFilters")?.toList(),
+            s.savedState.get<Array<String>>("activeFilters")?.toList()
         )
     }
 
@@ -530,7 +678,7 @@ class ContactPickerViewModelTest {
         assertEquals(
             "RecentlyAdded does not clear the frequency filter",
             setOf("CommonlyCalled", "RecentlyAdded"),
-            s.savedState.get<Array<String>>("activeFilters")?.toSet(),
+            s.savedState.get<Array<String>>("activeFilters")?.toSet()
         )
     }
 
@@ -542,8 +690,8 @@ class ContactPickerViewModelTest {
         s.contactRepo.seed(
             listOf(
                 contactFixture(id = 12L, displayName = "Sarah", isIgnored = true)
-                    .copy(ignoredAt = Instant.parse("2026-06-01T00:00:00Z")),
-            ),
+                    .copy(ignoredAt = Instant.parse("2026-06-01T00:00:00Z"))
+            )
         )
 
         s.commitBus.events.test {

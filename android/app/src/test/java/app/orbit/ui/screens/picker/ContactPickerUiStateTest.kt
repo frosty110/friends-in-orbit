@@ -40,7 +40,7 @@ class ContactPickerUiStateTest {
         isLongGap: Boolean = false,
         listIds: Set<Long> = emptySet(),
         phone: String = "+1555000$id",
-        isStarred: Boolean = false,
+        isStarred: Boolean = false
     ) = PickerContact(
         contactId = id,
         displayName = name,
@@ -56,7 +56,7 @@ class ContactPickerUiStateTest {
         isRarelyCalled = isRarelyCalled,
         isRecentlyAdded = isRecentlyAdded,
         isLongGap = isLongGap,
-        isStarred = isStarred,
+        isStarred = isStarred
     )
 
     // ─── Starred filter ─────────────────────────────────────
@@ -66,18 +66,18 @@ class ContactPickerUiStateTest {
         val all = listOf(
             contact(1, isStarred = true),
             contact(2, isStarred = false),
-            contact(3, isStarred = true, isIgnored = true),
+            contact(3, isStarred = true, isIgnored = true)
         )
         val s = stateOf(all, filters = setOf(PickerFilter.Starred))
         assertEquals(
             listOf(1L),
             s.filteredContacts.map { it.contactId },
-            "Starred AND ignored-default exclusion — ignored starred contact stays hidden",
+            "Starred AND ignored-default exclusion — ignored starred contact stays hidden"
         )
         assertEquals(
             1,
             PickerFilter.Starred.countFor(s),
-            "chip count respects the ignored-default exclusion (countFor semantics)",
+            "chip count respects the ignored-default exclusion (countFor semantics)"
         )
     }
 
@@ -86,7 +86,7 @@ class ContactPickerUiStateTest {
         val all = listOf(
             contact(1, isStarred = true),
             contact(2, isStarred = true),
-            contact(3),
+            contact(3)
         )
         val s = stateOf(all)
         assertEquals(2, s.filterCounts[PickerFilter.Starred])
@@ -99,13 +99,13 @@ class ContactPickerUiStateTest {
             contact(2, name = "Bea", isStarred = true),
             contact(3, name = "Cory"),
             contact(4, name = "Dana", isStarred = true),
-            contact(5, name = "Eli", listIds = setOf(1L)), // sorted — excluded by Unsorted
+            contact(5, name = "Eli", listIds = setOf(1L)) // sorted — excluded by Unsorted
         )
         val s = stateOf(all, filters = setOf(PickerFilter.Unsorted))
         assertEquals(
             listOf(2L, 4L, 1L, 3L),
             s.filteredContacts.map { it.contactId },
-            "starred float first; stable sort preserves name order within each band",
+            "starred float first; stable sort preserves name order within each band"
         )
     }
 
@@ -113,13 +113,13 @@ class ContactPickerUiStateTest {
     fun starred_first_is_scoped_to_the_unsorted_view() {
         val all = listOf(
             contact(1, name = "Alex"),
-            contact(2, name = "Bea", isStarred = true),
+            contact(2, name = "Bea", isStarred = true)
         )
         val s = stateOf(all)
         assertEquals(
             listOf(1L, 2L),
             s.filteredContacts.map { it.contactId },
-            "without the Unsorted chip the default order is untouched",
+            "without the Unsorted chip the default order is untouched"
         )
     }
 
@@ -129,15 +129,16 @@ class ContactPickerUiStateTest {
         search: String = "",
         showIgnored: Boolean = false,
         selected: Set<Long> = emptySet(),
+        mode: PickerMode = PickerMode.Add
     ) = ContactPickerUiState(
         phase = ContactPickerUiState.Phase.Ready,
-        mode = PickerMode.Add,
+        mode = mode,
         targetListName = "Inner orbit",
         searchQuery = search,
         activeFilters = filters,
         showIgnored = showIgnored,
         allContacts = contacts,
-        selectedIds = selected,
+        selectedIds = selected
     )
 
     // ─── AND-semantics (PICK-02) ───────────────────────────────────────────
@@ -155,9 +156,10 @@ class ContactPickerUiStateTest {
         val all = listOf(
             contact(1, isCommonlyCalled = true, isRecentlyAdded = false),
             contact(2, isCommonlyCalled = true, isRecentlyAdded = true),
-            contact(3, isCommonlyCalled = false, isRecentlyAdded = true),
+            contact(3, isCommonlyCalled = false, isRecentlyAdded = true)
         )
-        val s = stateOf(all, filters = setOf(PickerFilter.CommonlyCalled, PickerFilter.RecentlyAdded))
+        val s =
+            stateOf(all, filters = setOf(PickerFilter.CommonlyCalled, PickerFilter.RecentlyAdded))
         assertEquals(1, s.filteredContacts.size, "AND of CommonlyCalled + RecentlyAdded")
         assertEquals(2L, s.filteredContacts[0].contactId)
     }
@@ -169,11 +171,15 @@ class ContactPickerUiStateTest {
         val all = listOf(
             contact(1, name = "Alex", isCommonlyCalled = true),
             contact(2, name = "Sam", isCommonlyCalled = true),
-            contact(3, name = "Alex", isCommonlyCalled = false),
+            contact(3, name = "Alex", isCommonlyCalled = false)
         )
         val s = stateOf(all, filters = setOf(PickerFilter.CommonlyCalled), search = "alex")
         assertEquals(1, s.filteredContacts.size)
-        assertEquals(1L, s.filteredContacts[0].contactId, "AND: name contains 'alex' AND CommonlyCalled")
+        assertEquals(
+            1L,
+            s.filteredContacts[0].contactId,
+            "AND: name contains 'alex' AND CommonlyCalled"
+        )
     }
 
     @Test
@@ -197,7 +203,7 @@ class ContactPickerUiStateTest {
     fun search_matches_phone_digits() {
         val all = listOf(
             contact(1, name = "Alex", phone = "+14045551234"),
-            contact(2, name = "Sam", phone = "+15125550000"),
+            contact(2, name = "Sam", phone = "+15125550000")
         )
         val s = stateOf(all, search = "404555")
         assertEquals(listOf(1L), s.filteredContacts.map { it.contactId })
@@ -233,7 +239,7 @@ class ContactPickerUiStateTest {
             contact(2, isRarelyCalled = true, callCount = 1),
             contact(3, callCount = 0),
             contact(4, isLongGap = true, callCount = 2),
-            contact(5, isIgnored = true, isCommonlyCalled = true, callCount = 7),
+            contact(5, isIgnored = true, isCommonlyCalled = true, callCount = 7)
         )
         val s = stateOf(all)
         assertEquals(1, PickerFilter.CommonlyCalled.countFor(s), "ignored excluded")
@@ -248,7 +254,7 @@ class ContactPickerUiStateTest {
         val all = listOf(
             contact(1, name = "Alex"),
             contact(2, name = "Sam", isIgnored = true),
-            contact(3, name = "Zara", isIgnored = true),
+            contact(3, name = "Zara", isIgnored = true)
         )
         val s = stateOf(all, search = "alex")
         assertEquals(2, s.ignoredCount)
@@ -272,7 +278,7 @@ class ContactPickerUiStateTest {
         val all = listOf(
             contact(1, callCount = 0),
             contact(2, callCount = 5),
-            contact(3, callCount = 0),
+            contact(3, callCount = 0)
         )
         val s = stateOf(all, filters = setOf(PickerFilter.NeverCalled))
         assertEquals(setOf(1L, 3L), s.filteredContacts.map { it.contactId }.toSet())
@@ -286,13 +292,13 @@ class ContactPickerUiStateTest {
             contact(1, listIds = emptySet()),
             contact(2, listIds = setOf(10L)),
             contact(3, listIds = emptySet()),
-            contact(4, listIds = setOf(10L, 20L)),
+            contact(4, listIds = setOf(10L, 20L))
         )
         val s = stateOf(all, filters = setOf(PickerFilter.Unsorted))
         assertEquals(
             setOf(1L, 3L),
             s.filteredContacts.map { it.contactId }.toSet(),
-            "Unsorted matches iff listIds.isEmpty()",
+            "Unsorted matches iff listIds.isEmpty()"
         )
     }
 
@@ -301,7 +307,7 @@ class ContactPickerUiStateTest {
         val all = listOf(
             contact(1, listIds = emptySet(), isCommonlyCalled = true),
             contact(2, listIds = emptySet(), isCommonlyCalled = false),
-            contact(3, listIds = setOf(10L), isCommonlyCalled = true),
+            contact(3, listIds = setOf(10L), isCommonlyCalled = true)
         )
         val s = stateOf(all, filters = setOf(PickerFilter.Unsorted, PickerFilter.CommonlyCalled))
         assertEquals(1, s.filteredContacts.size, "AND of Unsorted + CommonlyCalled")
@@ -309,6 +315,15 @@ class ContactPickerUiStateTest {
     }
 
     // ─── canSelectAllMatching (PICK-03) ────────────────────────────────────
+
+    @Test
+    fun canSelectAllMatching_never_offered_in_relink_mode() {
+        // CONTACT-07: re-link picks exactly one contact.
+        val all = (1L..5L).map { contact(it, name = "Alex $it") }
+        val s = stateOf(all, search = "alex", mode = PickerMode.Relink)
+        assertFalse(s.canSelectAllMatching)
+        assertFalse(s.selectAllCapExceeded)
+    }
 
     @Test
     fun canSelectAllMatching_false_when_no_filters_active() {
@@ -323,7 +338,7 @@ class ContactPickerUiStateTest {
         val s = stateOf(
             all,
             filters = setOf(PickerFilter.CommonlyCalled),
-            selected = setOf(1L, 2L),
+            selected = setOf(1L, 2L)
         )
         assertFalse(s.canSelectAllMatching, "all 2 matches selected = no remaining work")
     }
@@ -334,7 +349,7 @@ class ContactPickerUiStateTest {
         val s = stateOf(
             all,
             filters = setOf(PickerFilter.CommonlyCalled),
-            selected = setOf(1L),
+            selected = setOf(1L)
         )
         assertTrue(s.canSelectAllMatching, "1 of 2 selected = affordance visible")
     }
@@ -346,12 +361,12 @@ class ContactPickerUiStateTest {
         val all = listOf(
             contact(1, name = "Sarah Smith"),
             contact(2, name = "Sam Smith"),
-            contact(3, name = "Priya"),
+            contact(3, name = "Priya")
         )
         val s = stateOf(all, search = "smith")
         assertTrue(
             s.canSelectAllMatching,
-            "a search query alone narrows the list — 9 matches must not cost 9 taps",
+            "a search query alone narrows the list — 9 matches must not cost 9 taps"
         )
     }
 
@@ -392,13 +407,13 @@ class ContactPickerUiStateTest {
             contact(2, name = "Alex", isCommonlyCalled = true, isRecentlyAdded = false),
             contact(3, name = "Sam", isCommonlyCalled = true, isRecentlyAdded = true),
             contact(4, name = "Alex", isCommonlyCalled = false),
-            contact(5, name = "Alex", isCommonlyCalled = true, isIgnored = true),
+            contact(5, name = "Alex", isCommonlyCalled = true, isIgnored = true)
         )
         val s = stateOf(
             all,
             filters = setOf(PickerFilter.RecentlyAdded),
             search = "alex",
-            showIgnored = false,
+            showIgnored = false
         )
 
         // countFor(CommonlyCalled) should count: name contains 'alex' AND !isIgnored AND CommonlyCalled.
@@ -407,7 +422,7 @@ class ContactPickerUiStateTest {
         assertEquals(
             2,
             PickerFilter.CommonlyCalled.countFor(s),
-            "countFor must respect search + ignored, but ignore the OTHER active filter (RecentlyAdded)",
+            "countFor must respect search + ignored, but ignore the OTHER active filter (RecentlyAdded)"
         )
     }
 
@@ -415,7 +430,7 @@ class ContactPickerUiStateTest {
     fun countFor_with_showIgnored_true_includes_ignored() {
         val all = listOf(
             contact(1, isCommonlyCalled = true),
-            contact(2, isCommonlyCalled = true, isIgnored = true),
+            contact(2, isCommonlyCalled = true, isIgnored = true)
         )
         val s = stateOf(all, showIgnored = true)
         assertEquals(2, PickerFilter.CommonlyCalled.countFor(s))

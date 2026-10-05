@@ -13,13 +13,19 @@ import java.time.Duration
  *
  * @property duration  Length of the pause. `null` means indefinite — the use case maps
  *                     this to the 9999 sentinel at write time.
+ * @property snackbarPhrase How the pause reads at the end of every "Paused …"
+ *                     snackbar, single or bulk: "for 1 week", "for 1 month",
+ *                     "indefinitely". It carries its own preposition because
+ *                     "indefinitely" takes none; building "for {label}" at the
+ *                     call site is what produced "Paused 3 contacts for
+ *                     indefinitely". One owner, so the three pause paths cannot
+ *                     word it differently again.
  */
 sealed class PauseDuration(
     val duration: Duration?,
-    /** Sentence-case label for BulkPauseUseCase snackbar copy ("Paused 5 contacts for 1 week"). */
-    val displayLabel: String,
+    val snackbarPhrase: String
 ) {
-    data object OneWeek : PauseDuration(Duration.ofDays(7), "1 week")
-    data object OneMonth : PauseDuration(Duration.ofDays(30), "1 month")
+    data object OneWeek : PauseDuration(Duration.ofDays(7), "for 1 week")
+    data object OneMonth : PauseDuration(Duration.ofDays(30), "for 1 month")
     data object Indefinite : PauseDuration(null, "indefinitely")
 }

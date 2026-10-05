@@ -35,6 +35,8 @@ import app.orbit.ui.theme.OrbitTheme
  *   - [PickerMode.Add]  → "Add {N} to {targetListName}"
  *   - [PickerMode.Move] → "Move {N} to {targetListName}"
  *   - [PickerMode.Copy] → "Copy {N} to {targetListName}"
+ *   - [PickerMode.Relink] → "Re-link {orphan name}" (CONTACT-07; the
+ *     picker passes the orphan's name as [targetListName], and N is always 1)
  *
  * Disabled (greyed) when [isCommitting] is true — prevents double-tap commit
  * during an in-flight write.
@@ -47,7 +49,7 @@ fun BatchCounter(
     isCommitting: Boolean,
     onClear: () -> Unit,
     onCommit: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     if (selectionCount == 0) return
 
@@ -55,19 +57,20 @@ fun BatchCounter(
         PickerMode.Add -> "Add $selectionCount to $targetListName"
         PickerMode.Move -> "Move $selectionCount to $targetListName"
         PickerMode.Copy -> "Copy $selectionCount to $targetListName"
+        PickerMode.Relink -> "Re-link $targetListName"
     }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(OrbitTheme.colors.surface),
+            .background(OrbitTheme.colors.surface)
     ) {
         // Top hairline separates the bar from the list it docks beneath.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(1.dp)
-                .background(OrbitTheme.colors.lineSoft),
+                .background(OrbitTheme.colors.lineSoft)
         )
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -76,14 +79,14 @@ fun BatchCounter(
                 .fillMaxWidth()
                 .padding(
                     horizontal = OrbitTheme.spacing.x4,
-                    vertical = OrbitTheme.spacing.x3,
-                ),
+                    vertical = OrbitTheme.spacing.x3
+                )
         ) {
             Text(
                 text = "$selectionCount selected",
                 style = OrbitTheme.type.body,
                 color = OrbitTheme.colors.fg,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
             )
             Text(
                 text = "Clear",
@@ -91,12 +94,12 @@ fun BatchCounter(
                 color = OrbitTheme.colors.fgMuted,
                 modifier = Modifier
                     .clickable(enabled = !isCommitting, onClick = onClear)
-                    .padding(horizontal = OrbitTheme.spacing.x2, vertical = OrbitTheme.spacing.x2),
+                    .padding(horizontal = OrbitTheme.spacing.x2, vertical = OrbitTheme.spacing.x2)
             )
             OrbitButton(
                 text = ctaCopy,
                 onClick = onCommit,
-                enabled = !isCommitting,
+                enabled = !isCommitting
             )
         }
     }
@@ -112,7 +115,7 @@ private fun BatchCounterAddPreviewLight() {
             mode = PickerMode.Add,
             isCommitting = false,
             onClear = {},
-            onCommit = {},
+            onCommit = {}
         )
     }
 }
@@ -127,7 +130,7 @@ private fun BatchCounterMovePreviewDark() {
             mode = PickerMode.Move,
             isCommitting = false,
             onClear = {},
-            onCommit = {},
+            onCommit = {}
         )
     }
 }
@@ -142,7 +145,7 @@ private fun BatchCounterCopyPreviewLight() {
             mode = PickerMode.Copy,
             isCommitting = false,
             onClear = {},
-            onCommit = {},
+            onCommit = {}
         )
     }
 }

@@ -51,26 +51,26 @@ class SettingsIgnoredViewModel @Inject constructor(
     private val ignoreContactUseCase: IgnoreContactUseCase,
     private val unignoreContactUseCase: UnignoreContactUseCase,
     private val undoStack: UndoStack,
-    private val clock: Clock,
+    private val clock: Clock
 ) : ViewModel() {
 
     val uiState: StateFlow<SettingsIgnoredUiState> =
         contactRepo.observeIgnored()
-            .map { entities ->
-                // Filter archived contacts out of the Ignored view.
-                val visible = entities.filter { !it.isArchived }
+            .map { visible ->
+                // Archived contacts are already excluded by the query, so this
+                // list and Settings' "{N} ignored" count always agree.
                 if (visible.isEmpty()) {
                     SettingsIgnoredUiState.Empty
                 } else {
                     SettingsIgnoredUiState.Ready(
-                        ignored = visible.map { it.toRow(now = clock.now()) },
+                        ignored = visible.map { it.toRow(now = clock.now()) }
                     )
                 }
             }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = SettingsIgnoredUiState.Loading,
+                initialValue = SettingsIgnoredUiState.Loading
             )
 
     private val _snackbarEvents = MutableSharedFlow<SnackbarEvent>(extraBufferCapacity = 1)
@@ -92,8 +92,8 @@ class SettingsIgnoredViewModel @Inject constructor(
         undoStack.put(
             UndoStack.PendingUndo(
                 inverse = { ignoreContactUseCase(contactId, name) },
-                label = "Restored $name",
-            ),
+                label = "Restored $name"
+            )
         )
         _snackbarEvents.tryEmit(SnackbarEvent("Restored $name", "Undo"))
     }
@@ -110,7 +110,7 @@ class SettingsIgnoredViewModel @Inject constructor(
             name = displayName,
             photoUri = photoUri,
             ignoredAtMs = ignoredInstant.toEpochMilli(),
-            ignoredRelativeLabel = "Ignored " + formatRelative(ignoredInstant, now),
+            ignoredRelativeLabel = "Ignored " + formatRelative(ignoredInstant, now)
         )
     }
 }

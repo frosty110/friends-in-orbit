@@ -6,11 +6,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.orbit.ui.components.OrbitAppBar
@@ -33,6 +37,11 @@ import app.orbit.ui.theme.OrbitTheme
  * `secondary` = optional skip-style ghost CTA above primary. Pain-point #1
  * "no dead-end" requires every step except Welcome and Done to expose a
  * reachable forward path even when the user doesn't fulfill the ask.
+ *
+ * `snackbarHostState` = where a step's snackbars show, over the bottom of the
+ * content and just above the CTAs so Done stays reachable. A step that emits
+ * snackbars must pass it: `showSnackbar` with no host on screen suspends
+ * forever, and every later message queues behind it.
  */
 @Composable
 fun OnboardingScaffold(
@@ -40,7 +49,8 @@ fun OnboardingScaffold(
     onBack: (() -> Unit)?,
     primary: OnboardingAction,
     secondary: OnboardingAction? = null,
-    content: @Composable ColumnScope.() -> Unit,
+    snackbarHostState: SnackbarHostState? = null,
+    content: @Composable ColumnScope.() -> Unit
 ) {
     OrbitScreen {
         OrbitAppBar(
@@ -48,46 +58,55 @@ fun OnboardingScaffold(
             subtle = true,
             leading = if (onBack != null) {
                 { OrbitIconButton("arrow-left", onBack, contentDescription = "Back") }
-            } else null,
+            } else {
+                null
+            },
             trailing = if (step != null) {
                 { OnboardingProgress(step) }
-            } else null,
+            } else {
+                null
+            }
         )
 
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(
-                    horizontal = OrbitTheme.spacing.x5,
-                    vertical = OrbitTheme.spacing.x2,
+        Box(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        horizontal = OrbitTheme.spacing.x5,
+                        vertical = OrbitTheme.spacing.x2
+                    )
+                    .padding(bottom = OrbitTheme.spacing.x5),
+                content = content
+            )
+            if (snackbarHostState != null) {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.align(Alignment.BottomCenter)
                 )
-                .padding(bottom = OrbitTheme.spacing.x5),
-            content = content,
-        )
+            }
+        }
 
         OnboardingFooter(primary = primary, secondary = secondary)
     }
 }
 
 @Composable
-private fun OnboardingFooter(
-    primary: OnboardingAction,
-    secondary: OnboardingAction?,
-) {
+private fun OnboardingFooter(primary: OnboardingAction, secondary: OnboardingAction?) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .background(OrbitTheme.colors.bg)
             .padding(
                 horizontal = OrbitTheme.spacing.x5,
-                vertical = OrbitTheme.spacing.x3,
+                vertical = OrbitTheme.spacing.x3
             )
-            .padding(bottom = OrbitTheme.spacing.x4),
+            .padding(bottom = OrbitTheme.spacing.x4)
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
         ) {
             if (secondary != null) {
                 OrbitButton(
@@ -95,7 +114,7 @@ private fun OnboardingFooter(
                     onClick = secondary.onClick,
                     variant = OrbitButtonVariant.Ghost,
                     enabled = secondary.enabled,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
             Row(modifier = Modifier.fillMaxWidth()) {
@@ -104,7 +123,7 @@ private fun OnboardingFooter(
                     onClick = primary.onClick,
                     enabled = primary.enabled,
                     height = 52.dp,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
@@ -114,5 +133,5 @@ private fun OnboardingFooter(
 data class OnboardingAction(
     val label: String,
     val onClick: () -> Unit,
-    val enabled: Boolean = true,
+    val enabled: Boolean = true
 )

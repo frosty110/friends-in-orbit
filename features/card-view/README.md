@@ -1,10 +1,10 @@
 # card-view
 
 **Status:** in-progress
-**Last reviewed:** 2026-06-09
+**Last reviewed:** 2026-10-05
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/ui/screens/card/` (`CardViewScreen`, `CardViewViewModel`, `CardViewUiState`, `CardSwipeFrame`), `android/app/src/main/java/app/orbit/data/feed/CardFeed.kt`
-- Tests: `android/app/src/test/java/app/orbit/ui/screens/card/CardViewViewModelTest.kt`
+- Tests: `android/app/src/test/java/app/orbit/ui/screens/card/CardViewViewModelTest.kt`, instrumented: `android/app/src/androidTest/java/app/orbit/ui/screens/card/CardFaceCurtainTest.kt`
 
 ---
 
@@ -21,6 +21,10 @@ As a user, I see one person at a time with just enough context to decide whether
 ### Behavior
 
 **Layout.** Photo + contact name dominate above the fold. Stats present but secondary. List context shown as a small badge. Subtle skip button in the thumb zone for users who don't want to swipe.
+
+**Privacy curtain** (2026-10-05). With the curtain on (app backgrounded), the card face shows "Contact" in place of the person's name and derives the avatar initial from it, like the app bar. Before, the face still showed the real name and initials. Convention: `features/privacy-and-lock/README.md`, "Quick-hide on focus loss".
+
+**Smart lists** (2026-10-05). A smart list's rule matches are stored as members, due when they start matching (`SmartListMembershipSync`, see `features/orbit-lists/README.md`), so its card surfaces people like a static list's. Before, it always showed the no-members empty state.
 
 **Context data.** Last call time, call count, average call length, earliest/latest call time-of-day, days since last contact. Neutral framing — no streaks, no shame.
 

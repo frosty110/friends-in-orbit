@@ -70,7 +70,7 @@ class ListConfigViewModel @Inject constructor(
     private val bulkRemoveFromListUseCase: BulkRemoveFromListUseCase,
     private val undoStack: UndoStack,
     private val nudgeScheduler: NudgeScheduler,
-    savedStateHandle: SavedStateHandle,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val json = JsonProvider.json
@@ -93,7 +93,7 @@ class ListConfigViewModel @Inject constructor(
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = ListConfigUiState.Loading,
+                initialValue = ListConfigUiState.Loading
             )
 
     // ────────────────────────────────────────────────────────────────────────
@@ -140,7 +140,15 @@ class ListConfigViewModel @Inject constructor(
             // MembersPreview report "20 people" for a 50-person list and left
             // rows 21+ unremovable. The full list flows down; MembersPreview
             // owns the (honestly labeled) visual collapse.
-            flowOf(buildReady(entity, ruleTemplate = templateLookup(entity), members = members.map { it.toUiSnapshot() }))
+            flowOf(
+                buildReady(
+                    entity,
+                    ruleTemplate = templateLookup(entity),
+                    members = members.map {
+                        it.toUiSnapshot()
+                    }
+                )
+            )
         }
     }
 
@@ -150,18 +158,17 @@ class ListConfigViewModel @Inject constructor(
      * count must be the true total and every member must be removable;
      * [MembersPreview] handles the visual collapse with an honest label.
      */
-    private fun staticProjection(entity: ListEntity): Flow<ListConfigUiState> =
-        combine(
-            listRepo.observeMembersOfList(entity.id),
-            contactRepo.observeAll(),
-        ) { memberships, contacts ->
-            val byId = contacts.associateBy { it.id }
-            val members = memberships
-                .mapNotNull { byId[it.contactId] }
-                .sortedBy { it.id }
-                .map { it.toUiSnapshot() }
-            buildReady(entity, ruleTemplate = templateLookup(entity), members = members)
-        }
+    private fun staticProjection(entity: ListEntity): Flow<ListConfigUiState> = combine(
+        listRepo.observeMembersOfList(entity.id),
+        contactRepo.observeAll()
+    ) { memberships, contacts ->
+        val byId = contacts.associateBy { it.id }
+        val members = memberships
+            .mapNotNull { byId[it.contactId] }
+            .sortedBy { it.id }
+            .map { it.toUiSnapshot() }
+        buildReady(entity, ruleTemplate = templateLookup(entity), members = members)
+    }
 
     // The template lookup is suspend-only on the repository; we resolve
     // synchronously on each emission inside `combine`/`flatMapLatest` via a
@@ -175,7 +182,7 @@ class ListConfigViewModel @Inject constructor(
     private suspend fun buildReady(
         entity: ListEntity,
         ruleTemplate: RuleTemplateEntity?,
-        members: List<ListConfigContactSnapshot>,
+        members: List<ListConfigContactSnapshot>
     ): ListConfigUiState {
         val ruleParams: RuleParams? = resolveRuleParams(entity, ruleTemplate)
         val smartRule: SmartListRule? = entity.smartRuleJson?.let { decodeSmartRule(it) }
@@ -194,13 +201,13 @@ class ListConfigViewModel @Inject constructor(
             activeHoursEnd = entity.activeHoursEnd,
             notificationsEnabled = entity.notificationsEnabled,
             nudgeSchedule = nudgeSchedule,
-            members = members,
+            members = members
         )
     }
 
     private fun resolveRuleParams(
         entity: ListEntity,
-        ruleTemplate: RuleTemplateEntity?,
+        ruleTemplate: RuleTemplateEntity?
     ): RuleParams? {
         entity.ruleParamsOverrideJson?.let { override ->
             return runCatching {
@@ -218,12 +225,11 @@ class ListConfigViewModel @Inject constructor(
         json.decodeFromString(SmartListRule.serializer(), jsonText)
     }.getOrNull()
 
-    private fun ContactEntity.toUiSnapshot(): ListConfigContactSnapshot =
-        ListConfigContactSnapshot(
-            id = id,
-            displayName = displayName,
-            photoUri = photoUri,
-        )
+    private fun ContactEntity.toUiSnapshot(): ListConfigContactSnapshot = ListConfigContactSnapshot(
+        id = id,
+        displayName = displayName,
+        photoUri = photoUri
+    )
 
     // ────────────────────────────────────────────────────────────────────────
     // Save-on-change setters (LIST-04, LIST-05, LIST-06, SMART-04, SMART-06)
@@ -291,7 +297,14 @@ class ListConfigViewModel @Inject constructor(
     fun setActiveHours(start: LocalTime?, end: LocalTime?) {
         val id = listId ?: return
         viewModelScope.launch {
-            runMutation { listRepo.updateActiveHours(id, start, end) }
+            runMutation {
+                listRepo.updateActiveHours(id, start, end)
+                // The effective nudge schedule depends on the window (D-09: a slot at
+                // the window start only when no chosen time lands inside it), so a
+                // window edit re-anchors the chain instead of leaving the old slot
+                // queued until the next fire or cold start.
+                listRepo.getById(id)?.let { nudgeScheduler.scheduleFromEntity(it) }
+            }
         }
     }
 
@@ -307,10 +320,8 @@ class ListConfigViewModel @Inject constructor(
      * NOTIF-10/11 — save-on-change setter for the per-list nudge schedule.
      *
      * Encodes [schedule] to JSON, persists via [ListRepository.setNudgeScheduleJson],
-     * then calls [NudgeScheduler.schedule] with the list's current [activeHoursStart]
-     * forwarded so the D-09 implicit active-hours slot survives a config save. Using
-     * the 3-arg overload (schedule + activeHoursStart) is required — calling the
-     * 2-arg overload would drop the injected slot until the next cold-start reAnchorAll.
+     * then calls [NudgeScheduler.schedule] with the list's current active-hours
+     * window forwarded so the D-09 slot is decided against the saved window.
      */
     fun onNudgeScheduleChange(schedule: NudgeSchedule) {
         val id = listId ?: return
@@ -318,9 +329,14 @@ class ListConfigViewModel @Inject constructor(
             runMutation {
                 val encoded = json.encodeToString(NudgeSchedule.serializer(), schedule)
                 listRepo.setNudgeScheduleJson(id, encoded)
-                // Re-read the entity to obtain the authoritative activeHoursStart for D-09.
+                // Re-read the entity to obtain the authoritative window for D-09.
                 val entity = listRepo.getById(id) ?: return@runMutation
-                nudgeScheduler.schedule(id, schedule, entity.activeHoursStart)
+                nudgeScheduler.schedule(
+                    id,
+                    schedule,
+                    entity.activeHoursStart,
+                    entity.activeHoursEnd
+                )
             }
         }
     }
@@ -351,11 +367,22 @@ class ListConfigViewModel @Inject constructor(
      *
      * No local mutation: writing through the repository is the single source of
      * truth. No-op when `listId` is null (sentinel route, e.g. `"new"`).
+     *
+     * A converted list keeps a cadence. Smart lists used to have none, so a
+     * converted one landed with Cadence unselected and surfaced no one until
+     * the user noticed; it now inherits Keep in touch when it has no rhythm.
      */
     fun confirmConvert() {
         val id = listId ?: return
         viewModelScope.launch {
-            runMutation { listRepo.convertSmartToStatic(id) }
+            runMutation {
+                listRepo.convertSmartToStatic(id)
+                if (listRepo.getById(id)?.ruleTemplateId == null) {
+                    val keepInTouch = ruleTemplateRepo.getByKind(RuleKind.KEEP_IN_TOUCH)
+                        ?: error("KEEP_IN_TOUCH seed row missing")
+                    listRepo.updateRuleTemplate(id, keepInTouch.id)
+                }
+            }
         }
     }
 
@@ -393,11 +420,11 @@ class ListConfigViewModel @Inject constructor(
                 val result = bulkRemoveFromListUseCase(
                     listId = id,
                     contactIds = listOf(contactId),
-                    sourceListName = sourceListName,
+                    sourceListName = sourceListName
                 )
                 undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
                 _snackbarEvents.tryEmit(
-                    SnackbarEvent("Removed ${contactName.ifBlank { "contact" }}", "Undo"),
+                    SnackbarEvent("Removed ${contactName.ifBlank { "contact" }}", "Undo")
                 )
             }
         }
@@ -420,7 +447,7 @@ class ListConfigViewModel @Inject constructor(
      */
     private suspend fun runMutation(
         failureLabel: String = "Couldn't update list",
-        block: suspend () -> Unit,
+        block: suspend () -> Unit
     ) {
         try {
             block()
@@ -429,5 +456,4 @@ class ListConfigViewModel @Inject constructor(
             _snackbarEvents.tryEmit(SnackbarEvent(failureLabel))
         }
     }
-
 }

@@ -59,7 +59,7 @@ class SettingsIgnoredViewModelTest {
             contactRepo = contactRepo,
             listMembershipDao = membershipDao,
             listRepo = listRepo,
-            clock = clock,
+            clock = clock
         )
         val unignoreContactUseCase = UnignoreContactUseCase(
             txRunner = passThruTx,
@@ -67,7 +67,7 @@ class SettingsIgnoredViewModelTest {
             listDao = listDao,
             listMembershipDao = membershipDao,
             listRepo = listRepo,
-            clock = clock,
+            clock = clock
         )
         val undoStack = UndoStack()
         val vm = SettingsIgnoredViewModel(
@@ -75,7 +75,7 @@ class SettingsIgnoredViewModelTest {
             ignoreContactUseCase = ignoreContactUseCase,
             unignoreContactUseCase = unignoreContactUseCase,
             undoStack = undoStack,
-            clock = clock,
+            clock = clock
         )
         return Setup(vm, contactRepo, undoStack)
     }
@@ -83,7 +83,7 @@ class SettingsIgnoredViewModelTest {
     private data class Setup(
         val vm: SettingsIgnoredViewModel,
         val contactRepo: FakeContactRepository,
-        val undoStack: UndoStack,
+        val undoStack: UndoStack
     )
 
     // ============================================================================
@@ -126,7 +126,7 @@ class SettingsIgnoredViewModelTest {
     // ============================================================================
     // Test 3 — B1: ignored AND archived row is filtered out.
     // Two contacts seeded: one ignored-only, one ignored-and-archived. The
-    // VM's `!isArchived` filter must drop the archived one so only the visible
+    // ignored query (mirrored by the fake) drops the archived one so only the visible
     // row appears.
     // ============================================================================
 

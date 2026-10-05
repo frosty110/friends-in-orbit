@@ -6,9 +6,10 @@ import app.orbit.data.entity.ListEntity
 import app.orbit.data.repository.ListRepository
 import app.orbit.data.repository.RuleTemplateRepository
 import app.orbit.domain.JsonProvider
+import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeScheduler
-import app.orbit.ui.screens.picker.SnackbarEvent
+import app.orbit.ui.screens.home.HomeSnackbarEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -48,7 +50,7 @@ import kotlinx.coroutines.sync.withLock
 class ListsManagerViewModel @Inject constructor(
     private val listRepo: ListRepository,
     private val ruleTemplateRepo: RuleTemplateRepository,
-    private val nudgeScheduler: NudgeScheduler,
+    private val nudgeScheduler: NudgeScheduler
 ) : ViewModel() {
 
     private val reorderMutex = Mutex()
@@ -57,8 +59,16 @@ class ListsManagerViewModel @Inject constructor(
 
     // H4 fix — VM-owned snackbar surface so [runMutation] can emit a failure
     // toast when a mutation throws. The screen subscribes via [snackbarEvents].
-    private val _snackbarEvents = MutableSharedFlow<SnackbarEvent>(extraBufferCapacity = 1)
-    val snackbarEvents: SharedFlow<SnackbarEvent> = _snackbarEvents.asSharedFlow()
+    // Same event type as Home: both surfaces offer archive and delete with Undo,
+    // and the spec requires them to behave identically (features/orbit-lists,
+    // "the same delete-with-Undo behavior"). The kind tells the collector what an
+    // Undo tap and a dismissal mean.
+    private val _snackbarEvents = MutableSharedFlow<HomeSnackbarEvent>(extraBufferCapacity = 1)
+    val snackbarEvents: SharedFlow<HomeSnackbarEvent> = _snackbarEvents.asSharedFlow()
+
+    // Lists staged for a deferred delete: hidden immediately on confirm, purged
+    // in [commitDelete] once the Undo window closes (mirrors HomeViewModel).
+    private val pendingDeletes = MutableStateFlow<Set<Long>>(emptySet())
 
     // 2026-06-09 #26 — create no longer strands the user on the manager with a
     // "List created." toast. [createList] emits the new row id here; the screen
@@ -72,7 +82,9 @@ class ListsManagerViewModel @Inject constructor(
             listRepo.observeAll(),
             listRepo.observeMemberCountsByListId(),
             archivedExpanded,
-        ) { rows, memberCountsByListId, expanded ->
+            pendingDeletes
+        ) { allRows, memberCountsByListId, expanded, pending ->
+            val rows = allRows.filter { it.id !in pending }
             if (rows.isEmpty()) {
                 ListsManagerUiState.Empty
             } else {
@@ -85,14 +97,14 @@ class ListsManagerViewModel @Inject constructor(
                 ListsManagerUiState.Ready(
                     active = active,
                     archived = archived,
-                    archivedExpanded = expanded,
+                    archivedExpanded = expanded
                 )
             }
         }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = ListsManagerUiState.Loading,
+                initialValue = ListsManagerUiState.Loading
             )
 
     /** LIST-02 (reorder) — the mutex guards the dispatch. */
@@ -110,7 +122,7 @@ class ListsManagerViewModel @Inject constructor(
      * LIST-02 (archive) — flips `isArchived` to true; memberships untouched.
      *
      * LOW polish (Group 5) — emits the "List archived." snackbar event from the
-     * VM, NOT the screen, with the listId carried via [SnackbarEvent.actionPayload].
+     * VM, NOT the screen, with the listId carried via [HomeSnackbarEvent.payloadListId].
      * The screen collector dispatches `onUndoArchive(payload)` when the user taps
      * Undo. Without this, the previous screen-side `scope.launch { showSnackbar }`
      * died if the user navigated away mid-snackbar — the Undo work never ran.
@@ -126,11 +138,12 @@ class ListsManagerViewModel @Inject constructor(
                 nudgeScheduler.cancel(listId)
             }
             _snackbarEvents.tryEmit(
-                SnackbarEvent(
+                HomeSnackbarEvent(
                     message = "List archived.",
                     actionLabel = "Undo",
-                    actionPayload = listId,
-                ),
+                    payloadListId = listId,
+                    kind = HomeSnackbarEvent.Kind.ARCHIVE_UNDO
+                )
             )
         }
     }
@@ -153,13 +166,39 @@ class ListsManagerViewModel @Inject constructor(
     }
 
     /**
-     * D-25 — hard-delete an archived list. The PRD requires Delete to be
-     * reachable only from the archived section, so this is invoked from
-     * `ArchivedListRow` only. Memberships cascade via Room FK `ON DELETE
-     * CASCADE`. The snackbar carries no Undo: archive already provides the
-     * reversible path; once Delete is confirmed, the row is gone.
+     * D-25: delete an archived list, reachable only from the archived section.
+     * Memberships cascade via Room FK `ON DELETE CASCADE`.
+     *
+     * Deferred, with Undo, exactly like Home's delete: the row hides now and
+     * the purge runs in [commitDelete] when the snackbar closes. This used to
+     * delete immediately with no Undo on the grounds that archive was the
+     * reversible step; once Home offered Delete with Undo, the spec required
+     * this surface to match (features/orbit-lists, "Delete recoverability").
      */
     fun deleteList(listId: Long) {
+        pendingDeletes.update { it + listId }
+        _snackbarEvents.tryEmit(
+            HomeSnackbarEvent(
+                message = "List deleted.",
+                actionLabel = "Undo",
+                payloadListId = listId,
+                kind = HomeSnackbarEvent.Kind.DELETE_UNDO
+            )
+        )
+    }
+
+    /** Undo of [deleteList]: the row was never purged, so just un-hide it. */
+    fun undoDelete(listId: Long) {
+        pendingDeletes.update { it - listId }
+    }
+
+    /**
+     * Finalize a deferred delete once the Undo window closes (snackbar
+     * dismissed, superseded, or the screen left). Idempotent: a no-op when the
+     * list is no longer pending. The row stays hidden until Room confirms.
+     */
+    fun commitDelete(listId: Long) {
+        if (listId !in pendingDeletes.value) return
         viewModelScope.launch {
             runMutation {
                 listRepo.delete(listId)
@@ -168,12 +207,12 @@ class ListsManagerViewModel @Inject constructor(
                 // the WM cancel move together — a throw leaves no orphan chain.
                 nudgeScheduler.cancel(listId)
             }
-            _snackbarEvents.tryEmit(SnackbarEvent(message = "List deleted."))
+            pendingDeletes.update { it - listId }
         }
     }
 
     /**
-     * LOW polish (Group 5) — paired with [archiveList]'s SnackbarEvent. The screen's
+     * LOW polish (Group 5): paired with [archiveList]'s snackbar event. The screen's
      * snackbar collector invokes this when the user taps Undo on the
      * "List archived." event. Re-uses [unarchiveList] under the hood so the
      * mutation surface and runMutation error handling stay uniform.
@@ -224,34 +263,41 @@ class ListsManagerViewModel @Inject constructor(
      *  - 2026-06-09 #26 — emits the new row id on [createdListEvents] so the
      *    screen can navigate to the new list's configuration screen.
      */
-    fun createList(template: TemplateChoice, name: String): Job =
-        viewModelScope.launch {
-            runMutation {
-                val trimmed = name.trim()
-                if (trimmed.isEmpty()) return@runMutation
-                val ruleTemplateId: Long? = template.ruleKind
-                    ?.let { ruleTemplateRepo.getByKind(it) }
-                    ?.id
-                val smartRuleJson: String? = template.smartRule
-                    ?.let { json.encodeToString(SmartListRule.serializer(), it) }
-                val nextSortOrder =
-                    (listRepo.observeAll().first().maxOfOrNull { it.sortOrder } ?: -1) + 1
-                val draft = ListEntity(
-                    name = trimmed,
-                    sortOrder = nextSortOrder,
-                    isArchived = false,
-                    type = template.type,
-                    smartRuleJson = smartRuleJson,
-                    ruleTemplateId = ruleTemplateId,
-                    activeHoursStart = null,
-                    activeHoursEnd = null,
-                    notificationsEnabled = true,
-                    ruleParamsOverrideJson = null,
-                )
-                val newListId = listRepo.create(draft)
-                _createdListEvents.tryEmit(newListId)
-            }
+    fun createList(template: TemplateChoice, name: String): Job = viewModelScope.launch {
+        runMutation {
+            val trimmed = name.trim()
+            if (trimmed.isEmpty()) return@runMutation
+            val ruleTemplateId: Long? = template.ruleKind
+                ?.let { ruleTemplateRepo.getByKind(it) }
+                ?.id
+            val smartRuleJson: String? = template.smartRule
+                ?.let { json.encodeToString(SmartListRule.serializer(), it) }
+            val nextSortOrder =
+                (listRepo.observeAll().first().maxOfOrNull { it.sortOrder } ?: -1) + 1
+            val draft = ListEntity(
+                name = trimmed,
+                sortOrder = nextSortOrder,
+                isArchived = false,
+                type = template.type,
+                smartRuleJson = smartRuleJson,
+                ruleTemplateId = ruleTemplateId,
+                activeHoursStart = null,
+                activeHoursEnd = null,
+                notificationsEnabled = true,
+                // The template's own rhythm, encoded exactly as the interval
+                // slider writes it (KeepInTouch.withIntervalHours keeps both
+                // cooldown bounds consistent).
+                ruleParamsOverrideJson = template.intervalDays?.let { days ->
+                    json.encodeToString(
+                        RuleParams.serializer(),
+                        RuleParams.KeepInTouch().withIntervalHours(days * 24)
+                    )
+                }
+            )
+            val newListId = listRepo.create(draft)
+            _createdListEvents.tryEmit(newListId)
         }
+    }
 
     /**
      * H4 fix — wraps a mutation block with a uniform try/catch + snackbar
@@ -263,25 +309,26 @@ class ListsManagerViewModel @Inject constructor(
      */
     private suspend fun runMutation(
         failureLabel: String = "Couldn't save your change",
-        block: suspend () -> Unit,
+        block: suspend () -> Unit
     ) {
         try {
             block()
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
-            _snackbarEvents.tryEmit(SnackbarEvent(failureLabel))
+            _snackbarEvents.tryEmit(HomeSnackbarEvent(message = failureLabel))
         }
     }
 
-    private fun ListEntity.toTile(memberCountsByListId: Map<Long, Int>): ListTileState = ListTileState(
-        id = id,
-        name = name,
-        // Per-list count via ListMembershipDao.observeMemberCountsByListId.
-        // Empty lists are absent from the map; default to 0.
-        memberCount = memberCountsByListId[id] ?: 0,
-        type = type,
-        ruleSummary = ruleSummary(smartRuleJson),
-    )
+    private fun ListEntity.toTile(memberCountsByListId: Map<Long, Int>): ListTileState =
+        ListTileState(
+            id = id,
+            name = name,
+            // Per-list count via ListMembershipDao.observeMemberCountsByListId.
+            // Empty lists are absent from the map; default to 0.
+            memberCount = memberCountsByListId[id] ?: 0,
+            type = type,
+            ruleSummary = ruleSummary(smartRuleJson)
+        )
 
     /**
      * Sentence-case rule-summary formatter for the Lists Manager copywriting

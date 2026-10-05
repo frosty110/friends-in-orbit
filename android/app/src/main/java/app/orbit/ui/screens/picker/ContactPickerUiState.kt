@@ -80,7 +80,7 @@ data class ContactPickerUiState(
      * ONB-21 — picker sort mode. Default `ByName` (DAO order);
      * onboarding flips to `ByRecency` so most-recently-called surface first.
      */
-    val sortBy: PickerSort = PickerSort.ByName,
+    val sortBy: PickerSort = PickerSort.ByName
 ) {
     /**
      * Phase enum — drives which surface [ContactPickerScreen] renders:
@@ -107,7 +107,7 @@ data class ContactPickerUiState(
         EmptyDevice,
         Ready,
         Committing,
-        NotFound,
+        NotFound
     }
 
     /**
@@ -143,7 +143,7 @@ data class ContactPickerUiState(
             PickerSort.ByMostCalled ->
                 filtered.sortedWith(
                     compareByDescending<PickerContact> { it.callCount }
-                        .thenBy { it.displayName },
+                        .thenBy { it.displayName }
                 )
             PickerSort.ByRecentlySaved ->
                 filtered.sortedWith(
@@ -153,7 +153,7 @@ data class ContactPickerUiState(
                     // place. Falls back to firstSeenByAppAt when the device gave none.
                     compareByDescending<PickerContact> { c ->
                         c.deviceUpdatedAt?.let { minOf(c.firstSeenByAppAt, it) } ?: c.firstSeenByAppAt
-                    }.thenBy { it.displayName },
+                    }.thenBy { it.displayName }
                 )
         }
         // Within the Unsorted triage view, Android favorites
@@ -169,7 +169,7 @@ data class ContactPickerUiState(
             items = starredFirst,
             query = searchQuery,
             name = { it.displayName },
-            phone = { it.phone },
+            phone = { it.phone }
         )
     }
 
@@ -214,9 +214,9 @@ data class ContactPickerUiState(
                 PickerFilter.RecentlyAdded to recentlyAdded,
                 PickerFilter.LongGap to longGap,
                 PickerFilter.Unsorted to unsorted,
-                PickerFilter.Starred to starred,
+                PickerFilter.Starred to starred
             ),
-            ignoredCount = ignored,
+            ignoredCount = ignored
         )
     }
 
@@ -231,9 +231,13 @@ data class ContactPickerUiState(
 
     val selectionCount: Int get() = selectedIds.size
 
-    /** True when a search query or an active filter narrows the list. */
+    /**
+     * True when a search query or an active filter narrows the list. Never in
+     * [PickerMode.Relink]: re-link picks exactly one contact, so there is
+     * nothing to select all of.
+     */
     private val isNarrowed: Boolean
-        get() = searchQuery.isNotBlank() || activeFilters.isNotEmpty()
+        get() = mode != PickerMode.Relink && (searchQuery.isNotBlank() || activeFilters.isNotEmpty())
 
     val canSelectAllMatching: Boolean =
         isNarrowed &&
@@ -264,7 +268,7 @@ data class ContactPickerUiState(
  */
 private data class PickerDerivedCounts(
     val filterCounts: Map<PickerFilter, Int>,
-    val ignoredCount: Int,
+    val ignoredCount: Int
 )
 
 /**
@@ -345,8 +349,13 @@ sealed class PickerFilter {
  *   candidates are restricted to source-list members.
  * - [Copy]: additive copy via [app.orbit.domain.usecase.CopyContactsUseCase].
  *   Idempotent — a contact already on the target list is silently kept.
+ * - [Relink]: CONTACT-07. Picks the ONE phone contact an orphan is re-linked
+ *   to; requires a `relinkContactId` nav arg instead of a target list and
+ *   dispatches [app.orbit.domain.usecase.RelinkContactUseCase]. Selection is
+ *   single (a new pick replaces the old one) and candidates are restricted to
+ *   [app.orbit.domain.usecase.RelinkContactUseCase.isRelinkTarget].
  */
-enum class PickerMode { Add, Move, Copy }
+enum class PickerMode { Add, Move, Copy, Relink }
 
 /**
  * UI-domain projection of a contact for the picker. Carries the pre-derived
@@ -390,7 +399,7 @@ data class PickerContact(
      * (ContactsContract STARRED) via `ContactEntity.isStarred`. Defaulted so
      * preview/test fixtures that predate the flag stay valid.
      */
-    val isStarred: Boolean = false,
+    val isStarred: Boolean = false
 )
 
 /**
@@ -401,7 +410,7 @@ data class PickerContact(
 @Immutable
 data class PickerListSummary(
     val id: Long,
-    val name: String,
+    val name: String
 )
 
 /**
@@ -425,14 +434,13 @@ data class PickerListSummary(
  * search leg of the predicate matches [ContactPickerUiState.filteredContacts]:
  * both go through [ContactSearch].
  */
-fun PickerFilter.countFor(state: ContactPickerUiState): Int =
-    state.filterCounts[this]
-        ?: state.allContacts.count { c ->
-            (state.showIgnored || !c.isIgnored) &&
-                c.phone.isNotBlank() &&
-                (
-                    state.searchQuery.isBlank() ||
-                        ContactSearch.match(state.searchQuery, c.displayName, c.phone) != null
-                    ) &&
-                this.matches(c)
-        }
+fun PickerFilter.countFor(state: ContactPickerUiState): Int = state.filterCounts[this]
+    ?: state.allContacts.count { c ->
+        (state.showIgnored || !c.isIgnored) &&
+            c.phone.isNotBlank() &&
+            (
+                state.searchQuery.isBlank() ||
+                    ContactSearch.match(state.searchQuery, c.displayName, c.phone) != null
+                ) &&
+            this.matches(c)
+    }

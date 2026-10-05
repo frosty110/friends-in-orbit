@@ -1,10 +1,10 @@
 # orbit-lists
 
 **Status:** in-progress
-**Last reviewed:** 2026-06-09
+**Last reviewed:** 2026-10-05
 **Ground truth:**
-- Code: `android/app/src/main/java/app/orbit/ui/screens/lists/` (`ListsManagerScreen`/`ViewModel`, `ListConfigScreen`/`Body`/`ViewModel`, `CreateListBottomSheet`, `TemplateChoice`, `RuleTemplatePicker`, `MembersPreview`, `ActiveHoursEditor`, `SmartRuleEditor`, …); list picker: `android/app/src/main/java/app/orbit/ui/screens/picker/ListPickerScreen.kt` + `ListPickerViewModel.kt`
-- Tests: `android/app/src/test/java/app/orbit/ui/screens/lists/` (`ListsManagerViewModelTest`, `ListConfigViewModelTest`, `CreateListTemplateCatalogTest`, `ActiveHoursFormatterTest`, `IntervalScaleLabelsTest`, `SmartRuleEditIntegrationTest`), `android/app/src/test/java/app/orbit/ui/screens/picker/ListPickerViewModelTest.kt`
+- Code: `android/app/src/main/java/app/orbit/ui/screens/lists/` (`ListsManagerScreen`/`ViewModel`, `ListConfigScreen`/`Body`/`ViewModel`, `CreateListBottomSheet`, `TemplateChoice`, `RuleTemplatePicker`, `MembersPreview`, `ActiveHoursEditor`, `SmartRuleEditor`, …); list picker: `android/app/src/main/java/app/orbit/ui/screens/picker/ListPickerScreen.kt` + `ListPickerViewModel.kt`; smart-list membership: `android/app/src/main/java/app/orbit/data/feed/SmartListMembershipSync.kt`
+- Tests: `android/app/src/test/java/app/orbit/ui/screens/lists/` (`ListsManagerViewModelTest`, `ListConfigViewModelTest`, `CreateListTemplateCatalogTest`, `ActiveHoursFormatterTest`, `IntervalScaleLabelsTest`, `SmartRuleEditIntegrationTest`), `android/app/src/test/java/app/orbit/ui/screens/picker/ListPickerViewModelTest.kt`, `android/app/src/test/java/app/orbit/data/feed/SmartListMembershipSyncTest.kt`
 
 ---
 
@@ -23,20 +23,28 @@ As a user, I create lists that match how I actually think about my people. Each 
 **Lists Manager.**
 - Rows: name, member count, cooldown summary.
 - Dashed "new list" CTA at end of list.
-- Reorder via long-press drag. Archive removes from home while preserving data. Delete requires confirmation (destructive).
+- Reorder via long-press drag. Archive removes from home while preserving data. Delete requires confirmation (destructive), then shows "List deleted." with Undo; the delete is held until the snackbar goes away, as on home (2026-10-05).
 - Per-row overflow actions: rename, archive, **list settings** (opens List Configuration), move up/down. The action that opens List Configuration is labeled **"List settings"** everywhere — not "Configure" — matching the home long-press menu (see `features/home/README.md`).
 - These per-list actions (add people, mute/unmute prompts, list settings, archive, delete) are **also reachable via a long-press on the list tile on home**. Home is the convenience surface; Lists Manager remains the full manager. The two must stay consistent — same labels, and the same delete-with-Undo behavior. Spec: `features/home/README.md` → "List tile long-press — quick actions".
 
 **List creation.**
 - Lists Manager create (`CreateListBottomSheet`) navigates straight to List Configuration on success.
 - The list picker supports inline list creation (2026-06-09 #26) — no "create a list first, then come back" detour.
+- Each create template writes its own Keep in touch interval as the list's override (2026-10-05; before, every template made the same 2-day list): "Inner orbit" "Closest people, about weekly." (7 days), "Family" "Steady, every couple of weeks." (14 days), "Mentors" "Every couple of months." (60 days, the slider's cap per ADR 0010, so no longer quarterly), "Drifted" "Reconnect about once a month." (30 days). "Recently added, not called" ("Auto-updates as you add people.") is smart and carries Keep in touch; "Start from blank" ("Choose your own cadence.") keeps the template default (2 days). Pinned by `CreateListTemplateCatalogTest` and `ListsManagerViewModelTest`.
 
 **List Configuration (per list).**
 - Template selection is kind-based: a `TemplateChoice` catalog grouped by `RuleKind` (`KEEP_IN_TOUCH`, `LATE_NIGHT`, `ENERGIZE`). See `features/rule-engine/README.md` for the semantics.
 - Interval tuning is honest — the slider moves both cooldown bounds together (interval honesty; see `IntervalScaleLabelsTest`).
 - Member preview shows true member counts: first 20 rows + "Showing 20 of N" with a "Show all" affordance (`MembersPreview`).
-- Active hours (optional) — simple start/end pickers. Example: late night list active 9pm-2am.
+- Cadence and Interval show for smart lists too (static only before 2026-10-05), so a smart list can be given a rhythm.
+- Active hours (optional) — simple start/end pickers. Example: late night list active 9pm-2am. They gate when the list's nudge may post and never change its nudge days; changing them reschedules the nudge immediately (see `features/notifications/README.md`).
 - Per-list notification toggle (see `features/notifications/README.md`).
+
+**Smart lists (2026-10-05).**
+- `SmartListMembershipSync` keeps each non-archived smart list's stored members equal to what its rule matches. A contact who starts matching becomes a member, due now; one who stops matching is removed (for "Recently added, not called", that is the moment you call them). The list's due count is recomputed after each change.
+- So smart lists surface wherever static lists do: Home ("Next up", due counts), Card view, Browse and its queue, and nudges. Before, their members existed only inside List settings.
+- A smart list with no cadence is given Keep in touch.
+- Convert to static keeps the current members as a snapshot and ends syncing (the list is no longer smart); a list with no cadence gets Keep in touch.
 
 **Cross-list propagation.**
 - Calling contact X updates last-call state everywhere X appears — home, card-view, browse, widget — via Flow.
@@ -73,12 +81,13 @@ As a user, I create lists that match how I actually think about my people. Each 
 - `ListsManagerViewModel` observes `Flow<List<ListEntity>>` from Room; reorder via `sh.calvin.reorderable` in `ListsManagerScreen`.
 - `ListConfigViewModel` observes a single list + its rule config Flow.
 - `ListPickerViewModel` (under `ui/screens/picker/`) handles add-to-list flows, including inline list creation.
+- `SmartListMembershipSync` (`data/feed/`, `@Singleton`) is started once from `OrbitApp.onCreate` and runs on `@ApplicationScope`. It reconciles each smart list's rows against `SmartListEngine.membership(rule)`, so smart lists use the same surfacing path as static ones instead of a second one.
 - Cross-list propagation is automatic because call data is stored with `contactId` only (no `listId`); every list's due computation reads the same `CallEntity` rows.
 
 ### Data model
 
 - `ListEntity` — id, name, sortOrder, isArchived, type (`STATIC` | `SMART`), `smartRuleJson` (smart lists), `ruleTemplateId`, active hours (nullable start/end), notificationsEnabled, `ruleParamsOverrideJson`.
-- `ListMembershipEntity` — many-to-many with `ContactEntity`, plus per-list schedule state (`nextDueAt`, `skipCount`).
+- `ListMembershipEntity` — many-to-many with `ContactEntity`, plus per-list schedule state (`nextDueAt`, `skipCount`). A smart list's rows are written by `SmartListMembershipSync`, not by the user.
 - Rule config as built: `ruleTemplateId` references `RuleTemplateEntity`; per-list param tweaks live in `ruleParamsOverrideJson` (kotlinx-serialization, total parsing). A per-contact override (`ContactEntity.ruleOverrideJson`) still wins over the list's params.
 
 ### Permissions / integrations

@@ -23,7 +23,7 @@ import javax.inject.Inject
 class BulkPauseUseCase @Inject constructor(
     private val txRunner: TransactionRunner,
     private val contactDao: ContactDao,
-    private val clock: Clock,
+    private val clock: Clock
 ) {
     /**
      * @property inverse Suspending closure that restores each contact's prior
@@ -31,16 +31,13 @@ class BulkPauseUseCase @Inject constructor(
      *                   dispatches at most one `setPausedUntilBatch` call per
      *                   distinct prior `pausedUntil` (mirrors [BulkIgnoreUseCase]'s
      *                   shape; M8 fix avoids N round trips).
-     * @property label Snackbar copy: "Paused {N} contacts for
-     *                  {duration.displayLabel}" ("1 contact" when the batch is
+     * @property label Snackbar copy: "Paused {N} contacts
+     *                  {duration.snackbarPhrase}" ("1 contact" when the batch is
      *                  a single row).
      */
     data class Result(val inverse: suspend () -> Unit, val label: String)
 
-    suspend operator fun invoke(
-        contactIds: List<Long>,
-        duration: PauseDuration,
-    ): Result {
+    suspend operator fun invoke(contactIds: List<Long>, duration: PauseDuration): Result {
         // PauseDuration.duration is null only for Indefinite; reuse the shared
         // sentinel rather than duplicating it (Instant.MAX would round-trip
         // badly through Room's Long-based InstantTypeConverter).
@@ -65,8 +62,8 @@ class BulkPauseUseCase @Inject constructor(
             },
             label = run {
                 val noun = if (contactIds.size == 1) "contact" else "contacts"
-                "Paused ${contactIds.size} $noun for ${duration.displayLabel}"
-            },
+                "Paused ${contactIds.size} $noun ${duration.snackbarPhrase}"
+            }
         )
     }
 }

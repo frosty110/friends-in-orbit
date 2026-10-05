@@ -1,13 +1,13 @@
 package app.orbit.ui.screens.contact
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,18 +15,18 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -61,7 +61,6 @@ import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -73,7 +72,9 @@ import app.orbit.data.ChipTone
 import app.orbit.data.Contact
 import app.orbit.data.NoteRow
 import app.orbit.domain.model.PauseDuration
+import app.orbit.domain.rule.RuleParams
 import app.orbit.ui.components.Avatar
+import app.orbit.ui.components.ContactStatsPanel
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
@@ -85,9 +86,7 @@ import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.PhIcon
-import app.orbit.ui.components.ContactStatsPanel
 import app.orbit.ui.components.StatEntry
-import app.orbit.domain.rule.RuleParams
 import app.orbit.ui.screens.contact.sections.LogConnectionSheet
 import app.orbit.ui.screens.contact.sections.NotesSection
 import app.orbit.ui.screens.contact.sections.PauseSheet
@@ -97,6 +96,7 @@ import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.dialPhoneNumber
 import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 
 /**
  * Contact Detail — read-only information surface for
@@ -117,12 +117,14 @@ import coil.compose.AsyncImage
  */
 @Composable
 fun ContactDetailScreen(
-    contactId: String,                                  // VM reads via SavedStateHandle; also threaded to onAddToLists
+    contactId: String, // VM reads via SavedStateHandle; also threaded to onAddToLists
     onBack: () -> Unit,
-    onAddToLists: (contactId: String) -> Unit = {},     // BULK-06 — entry to ListPickerScreen
-    onRelink: (contactId: Long) -> Unit = {},           // CONTACT-06 — Re-link → ContactPickerScreen mode=relink
-    onViewAllCalls: () -> Unit = {},                    // LOG-01 — overflow → CallLogScreen
-    vm: ContactDetailViewModel = hiltViewModel(),
+    onAddToLists: (contactId: String) -> Unit = {}, // BULK-06 — entry to ListPickerScreen
+    onRelink: (
+        contactId: Long
+    ) -> Unit = {}, // CONTACT-06 — Re-link → ContactPickerScreen mode=relink
+    onViewAllCalls: () -> Unit = {}, // LOG-01 — overflow → CallLogScreen
+    vm: ContactDetailViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -146,7 +148,7 @@ fun ContactDetailScreen(
                     message = event.message,
                     actionLabel = event.actionLabel,
                     duration = SnackbarDuration.Short,
-                    withDismissAction = false,
+                    withDismissAction = false
                 )
                 if (r == SnackbarResult.ActionPerformed) vm.onUndo()
             }
@@ -191,6 +193,7 @@ fun ContactDetailScreen(
         onIgnore = vm::onIgnore,
         onPauseContact = vm::onPauseContact,
         onUnpauseContact = vm::onUnpauseContact,
+        onUnpauseNow = vm::onUnpauseNow,
         // LOG-01 — overflow → CallLogScreen. The NavHost-side caller forwards
         // this through `onViewAllCalls` to nav.navigate(Routes.CallLog).
         onViewAllCalls = onViewAllCalls,
@@ -217,7 +220,7 @@ fun ContactDetailScreen(
         // Inserts a CallEventEntity(source = MANUAL) via MarkCalledUseCase so
         // per-list nextDueAt advances; quiet "Logged." snackbar on success.
         onLogConnection = vm::onLogConnection,
-        notesInputFocusRequester = notesInputFocusRequester,
+        notesInputFocusRequester = notesInputFocusRequester
     )
 }
 
@@ -234,6 +237,7 @@ private fun ContactDetailContent(
     onIgnore: (String) -> Unit,
     onPauseContact: (PauseDuration) -> Unit,
     onUnpauseContact: () -> Unit,
+    onUnpauseNow: () -> Unit,
     onViewAllCalls: () -> Unit,
     onRelink: () -> Unit,
     onArchive: (String) -> Unit,
@@ -242,7 +246,7 @@ private fun ContactDetailContent(
     onClearOverride: () -> Unit,
     onAddRetroactiveNote: (Long, String) -> Unit,
     onLogConnection: (LogConnectionWhen, String, Boolean) -> Unit,
-    notesInputFocusRequester: FocusRequester? = null,
+    notesInputFocusRequester: FocusRequester? = null
 ) {
     // CONTACT-04, IGNORE-02 — overflow + pause sheet
     // visibility flags. `showOverflow` is non-saveable (transient); the
@@ -259,14 +263,20 @@ private fun ContactDetailContent(
         OrbitScreen {
             OrbitAppBar(
                 title = "",
-                leading = { OrbitIconButton(icon = "arrow-left", onClick = onBack, contentDescription = "Back") },
+                leading = {
+                    OrbitIconButton(
+                        icon = "arrow-left",
+                        onClick = onBack,
+                        contentDescription = "Back"
+                    )
+                },
                 trailing = if (state is ContactDetailUiState.Ready) {
                     {
                         Box {
                             OrbitIconButton(
                                 icon = "dots-three-vertical",
                                 onClick = { showOverflow = true },
-                                contentDescription = "More actions for ${readyContactName ?: "contact"}",
+                                contentDescription = "More actions for ${readyContactName ?: "contact"}"
                             )
                             // Ordering + danger tint per the shared
                             // [OrbitDropdownMenu] contract: the everyday reads
@@ -275,34 +285,25 @@ private fun ContactDetailContent(
                             OrbitDropdownMenu(
                                 expanded = showOverflow,
                                 onDismissRequest = { showOverflow = false },
-                                actions = listOf(
-                                    OrbitMenuAction(
-                                        label = "View all calls",
-                                        onClick = onViewAllCalls,
-                                        icon = "clock-counter-clockwise",
-                                    ),
-                                    OrbitMenuAction(
-                                        label = "Pause",
-                                        onClick = { showPauseSheet = true },
-                                        icon = "pause-circle",
-                                    ),
-                                    OrbitMenuAction(
-                                        label = "Ignore",
-                                        onClick = { readyContactName?.let { onIgnore(it) } },
-                                        icon = "eye-slash",
-                                        tone = OrbitMenuTone.Destructive,
-                                    ),
-                                ),
+                                actions = contactOverflowActions(
+                                    isPaused = (state as? ContactDetailUiState.Ready)?.pausedLabel != null,
+                                    onViewAllCalls = onViewAllCalls,
+                                    onPause = { showPauseSheet = true },
+                                    onUnpause = onUnpauseNow,
+                                    onIgnore = { readyContactName?.let { onIgnore(it) } }
+                                )
                             )
                         }
                     }
-                } else null,
+                } else {
+                    null
+                }
             )
             when (state) {
                 ContactDetailUiState.Loading -> EmptyContactShell()
                 ContactDetailUiState.NotFound -> ErrorShell(
                     message = "This contact isn't in Orbit anymore.",
-                    onBack = onBack,
+                    onBack = onBack
                 )
                 is ContactDetailUiState.Ready -> ContactBodyLazyColumn(
                     contact = state.contact,
@@ -312,6 +313,7 @@ private fun ContactDetailContent(
                     recentCalls = state.recentCalls,
                     longestGapLabel = state.longestGapLabel,
                     unpausePromptVisible = state.unpausePromptVisible,
+                    pausedLabel = state.pausedLabel,
                     customScheduleVisible = state.customScheduleVisible,
                     currentTemplateName = state.currentTemplateName,
                     primaryListName = state.primaryListName,
@@ -336,21 +338,22 @@ private fun ContactDetailContent(
                     onSaveOverride = onSaveOverride,
                     onClearOverride = onClearOverride,
                     onAddRetroactiveNote = onAddRetroactiveNote,
-                    notesInputFocusRequester = notesInputFocusRequester,
+                    notesInputFocusRequester = notesInputFocusRequester
                 )
                 is ContactDetailUiState.Orphaned -> Column(modifier = Modifier.fillMaxSize()) {
                     OrphanBanner(
                         onRelink = onRelink,
-                        onArchive = { onArchive(state.contact.name) },
+                        onArchive = { onArchive(state.contact.name) }
                     )
                     ContactBodyLazyColumn(
                         contact = state.contact,
-                        notes = emptyList(),       // Orphan: notes section hidden
+                        notes = emptyList(), // Orphan: notes section hidden
                         draft = "",
                         listsOn = state.listsOn,
                         recentCalls = state.recentCalls,
                         longestGapLabel = state.longestGapLabel,
                         unpausePromptVisible = false, // Orphan path bypasses unpause banner.
+                        pausedLabel = null, // Orphans are not surfaced, so a pause has no effect to report.
                         // Orphan path bypasses RuleOverrideSection — section
                         // wraps in its own AnimatedVisibility on listsOnSize >= 2,
                         // and edit affordances are off per the orphan banner copy.
@@ -372,7 +375,7 @@ private fun ContactDetailContent(
                         // The number survives orphaning, so calling still works.
                         callButtonVariant = OrbitButtonVariant.Secondary,
                         onOpenLogConnection = null, // Orphan: edit affordances disabled (banner copy)
-                        onAddToLists = null,        // Orphan: edit affordances disabled (banner copy)
+                        onAddToLists = null, // Orphan: edit affordances disabled (banner copy)
                         onDraftChange = {},
                         onAddNote = {},
                         onDeleteNote = {},
@@ -382,7 +385,7 @@ private fun ContactDetailContent(
                         onSaveOverride = {},
                         onClearOverride = {},
                         onAddRetroactiveNote = { _, _ -> },
-                        notesInputFocusRequester = null,
+                        notesInputFocusRequester = null
                     )
                 }
             }
@@ -397,7 +400,7 @@ private fun ContactDetailContent(
                     // launch-then-flip pattern; we just mirror the flag here.
                     showPauseSheet = false
                 },
-                onDismiss = { showPauseSheet = false },
+                onDismiss = { showPauseSheet = false }
             )
         }
         // Manual connection log — sheet at screen scope, mirroring PauseSheet.
@@ -406,12 +409,12 @@ private fun ContactDetailContent(
         if (showLogConnectionSheet) {
             LogConnectionSheet(
                 onConfirm = onLogConnection,
-                onDismiss = { showLogConnectionSheet = false },
+                onDismiss = { showLogConnectionSheet = false }
             )
         }
         SnackbarHost(
             hostState = snackbarHostState,
-            modifier = Modifier.align(Alignment.BottomCenter),
+            modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
 }
@@ -425,20 +428,20 @@ private fun EmptyContactShell() {
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = OrbitTheme.spacing.x6),
+            .padding(top = OrbitTheme.spacing.x6)
     ) {
         Box(
             modifier = Modifier
                 .size(120.dp)
                 .clip(CircleShape)
-                .background(OrbitTheme.colors.bgSubtle),
+                .background(OrbitTheme.colors.bgSubtle)
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
         Box(
             modifier = Modifier
                 .size(width = 160.dp, height = OrbitTheme.spacing.x6)
                 .clip(OrbitTheme.shapes.md)
-                .background(OrbitTheme.colors.bgSubtle),
+                .background(OrbitTheme.colors.bgSubtle)
         )
     }
 }
@@ -458,19 +461,19 @@ private fun ErrorShell(message: String, onBack: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         modifier = Modifier
             .fillMaxSize()
-            .padding(OrbitTheme.spacing.x8),
+            .padding(OrbitTheme.spacing.x8)
     ) {
         Text(
             text = message,
             style = OrbitTheme.type.body,
-            color = OrbitTheme.colors.fgMuted,
+            color = OrbitTheme.colors.fgMuted
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
         OrbitButton(text = "Back", onClick = onBack)
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)   // function-scoped per Pitfall 8
+@OptIn(ExperimentalLayoutApi::class) // function-scoped per Pitfall 8
 @Composable
 private fun ContactBodyLazyColumn(
     contact: Contact,
@@ -480,6 +483,7 @@ private fun ContactBodyLazyColumn(
     recentCalls: List<CallEntry>,
     longestGapLabel: String,
     unpausePromptVisible: Boolean,
+    pausedLabel: String?,
     customScheduleVisible: Boolean,
     currentTemplateName: String,
     primaryListName: String,
@@ -517,7 +521,7 @@ private fun ContactBodyLazyColumn(
     onSaveOverride: (RuleParams) -> Unit,
     onClearOverride: () -> Unit,
     onAddRetroactiveNote: (Long, String) -> Unit,
-    notesInputFocusRequester: FocusRequester? = null,
+    notesInputFocusRequester: FocusRequester? = null
 ) {
     val curtain = LocalPrivacyCurtain.current
     val displayName = if (curtain) "Contact" else contact.name
@@ -562,8 +566,8 @@ private fun ContactBodyLazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
             horizontal = OrbitTheme.spacing.x6,
-            vertical = OrbitTheme.spacing.x4,
-        ),
+            vertical = OrbitTheme.spacing.x4
+        )
     ) {
         // CONTACT-05 — UnpauseBanner item at top of body.
         // Renders only when pausedUntil <= now AND not the indefinite sentinel
@@ -573,17 +577,17 @@ private fun ContactBodyLazyColumn(
                 visible = unpausePromptVisible,
                 enter = slideInVertically(
                     animationSpec = tween(OrbitMotion.DurBaseMs),
-                    initialOffsetY = { -it },
+                    initialOffsetY = { -it }
                 ) + fadeIn(animationSpec = tween(OrbitMotion.DurBaseMs)),
                 exit = slideOutVertically(
                     animationSpec = tween(OrbitMotion.DurBaseMs),
-                    targetOffsetY = { -it },
-                ) + fadeOut(animationSpec = tween(OrbitMotion.DurBaseMs)),
+                    targetOffsetY = { -it }
+                ) + fadeOut(animationSpec = tween(OrbitMotion.DurBaseMs))
             ) {
                 UnpauseBanner(
                     contactName = contact.name,
                     curtain = curtain,
-                    onUnpause = onUnpauseContact,
+                    onUnpause = onUnpauseContact
                 )
             }
         }
@@ -594,14 +598,14 @@ private fun ContactBodyLazyColumn(
             val hasPhone = contact.phone.isNotBlank()
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 ContactPhoto(photoUri = contact.photoUri, name = displayName, size = 120.dp)
                 Spacer(Modifier.height(OrbitTheme.spacing.x4))
                 Text(
                     text = displayName,
                     style = OrbitTheme.type.hero,
-                    color = OrbitTheme.colors.fg,
+                    color = OrbitTheme.colors.fg
                 )
                 // FINDING A — tappable phone row. ACTION_DIAL via the shared
                 // Dialer util (never CALL_PHONE); 48dp target per design rule 3.
@@ -616,12 +620,21 @@ private fun ContactBodyLazyColumn(
                             role = Role.Button
                             contentDescription = "Call $formattedPhone"
                         }
-                        .padding(horizontal = OrbitTheme.spacing.x3),
+                        .padding(horizontal = OrbitTheme.spacing.x3)
                 ) {
                     Text(
                         text = formattedPhone,
                         style = OrbitTheme.type.body,
-                        color = OrbitTheme.colors.fgMuted,
+                        color = OrbitTheme.colors.fgMuted
+                    )
+                }
+                // An active pause used to be invisible here; say so plainly
+                // (the overflow offers Unpause while this shows).
+                if (pausedLabel != null) {
+                    Text(
+                        text = pausedLabel,
+                        style = OrbitTheme.type.meta,
+                        color = OrbitTheme.colors.fgMuted
                     )
                 }
                 Spacer(Modifier.height(OrbitTheme.spacing.x3))
@@ -630,7 +643,7 @@ private fun ContactBodyLazyColumn(
                 // call Orbit can't see (another app, in person).
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     OrbitButton(
                         text = "Call",
@@ -638,14 +651,14 @@ private fun ContactBodyLazyColumn(
                         variant = callButtonVariant,
                         leadingIcon = "phone",
                         enabled = hasPhone,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f)
                     )
                     if (onOpenLogConnection != null) {
                         OrbitButton(
                             text = "Log a connection",
                             onClick = onOpenLogConnection,
                             variant = OrbitButtonVariant.Secondary,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
@@ -659,21 +672,21 @@ private fun ContactBodyLazyColumn(
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
-                verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
+                verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2)
             ) {
                 listsOn.forEach { listName ->
                     OrbitChip(
                         label = if (curtain) "Contact" else listName,
                         // ChipTone.Stone is the neutral read-only marker —
                         // matches the curtain-on tone for visual consistency.
-                        tone = ChipTone.Stone,
+                        tone = ChipTone.Stone
                     )
                 }
                 if (listsOn.isEmpty()) {
                     Text(
                         text = "—",
                         style = OrbitTheme.type.body,
-                        color = OrbitTheme.colors.fgMuted,
+                        color = OrbitTheme.colors.fgMuted
                     )
                 }
             }
@@ -688,25 +701,25 @@ private fun ContactBodyLazyColumn(
                 stats = listOf(
                     StatEntry(
                         label = "Last call",
-                        value = contact.lastCalledLabel.ifBlank { "Never called" },
+                        value = contact.lastCalledLabel.ifBlank { "Never called" }
                     ),
                     StatEntry(
                         label = "Total calls",
-                        value = contact.totalCalls.toString(),
+                        value = contact.totalCalls.toString()
                     ),
                     StatEntry(
                         label = "Avg length",
-                        value = if (contact.totalCalls >= 3) contact.avgLengthLabel.ifBlank { "—" } else "—",
+                        value = if (contact.totalCalls >= 3) contact.avgLengthLabel.ifBlank { "—" } else "—"
                     ),
                     StatEntry(
                         label = "Longest gap",
-                        value = longestGapLabel,
-                    ),
-                ),
+                        value = longestGapLabel
+                    )
+                )
             )
             HorizontalDivider(
                 color = OrbitTheme.colors.line,
-                thickness = 1.dp,
+                thickness = 1.dp
             )
             UsuallyStatRow(value = contact.bestWindowLabel.ifBlank { "—" })
         }
@@ -724,7 +737,7 @@ private fun ContactBodyLazyColumn(
                     // terracotta element (rules.md design rule 5).
                     variant = OrbitButtonVariant.Secondary,
                     leadingIcon = "user-plus",
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
@@ -744,7 +757,7 @@ private fun ContactBodyLazyColumn(
                     onAdd = { onAddNote(draft) },
                     onDelete = onDeleteNote,
                     onEditCommit = onEditNote,
-                    inputFocusRequester = notesInputFocusRequester,
+                    inputFocusRequester = notesInputFocusRequester
                 )
             }
         }
@@ -768,7 +781,7 @@ private fun ContactBodyLazyColumn(
                     currentParams = currentParams ?: RuleParams.KeepInTouch(),
                     onOverride = onOpenOverride,
                     onParamsChange = onSaveOverride,
-                    onResetDefault = onClearOverride,
+                    onResetDefault = onClearOverride
                 )
             }
         }
@@ -784,7 +797,7 @@ private fun ContactBodyLazyColumn(
                 Text(
                     text = "No calls yet.",
                     style = OrbitTheme.type.body,
-                    color = OrbitTheme.colors.fgMuted,
+                    color = OrbitTheme.colors.fgMuted
                 )
             }
         } else {
@@ -796,12 +809,12 @@ private fun ContactBodyLazyColumn(
             items(
                 count = recentCalls.size,
                 key = { idx -> "call-$idx" },
-                contentType = { "callRow" },
+                contentType = { "callRow" }
             ) { idx ->
                 CallHistoryRow(
                     call = recentCalls[idx],
                     isManual = recentCallIsManual.getOrNull(idx) ?: false,
-                    isAttempt = recentCallIsAttempt.getOrNull(idx) ?: false,
+                    isAttempt = recentCallIsAttempt.getOrNull(idx) ?: false
                 )
                 // LOG-03 — inline "Add note to this call" affordance. Renders
                 // below the highlighted call row (the one the CallLog deep link
@@ -819,7 +832,7 @@ private fun ContactBodyLazyColumn(
                                 onAddRetroactiveNote(callEventId, retroNoteDraft)
                                 retroNoteDraft = ""
                             }
-                        },
+                        }
                     )
                 }
             }
@@ -835,7 +848,7 @@ private fun SectionEyebrow(label: String) {
     Text(
         text = label,
         style = OrbitTheme.type.eyebrow,
-        color = OrbitTheme.colors.fgMuted,
+        color = OrbitTheme.colors.fgMuted
     )
 }
 
@@ -848,35 +861,35 @@ private fun UsuallyStatRow(value: String) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = OrbitTheme.spacing.x3),
+            .padding(vertical = OrbitTheme.spacing.x3)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f)
         ) {
             Text(
                 text = "Usually",
                 style = OrbitTheme.type.eyebrow,
-                color = OrbitTheme.colors.fgMuted,
+                color = OrbitTheme.colors.fgMuted
             )
             Spacer(Modifier.width(6.dp))
             TooltipBox(
                 positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
                 tooltip = { PlainTooltip { Text(USUALLY_TOOLTIP) } },
-                state = rememberTooltipState(isPersistent = false),
+                state = rememberTooltipState(isPersistent = false)
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Info,
                     contentDescription = "About this stat",
                     tint = OrbitTheme.colors.fgMuted,
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(14.dp)
                 )
             }
         }
         Text(
             text = value,
             style = OrbitTheme.type.statValue,
-            color = OrbitTheme.colors.fg,
+            color = OrbitTheme.colors.fg
         )
     }
 }
@@ -895,7 +908,7 @@ private fun ContactPhoto(photoUri: String?, name: String, size: Dp) {
             contentDescription = null,
             modifier = Modifier
                 .size(size)
-                .clip(CircleShape),
+                .clip(CircleShape)
         )
     }
 }
@@ -912,31 +925,28 @@ private fun ContactPhoto(photoUri: String?, name: String, size: Dp) {
  *   - Body: "History stays here. Re-link to a phone contact, or archive to remove from lists."
  */
 @Composable
-internal fun OrphanBanner(
-    onRelink: () -> Unit,
-    onArchive: () -> Unit,
-) {
+internal fun OrphanBanner(onRelink: () -> Unit, onArchive: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(
                 horizontal = OrbitTheme.spacing.x6,
-                vertical = OrbitTheme.spacing.x4,
+                vertical = OrbitTheme.spacing.x4
             )
             .clip(OrbitTheme.shapes.lg)
             .background(OrbitTheme.colors.bgSubtle)
-            .padding(OrbitTheme.spacing.x4),
+            .padding(OrbitTheme.spacing.x4)
     ) {
         Text(
             text = "This contact was deleted from your phone",
             style = OrbitTheme.type.h3,
-            color = OrbitTheme.colors.fg,
+            color = OrbitTheme.colors.fg
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
             text = "History stays here. Re-link to a phone contact, or archive to remove from lists.",
             style = OrbitTheme.type.body,
-            color = OrbitTheme.colors.fgMuted,
+            color = OrbitTheme.colors.fgMuted
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x3))
         Row(horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3)) {
@@ -944,13 +954,13 @@ internal fun OrphanBanner(
                 text = "Re-link",
                 onClick = onRelink,
                 variant = OrbitButtonVariant.Primary,
-                leadingIcon = "link",
+                leadingIcon = "link"
             )
             OrbitButton(
                 text = "Archive",
                 onClick = onArchive,
                 variant = OrbitButtonVariant.Secondary,
-                leadingIcon = "eye-slash",
+                leadingIcon = "eye-slash"
             )
         }
     }
@@ -975,7 +985,7 @@ private fun CallHistoryRow(call: CallEntry, isManual: Boolean = false, isAttempt
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = OrbitTheme.spacing.x3),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         val iconName: String = when {
             isAttempt -> "phone-slash"
@@ -993,12 +1003,12 @@ private fun CallHistoryRow(call: CallEntry, isManual: Boolean = false, isAttempt
                     else -> call.lengthLabel
                 },
                 style = OrbitTheme.type.body,
-                color = OrbitTheme.colors.fg,
+                color = OrbitTheme.colors.fg
             )
             Text(
                 text = call.relativeWhen,
                 style = OrbitTheme.type.meta,
-                color = OrbitTheme.colors.fgMuted,
+                color = OrbitTheme.colors.fgMuted
             )
         }
     }
@@ -1023,12 +1033,12 @@ private fun CallHistoryRow(call: CallEntry, isManual: Boolean = false, isAttempt
 private fun RetroNoteAffordance(
     draft: String,
     onDraftChange: (String) -> Unit,
-    onSave: () -> Unit,
+    onSave: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = OrbitTheme.spacing.x2, bottom = OrbitTheme.spacing.x4),
+            .padding(top = OrbitTheme.spacing.x2, bottom = OrbitTheme.spacing.x4)
     ) {
         BasicTextField(
             value = draft,
@@ -1044,20 +1054,20 @@ private fun RetroNoteAffordance(
                         .background(OrbitTheme.colors.bgSubtle)
                         .padding(
                             horizontal = OrbitTheme.spacing.x4,
-                            vertical = OrbitTheme.spacing.x3,
+                            vertical = OrbitTheme.spacing.x3
                         )
-                        .defaultMinSize(minHeight = 48.dp),
+                        .defaultMinSize(minHeight = 48.dp)
                 ) {
                     if (draft.isEmpty()) {
                         Text(
                             text = "Add a note about this call",
-                            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
+                            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted)
                         )
                     }
                     inner()
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         OrbitButton(
@@ -1068,7 +1078,7 @@ private fun RetroNoteAffordance(
             // element (rules.md design rule 5).
             variant = OrbitButtonVariant.Secondary,
             leadingIcon = "note-pencil",
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
@@ -1077,7 +1087,7 @@ private fun formatPhone(raw: String): String {
     // PhoneNumberUtils returns null for unparseable input — fall back to raw.
     return android.telephony.PhoneNumberUtils.formatNumber(
         raw,
-        java.util.Locale.getDefault().country,
+        java.util.Locale.getDefault().country
     ) ?: raw
 }
 
@@ -1096,7 +1106,7 @@ private val previewContact: app.orbit.data.Contact = app.orbit.data.Contact(
     heat = FloatArray(24) { 0f },
     history = emptyList(),
     notes = emptyList(),
-    patternNote = "",
+    patternNote = ""
 )
 
 private val previewState: ContactDetailUiState = ContactDetailUiState.Ready(
@@ -1104,7 +1114,7 @@ private val previewState: ContactDetailUiState = ContactDetailUiState.Ready(
     notes = emptyList(),
     listsOn = listOf("Inner orbit"),
     recentCalls = emptyList(),
-    longestGapLabel = "21 days",
+    longestGapLabel = "21 days"
 )
 
 @PreviewLightDark
@@ -1124,6 +1134,7 @@ private fun ContactDetailContentPreview() {
             onIgnore = {},
             onPauseContact = {},
             onUnpauseContact = {},
+            onUnpauseNow = {},
             onViewAllCalls = {},
             onRelink = {},
             onArchive = {},
@@ -1131,7 +1142,40 @@ private fun ContactDetailContentPreview() {
             onSaveOverride = {},
             onClearOverride = {},
             onAddRetroactiveNote = { _, _ -> },
-            onLogConnection = { _, _, _ -> },
+            onLogConnection = { _, _, _ -> }
         )
     }
 }
+
+/**
+ * Contact detail overflow, ordered by the shared [OrbitDropdownMenu] contract:
+ * the everyday reads lead, and "Ignore" sits last in danger.
+ *
+ * While a pause is in force the pause slot offers Unpause instead. There was
+ * no Unpause anywhere before, so an indefinite pause outlived its snackbar
+ * permanently. `internal` so the order is unit-tested (ContactOverflowMenuTest).
+ */
+internal fun contactOverflowActions(
+    isPaused: Boolean,
+    onViewAllCalls: () -> Unit,
+    onPause: () -> Unit,
+    onUnpause: () -> Unit,
+    onIgnore: () -> Unit
+): List<OrbitMenuAction> = listOf(
+    OrbitMenuAction(
+        label = "View all calls",
+        onClick = onViewAllCalls,
+        icon = "clock-counter-clockwise"
+    ),
+    if (isPaused) {
+        OrbitMenuAction(label = "Unpause", onClick = onUnpause, icon = "play")
+    } else {
+        OrbitMenuAction(label = "Pause", onClick = onPause, icon = "pause-circle")
+    },
+    OrbitMenuAction(
+        label = "Ignore",
+        onClick = onIgnore,
+        icon = "eye-slash",
+        tone = OrbitMenuTone.Destructive
+    )
+)

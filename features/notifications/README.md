@@ -1,7 +1,7 @@
 # notifications
 
 **Status:** shipped
-**Last reviewed:** 2026-07-03
+**Last reviewed:** 2026-10-05
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/notify/` — full notification system. `OrbitNotifications` registers only the `orbit.list_prompt` (DEFAULT importance) channel on startup; the retired `orbit.digest`, `orbit.incoming_followup`, and `orbit.incoming_followup.v2` channels are deleted on every cold start. `DailyDigestWorker` and `IncomingFollowUpWorker` were both deleted (ADR 0009 — notifications are pull, never push). One notification worker remains: `ListPromptWorker`.
 - `NudgeSchedule` — `@Serializable` per-list schedule model (days of week × times of day); stored as JSON in `ListEntity.nudgeScheduleJson` (schema v12 / `MIGRATION_11_12` backfill). `NudgeScheduler` (@Singleton) enqueues self-re-enqueueing `OneTimeWork` per list via `setInitialDelay` + `ExistingWorkPolicy.REPLACE`. `ListPromptWorker` (@HiltWorker) implements a 5-gate `doWork`: notifications-enabled check, DND check, list-muted check, due-count check, active-hours check; posts with title = list name, body = opportunity framing via `NotificationCopy.nudgeBody` (name-free; "Someone in {list} is ready when you are. Want to call?" / "A few people in {list} are ready when you are. Start with one?" — the exact due count is deliberately never shown); re-enqueues in `finally` block.
@@ -30,7 +30,9 @@ As a user, my lists nudge me on the schedule I set — "someone in {list} is rea
 
 **Daily digest.** RETIRED 2026-04-28 (whole-app review). The legacy `DailyDigestWorker` was deleted. The `orbit.daily_digest` unique work name is cancelled on every `OrbitApp.onCreate` to clean up any remaining scheduled instances on existing installs.
 
-**Time-of-day list prompts.** Only for lists with active-hours configured. One notification per list per active-hours window, never per contact. Example: late night list notifies at 10pm if anyone is due.
+**Active hours and nudge days** (2026-10-05). A list's nudge fires on the days and times chosen for it, one notification per list per slot, never per contact. Optional active hours only gate when that nudge may post: they never add days or a second daily nudge. The window start is added as an extra nudge time only when every chosen time falls outside the window (otherwise the list could never nudge), and only on the chosen days. "No days selected" (nudges off) stays off with a window set. Changing active hours reschedules the list's nudge immediately. Before, a window merged all seven days into the schedule and added a second daily slot, so weekday nudges fired every day and "nudges off" kept nudging. As built: `NudgeScheduler.effectiveSchedule`, sharing `isInActiveWindow` with the worker's active-hours gate; pinned by `NudgeSchedulerEffectiveSlotsTest` and `ListConfigViewModelTest`.
+
+**Smart lists nudge too** (2026-10-05). A smart list's rule matches are stored as members with a due count (`SmartListMembershipSync`, see `features/orbit-lists/README.md`), so the due-count gate treats it like a static list.
 
 **Incoming / missed calls — no notification** (ADR 0009). A missed inbound call surfaces the contact in the deck (due since they rang — `KeepInTouchEngine` step 3c), not as a ping. Orbit never notifies you because of an event; the miss shows up in-app, silently.
 

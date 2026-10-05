@@ -29,4 +29,11 @@ class PickerModeTitleTest {
         assertEquals("Copy 1 contact", pickerModeTitle(PickerMode.Copy, 1))
         assertEquals("Copy 12 contacts", pickerModeTitle(PickerMode.Copy, 12))
     }
+
+    @Test
+    fun relink_mode_ignores_selection_count() {
+        // CONTACT-07: one pick, so no count to show.
+        assertEquals("Re-link contact", pickerModeTitle(PickerMode.Relink, 0))
+        assertEquals("Re-link contact", pickerModeTitle(PickerMode.Relink, 1))
+    }
 }

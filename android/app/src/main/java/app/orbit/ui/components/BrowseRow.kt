@@ -21,8 +21,8 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import app.orbit.data.Contact
 import app.orbit.ui.theme.OrbitTheme
@@ -56,18 +56,25 @@ import app.orbit.ui.theme.OrbitTheme
  * Accessibility (UI-SPEC §BROWSE-05): two CustomAccessibilityActions —
  * "Call {FirstName}" and "Open details". Row body tap opens detail; trailing
  * phone icon tap dials. Two distinct hit areas, each ≥ `spacing.tapMin`.
+ *
+ * [onTap] = null when the CALLER owns the row gesture (Browse wraps each row
+ * in a `combinedClickable` for tap, long-press quick actions and
+ * multi-select). The row then adds no clickable of its own: a clickable here
+ * consumes the press before the parent sees it, which is how Browse rows used
+ * to ignore taps and long-presses entirely. "Open details" is left to the
+ * caller's click semantics in that case.
  */
 @Composable
 fun BrowseRow(
     contact: Contact,
-    onTap: () -> Unit,
+    onTap: (() -> Unit)?,
     onDial: () -> Unit,
     modifier: Modifier = Modifier,
     due: Boolean = contact.due,
     statusLabel: String? = null,
     showCallMeta: Boolean = true,
-    queuePosition: Int? = null,   // null → render blank 24dp column (GlobalSearch + "Other members" rows)
-    isHead: Boolean = false,      // queue head (position 1) → accent color on the position number
+    queuePosition: Int? = null, // null → render blank 24dp column (GlobalSearch + "Other members" rows)
+    isHead: Boolean = false // queue head (position 1) → accent color on the position number
 ) {
     val curtain = LocalPrivacyCurtain.current
     val displayName = if (curtain) "Contact" else contact.name
@@ -79,21 +86,29 @@ fun BrowseRow(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = OrbitTheme.spacing.tapMin)
-            .clickable(onClick = onTap)
+            .then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier)
             .padding(
                 horizontal = OrbitTheme.spacing.x5,
-                vertical = OrbitTheme.spacing.x3,
+                vertical = OrbitTheme.spacing.x3
             )
             .semantics {
-                customActions = listOf(
-                    CustomAccessibilityAction(label = "Call $firstName") {
-                        onDial(); true
-                    },
-                    CustomAccessibilityAction(label = "Open details") {
-                        onTap(); true
-                    },
-                )
-            },
+                customActions = buildList {
+                    add(
+                        CustomAccessibilityAction(label = "Call $firstName") {
+                            onDial()
+                            true
+                        }
+                    )
+                    if (onTap != null) {
+                        add(
+                            CustomAccessibilityAction(label = "Open details") {
+                                onTap()
+                                true
+                            }
+                        )
+                    }
+                }
+            }
     ) {
         // Documented dp-token exception (project convention, Code rule 2): `widthIn(min = 24.dp)`
         // is the sole raw `.dp` in this file. Rationale: `OrbitSpacing` exposes a 4dp grid
@@ -105,20 +120,20 @@ fun BrowseRow(
             style = OrbitTheme.type.statValue,
             color = if (isHead) OrbitTheme.colors.accent else OrbitTheme.colors.fgMuted,
             textAlign = TextAlign.End,
-            modifier = Modifier.widthIn(min = 24.dp),
+            modifier = Modifier.widthIn(min = 24.dp)
         )
         Avatar(name = displayName, size = 44.dp)
         Column(modifier = Modifier.weight(1f)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
+                horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2)
             ) {
                 Text(
                     text = displayName,
                     // Paused/ignored rows read muted — visually distinct without
                     // shouting (#19).
                     color = if (statusLabel != null) OrbitTheme.colors.fgMuted else OrbitTheme.colors.fg,
-                    style = OrbitTheme.type.h3,
+                    style = OrbitTheme.type.h3
                 )
                 if (due && statusLabel == null) {
                     // Quiet due dot — accent token per features/browse/README.md:34.
@@ -127,14 +142,14 @@ fun BrowseRow(
                             .size(8.dp)
                             .clip(OrbitTheme.shapes.full)
                             .background(OrbitTheme.colors.accent)
-                            .semantics { contentDescription = "Due" },
+                            .semantics { contentDescription = "Due" }
                     )
                 }
                 if (statusLabel != null) {
                     Text(
                         text = statusLabel,
                         style = OrbitTheme.type.meta,
-                        color = OrbitTheme.colors.fgSubtle,
+                        color = OrbitTheme.colors.fgSubtle
                     )
                 }
             }
@@ -144,24 +159,27 @@ fun BrowseRow(
                 Text(
                     text = secondaryText,
                     style = OrbitTheme.type.meta,
-                    color = OrbitTheme.colors.fgMuted,
+                    color = OrbitTheme.colors.fgMuted
                 )
             }
         }
-        // Trailing phone icon — separate tap target ≥48dp.
+        // Trailing phone icon: a separate tap target ≥48dp. Muted, not accent:
+        // it repeats on every row, and an accent icon per row spent the
+        // screen's one accent element N times (rules.md Design 5). The row's
+        // accent is reserved for the queue head's number and the due dot.
         Box(
             modifier = Modifier
                 .defaultMinSize(
                     minWidth = OrbitTheme.spacing.tapMin,
-                    minHeight = OrbitTheme.spacing.tapMin,
+                    minHeight = OrbitTheme.spacing.tapMin
                 )
                 .clickable(onClick = onDial),
-            contentAlignment = Alignment.Center,
+            contentAlignment = Alignment.Center
         ) {
             PhIcon(
                 name = "phone-call",
                 size = 22.dp,
-                tint = OrbitTheme.colors.accent,
+                tint = OrbitTheme.colors.fgMuted
             )
         }
     }
@@ -182,7 +200,7 @@ private fun previewContact(name: String, lastCalled: String) = Contact(
     heat = FloatArray(24) { 0f },
     history = emptyList(),
     notes = emptyList(),
-    patternNote = "",
+    patternNote = ""
 )
 
 @PreviewLightDark
@@ -196,19 +214,19 @@ private fun BrowseRowPreview() {
                 onDial = {},
                 due = true,
                 queuePosition = 1,
-                isHead = true,
+                isHead = true
             )
             BrowseRow(
                 contact = previewContact("Sam Patel", "2 months ago"),
                 onTap = {},
                 onDial = {},
-                statusLabel = "Paused",
+                statusLabel = "Paused"
             )
             BrowseRow(
                 contact = previewContact("Jordan Lee", ""),
                 onTap = {},
                 onDial = {},
-                showCallMeta = false,
+                showCallMeta = false
             )
         }
     }

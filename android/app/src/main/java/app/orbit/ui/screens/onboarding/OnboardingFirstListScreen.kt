@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,7 +29,6 @@ import app.orbit.data.entity.RuleKind
 import app.orbit.domain.JsonProvider
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
-import app.orbit.notify.NudgeSchedule
 import app.orbit.ui.screens.lists.ListConfigBody
 import app.orbit.ui.screens.lists.ListConfigContactSnapshot
 import app.orbit.ui.screens.lists.ListConfigUiState
@@ -51,7 +52,8 @@ import java.time.LocalTime
  * Add-another (ONB-09): the secondary CTA "Add another list" exits this
  * screen by navigating to a freshly-created list and re-entering this
  * route — the next press of Done finishes onboarding. The actual list
- * creation for "Add another" happens in OrbitNavHost.
+ * creation for "Add another" happens in OrbitNavHost, via
+ * [OnboardingListStarter.startAnother].
  *
  * The ViewModel is the production [ListConfigViewModel] — `listId` flows
  * through `SavedStateHandle` exactly as the production path. This means
@@ -68,18 +70,26 @@ fun OnboardingFirstListScreen(
     onAddAnother: () -> Unit,
     onAddContacts: () -> Unit,
     vm: ListConfigViewModel = hiltViewModel(),
-    permVm: OnboardingPermissionsViewModel = hiltViewModel(),
+    permVm: OnboardingPermissionsViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    // Same handling as the production ListConfigScreen: Short, and an Undo
+    // tap (member remove) pops the VM's UndoStack. The host is passed to
+    // OnboardingScaffold below; without one on screen, the first showSnackbar
+    // suspended forever, so "Removed {name}" never appeared and every later
+    // message stalled behind it.
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             vm.snackbarEvents.collect { event ->
-                snackbarHostState.showSnackbar(
+                val result = snackbarHostState.showSnackbar(
                     message = event.message,
                     actionLabel = event.actionLabel,
+                    duration = SnackbarDuration.Short,
+                    withDismissAction = false
                 )
+                if (result == SnackbarResult.ActionPerformed) vm.onUndo()
             }
         }
     }
@@ -103,10 +113,10 @@ fun OnboardingFirstListScreen(
     val canFinish = ready != null && firstListCanFinish(
         name = ready.name,
         memberCount = ready.members.size,
-        hasContactsPermission = hasContacts,
+        hasContactsPermission = hasContacts
     )
 
-    // 2026-06-09 — the list arrives from createOnboardingFirstList
+    // 2026-06-09: the list arrives from OnboardingListStarter
     // with ruleTemplateId = null, so the Cadence picker rendered with nothing
     // selected. Pre-seed the "Keep in touch" template once the entity loads;
     // the Room write re-emits with ruleKind set, so the effect self-quiesces.
@@ -124,13 +134,14 @@ fun OnboardingFirstListScreen(
         primary = OnboardingAction(
             label = "Done",
             onClick = onDone,
-            enabled = canFinish,
+            enabled = canFinish
         ),
         secondary = OnboardingAction(
             label = "Add another list",
             onClick = onAddAnother,
-            enabled = canFinish,
+            enabled = canFinish
         ),
+        snackbarHostState = snackbarHostState
     ) {
         if (ready == null) {
             // 2026-06-09 — arriving from the preview commit can
@@ -147,12 +158,12 @@ fun OnboardingFirstListScreen(
         firstListHelperText(
             name = ready.name,
             memberCount = ready.members.size,
-            hasContactsPermission = hasContacts,
+            hasContactsPermission = hasContacts
         )?.let { helper ->
             Text(
                 text = helper,
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4),
+                modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4)
             )
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
         }
@@ -165,7 +176,7 @@ fun OnboardingFirstListScreen(
             onRuleTemplateChange = vm::setRuleTemplate,
             onRuleParamsChange = { params ->
                 vm.setRuleParamsOverrideJson(
-                    JsonProvider.json.encodeToString(RuleParams.serializer(), params),
+                    JsonProvider.json.encodeToString(RuleParams.serializer(), params)
                 )
             },
             onActiveHoursChange = vm::setActiveHours,
@@ -182,7 +193,7 @@ fun OnboardingFirstListScreen(
             onNudgeScheduleChange = {},
             onSmartRuleChange = { rule ->
                 vm.setSmartRuleJson(
-                    JsonProvider.json.encodeToString(SmartListRule.serializer(), rule),
+                    JsonProvider.json.encodeToString(SmartListRule.serializer(), rule)
                 )
             },
             onConfirmConvert = vm::confirmConvert,
@@ -191,7 +202,7 @@ fun OnboardingFirstListScreen(
             // the list was reopened from Lists Manager. Wire them to the same VM
             // path production uses; onAddContacts navigates to the picker.
             onRemoveMember = vm::onRemoveMember,
-            onAddContacts = onAddContacts,
+            onAddContacts = onAddContacts
         )
     }
 }
@@ -208,7 +219,7 @@ fun OnboardingFirstListScreen(
 internal fun firstListCanFinish(
     name: String,
     memberCount: Int,
-    hasContactsPermission: Boolean,
+    hasContactsPermission: Boolean
 ): Boolean = name.isNotBlank() && (!hasContactsPermission || memberCount >= 3)
 
 /**
@@ -220,7 +231,7 @@ internal fun firstListCanFinish(
 internal fun firstListHelperText(
     name: String,
     memberCount: Int,
-    hasContactsPermission: Boolean,
+    hasContactsPermission: Boolean
 ): String? = when {
     !hasContactsPermission && name.isBlank() ->
         "Give your list a name to finish. You can add people once Orbit can see your contacts."
@@ -246,7 +257,7 @@ private fun FirstListLoadingSkeleton() {
                     .padding(OrbitTheme.spacing.x3)
                     .height(OrbitTheme.spacing.x6)
                     .clip(OrbitTheme.shapes.md)
-                    .background(OrbitTheme.colors.bgSubtle),
+                    .background(OrbitTheme.colors.bgSubtle)
             )
         }
     }
@@ -264,29 +275,29 @@ private fun FirstListLoadingSkeleton() {
 @Composable
 private fun OnboardingFirstListScreenPreviewBody(
     state: ListConfigUiState.Ready,
-    hasContactsPermission: Boolean = true,
+    hasContactsPermission: Boolean = true
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val canFinish = firstListCanFinish(
         name = state.name,
         memberCount = state.members.size,
-        hasContactsPermission = hasContactsPermission,
+        hasContactsPermission = hasContactsPermission
     )
     OnboardingScaffold(
         step = OnboardingStep.FirstList,
         onBack = null,
         primary = OnboardingAction(label = "Done", onClick = {}, enabled = canFinish),
-        secondary = OnboardingAction(label = "Add another list", onClick = {}, enabled = canFinish),
+        secondary = OnboardingAction(label = "Add another list", onClick = {}, enabled = canFinish)
     ) {
         firstListHelperText(
             name = state.name,
             memberCount = state.members.size,
-            hasContactsPermission = hasContactsPermission,
+            hasContactsPermission = hasContactsPermission
         )?.let { helper ->
             Text(
                 text = helper,
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4),
+                modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4)
             )
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
         }
@@ -302,7 +313,7 @@ private fun OnboardingFirstListScreenPreviewBody(
             onNotificationsToggle = {},
             onNudgeScheduleChange = {},
             onSmartRuleChange = {},
-            onConfirmConvert = {},
+            onConfirmConvert = {}
         )
     }
 }
@@ -315,7 +326,7 @@ private fun OnboardingFirstListLoadingPreview() {
             step = OnboardingStep.FirstList,
             onBack = null,
             primary = OnboardingAction(label = "Done", onClick = {}, enabled = false),
-            secondary = OnboardingAction(label = "Add another list", onClick = {}, enabled = false),
+            secondary = OnboardingAction(label = "Add another list", onClick = {}, enabled = false)
         ) {
             FirstListLoadingSkeleton()
         }
@@ -342,9 +353,9 @@ private fun OnboardingFirstListScreenPreview() {
                 members = listOf(
                     ListConfigContactSnapshot(id = 1L, displayName = "Sarah", photoUri = null),
                     ListConfigContactSnapshot(id = 2L, displayName = "Marcus", photoUri = null),
-                    ListConfigContactSnapshot(id = 3L, displayName = "Priya", photoUri = null),
-                ),
-            ),
+                    ListConfigContactSnapshot(id = 3L, displayName = "Priya", photoUri = null)
+                )
+            )
         )
     }
 }
@@ -367,9 +378,9 @@ private fun OnboardingFirstListContactsDeniedPreview() {
                 activeHoursEnd = null,
                 notificationsEnabled = true,
                 nudgeSchedule = null,
-                members = emptyList(),
+                members = emptyList()
             ),
-            hasContactsPermission = false,
+            hasContactsPermission = false
         )
     }
 }

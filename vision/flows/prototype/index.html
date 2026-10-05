@@ -173,6 +173,9 @@ svg.i { width: 24px; height: 24px; flex: none; display: block; }
 .bug .bid { font-family: var(--font-mono); font-size: 11px; color: var(--bug); font-weight: 500; }
 .bug .bsev { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--bug); }
 .bug .bsure { font-size: 11.5px; color: var(--chrome-muted); }
+.bug.fixed { border-left-color: var(--chrome-muted); background: transparent; }
+.bug.fixed .bid, .bug.fixed .bsev { color: var(--chrome-muted); }
+.bug .bfix { margin-top: 4px; }
 .store-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--chrome-muted); border: 1px dashed var(--chrome-line); border-radius: 999px; padding: 4px 10px; }
 .store-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--chrome-muted); }
 .store-chip.page { border-style: solid; border-color: var(--markup); color: var(--markup); }
@@ -660,7 +663,7 @@ const L = {
   touch:  { name: 'In touch', template: 'Keep in touch', interval: 2, tone: 'A',
             queue: ['kai', 'luma', 'owen', 'rhea', 'alex', 'priya', 'jamie', 'sarah', 'nia', 'theo'], due: 6, other: ['marcus'], paused: ['marcus'] },
   late:   { name: 'Late night', template: 'Late night', tone: 'B', queue: ['dana', 'jamie', 'nia', 'theo'], due: 1, other: [] },
-  recent: { name: 'Recently added, not called', smart: true, rule: 'Recently added · 30 days', tone: 'A', queue: [], due: 0, other: [], preview: ['ama', 'leo'] },
+  recent: { name: 'Recently added, not called', smart: true, rule: 'Recently added · 30 days', tone: 'A', queue: ['ama', 'leo'], due: 2, other: [], preview: ['ama', 'leo'] },
 };
 const LIST_ORDER = ['touch', 'late', 'recent'];
 const members = (lid) => [...L[lid].queue, ...L[lid].other];
@@ -1203,7 +1206,7 @@ screen({
   spec: 'features/page-views/onboarding-first-list.md', code: 'ui/screens/onboarding/OnboardingFirstListScreen.kt',
   purpose: 'Leave onboarding with one real list: a name and at least 3 people.',
   owes: ['Name the list and pick at least 3 people', 'The same controls as the real Edit list screen', 'Finish, or add another list', 'Clear gating until name and 3 people are in'],
-  drift: 'There is no back arrow; system back returns to the sync screen and a second pass through Preview creates another list. The "Removed {name}" undo snackbar is produced here but never shown.',
+  drift: 'There is no back arrow; system back returns to the sync screen, whose Continue now comes straight back to this same list (fixed 2026-10-05, B6). "Removed {name}" with Undo now shows (B8).',
   states: [['default', 'From the suggestions'], ['blank', 'Started blank (gated)']],
   to: [['S32', 'Add contacts'], ['S08', 'Done'], ['S07', 'Add another list']],
   enter(e) { if (e.st === 'blank') ACT.startBlank(); else ACT.acceptPreview(); },
@@ -1350,7 +1353,7 @@ screen({
   render(st, p) {
     const lid = p || 'touch';
     const l = L[lid];
-    if (st === 'default' && !l.queue.length) st = 'empty'; // smart lists have no stored members (findings B1)
+    if (st === 'default' && !l.queue.length) st = 'empty'; // a list with no stored members (smart lists store their matches since the B1 fix)
     const menuBtn = iconBtn('list', A.st('menu'), 'List actions');
     const bar = appBar({ title: st === 'empty' || st === 'none' ? '' : esc(l.name), actions: menuBtn });
     const notice = st === 'nolog' ? `<div style="margin:0 16px 4px;padding:8px 8px 8px 14px;border-radius:12px;background:var(--bg-subtle)" class="row"><div class="meta grow">Orbit can't see your calls - cards won't move on on their own</div><button class="btn text" style="color:var(--fg);font-weight:600" ${A.go('S40')}>Open settings</button></div>` : '';
@@ -1441,7 +1444,7 @@ P.jordan = { name: 'Jordan Pike', tone: 'stone', phone: '+1 415-555-0133', last:
 P.mia = { name: 'Mia Santos', tone: 'terracotta', phone: '+1 415-555-0161', last: 64, calls: 2, avg: '6 min', gap: '52 days', usually: null, heat: null };
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-function phoneIcon(pid) { return `<button class="ib accent" ${A.go('S53', null, pid)} aria-label="Call ${esc(first(pid))}">${ic('phone-call')}</button>`; }
+function phoneIcon(pid) { return `<button class="ib muted" ${A.go('S53', null, pid)} aria-label="Call ${esc(first(pid))}">${ic('phone-call')}</button>`; }
 function browseRow({ pid, pos = null, head = false, due = false, status = '', sel = null, lp = 'rowmenu', tapAttrs }) {
   const pp = P[pid];
   const muted = !!status;
@@ -1465,7 +1468,7 @@ screen({
   spec: 'features/page-views/browse.md', code: 'ui/screens/browse/BrowseListScreen.kt',
   purpose: 'See a whole list as the queue it is; find someone; manage people in bulk.',
   owes: ['Search the list and clear it fast', 'Filter: Called recently, Not called yet', 'Tap a person for details; tap the phone to dial', 'Long-press for Call, Select, Pause, Ignore', 'Multi-select to move, copy, remove, pause all, ignore all', 'Undo any bulk action', 'Add people with the + in the app bar'],
-  drift: 'The separate "Up next / Queue" screen in PAGE_VIEWS.md no longer exists; its numbered queue now lives here (position 1 in accent). Code reading suggests the row\'s own inert tap handler may swallow the row tap and long-press in the real app; not verified on a device.',
+  drift: 'The separate "Up next / Queue" screen in PAGE_VIEWS.md no longer exists; its numbered queue now lives here (position 1 in accent). Row tap and long-press work since the 2026-10-05 fix (B7); the row phone icons are muted (B14), though one per row still conflicts with rules.md Design 6.',
   states: [['default', 'Queue'], ['filtered', 'Filter on'], ['rowmenu', 'Long-press a row', 'overlay'], ['pause', 'Pause one person', 'overlay'], ['select', 'Multi-select'], ['selmore', 'More batch actions', 'overlay'], ['pauseall', 'Pause all', 'overlay'], ['move', 'Move to which list?', 'overlay'], ['copy', 'Copy to which list?', 'overlay'], ['nolog', 'Call log permission off'], ['nomatch', 'No search matches'], ['empty', 'Empty list']],
   to: [['S20', 'Tap a person'], ['S53', 'Phone icon, or long-press Call'], ['S32', '+ Add contacts']],
   prep(st) {
@@ -1502,10 +1505,13 @@ screen({
     const who = p && P[p] ? p : 'luma';
     if (st === 'rowmenu') {
       const idx = Math.max(0, l.queue.indexOf(who));
+      const isPaused = !!(l.paused && l.paused.includes(who));
       layer = menu([
         { label: 'Call', icon: 'phone-call', attrs: A.go('S53', null, who) },
         { label: 'Select', attrs: A.act('startSel', who) },
-        { label: 'Pause', icon: 'pause-circle', attrs: A.st('pause', who) },
+        isPaused
+          ? { label: 'Unpause', icon: 'pause-circle', attrs: `${A.st('default')} ${A.snack('Unpaused ' + P[who].name, 'Undo')}` }
+          : { label: 'Pause', icon: 'pause-circle', attrs: A.st('pause', who) },
         { label: 'Ignore', icon: 'eye-slash', danger: true, attrs: `${A.st('default')} ${A.snack('Ignored ' + P[who].name, 'Undo')}` },
       ], { top: Math.min(560, 300 + idx * 77), left: 120 });
     }
@@ -1534,7 +1540,7 @@ ACT.bulk = (arg) => {
   const n = D.sel.size || 1;
   const lname = L[cur().p] ? L[cur().p].name : 'In touch';
   const [kind, x] = arg.split(':');
-  const msg = kind === 'remove' ? `Removed ${n} from ${lname}` : kind === 'ignore' ? `Ignored ${plural(n, 'contact', 'contacts')}` : kind === 'pause' ? `Paused ${plural(n, 'contact', 'contacts')} for ${x.toLowerCase()}` : `${kind === 'move' ? 'Moved' : 'Copied'} ${n} to ${L[x].name}`;
+  const msg = kind === 'remove' ? `Removed ${n} from ${lname}` : kind === 'ignore' ? `Ignored ${plural(n, 'contact', 'contacts')}` : kind === 'pause' ? `Paused ${plural(n, 'contact', 'contacts')} ${x === 'Indefinitely' ? 'indefinitely' : 'for ' + x}` : `${kind === 'move' ? 'Moved' : 'Copied'} ${n} to ${L[x].name}`;
   D.sel = new Set(); setSt('default'); snack(msg, 'Undo'); return false;
 };
 
@@ -1561,14 +1567,15 @@ screen({
   spec: 'features/page-views/contact-detail.md', code: 'ui/screens/contact/ContactDetailScreen.kt',
   purpose: 'The full picture of one person, and the place to act and remember.',
   owes: ['Photo, name, number, and which lists they are on', 'Stats: last called, total calls, average length, longest gap, usual time', 'Recent call history', 'Add and read notes; some entry points jump straight to the note field', 'Pause for a while, or unpause', 'Ignore, or add to more lists', 'Re-link if the phone contact was deleted'],
-  drift: 'The "Usually" stat always shows a blank here because the screen never computes it, even though the card view shows "Mornings" for the same person. A paused or ignored person looks no different on this screen.',
-  states: [['default', 'Ready'], ['note', 'Note field focused'], ['menu', 'More actions', 'overlay'], ['log', 'Log a connection', 'overlay'], ['pause', 'Pause for how long?', 'overlay'], ['unpaused', 'Pause just ended'], ['override', 'Custom schedule open'], ['retro', 'Opened from a call'], ['orphaned', 'Deleted from the phone']],
+  drift: 'Fixed 2026-10-05: "Usually" now shows the same answer as the card (B9), a paused person shows "Paused until ..." with Unpause under More actions (B3), and Re-link merges the picked phone contact into this one (B2). An ignored person still looks no different here.',
+  states: [['default', 'Ready'], ['note', 'Note field focused'], ['menu', 'More actions', 'overlay'], ['log', 'Log a connection', 'overlay'], ['pause', 'Pause for how long?', 'overlay'], ['paused', 'Paused indefinitely'], ['pmenu', 'More actions while paused', 'overlay'], ['unpaused', 'Pause just ended'], ['override', 'Custom schedule open'], ['retro', 'Opened from a call'], ['orphaned', 'Deleted from the phone']],
   to: [['S53', 'Call, or tap the number'], ['S21', 'Add to lists'], ['S42', 'More: View all calls'], ['S32', 'Orphaned: Re-link']],
   render(st, p) {
     const pid = p && P[p] ? p : (st === 'override' ? 'jamie' : 'kai');
     const pp = P[pid];
     const orphan = st === 'orphaned';
-    const bar = appBar({ actions: orphan ? '' : iconBtn('dots-three-vertical', A.st('menu'), 'More actions for ' + pp.name) });
+    const paused = st === 'paused' || st === 'pmenu';
+    const bar = appBar({ actions: orphan ? '' : iconBtn('dots-three-vertical', A.st(paused ? 'pmenu' : 'menu', pid), 'More actions for ' + pp.name) });
     const lists = listsOf(pid);
     const chips = lists.length ? lists.map((l) => `<span class="chip" style="cursor:default;font-size:14px;min-height:32px"><span class="dot"></span>${esc(L[l].name)}</span>`).join('') : '<span class="body muted">-</span>';
     const kv = (k, v) => `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`;
@@ -1586,10 +1593,11 @@ screen({
         <div class="av tone-${pp.tone}" style="width:120px;height:120px;font-size:44px">${initials(pp.name)}</div>
         <div class="h-hero center-t" style="margin-top:6px">${esc(pp.name)}</div>
         <button class="btn text" style="color:var(--fg-muted);font-size:17px" ${A.go('S53', null, pid)}>${pp.phone}</button>
+        ${paused ? '<div class="meta">Paused until you unpause</div>' : ''}
         <div class="row" style="width:100%;gap:12px">${orphan ? `<button class="btn tonal block sm" ${A.go('S53', null, pid)}>${ic('phone')}Call</button>` : `<button class="btn primary sm grow" ${A.go('S53', null, pid)}>${ic('phone')}Call</button><button class="btn tonal sm grow" style="padding:0 10px" ${A.st('log', pid)}>Log a connection</button>`}</div>
       </div>
       <div><div class="eyebrow" style="margin-bottom:8px">On these lists</div><div class="chips">${chips}</div></div>
-      <div><div class="eyebrow">Stats</div>${kv('Last call', pp.last == null ? 'Never called' : rel(pp.last))}${kv('Total calls', pp.calls)}${kv('Avg length', pp.calls >= 3 ? pp.avg : '-')}${kv('Longest gap', pp.gap || '-')}${kv(`Usually <span style="display:inline-block;vertical-align:-3px">${ic('info').replace('class="i"', 'class="i" style="width:15px;height:15px"')}</span>`, '-')}</div>
+      <div><div class="eyebrow">Stats</div>${kv('Last call', pp.last == null ? 'Never called' : rel(pp.last))}${kv('Total calls', pp.calls)}${kv('Avg length', pp.calls >= 3 ? pp.avg : '-')}${kv('Longest gap', pp.gap || '-')}${kv(`Usually <span style="display:inline-block;vertical-align:-3px">${ic('info').replace('class="i"', 'class="i" style="width:15px;height:15px"')}</span>`, pp.calls >= 3 && pp.usually ? pp.usually : '-')}</div>
       ${orphan ? '' : `<button class="btn tonal block sm" ${A.go('S21', null, pid)}>${ic('user-plus')}Add to lists</button>
       <div><div class="row eyebrow" style="gap:6px">${ic('note-pencil').replace('class="i"', 'class="i" style="width:15px;height:15px"')}Notes</div>
         <div class="row" style="margin-top:8px;align-items:stretch"><div class="grow" style="background:var(--bg-subtle);border-radius:12px;padding:12px;color:var(--fg-subtle);${noteFocus ? 'box-shadow:inset 0 0 0 2px var(--accent)' : ''}">Add a note${noteFocus ? '<span style="display:inline-block;width:1.5px;height:18px;background:var(--accent);vertical-align:middle;margin-left:2px"></span>' : ''}</div><button class="btn tonal sm" disabled style="opacity:.4">Add</button></div>${notes}</div>
@@ -1605,6 +1613,11 @@ screen({
       { label: 'Pause', icon: 'pause-circle', attrs: A.st('pause', pid) },
       { label: 'Ignore', icon: 'eye-slash', danger: true, attrs: `${A.st('default')} ${A.snack('Ignored ' + pp.name, 'Undo')}` },
     ], { top: 100, right: 12 });
+    if (st === 'pmenu') layer = menu([
+      { label: 'View all calls', icon: 'clock-counter-clockwise', attrs: A.go('S42') },
+      { label: 'Unpause', icon: 'pause-circle', attrs: `${A.st('default', pid)} ${A.snack('Unpaused ' + pp.name, 'Undo')}` },
+      { label: 'Ignore', icon: 'eye-slash', danger: true, attrs: `${A.st('default')} ${A.snack('Ignored ' + pp.name, 'Undo')}` },
+    ], { top: 100, right: 12 }, 'paused');
     if (st === 'pause') layer = pauseSheet(pp.name, 'default');
     if (st === 'log') {
       const conn = D.logMode === 'conn';
@@ -1684,10 +1697,10 @@ ACT.noteedit = () => { snack('Long-press opens the note for editing in place'); 
 
 /* ════════ Lists manager ════════ */
 const TEMPLATES = [
-  ['Inner orbit', 'Closest people, called often.', 'heart'],
-  ['Family', 'Steady, longer cadence.', 'users'],
-  ['Mentors', 'Quarterly check-ins.', 'star'],
-  ['Drifted', "People you've meant to reach.", 'clock-counter-clockwise'],
+  ['Inner orbit', 'Closest people, about weekly.', 'heart'],
+  ['Family', 'Steady, every couple of weeks.', 'users'],
+  ['Mentors', 'Every couple of months.', 'star'],
+  ['Drifted', 'Reconnect about once a month.', 'clock-counter-clockwise'],
   ['Recently added, not called', 'Auto-updates as you add people.', 'shuffle-angular'],
   ['Start from blank', 'Choose your own cadence.', 'plus'],
 ];
@@ -1696,7 +1709,7 @@ screen({
   spec: 'features/page-views/lists-manager.md', code: 'ui/screens/lists/ListsManagerScreen.kt',
   purpose: 'Shape your lists: order them, archive them, start new ones.',
   owes: ['Every list, reorderable by drag (order is Home order)', 'Per list: name, rule summary for smart lists, member count, + to add people', 'Row menu: Rename, List settings, Move up or down, Archive', 'New list from a template sheet', 'Archived lists to restore, delete, or configure', 'Undo archive'],
-  drift: 'Two "new list" buttons sit on this screen at once: the + in the app bar and the floating New list button. Deleting a list shows "List deleted." with no Undo here, while Home offers Undo for the same action.',
+  drift: 'Two "new list" buttons sit on this screen at once: the + in the app bar and the floating New list button. Deleting a list shows "List deleted." with Undo, the same as Home (fixed 2026-10-05, B10).',
   states: [['default', 'Lists'], ['rowmenu', 'Row menu', 'overlay'], ['rename', 'Rename list', 'overlay'], ['archived', 'Archived open'], ['delete', 'Delete this list?', 'overlay'], ['create', 'New list sheet', 'overlay'], ['empty', 'No lists yet']],
   to: [['S31', 'Tap a list, or after Create'], ['S32', '+ on a static list'], ['S10', 'Back']],
   prep(st) { if (st === 'create') { D.template = null; D.newName = ''; } D.archivedOpen = st === 'archived' || st === 'delete'; },
@@ -1729,7 +1742,7 @@ screen({
       { label: 'Archive', sub: `Hides ${L[lid].name} from home. You can restore it.`, danger: true, attrs: `${A.st('default')} ${A.snack('List archived.', 'Undo')}` },
     ], { top: 160 + LIST_ORDER.indexOf(lid) * 88, right: 16 });
     if (st === 'rename') layer += dialog(`<div class="dt">Rename list</div><div style="border:1.5px solid var(--accent);border-radius:12px;padding:12px;color:var(--fg)">${esc(L[lid].name)}<span style="display:inline-block;width:1.5px;height:18px;background:var(--accent);vertical-align:middle;margin-left:2px"></span></div><div class="da"><button class="btn text" style="color:var(--fg-muted)" ${A.st('default')}>Cancel</button><button class="btn primary sm" ${A.st('default')}>Save</button></div>`);
-    if (st === 'delete') layer += dialog(`<div class="dt">Delete this list?</div><div class="db">this removes the list. people stay in your contacts.</div><div class="da"><button class="btn text" style="color:var(--fg-muted)" ${A.st('archived')}>Keep</button><button class="btn outline sm danger" ${A.st('default')} ${A.snack('List deleted.')}>Delete</button></div>`, 'archived');
+    if (st === 'delete') layer += dialog(`<div class="dt">Delete this list?</div><div class="db">this removes the list. people stay in your contacts.</div><div class="da"><button class="btn text" style="color:var(--fg-muted)" ${A.st('archived')}>Keep</button><button class="btn outline sm danger" ${A.st('default')} ${A.snack('List deleted.', 'Undo')}>Delete</button></div>`, 'archived');
     if (st === 'create') {
       const tiles = TEMPLATES.map(([t, s, i], k) => `<button style="border:0;cursor:pointer;border-radius:14px;padding:12px 8px;min-height:104px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;background:${D.template === k ? 'var(--accent-tint)' : 'var(--bg-subtle)'};color:var(--fg)" ${A.act('template', k)}><span style="color:${D.template === k ? 'var(--accent-press)' : 'var(--fg-muted)'}">${ic(i)}</span><span style="font-weight:500;font-size:15px;line-height:1.2">${t}</span><span class="meta" style="font-size:13px;line-height:1.25">${s}</span></button>`).join('');
       const ok = D.template != null && D.newName.trim();
@@ -1770,7 +1783,7 @@ screen({
     const mem = isNew ? (D.newMembers || []) : smart ? (L[lid].preview || []) : members(lid);
     const bar = appBar({ title: esc(name), actions: `<button class="btn text accent-t" data-back aria-label="Done, back to your lists">Done</button>` });
     let body = `<div class="sec-label">Name</div><div class="group"><div class="gi tap" ${A.snack('Tap to rename in place')}><span class="grow body">${esc(name)}</span>${ic('pencil-simple').replace('class="i"', 'class="i" style="color:var(--fg-muted)"')}</div></div>`;
-    if (!smart) body += `<div class="sec-label">Cadence</div><div class="group">${cadenceRows(D.cadence, 'setCadence')}</div><div class="sec-label">Interval</div><div class="group">${intervalBlock(D.cadence, D.interval)}</div>`;
+    body += `<div class="sec-label">Cadence</div><div class="group">${cadenceRows(D.cadence, 'setCadence')}</div><div class="sec-label">Interval</div><div class="group">${intervalBlock(D.cadence, D.interval)}</div>`;
     body += `<div class="sec-label">Active hours</div><div class="group">${hoursBlock()}</div>
       <div class="sec-label">Notifications</div><div class="group"><div class="gi"><div class="grow"><div class="gt">Reminders</div><div class="gs">Notify me when I should reach out.</div></div><button class="switch${D.reminders ? ' on' : ''}" ${A.act('toggleReminders')} aria-label="Reminders"></button></div></div>
       <div class="sec-label">Nudges</div><div class="group">${nudgesBlock()}</div>`;
@@ -1803,7 +1816,7 @@ const FILTERS = [
 function pickerTarget(p) {
   if (p === 'fl') return { name: D.flName || 'your list', exclude: D.flMembers };
   if (p === 'new') return { name: D.created ? D.created.name : 'Family', exclude: [] };
-  if (p === 'relink') return { name: 'this contact', exclude: [] };
+  if (p === 'relink') return { name: P.kai.name, exclude: ['kai'], relink: true };
   const lid = L[p] ? p : 'touch';
   return { name: L[lid].name, exclude: members(lid) };
 }
@@ -1812,14 +1825,14 @@ screen({
   spec: 'features/page-views/picker-contacts.md', code: 'ui/screens/picker/ContactPickerScreen.kt',
   purpose: 'Get the right people into a list fast, from the whole address book.',
   owes: ['Pick people from the address book into a list', 'Search by name or number', 'Sort: Alphabetical, Most called, Recently called, Recently added', 'Filter chips with counts; applied filters in their own row', 'Empty filters greyed and pushed to the end', 'Select all matching', 'A docked bar with the count and "Add N to {list}"'],
-  drift: 'Move and Copy modes exist in code but nothing opens them; Browse moves people with its own sheet instead. "Skip for now" never shows, because its only caller passes no skip action. Re-link from Contact detail opens this picker in plain Add mode.',
-  states: [['default', 'Alphabetical'], ['selected', 'Three picked'], ['filtered', 'Filter applied'], ['sort', 'Sort menu', 'overlay'], ['rowmenu', 'Row menu', 'overlay'], ['nomatch', 'No matches'], ['rationale', 'Before contacts access'], ['denied', 'Contacts access off'], ['nodevice', 'No contacts on the phone']],
-  to: [['S31', 'Add N to {list} (returns with a snackbar)'], ['S07', 'Same, during first run']],
+  drift: 'Move and Copy modes exist in code but nothing opens them; Browse moves people with its own sheet instead. "Skip for now" never shows, because its only caller passes no skip action. Re-link from a deleted contact opens a Re-link mode: pick one phone contact and it merges into that person (fixed 2026-10-05, B2).',
+  states: [['default', 'Alphabetical'], ['selected', 'Three picked'], ['filtered', 'Filter applied'], ['sort', 'Sort menu', 'overlay'], ['rowmenu', 'Row menu', 'overlay'], ['nomatch', 'No matches'], ['rationale', 'Before contacts access'], ['denied', 'Contacts access off'], ['nodevice', 'No contacts on the phone'], ['relink', 'Re-link mode']],
+  to: [['S31', 'Add N to {list} (returns with a snackbar)'], ['S07', 'Same, during first run'], ['S20', 'Re-link (back to the contact, now linked)']],
   prep(st) { D.pq = st === 'nomatch' ? 'zz' : ''; D.pfilters = new Set(st === 'filtered' ? ['never'] : []); D.sel = new Set(st === 'selected' ? ['ava', 'beth', 'grace'] : []); },
   enter() { D.pq = ''; D.pfilters = new Set(); D.sel = new Set(); },
   render(st, p) {
-    const tgt = pickerTarget(p);
-    const bar = appBar({ title: 'Add contacts', actions: D.pq ? iconBtn('x', A.act('clearQ', 'pq'), 'Clear search') : '' });
+    const tgt = pickerTarget(st === 'relink' ? 'relink' : p);
+    const bar = appBar({ title: tgt.relink ? 'Re-link contact' : 'Add contacts', actions: D.pq ? iconBtn('x', A.act('clearQ', 'pq'), 'Clear search') : '' });
     if (st === 'rationale') return view({ bar, body: `<div class="center-t" style="padding:40px 24px;display:flex;flex-direction:column;align-items:center;gap:12px"><span style="color:var(--accent)">${ic('shield-check')}</span><div class="h3">Allow access to your contacts</div><div class="body muted" style="max-width:280px">Orbit reads your phone contacts so you can add them to lists. Nothing is uploaded - your contacts stay on this device.</div><button class="btn primary block" ${A.st('default')}>Grant access</button><button class="btn text block" data-back>Not now</button></div>` });
     if (st === 'denied') return view({ bar, center: true, body: `<div class="center-t" style="padding:0 24px 80px;display:flex;flex-direction:column;align-items:center;gap:12px"><span style="color:var(--fg-muted)">${ic('shield-check')}</span><div class="h3">Contacts access is off</div><div class="body muted">You can turn it on in Settings to add people to your lists.</div><button class="btn primary block" ${A.act('openSettings')}>Open Settings</button></div>` });
     if (st === 'nodevice') return view({ bar, center: true, body: `<div class="center-t" style="padding:0 24px 80px;display:flex;flex-direction:column;align-items:center;gap:12px"><span style="color:var(--fg-muted)">${ic('users')}</span><div class="h3">No contacts on this device</div><div class="body muted">Add people to your phone's contacts, then come back here.</div></div>` });
@@ -1834,7 +1847,7 @@ screen({
     const availRow = `<div class="chips scroll" style="padding-bottom:8px">${avail.map(([k, lab, n]) => `<button class="chip outline${n ? '' : ' dim'}" ${n ? A.act('pfilter', k) : 'disabled'} style="border-radius:12px;min-height:44px">${lab}</button>`).join('')}<button class="chip outline" style="border-radius:12px;min-height:44px" ${A.snack('Opens a menu of your lists')}>In list… ${ic('caret-down')}</button></div>`;
     const greyHint = avail.some(([k, , n]) => ['common', 'rare', 'gap'].includes(k) && !n) ? '<div class="micro" style="padding:0 20px 6px">Greyed filters have no matches right now.</div>' : '';
     const narrowing = q || applied.length;
-    const selAll = narrowing && shown.some((id) => !D.sel.has(id)) ? `<button class="btn text block" style="font-size:15px" ${A.act('selAll', shown.join(','))}>Select all matching (${shown.length})</button>` : '';
+    const selAll = !tgt.relink && narrowing && shown.some((id) => !D.sel.has(id)) ? `<button class="btn text block" style="font-size:15px" ${A.act('selAll', shown.join(','))}>Select all matching (${shown.length})</button>` : '';
     let lastLetter = '';
     const rows = shown.map((id) => {
       const pp = P[id];
@@ -1851,7 +1864,7 @@ screen({
     const letters = [...new Set(shown.map((id) => P[id].name[0].toUpperCase()))];
     const rail = !narrowing && letters.length > 1 ? `<div style="position:absolute;right:2px;top:300px;width:28px;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:2" aria-hidden="true">${letters.map((x, i) => `<span class="micro" style="height:20px;line-height:20px;${i === 0 ? 'color:var(--accent);font-weight:700' : 'color:var(--fg-muted)'}">${x}</span>`).join('')}</div>` : '';
     const n = D.sel.size;
-    const foot = n ? `<div class="row" style="flex:none;background:var(--surface);border-top:1px solid var(--line-soft);padding:10px 16px 12px"><span class="body grow">${n} selected</span><button class="btn text" ${A.act('pclear')}>Clear</button><button class="btn primary sm" ${A.act('pcommit', p || 'touch')}>Add ${n} to ${esc(tgt.name)}</button></div>` : '';
+    const foot = n ? `<div class="row" style="flex:none;background:var(--surface);border-top:1px solid var(--line-soft);padding:10px 16px 12px"><span class="body grow">${n} selected</span><button class="btn text" ${A.act('pclear')}>Clear</button>${tgt.relink ? `<button class="btn primary sm" ${A.act('prelink', [...D.sel][0])}>Re-link ${esc(tgt.name)}</button>` : `<button class="btn primary sm" ${A.act('pcommit', p || 'touch')}>Add ${n} to ${esc(tgt.name)}</button>`}</div>` : '';
     let layer = rail;
     if (st === 'sort') layer += menu(['Alphabetical', 'Most called', 'Recently called', 'Recently added'].map((s) => ({ label: s, icon: D.psort === s ? 'check' : null, attrs: A.act('psort', s) })), { top: 200, left: 20 });
     if (st === 'rowmenu') { const who = P[p] ? p : 'ava'; layer += menu([{ label: 'Open in Contacts', sub: "See their call and message history in your phone's contacts app.", attrs: A.st('default') }, { label: 'Ignore', sub: `Hide ${P[who].name} from Orbit. They stay in your phone's contacts.`, danger: true, attrs: `${A.st('default')} ${A.snack('Ignored ' + P[who].name, 'Undo')}` }], { top: 340, left: 60 }); }
@@ -1865,10 +1878,18 @@ screen({
   },
 });
 ACT.pfilter = (k) => { const g = ['common', 'rare', 'never']; if (D.pfilters.has(k)) D.pfilters.delete(k); else { if (g.includes(k)) g.forEach((x) => D.pfilters.delete(x)); D.pfilters.add(k); } setSt(D.pfilters.size ? 'filtered' : 'default'); return false; };
-ACT.psel = (id) => { D.sel.has(id) ? D.sel.delete(id) : D.sel.add(id); const t = cur(); if (t.st === 'default' || t.st === 'selected') t.st = D.sel.size ? 'selected' : 'default'; return false; };
+ACT.psel = (id) => { const relink = cur().p === 'relink' || cur().st === 'relink'; if (relink && !D.sel.has(id)) D.sel = new Set(); D.sel.has(id) ? D.sel.delete(id) : D.sel.add(id); const t = cur(); if (t.st === 'default' || t.st === 'selected') t.st = D.sel.size ? 'selected' : 'default'; return false; };
 ACT.selAll = (ids) => { ids.split(',').forEach((x) => D.sel.add(x)); return false; };
 ACT.pclear = () => { D.sel = new Set(); if (cur().st === 'selected') setSt('default'); return false; };
 ACT.psort = (s) => { D.psort = s; setSt('default'); return false; };
+// Back to the contact, which is no longer orphaned: the merge keeps its id (CONTACT-07).
+ACT.prelink = (id) => {
+  D.sel = new Set();
+  back(`Re-linked to ${P[id].name}`, 'Undo');
+  const t = cur();
+  if (t.id === 'S20') { t.st = 'default'; t.p = 'kai'; }
+  return false;
+};
 ACT.pcommit = (p) => {
   const n = D.sel.size; const name = pickerTarget(p).name;
   if (p === 'new') D.newMembers = [...(D.newMembers || []), ...D.sel];
@@ -1899,7 +1920,7 @@ screen({
     const sw = SWATCHES.map(([n, c]) => `<button style="border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;width:56px;color:${D.theme === n ? 'var(--fg)' : 'var(--fg-muted)'}" ${A.act('theme', n)}><span style="width:48px;height:48px;border-radius:50%;display:grid;place-items:center;${D.theme === n ? 'box-shadow:inset 0 0 0 2px var(--fg)' : ''}"><span style="width:34px;height:34px;border-radius:50%;background:${c}"></span></span><span style="font-size:12px">${n}</span></button>`).join('');
     const modes = ['System', 'Light', 'Dark'].map((m) => `<button class="chip${D.mode === m ? ' on' : ''}" style="min-height:44px" ${A.act('mode', m)}>${m}</button>`).join('');
     const perm = (t, state) => `<div class="gi"><div class="grow"><div class="gt">${t}</div><div class="gs" style="${state === 'ok' ? 'color:var(--good)' : ''}">${state === 'ok' ? 'Allowed' : state === 'no' ? 'Not allowed' : "Off in your phone's settings"}</div></div>${state === 'ok' ? '' : `<button class="btn text" style="font-size:15px" ${A.act('openSettings')}>${state === 'no' ? 'Allow' : 'Open Android Settings'}</button>`}</div>`;
-    const syncRow = (when) => `<div class="gi"><div class="grow gs">Last synced ${when}</div><button class="btn primary sm" style="min-height:44px;font-size:15px" ${A.snack('Syncing…')}>Sync now</button></div>`;
+    const syncRow = (when) => `<div class="gi"><div class="grow gs">Last synced ${when}</div><button class="btn tonal sm" style="min-height:44px;font-size:15px" ${A.snack('Syncing…')}>Sync now</button></div>`;
     const ranges = ['30d', '90d', '180d', '365d'].map((r) => `<button class="chip${D.range === r ? ' on' : ''}" style="min-height:40px" ${A.act('range', r)}>${r}</button>`).join('');
     const body = `<div style="padding-bottom:32px">
       ${group('Appearance', `<div style="padding:14px 16px" class="gap12"><div><div class="gt">Theme</div><div class="gs">Pick a color that feels like you</div></div><div class="row" style="gap:12px;overflow-x:auto">${sw}</div>
@@ -2037,7 +2058,7 @@ screen({
   spec: 'features/privacy-and-lock/README.md', code: 'ui/components/PrivacyCurtain.kt',
   purpose: 'When Orbit leaves the screen, names leave with it.',
   owes: ['Names turn to "Contact" and list names to "List" when the app loses focus', 'Release builds hide the thumbnail entirely'],
-  drift: 'The curtain is a flag that screens check, not an overlay; Card view keeps the person\'s full name on the card face. The "from {list}" part of Call history and the phone number on Contact detail are not masked. Notifications and widgets ignore it.',
+  drift: 'The curtain is a flag that screens check, not an overlay. The card face now reads "Contact" too (fixed 2026-10-05, B11). Reported but never confirmed: the "from {list}" part of Call history and the phone number on Contact detail are not masked, and notifications and widgets ignore it.',
   states: [['default', 'Debug build: names masked'], ['release', 'Release build: thumbnail hidden']],
   to: [['S10', 'Tap Orbit to return']],
   render(st) {
@@ -2100,38 +2121,40 @@ ACT.endCall = (pid) => {
 </script>
 <script>
 'use strict';
-/* ════════ Bugs found in the code. Mirrors vision/flows/findings.md; IDs match. ════════ */
+/* ════════ Bugs found in the code. Mirrors vision/flows/findings.md; IDs match.
+   All were fixed on 2026-10-05; `status` says so and `fixed` says how. B14 is fixed in part. ════════ */
 const BUGS = {
-  B1: { sev: 'High', sure: 'Confirmed in code', screens: ['S10', 'S11', 'S13', 'S30', 'S31'], title: 'Smart lists never surface anyone',
+  B1: { status: 'fixed', fixed: 'Smart lists now store their matches as members (due when they start matching) and get Keep in touch, so Home, Card view and Browse surface them. Cadence shows in List settings for smart lists.', sev: 'High', sure: 'Confirmed in code', screens: ['S10', 'S11', 'S13', 'S30', 'S31'], title: 'Smart lists never surface anyone',
     text: 'Smart lists are created with no cadence and never store members; their matches exist only in this list\'s settings preview. Home, Card view, and Browse all show no one. Converting to static still leaves no cadence picked.' },
-  B2: { sev: 'High', sure: 'Confirmed in code', screens: ['S20', 'S32'], title: 'Re-link writes to the wrong list',
+  B2: { status: 'fixed', fixed: 'Re-link opens a Re-link mode: pick one phone contact and it merges into this person, history kept, with Undo.', sev: 'High', sure: 'Confirmed in code', screens: ['S20', 'S32'], title: 'Re-link writes to the wrong list',
     text: 'Re-link passes the contact\'s id as the target list id. The picker adds people to whichever list has that number, or fails with "Couldn\'t save that". The orphan is never re-linked.' },
-  B3: { sev: 'High', sure: 'Confirmed in code', screens: ['S20', 'S13'], title: 'An indefinite pause cannot be undone',
+  B3: { status: 'fixed', fixed: 'More actions shows Unpause while someone is paused (here and in Browse), and the screen says "Paused until ...".', sev: 'High', sure: 'Confirmed in code', screens: ['S20', 'S13'], title: 'An indefinite pause cannot be undone',
     text: 'There is no Unpause action anywhere. The unpause banner only shows after a timed pause expires, never for an indefinite one. Undo on the snackbar is the only way back.' },
-  B4: { sev: 'High', sure: 'Confirmed in code', screens: ['S31', 'S04', 'S50'], title: 'Active hours override your nudge days',
+  B4: { status: 'fixed', fixed: 'Active hours no longer touch your days. The window start is added only when every chosen time is outside the window; nudges off stays off.', sev: 'High', sure: 'Confirmed in code', screens: ['S31', 'S04', 'S50'], title: 'Active hours override your nudge days',
     text: 'With active hours set, the scheduler merges in all seven days and adds an extra daily slot. "Weekdays at 10am" nudges every day, twice. "No days selected - nudges off" keeps nudging. Onboarding promised one nudge per list per day.' },
-  B5: { sev: 'Medium', sure: 'Confirmed in code', screens: ['S30'], title: 'Templates all create the same list',
+  B5: { status: 'fixed', fixed: 'Each template writes its own rhythm: Inner orbit 7 days, Family 14, Drifted 30, Mentors 60 ("Every couple of months.", the slider\'s cap).', sev: 'Medium', sure: 'Confirmed in code', screens: ['S30'], title: 'Templates all create the same list',
     text: 'Inner orbit, Family, Mentors ("Quarterly check-ins"), and Drifted all create Keep in touch every 2 days. Quarterly is not reachable: the interval slider stops at 60 days.' },
-  B6: { sev: 'Medium', sure: 'Confirmed in code', screens: ['S05', 'S06', 'S07'], title: 'First run can duplicate the first list',
+  B6: { status: 'fixed', fixed: 'Onboarding remembers its list; Sync continues straight into it and Preview reuses it.', sev: 'Medium', sure: 'Confirmed in code', screens: ['S05', 'S06', 'S07'], title: 'First run can duplicate the first list',
     text: 'If the app dies on Make your first list, relaunch resumes at the sync screen and Preview creates a second list; the first stays. System back from the first-list step does the same.' },
-  B7: { sev: 'Medium', sure: 'Reasoned, not seen on a device', screens: ['S13'], title: 'Browse rows probably ignore taps',
+  B7: { status: 'fixed', fixed: 'Confirmed by a test against the old code, then fixed: the row no longer has its own click handler inside Browse.', sev: 'Medium', sure: 'Reasoned, then confirmed by a test', screens: ['S13'], title: 'Browse rows ignored taps',
     text: 'Each row\'s inner clickable has an empty handler and sits inside the real one, so it likely eats the tap and the long-press. That would make Contact detail and multi-select unreachable from Browse. This prototype shows the intended behaviour.' },
-  B8: { sev: 'Medium', sure: 'Confirmed in code', screens: ['S07'], title: 'First run swallows its undo',
+  B8: { status: 'fixed', fixed: 'The step now shows its snackbars above the buttons, so "Removed {name}" and Undo appear.', sev: 'Medium', sure: 'Confirmed in code', screens: ['S07'], title: 'First run swallows its undo',
     text: 'This screen never places a snackbar host, so "Removed {name}" with Undo never appears, and the first message stalls every later one.' },
-  B9: { sev: 'Low', sure: 'Confirmed in code', screens: ['S20'], title: '"Usually" is always blank here',
+  B9: { status: 'fixed', fixed: '"Usually" now shows the same answer as the card.', sev: 'Low', sure: 'Confirmed in code', screens: ['S20'], title: '"Usually" is always blank here',
     text: 'Only Card view computes the usual answer time, so Contact detail always shows a placeholder for the same person.' },
-  B10: { sev: 'Low', sure: 'Confirmed in code', screens: ['S30', 'S10'], title: 'Delete has Undo on Home, not here',
+  B10: { status: 'fixed', fixed: 'Deleting from Lists shows "List deleted." with Undo, like Home.', sev: 'Low', sure: 'Confirmed in code', screens: ['S30', 'S10'], title: 'Delete has Undo on Home, not here',
     text: 'Deleting a list from Home offers Undo; deleting it from Lists does not.' },
-  B11: { sev: 'Low', sure: 'Confirmed in code', screens: ['S11', 'S52'], title: 'The curtain misses the card face',
+  B11: { status: 'fixed', fixed: 'The card face reads "Contact" under the curtain. The other reported gaps were never confirmed and are still open.', sev: 'Low', sure: 'Confirmed in code', screens: ['S11', 'S52'], title: 'The curtain misses the card face',
     text: 'With the app in the background, the title becomes "Contact" but the card still shows the real name and initials.' },
-  B12: { sev: 'Low', sure: 'Confirmed in code', screens: ['S40', 'S41'], title: 'Ignored count and list disagree',
+  B12: { status: 'fixed', fixed: 'The count and the screen read the same rows; archived contacts count in neither.', sev: 'Low', sure: 'Confirmed in code', screens: ['S40', 'S41'], title: 'Ignored count and list disagree',
     text: 'Settings counts archived ignored contacts; the Ignored screen hides them. "1 ignored" can open onto an empty screen.' },
-  B13: { sev: 'Low', sure: 'Confirmed in code', screens: ['S13'], title: '"for indefinitely"',
+  B13: { status: 'fixed', fixed: 'Reads "Paused 3 contacts indefinitely".', sev: 'Low', sure: 'Confirmed in code', screens: ['S13'], title: '"for indefinitely"',
     text: 'Pause all with Indefinitely reads "Paused 3 contacts for indefinitely".' },
-  B14: { sev: 'Low', sure: 'Confirmed', screens: ['S13', 'S22', 'S40'], title: 'Breaks the app\'s own accent rules',
+  B14: { status: 'partial', fixed: 'Row phone icons are muted and both Sync now buttons are Secondary. Still open: one phone icon per row conflicts with Design 6 and needs a product decision.', sev: 'Low', sure: 'Confirmed', screens: ['S13', 'S22', 'S40'], title: 'Breaks the app\'s own accent rules',
     text: 'rules.md allows one phone icon and one accent element per screen. Browse and Search put an accent phone on every row; Settings has two primary Sync now buttons.' },
 };
 const bugsFor = (id) => Object.entries(BUGS).filter(([, b]) => b.screens.includes(id));
+const openBugsFor = (id) => bugsFor(id).filter(([, b]) => b.status !== 'fixed');
 </script>
 <script>
 'use strict';
@@ -2217,7 +2240,7 @@ function renderInspector(force) {
   const edges = sc.to.map(([to, via]) => `<button class="edge" data-open="${to}"><span class="rid">${to}</span><span><span class="to">${esc(SC[to] ? SC[to].name : to)}</span><br><span class="via">${esc(via)}</span></span></button>`).join('');
   const from = SCREENS.filter((s) => s.to.some(([to]) => to === t.id)).map((s) => { const via = s.to.find(([to]) => to === t.id)[1]; return `<button class="edge" data-open="${s.id}"><span class="rid">${s.id}</span><span><span class="to">${esc(s.name)}</span><br><span class="via">${esc(via)}</span></span></button>`; }).join('');
   const bugs = bugsFor(t.id);
-  const bugBox = bugs.length ? `<div class="insp-sec"><h4>Bugs found in the code</h4>${bugs.map(([id, b]) => `<div class="bug"><div class="bh"><span class="bid">${id}</span><span class="bsev">${b.sev}</span><b>${esc(b.title)}</b></div><div>${esc(b.text)}</div><div class="bsure">${esc(b.sure)}. Details in vision/flows/findings.md.</div></div>`).join('')}</div>` : '';
+  const bugBox = bugs.length ? `<div class="insp-sec"><h4>Bugs found in the code</h4>${bugs.map(([id, b]) => `<div class="bug${b.status === 'fixed' ? ' fixed' : ''}"><div class="bh"><span class="bid">${id}</span><span class="bsev">${b.status === 'fixed' ? 'Fixed' : b.status === 'partial' ? 'Fixed in part' : b.sev}</span><b>${esc(b.title)}</b></div><div>${esc(b.text)}</div>${b.fixed ? `<div class="bfix"><b>Now:</b> ${esc(b.fixed)}</div>` : ''}<div class="bsure">${esc(b.sure)}. Details in vision/flows/findings.md.</div></div>`).join('')}</div>` : '';
   const screenInfo = `${bugBox}
     <div class="insp-sec"><h4>States you can open</h4>${states}</div>
     ${sc.drift ? `<div class="insp-sec"><h4>Docs vs code</h4><div class="drift">${esc(sc.drift)}</div></div>` : ''}
@@ -2249,7 +2272,7 @@ function renderBoard() {
       GROUPS.map(([g, label]) => `<div class="lane"><h3>${label}</h3><div class="lane-row">${SCREENS.filter((s) => s.group === g).map((s) => {
         const n = FB.forScreen(s.id).filter((x) => !x.done).length;
         const html = composePhone(s.id, s.states[0][0], null, false).replace(/ id="[^"]*"/g, '');
-        return `<div class="thumb" role="button" tabindex="0" data-open="${s.id}" aria-label="Open ${s.id} ${esc(s.name)}"><div class="thumb-frame"><div class="phone-scale">${html}</div></div><span class="t-id">${s.id}${n ? ` · ${n} open notes` : ''}${bugsFor(s.id).length ? ` · <span style="color:var(--bug)">${bugsFor(s.id).map(([id]) => id).join(', ')}</span>` : ''}</span><span class="t-name">${esc(s.name)}</span><span class="t-to">→ ${s.to.map(([to]) => to).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'nothing'}</span></div>`;
+        return `<div class="thumb" role="button" tabindex="0" data-open="${s.id}" aria-label="Open ${s.id} ${esc(s.name)}"><div class="thumb-frame"><div class="phone-scale">${html}</div></div><span class="t-id">${s.id}${n ? ` · ${n} open notes` : ''}${openBugsFor(s.id).length ? ` · <span style="color:var(--bug)">${openBugsFor(s.id).map(([id]) => id).join(', ')}</span>` : ''}</span><span class="t-name">${esc(s.name)}</span><span class="t-to">→ ${s.to.map(([to]) => to).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'nothing'}</span></div>`;
       }).join('')}</div></div>`).join('');
     return;
   }
@@ -2464,7 +2487,8 @@ const FLOWS = [
       { id: 'S20', p: 'kai', say: 'More actions on Contact detail holds Pause and Ignore.', tap: '[data-st="menu"]', from: ['S10', 'S11'] },
       { id: 'S20', st: 'menu', p: 'kai', say: 'View all calls, Pause, and Ignore in red.', tap: '[data-st="pause"]', from: ['S10', 'S11'] },
       { id: 'S20', st: 'pause', p: 'kai', say: 'Three lengths. Tapping one commits.', from: ['S10', 'S11'] },
-      { id: 'S20', p: 'kai', say: 'Paused, with Undo. Nothing on this screen shows the pause afterwards.', snack: 'Paused Kai Nakamura for 1 week', undo: true, from: ['S10', 'S11'] },
+      { id: 'S20', st: 'paused', p: 'kai', say: 'Paused, with Undo. A line under the number now says so.', snack: 'Paused Kai Nakamura indefinitely', undo: true, tap: '[data-st="pmenu"]', from: ['S10', 'S11'] },
+      { id: 'S20', st: 'pmenu', p: 'kai', say: 'While paused, More actions offers Unpause, which ends any pause at once, with Undo.', from: ['S10', 'S11'] },
       { id: 'S20', st: 'unpaused', p: 'kai', say: 'When a timed pause ends, a banner says they will surface again.', from: ['S10', 'S11'] },
       { id: 'S41', say: 'Ignored people live in Settings, Ignored, with one-tap Un-ignore.', tap: '[data-act="unignore"]' },
     ] },

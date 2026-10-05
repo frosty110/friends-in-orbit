@@ -79,6 +79,19 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
     val lastOnboardingStep: Flow<String?> =
         context.dataStore.data.map { it[KEY_LAST_ONBOARDING_STEP] }
 
+    /**
+     * Id of the list the in-progress onboarding is building, so the flow can
+     * come back to it instead of creating a second one when the user returns
+     * through Sync (system back from the first-list step, or a cold-start
+     * resume, which lands on Sync because a start destination cannot carry
+     * the id). Written by
+     * [app.orbit.ui.screens.onboarding.OnboardingListStarter]; cleared by
+     * [app.orbit.ui.screens.onboarding.OnboardingDoneViewModel] on completion.
+     * A stale id (list deleted, or a Settings reset) reads as "no list".
+     */
+    val onboardingListId: Flow<Long?> =
+        context.dataStore.data.map { it[KEY_ONBOARDING_LIST_ID] }
+
     // Call-log-ingestion prefs (CALL-02 / CALL-06).
     //
     // `callLogImportDays`: how far back the worker reaches on each reconcile pass
@@ -178,7 +191,7 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
         commonlyCalledTopPct,
         rarelyCalledBottomPct,
         recentlyAddedDays,
-        longGapDays,
+        longGapDays
     ) { top, bottom, recent, gap -> PickerThresholds(top, bottom, recent, gap) }
 
     // Appearance (THEMING 2026-06-22). Stored as raw primitives so the data
@@ -226,8 +239,22 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
      */
     suspend fun setLastOnboardingStep(stepName: String?) {
         context.dataStore.edit { prefs ->
-            if (stepName == null) prefs.remove(KEY_LAST_ONBOARDING_STEP)
-            else prefs[KEY_LAST_ONBOARDING_STEP] = stepName
+            if (stepName == null) {
+                prefs.remove(KEY_LAST_ONBOARDING_STEP)
+            } else {
+                prefs[KEY_LAST_ONBOARDING_STEP] = stepName
+            }
+        }
+    }
+
+    /** Pass `null` to clear. See [onboardingListId]. */
+    suspend fun setOnboardingListId(listId: Long?) {
+        context.dataStore.edit { prefs ->
+            if (listId == null) {
+                prefs.remove(KEY_ONBOARDING_LIST_ID)
+            } else {
+                prefs[KEY_ONBOARDING_LIST_ID] = listId
+            }
         }
     }
 
@@ -308,28 +335,34 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
         private val KEY_CALL_LOG_IMPORT_DAYS = intPreferencesKey("call_log_import_days")
         private val KEY_LAST_CALL_LOG_SYNC_AT = longPreferencesKey("last_call_log_sync_at_ms")
         private val KEY_CALL_LOG_SYNC_ENABLED = booleanPreferencesKey("call_log_sync_enabled")
+
         // WIDGET-04 — widget-only contact-name masking. Re-introduced
         // scoped to widgets after the in-app toggle was cut (ADR 0003 superseded).
         private val KEY_MINIMAL_MODE = booleanPreferencesKey("minimal_mode_enabled")
-        private val KEY_LAST_DUE_COUNT_RECOMPUTE_AT = longPreferencesKey("last_due_count_recompute_at")
+        private val KEY_LAST_DUE_COUNT_RECOMPUTE_AT =
+            longPreferencesKey("last_due_count_recompute_at")
         private val KEY_LAST_CONTACTS_INGESTED_AT = longPreferencesKey("last_contacts_ingested_at")
         private val KEY_COMMONLY_CALLED_TOP_PCT = intPreferencesKey("commonly_called_top_pct")
         private val KEY_RARELY_CALLED_BOTTOM_PCT = intPreferencesKey("rarely_called_bottom_pct")
         private val KEY_RECENTLY_ADDED_DAYS = intPreferencesKey("recently_added_days")
         private val KEY_LONG_GAP_DAYS = intPreferencesKey("long_gap_days")
+
         // THEMING 2026-06-22 — user-selectable appearance.
         private val KEY_COLOR_THEME = stringPreferencesKey("color_theme")
         private val KEY_DARK_MODE = stringPreferencesKey("dark_mode")
         private val KEY_ACCENT_HUE = intPreferencesKey("accent_hue")
+
         // F-2 fix (2026-04-30 hot-fix-260430-hs4) — per-permission "asked
         // at least once" flags. See [hasAskedContacts] / [setHasAsked].
         private val KEY_HAS_ASKED_CONTACTS = booleanPreferencesKey("has_asked_contacts")
         private val KEY_HAS_ASKED_CALL_LOG = booleanPreferencesKey("has_asked_call_log")
         private val KEY_HAS_ASKED_NOTIFICATIONS = booleanPreferencesKey("has_asked_notifications")
+
         // F-3 fix (2026-04-30 hot-fix-260430-hs4) — last completed onboarding
         // step name for crash-resume hydration. See [lastOnboardingStep] /
         // [setLastOnboardingStep].
         private val KEY_LAST_ONBOARDING_STEP = stringPreferencesKey("last_onboarding_step")
+        private val KEY_ONBOARDING_LIST_ID = longPreferencesKey("onboarding_list_id")
     }
 }
 
@@ -345,7 +378,7 @@ data class PickerThresholds(
     val commonlyTopPct: Int,
     val rarelyBottomPct: Int,
     val recentlyAddedDays: Int,
-    val longGapDays: Int,
+    val longGapDays: Int
 ) {
     companion object {
         val DEFAULT = PickerThresholds(20, 50, 30, 90)

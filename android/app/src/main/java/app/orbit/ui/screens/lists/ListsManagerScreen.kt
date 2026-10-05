@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -47,8 +48,10 @@ import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.PhIcon
+import app.orbit.ui.screens.home.HomeSnackbarEvent
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -85,13 +88,13 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 fun ListsManagerScreen(
     onBack: () -> Unit,
     onOpenList: (listId: String) -> Unit,
-    onAddContacts: (listId: String) -> Unit = {},   // BULK-05 — entry to ContactPickerScreen
+    onAddContacts: (listId: String) -> Unit = {}, // BULK-05 — entry to ContactPickerScreen
     // When true, the create-list bottom sheet is expanded on first composition.
     // Used by Home's "Create your first list" / "New list" CTAs (Routes.lists(openCreate = true))
     // so a single tap from Home lands the user directly in the creation form.
     // Subsequent rotations preserve whatever the user did from there via rememberSaveable.
     openCreateOnLaunch: Boolean = false,
-    vm: ListsManagerViewModel = hiltViewModel(),
+    vm: ListsManagerViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -106,20 +109,41 @@ fun ListsManagerScreen(
     // LOW polish (Group 5) — archive Undo lifecycle: the previous screen-side
     // `scope.launch { showSnackbar(...) }` died on screen leave, so the Undo
     // work was lost. We now ride VM-emitted events that carry the listId via
-    // `SnackbarEvent.actionPayload`; tapping Undo dispatches back into the VM
+    // `HomeSnackbarEvent.payloadListId`; tapping Undo dispatches back into the VM
     // (which is bound to viewModelScope, surviving navigation animations).
     //
     // repeatOnLifecycle gates the collect by STARTED. Snackbar emissions while
     // the screen is backgrounded drop on the floor (replay = 0).
+    //
+    // Same contract as HomeScreen's collector (features/home/README.md,
+    // "swallowed-toast trap"): collectLatest + Short so an Undo snackbar never
+    // blocks the next event, and the `finally` commits a deferred delete when
+    // its snackbar is dismissed, superseded, or the screen is left. The commit
+    // is a no-op for a delete that was just undone.
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            vm.snackbarEvents.collect { event ->
-                val result = snackbarHostState.showSnackbar(
-                    message = event.message,
-                    actionLabel = event.actionLabel,
-                )
-                if (result == SnackbarResult.ActionPerformed && event.actionPayload != null) {
-                    vm.onUndoArchive(event.actionPayload)
+            vm.snackbarEvents.collectLatest { event ->
+                try {
+                    val result = snackbarHostState.showSnackbar(
+                        message = event.message,
+                        actionLabel = event.actionLabel,
+                        duration = SnackbarDuration.Short
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        when (event.kind) {
+                            HomeSnackbarEvent.Kind.ARCHIVE_UNDO -> event.payloadListId?.let(
+                                vm::onUndoArchive
+                            )
+                            HomeSnackbarEvent.Kind.DELETE_UNDO -> event.payloadListId?.let(
+                                vm::undoDelete
+                            )
+                            HomeSnackbarEvent.Kind.PLAIN -> Unit
+                        }
+                    }
+                } finally {
+                    if (event.kind == HomeSnackbarEvent.Kind.DELETE_UNDO) {
+                        event.payloadListId?.let(vm::commitDelete)
+                    }
                 }
             }
         }
@@ -166,7 +190,7 @@ fun ListsManagerScreen(
                 snackbarHostState.showSnackbar("List restored.")
             }
         },
-        onToggleArchived = vm::toggleArchivedExpanded,
+        onToggleArchived = vm::toggleArchivedExpanded
     )
 
     if (showSheet) {
@@ -187,7 +211,7 @@ fun ListsManagerScreen(
                     .invokeOnCompletion {
                         if (!sheetState.isVisible) showSheet = false
                     }
-            },
+            }
         )
     }
 }
@@ -205,13 +229,13 @@ private fun ListsManagerContent(
     onDelete: (Long) -> Unit,
     onRename: (Long, String) -> Unit,
     onRestore: (Long) -> Unit,
-    onToggleArchived: () -> Unit,
+    onToggleArchived: () -> Unit
 ) {
     OrbitScreen {
         OrbitAppBar(
             title = "Lists",
             leading = { OrbitIconButton("arrow-left", onBack, contentDescription = "Back") },
-            trailing = { OrbitIconButton("plus", onCreate, contentDescription = "New list") },
+            trailing = { OrbitIconButton("plus", onCreate, contentDescription = "New list") }
         )
 
         Box(modifier = Modifier.fillMaxSize()) {
@@ -233,7 +257,7 @@ private fun ListsManagerContent(
                         onDelete = onDelete,
                         onRename = onRename,
                         onRestore = onRestore,
-                        onToggleArchived = onToggleArchived,
+                        onToggleArchived = onToggleArchived
                     )
                 }
             }
@@ -244,22 +268,28 @@ private fun ListsManagerContent(
                 containerColor = OrbitTheme.colors.accent,
                 contentColor = OrbitTheme.colors.accentFg,
                 shape = OrbitTheme.shapes.full,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = OrbitTheme.spacing.x1),
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = OrbitTheme.spacing.x1
+                ),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(OrbitTheme.spacing.x4),
+                    .padding(OrbitTheme.spacing.x4)
             ) {
-                PhIcon(name = "plus", size = OrbitTheme.spacing.x5 - OrbitTheme.spacing.x1, tint = OrbitTheme.colors.accentFg)
+                PhIcon(
+                    name = "plus",
+                    size = OrbitTheme.spacing.x5 - OrbitTheme.spacing.x1,
+                    tint = OrbitTheme.colors.accentFg
+                )
                 Spacer(Modifier.fillMaxWidth(0f))
                 Text(
                     text = " New list",
-                    style = OrbitTheme.type.button.copy(color = OrbitTheme.colors.accentFg),
+                    style = OrbitTheme.type.button.copy(color = OrbitTheme.colors.accentFg)
                 )
             }
 
             SnackbarHost(
                 hostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
     }
@@ -275,7 +305,7 @@ private fun ReadyContent(
     onDelete: (Long) -> Unit,
     onRename: (Long, String) -> Unit,
     onRestore: (Long) -> Unit,
-    onToggleArchived: () -> Unit,
+    onToggleArchived: () -> Unit
 ) {
     // D-25 — pending delete target. Tap on the trash icon stages an id; the
     // DeleteListDialog reads it to decide whether to render and clears it
@@ -303,7 +333,10 @@ private fun ReadyContent(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = OrbitTheme.spacing.x4),
-        contentPadding = PaddingValues(top = OrbitTheme.spacing.x1, bottom = OrbitTheme.spacing.x10),
+        contentPadding = PaddingValues(
+            top = OrbitTheme.spacing.x1,
+            bottom = OrbitTheme.spacing.x10
+        )
     ) {
         if (state.active.isNotEmpty()) {
             item(key = "active-card-spacer-top") {
@@ -317,7 +350,7 @@ private fun ReadyContent(
                         modifier = Modifier
                             .orbitCardShadow(OrbitTheme.shapes.lg, OrbitTheme.colors.isDark)
                             .clip(OrbitTheme.shapes.lg)
-                            .background(OrbitTheme.colors.surface),
+                            .background(OrbitTheme.colors.surface)
                     ) {
                         ListRow(
                             tile = tile,
@@ -340,7 +373,7 @@ private fun ReadyContent(
                             onMoveDown = {
                                 if (idx in 0 until active.lastIndex) onMove(idx, idx + 1)
                             },
-                            onAddContacts = { onAddContacts(tile.id.toString()) },
+                            onAddContacts = { onAddContacts(tile.id.toString()) }
                         )
                     }
                 }
@@ -353,7 +386,7 @@ private fun ReadyContent(
                 count = state.archived.size,
                 expanded = state.archivedExpanded,
                 onToggle = onToggleArchived,
-                modifier = Modifier.animateItem(),
+                modifier = Modifier.animateItem()
             )
         }
 
@@ -364,14 +397,14 @@ private fun ReadyContent(
                         .padding(top = OrbitTheme.spacing.x1)
                         .orbitCardShadow(OrbitTheme.shapes.lg, OrbitTheme.colors.isDark)
                         .clip(OrbitTheme.shapes.lg)
-                        .background(OrbitTheme.colors.surfaceAlt),
+                        .background(OrbitTheme.colors.surfaceAlt)
                 ) {
                     ArchivedListRow(
                         tile = tile,
                         modifier = Modifier.animateItem(),
                         onRestore = { onRestore(tile.id) },
                         onDelete = { pendingDeleteId = tile.id },
-                        onConfigure = { onOpenList(tile.id.toString()) },
+                        onConfigure = { onOpenList(tile.id.toString()) }
                     )
                 }
             }
@@ -385,7 +418,11 @@ private fun ReadyContent(
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = OrbitTheme.spacing.x5, start = OrbitTheme.spacing.x5, end = OrbitTheme.spacing.x5),
+                    .padding(
+                        top = OrbitTheme.spacing.x5,
+                        start = OrbitTheme.spacing.x5,
+                        end = OrbitTheme.spacing.x5
+                    )
             )
         }
     }
@@ -400,7 +437,7 @@ private fun ReadyContent(
                 onDelete(id)
                 pendingDeleteId = null
             },
-            onDismiss = { pendingDeleteId = null },
+            onDismiss = { pendingDeleteId = null }
         )
     }
 
@@ -419,7 +456,7 @@ private fun ReadyContent(
             onDismiss = {
                 pendingRenameId = null
                 pendingRenameName = ""
-            },
+            }
         )
     }
 }
@@ -429,7 +466,7 @@ private fun ArchivedSectionHeader(
     count: Int,
     expanded: Boolean,
     onToggle: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -438,16 +475,16 @@ private fun ArchivedSectionHeader(
             .fillMaxWidth()
             .padding(top = OrbitTheme.spacing.x4)
             .clickable(onClick = onToggle)
-            .padding(vertical = OrbitTheme.spacing.x2),
+            .padding(vertical = OrbitTheme.spacing.x2)
     ) {
         PhIcon(
             name = if (expanded) "caret-down" else "caret-right",
             size = OrbitTheme.spacing.x4,
-            tint = OrbitTheme.colors.fgMuted,
+            tint = OrbitTheme.colors.fgMuted
         )
         Text(
             text = "Archived ($count)",
-            style = OrbitTheme.type.h2.copy(color = OrbitTheme.colors.fg),
+            style = OrbitTheme.type.h2.copy(color = OrbitTheme.colors.fg)
         )
     }
 }
@@ -459,22 +496,22 @@ private fun EmptyState(onCreate: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .fillMaxSize()
-            .padding(OrbitTheme.spacing.x6),
+            .padding(OrbitTheme.spacing.x6)
     ) {
         Spacer(Modifier.height(OrbitTheme.spacing.x8))
         Text(
             text = "No lists yet",
-            style = OrbitTheme.type.h2.copy(color = OrbitTheme.colors.fg),
+            style = OrbitTheme.type.h2.copy(color = OrbitTheme.colors.fg)
         )
         Text(
             text = "Add a list to start grouping the people you want to stay in touch with.",
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
-            textAlign = TextAlign.Center,
+            textAlign = TextAlign.Center
         )
         OrbitButton(
             text = "New list",
             onClick = onCreate,
-            leadingIcon = "plus",
+            leadingIcon = "plus"
         )
     }
 }
@@ -501,7 +538,7 @@ private fun ListsManagerContentPreview() {
             onDelete = {},
             onRename = { _, _ -> },
             onRestore = {},
-            onToggleArchived = {},
+            onToggleArchived = {}
         )
     }
 }

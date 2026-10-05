@@ -7,6 +7,7 @@ import androidx.work.WorkManager
 import app.orbit.calllog.ContentObserverController
 import app.orbit.data.AppPrefs
 import app.orbit.data.feed.HomeFeed
+import app.orbit.data.feed.SmartListMembershipSync
 import app.orbit.data.keystore.DatabaseKeyProvider
 import app.orbit.logging.OrbitDebugTree
 import app.orbit.notify.NudgeScheduler
@@ -42,11 +43,18 @@ import timber.log.Timber
 class OrbitApp : Application(), Configuration.Provider, ImageLoaderFactory {
 
     @Inject lateinit var hiltWorkerFactory: HiltWorkerFactory
+
     @Inject lateinit var appPrefs: AppPrefs
+
     @Inject lateinit var contentObserverController: ContentObserverController
+
     @Inject lateinit var keyProvider: DatabaseKeyProvider
+
     @Inject lateinit var homeFeed: HomeFeed
+
     @Inject lateinit var nudgeScheduler: NudgeScheduler
+
+    @Inject lateinit var smartListMembershipSync: SmartListMembershipSync
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -54,7 +62,7 @@ class OrbitApp : Application(), Configuration.Provider, ImageLoaderFactory {
         get() = Configuration.Builder()
             .setWorkerFactory(hiltWorkerFactory)
             .setMinimumLoggingLevel(
-                if (BuildConfig.DEBUG) android.util.Log.DEBUG else android.util.Log.ERROR,
+                if (BuildConfig.DEBUG) android.util.Log.DEBUG else android.util.Log.ERROR
             )
             .build()
 
@@ -65,10 +73,9 @@ class OrbitApp : Application(), Configuration.Provider, ImageLoaderFactory {
      * whenever an [AsyncImage] composable does not pass an explicit
      * `imageLoader` parameter.
      */
-    override fun newImageLoader(): ImageLoader =
-        ImageLoader.Builder(this)
-            .components { add(SvgDecoder.Factory()) }
-            .build()
+    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
+        .components { add(SvgDecoder.Factory()) }
+        .build()
 
     override fun onCreate() {
         super.onCreate()
@@ -102,6 +109,11 @@ class OrbitApp : Application(), Configuration.Provider, ImageLoaderFactory {
         // inside reAnchorAll makes this idempotent. Must run on a coroutine — it reads
         // the DB and is declared suspend.
         appScope.launch { nudgeScheduler.reAnchorAll() }
+
+        // Smart lists surface through stored membership rows like static ones;
+        // the sync keeps those rows equal to each rule's matches for the life
+        // of the process (see SmartListMembershipSync).
+        smartListMembershipSync.start()
 
         // WIDGET-06: register the 1h periodic widget sweep on every cold
         // start. ExistingPeriodicWorkPolicy.KEEP makes re-registration a no-op so

@@ -15,18 +15,21 @@ class PauseDurationTest {
     @Test
     fun `OneWeek is seven days`() {
         assertEquals(Duration.ofDays(7), PauseDuration.OneWeek.duration)
-        assertEquals("1 week", PauseDuration.OneWeek.displayLabel)
+        assertEquals("for 1 week", PauseDuration.OneWeek.snackbarPhrase)
     }
 
     @Test
     fun `OneMonth is thirty days`() {
         assertEquals(Duration.ofDays(30), PauseDuration.OneMonth.duration)
-        assertEquals("1 month", PauseDuration.OneMonth.displayLabel)
+        assertEquals("for 1 month", PauseDuration.OneMonth.snackbarPhrase)
     }
 
     @Test
     fun `Indefinite carries a null duration`() {
-        assertNull(PauseDuration.Indefinite.duration, "Indefinite must be null so the use case maps it to the sentinel")
-        assertEquals("indefinitely", PauseDuration.Indefinite.displayLabel)
+        assertNull(
+            PauseDuration.Indefinite.duration,
+            "Indefinite must be null so the use case maps it to the sentinel"
+        )
+        assertEquals("indefinitely", PauseDuration.Indefinite.snackbarPhrase)
     }
 }

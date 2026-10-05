@@ -1,7 +1,7 @@
 # contacts-ingestion
 
 **Status:** in-progress
-**Last reviewed:** 2026-06-09
+**Last reviewed:** 2026-10-05
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/data/android/ContactsReader.kt`, `android/app/src/main/java/app/orbit/domain/usecase/IngestPhoneContactsUseCase.kt` (delta-sync), `android/app/src/main/java/app/orbit/calllog/ContactsIngestWorker.kt` (background trigger), `android/app/src/main/java/app/orbit/data/entity/ContactPhoneEntity.kt` (`contact_phones`)
 - Tests: `android/app/src/test/java/app/orbit/domain/usecase/IngestPhoneContactsUseCaseTest.kt`, `android/app/src/test/java/app/orbit/calllog/ContactsIngestWorkerTest.kt`
@@ -28,7 +28,7 @@ As a user during onboarding, I multi-select people from my phone contacts and ad
 
 **Rename handling.** Auto-match by number; the delta-sync refreshes `displayName` (and photo/starred flag) in place, so a rename propagates on the next ingest pass. If no number matches, the Orbit contact orphans (`isOrphaned`) — surfaced in contact-detail with a manual re-link path.
 
-**Deletion handling.** Keep app data (notes, history, list memberships), flag contact as orphaned (`isOrphaned = true`); the flag flips back automatically if the device contact returns. User can archive permanently or re-link to a different phone contact.
+**Deletion handling.** Keep app data (notes, history, list memberships), flag contact as orphaned (`isOrphaned = true`); the flag flips back automatically if the device contact returns. User can archive permanently or re-link to a different phone contact. Re-link is a manual pick (the picker's Relink mode) followed by a merge: the picked phone contact has almost always been mirrored already as its own row, so `RelinkContactUseCase` moves that row's calls, notes, numbers and memberships onto the orphan, gives the orphan its device identity (number, name, photo, starred flag, `phoneContactId`), clears `isOrphaned` and deletes the emptied row. The next ingest then matches the merged row by number, with no duplicate. Full behavior: CONTACT-07 in `features/contact-detail/README.md`.
 
 **Contact creation strictness (decision per PRD §Open Decisions).** Currently spec'd as **strict** — a contact must exist in phone contacts to be added to Orbit. Soft mode (adding to Orbit also creates a phone contact) is deferred.
 
@@ -51,7 +51,7 @@ As a user during onboarding, I multi-select people from my phone contacts and ad
 ### Open product questions
 
 - PRD §Open Decisions: strict vs soft contact creation. Currently strict; soft mode deferred.
-- Re-link UX for orphaned contacts: manual picker, or fuzzy-match suggestions? Leaning manual for v1.
+- ~~Re-link UX for orphaned contacts: manual picker, or fuzzy-match suggestions?~~ Resolved: manual picker for v1. Re-link opens the contact picker in Relink mode and merges the pick into the orphan (CONTACT-07); no fuzzy-match suggestions.
 - Should the bulk-add picker show contacts already on the target list (greyed out), or hide them? Leaning show-greyed for clarity.
 
 ---

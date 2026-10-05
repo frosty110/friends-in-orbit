@@ -57,6 +57,11 @@ sealed interface ContactDetailUiState {
         // AND the pause is NOT the indefinite sentinel (the user explicitly
         // chose "until I unpause" — that case never auto-expires).
         val unpausePromptVisible: Boolean = false,
+        // Non-null while a pause is in force: "Paused until 12 Oct" or
+        // "Paused until you unpause". Drives the status line under the number
+        // and swaps the overflow's Pause for Unpause. Before this, an active
+        // pause was invisible here and an indefinite one could never be undone.
+        val pausedLabel: String? = null,
         // CONTACT-03 — RuleOverrideSection inputs.
         val customScheduleVisible: Boolean = false,
         val currentTemplateName: String = "",
@@ -89,7 +94,7 @@ sealed interface ContactDetailUiState {
         // `recentCallIsAttempt[i]` is true when `recentCalls[i]` was a reach-out
         // that didn't connect (CallSource.ATTEMPT — voicemail / no answer); the
         // row renders "Attempted" + a phone-slash icon.
-        val recentCallIsAttempt: List<Boolean> = emptyList(),
+        val recentCallIsAttempt: List<Boolean> = emptyList()
     ) : ContactDetailUiState
 
     /** CONTACT-06 — phone contact removed; surfaces with a re-link/archive affordance. */
@@ -102,7 +107,7 @@ sealed interface ContactDetailUiState {
         // Parallel-indexed MANUAL flags — see [Ready.recentCallIsManual].
         val recentCallIsManual: List<Boolean> = emptyList(),
         // Parallel-indexed ATTEMPT flags — see [Ready.recentCallIsAttempt].
-        val recentCallIsAttempt: List<Boolean> = emptyList(),
+        val recentCallIsAttempt: List<Boolean> = emptyList()
     ) : ContactDetailUiState
 
     @Immutable data object NotFound : ContactDetailUiState

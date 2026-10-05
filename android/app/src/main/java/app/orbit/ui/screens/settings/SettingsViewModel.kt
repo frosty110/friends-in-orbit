@@ -182,11 +182,10 @@ class SettingsViewModel @Inject constructor(
     /**
      * Count of currently-ignored contacts. Drives the
      * Settings "Ignored" row subtitle ("{N} ignored" / "No ignored contacts").
-     * Note: this counts ALL `isIgnored = true` rows including any that are also
-     * archived. The Settings → Ignored screen itself filters to !isArchived for
-     * display, but the row subtitle prefers the simpler total — the screen
-     * is the management surface, the count is informational. The two values
-     * differ only when a contact is both ignored AND archived (rare).
+     * Reads the same `observeIgnored()` rows the Settings → Ignored screen
+     * lists, which exclude archived contacts in the query itself. This count
+     * used to include ignored-and-archived contacts, so "1 ignored" could open
+     * onto "No ignored contacts".
      */
     private val ignoredContactCountFlow: Flow<Int> =
         contactRepo.observeIgnored().map { it.size }

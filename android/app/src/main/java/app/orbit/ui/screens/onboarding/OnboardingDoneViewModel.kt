@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
  */
 @HiltViewModel
 class OnboardingDoneViewModel @Inject constructor(
-    private val appPrefs: AppPrefs,
+    private val appPrefs: AppPrefs
 ) : ViewModel() {
 
     private val _completed = MutableStateFlow(false)
@@ -40,6 +40,9 @@ class OnboardingDoneViewModel @Inject constructor(
             // on completion so a future re-onboarding (after Settings → Reset)
             // starts cleanly at Welcome rather than the last persisted step.
             appPrefs.setLastOnboardingStep(null)
+            // The onboarding list is finished; a later re-onboarding must
+            // start a new one, not reopen this (OnboardingListStarter).
+            appPrefs.setOnboardingListId(null)
             _completed.value = true
         }
     }

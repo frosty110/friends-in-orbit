@@ -10,12 +10,13 @@ import app.orbit.domain.FakeRuleTemplateRepository
 import app.orbit.domain.JsonProvider
 import app.orbit.domain.ReorderArgs
 import app.orbit.domain.listFixture
+import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
-import app.orbit.notify.NudgeSchedule
 import app.orbit.notify.NudgeScheduler
 import app.orbit.testutil.MainDispatcherRule
-import java.time.LocalTime
+import app.orbit.ui.screens.home.HomeSnackbarEvent
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -39,7 +40,7 @@ import org.robolectric.annotation.Config
  */
 private class ListsManagerFakeNudgeScheduler : NudgeScheduler(
     context = ApplicationProvider.getApplicationContext<Context>(),
-    listRepo = FakeListRepository(),
+    listRepo = FakeListRepository()
 ) {
     val cancelCalls: MutableList<Long> = mutableListOf()
     val scheduleFromEntityCalls: MutableList<ListEntity> = mutableListOf()
@@ -77,8 +78,9 @@ class ListsManagerViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private fun firstReady(items: suspend () -> ListsManagerUiState): suspend () -> ListsManagerUiState =
-        items
+    private fun firstReady(
+        items: suspend () -> ListsManagerUiState
+    ): suspend () -> ListsManagerUiState = items
 
     // ============================================================================
     // Test 1 — archive flips a row from active → archived in the next emission.
@@ -91,7 +93,12 @@ class ListsManagerViewModelTest {
         val l2 = listFixture(id = 2L, sortOrder = 1)
         val l3 = listFixture(id = 3L, sortOrder = 2)
         val repo = FakeListRepository(initialLists = listOf(l1, l2, l3))
-        val vm = ListsManagerViewModel(listRepo = repo, ruleTemplateRepo = FakeRuleTemplateRepository(), nudgeScheduler = ListsManagerFakeNudgeScheduler())
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
 
         vm.uiState.test(timeout = 2.seconds) {
             // First emission may be Loading or already Ready depending on dispatcher draining.
@@ -123,7 +130,12 @@ class ListsManagerViewModelTest {
     fun unarchive_restores_to_active() = runTest {
         val archived = listFixture(id = 1L, sortOrder = 0, isArchived = true)
         val repo = FakeListRepository(initialLists = listOf(archived))
-        val vm = ListsManagerViewModel(listRepo = repo, ruleTemplateRepo = FakeRuleTemplateRepository(), nudgeScheduler = ListsManagerFakeNudgeScheduler())
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
 
         vm.uiState.test(timeout = 2.seconds) {
             var first = awaitItem()
@@ -156,7 +168,12 @@ class ListsManagerViewModelTest {
         val l2 = listFixture(id = 2L, sortOrder = 1)
         val l3 = listFixture(id = 3L, sortOrder = 2)
         val repo = FakeListRepository(initialLists = listOf(l1, l2, l3))
-        val vm = ListsManagerViewModel(listRepo = repo, ruleTemplateRepo = FakeRuleTemplateRepository(), nudgeScheduler = ListsManagerFakeNudgeScheduler())
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
 
         vm.uiState.test(timeout = 2.seconds) {
             // Drain to first Ready so the upstream is collecting.
@@ -186,10 +203,15 @@ class ListsManagerViewModelTest {
         val smart = listFixture(
             id = 7L,
             type = ListType.SMART,
-            smartRuleJson = ruleJson,
+            smartRuleJson = ruleJson
         )
         val repo = FakeListRepository(initialLists = listOf(smart))
-        val vm = ListsManagerViewModel(listRepo = repo, ruleTemplateRepo = FakeRuleTemplateRepository(), nudgeScheduler = ListsManagerFakeNudgeScheduler())
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
 
         vm.uiState.test(timeout = 2.seconds) {
             var first = awaitItem()
@@ -211,10 +233,15 @@ class ListsManagerViewModelTest {
         val staticList = listFixture(
             id = 11L,
             type = ListType.STATIC,
-            smartRuleJson = null,
+            smartRuleJson = null
         )
         val repo = FakeListRepository(initialLists = listOf(staticList))
-        val vm = ListsManagerViewModel(listRepo = repo, ruleTemplateRepo = FakeRuleTemplateRepository(), nudgeScheduler = ListsManagerFakeNudgeScheduler())
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
 
         vm.uiState.test(timeout = 2.seconds) {
             var first = awaitItem()
@@ -234,7 +261,12 @@ class ListsManagerViewModelTest {
     @Test
     fun empty_state_when_no_lists() = runTest {
         val repo = FakeListRepository()
-        val vm = ListsManagerViewModel(listRepo = repo, ruleTemplateRepo = FakeRuleTemplateRepository(), nudgeScheduler = ListsManagerFakeNudgeScheduler())
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
 
         vm.uiState.test(timeout = 2.seconds) {
             var first = awaitItem()
@@ -248,7 +280,12 @@ class ListsManagerViewModelTest {
     fun renameList_trims_and_dispatches_updateName() = runTest {
         val list = listFixture(id = 7L, sortOrder = 0)
         val repo = FakeListRepository(initialLists = listOf(list))
-        val vm = ListsManagerViewModel(listRepo = repo, ruleTemplateRepo = FakeRuleTemplateRepository(), nudgeScheduler = ListsManagerFakeNudgeScheduler())
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
 
         val before = repo.updateNameCalls.size
         vm.renameList(listId = 7L, name = "  Late night  ")
@@ -263,7 +300,12 @@ class ListsManagerViewModelTest {
     fun renameList_drops_blank_input_as_noop() = runTest {
         val list = listFixture(id = 7L, sortOrder = 0)
         val repo = FakeListRepository(initialLists = listOf(list))
-        val vm = ListsManagerViewModel(listRepo = repo, ruleTemplateRepo = FakeRuleTemplateRepository(), nudgeScheduler = ListsManagerFakeNudgeScheduler())
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
 
         val before = repo.updateNameCalls.size
         vm.renameList(listId = 7L, name = "   ")
@@ -274,7 +316,12 @@ class ListsManagerViewModelTest {
     fun renameList_drops_empty_string_as_noop() = runTest {
         val list = listFixture(id = 7L, sortOrder = 0)
         val repo = FakeListRepository(initialLists = listOf(list))
-        val vm = ListsManagerViewModel(listRepo = repo, ruleTemplateRepo = FakeRuleTemplateRepository(), nudgeScheduler = ListsManagerFakeNudgeScheduler())
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
 
         val before = repo.updateNameCalls.size
         vm.renameList(listId = 7L, name = "")
@@ -289,7 +336,12 @@ class ListsManagerViewModelTest {
     @Test
     fun createList_emits_new_id_for_navigation() = runTest {
         val repo = FakeListRepository(initialLists = listOf(listFixture(id = 3L, sortOrder = 0)))
-        val vm = ListsManagerViewModel(listRepo = repo, ruleTemplateRepo = FakeRuleTemplateRepository(), nudgeScheduler = ListsManagerFakeNudgeScheduler())
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
         val blank = TemplateChoice.Catalog.first { it.id == "blank" }
 
         vm.createdListEvents.test(timeout = 2.seconds) {
@@ -302,9 +354,46 @@ class ListsManagerViewModelTest {
     }
 
     @Test
+    fun createList_writes_the_templates_own_interval() = runTest {
+        // Regression: every template made the same 2-day list (the Keep in
+        // touch default), whatever its subtitle promised.
+        val repo = FakeListRepository()
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
+        val family = TemplateChoice.Catalog.first { it.id == "family" }
+        val blank = TemplateChoice.Catalog.first { it.id == "blank" }
+
+        vm.createdListEvents.test(timeout = 2.seconds) {
+            vm.createList(family, "Family")
+            awaitItem()
+            vm.createList(blank, "Night owls")
+            awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val familyJson =
+            assertNotNull(repo.createCalls.first { it.name == "Family" }.ruleParamsOverrideJson)
+        val params = JsonProvider.json.decodeFromString(RuleParams.serializer(), familyJson)
+        assertEquals(RuleParams.KeepInTouch().withIntervalHours(14 * 24), params)
+        assertNull(
+            repo.createCalls.first { it.name == "Night owls" }.ruleParamsOverrideJson,
+            "Start from blank keeps the template default"
+        )
+    }
+
+    @Test
     fun createList_blank_name_emits_no_navigation_event() = runTest {
         val repo = FakeListRepository()
-        val vm = ListsManagerViewModel(listRepo = repo, ruleTemplateRepo = FakeRuleTemplateRepository(), nudgeScheduler = ListsManagerFakeNudgeScheduler())
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
         val blank = TemplateChoice.Catalog.first { it.id == "blank" }
 
         vm.createdListEvents.test(timeout = 2.seconds) {
@@ -326,7 +415,12 @@ class ListsManagerViewModelTest {
         val list = listFixture(id = 5L, sortOrder = 0)
         val repo = FakeListRepository(initialLists = listOf(list))
         val nudge = ListsManagerFakeNudgeScheduler()
-        val vm = ListsManagerViewModel(listRepo = repo, ruleTemplateRepo = FakeRuleTemplateRepository(), nudgeScheduler = nudge)
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = nudge
+            )
 
         vm.uiState.test(timeout = 2.seconds) {
             var first = awaitItem()
@@ -346,27 +440,70 @@ class ListsManagerViewModelTest {
     }
 
     @Test
-    fun deleteList_cancels_nudge_chain() = runTest {
-        val list = listFixture(id = 9L, sortOrder = 0)
+    fun deleteList_defers_the_purge_until_commit_then_cancels_nudge_chain() = runTest {
+        // Regression: Lists deleted immediately with no Undo, while the same
+        // action on Home offered one. Delete is now deferred like Home's.
+        val list = listFixture(id = 9L, sortOrder = 0, isArchived = true)
         val repo = FakeListRepository(initialLists = listOf(list))
         val nudge = ListsManagerFakeNudgeScheduler()
-        val vm = ListsManagerViewModel(listRepo = repo, ruleTemplateRepo = FakeRuleTemplateRepository(), nudgeScheduler = nudge)
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = nudge
+            )
 
-        vm.uiState.test(timeout = 2.seconds) {
-            var first = awaitItem()
-            if (first is ListsManagerUiState.Loading) first = awaitItem()
-            assertTrue(first is ListsManagerUiState.Ready)
-
+        vm.snackbarEvents.test(timeout = 2.seconds) {
             vm.deleteList(9L)
-
-            // Consume deletion emission (Empty state after the only list is gone).
+            val event = awaitItem()
+            assertEquals("List deleted.", event.message)
+            assertEquals("Undo", event.actionLabel)
+            assertEquals(HomeSnackbarEvent.Kind.DELETE_UNDO, event.kind)
+            assertEquals(9L, event.payloadListId)
             cancelAndIgnoreRemainingEvents()
         }
+        // Hidden, but not purged while the Undo window is open.
+        vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            if (state is ListsManagerUiState.Loading) state = awaitItem()
+            assertEquals(ListsManagerUiState.Empty, state, "the staged list must be hidden")
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertTrue(
+            repo.deleteCalls.isEmpty(),
+            "nothing may be purged before the Undo window closes"
+        )
 
-        // Repo mutation happened.
+        vm.commitDelete(9L)
+
         assertEquals(listOf(9L), repo.deleteCalls.toList())
         // NOTIF-11 / D-25 folded todo: nudge chain was cancelled.
         assertEquals(listOf(9L), nudge.cancelCalls.toList())
+    }
+
+    @Test
+    fun undoDelete_restores_the_row_and_never_purges() = runTest {
+        val list = listFixture(id = 9L, sortOrder = 0, isArchived = true)
+        val repo = FakeListRepository(initialLists = listOf(list))
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
+
+        vm.deleteList(9L)
+        vm.undoDelete(9L)
+        vm.commitDelete(9L) // the snackbar's finally still runs; it must be a no-op now
+
+        assertTrue(repo.deleteCalls.isEmpty())
+        vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            if (state is ListsManagerUiState.Loading) state = awaitItem()
+            val ready = state as ListsManagerUiState.Ready
+            assertEquals(listOf(9L), ready.archived.map { it.id })
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -374,7 +511,12 @@ class ListsManagerViewModelTest {
         val archived = listFixture(id = 3L, sortOrder = 0, isArchived = true)
         val repo = FakeListRepository(initialLists = listOf(archived))
         val nudge = ListsManagerFakeNudgeScheduler()
-        val vm = ListsManagerViewModel(listRepo = repo, ruleTemplateRepo = FakeRuleTemplateRepository(), nudgeScheduler = nudge)
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = nudge
+            )
 
         vm.uiState.test(timeout = 2.seconds) {
             var first = awaitItem()

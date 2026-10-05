@@ -88,7 +88,7 @@ class BrowseViewModel @Inject constructor(
     private val ignoreContactUseCase: IgnoreContactUseCase,
     private val pauseContactUseCase: PauseContactUseCase,
     private val undoStack: UndoStack,
-    private val savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     // listId arrives as String. null parse -> empty UI.
@@ -143,7 +143,7 @@ class BrowseViewModel @Inject constructor(
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = "",
+                initialValue = ""
             )
 
     // ─── Multi-select state ─────────────────────────────────────────────────────
@@ -165,7 +165,7 @@ class BrowseViewModel @Inject constructor(
                 scope = viewModelScope,
                 started = SharingStarted.Eagerly,
                 initialValue = savedStateHandle.get<LongArray>(KEY_SELECTED_IDS)
-                    ?.toSet().orEmpty(),
+                    ?.toSet().orEmpty()
             )
 
     private val _isCommitting = MutableStateFlow(false)
@@ -198,14 +198,14 @@ class BrowseViewModel @Inject constructor(
                 .stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5_000L),
-                    initialValue = BrowseUiState.Empty,
+                    initialValue = BrowseUiState.Empty
                 )
         } else {
             combine(
                 browseFeed.forList(listId),
                 searchQuery,
                 _activeFilters,
-                _callLogDenied,
+                _callLogDenied
             ) { snapshot, query, filters, callLogDenied ->
                 buildState(
                     snapshot.memberships,
@@ -214,7 +214,7 @@ class BrowseViewModel @Inject constructor(
                     snapshot.queueOrder,
                     query,
                     filters,
-                    callLogDenied,
+                    callLogDenied
                 )
             }
                 // combine arity caps at 5 — chain three more for multi-select state.
@@ -225,12 +225,18 @@ class BrowseViewModel @Inject constructor(
                     if (state is BrowseUiState.Ready) state.copy(selectedIds = selected) else state
                 }
                 .combine(_isCommitting) { state, committing ->
-                    if (state is BrowseUiState.Ready) state.copy(isCommitting = committing) else state
+                    if (state is BrowseUiState.Ready) {
+                        state.copy(
+                            isCommitting = committing
+                        )
+                    } else {
+                        state
+                    }
                 }
                 .stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5_000L),
-                    initialValue = BrowseUiState.Empty,
+                    initialValue = BrowseUiState.Empty
                 )
         }
 
@@ -245,7 +251,7 @@ class BrowseViewModel @Inject constructor(
         val current = selectedIdsFlow.value
         val next = if (id in current) current - id else current + id
         savedStateHandle[KEY_SELECTED_IDS] = next.toLongArray()
-        if (next.isEmpty()) savedStateHandle[KEY_IS_MULTI_SELECT] = false  // exit on empty (MOVE-06)
+        if (next.isEmpty()) savedStateHandle[KEY_IS_MULTI_SELECT] = false // exit on empty (MOVE-06)
     }
 
     fun onExitMultiSelect() {
@@ -331,27 +337,36 @@ class BrowseViewModel @Inject constructor(
         _snackbarEvents.tryEmit(SnackbarEvent(result.label, "Undo"))
     }
 
-    fun onSingleRowPause(
-        contactId: Long,
-        contactName: String,
-        duration: PauseDuration,
-    ) = viewModelScope.launch {
+    /**
+     * Long-press → Unpause on a paused row. Restores surfacing now; Undo puts
+     * back the exact prior pause (indefinite or timed).
+     */
+    fun onSingleRowUnpause(contactId: Long, contactName: String) = viewModelScope.launch {
         val prior = contactRepo.getById(contactId)?.pausedUntil
-        pauseContactUseCase(contactId, duration)
-        val labelSuffix = when (duration) {
-            PauseDuration.OneWeek -> "for 1 week"
-            PauseDuration.OneMonth -> "for 1 month"
-            PauseDuration.Indefinite -> "indefinitely"
-        }
-        val label = "Paused $contactName $labelSuffix"
+        contactRepo.setPausedUntil(contactId, null)
+        val label = "Unpaused $contactName"
         undoStack.put(
             UndoStack.PendingUndo(
                 inverse = { contactRepo.setPausedUntil(contactId, prior) },
-                label = label,
-            ),
+                label = label
+            )
         )
         _snackbarEvents.tryEmit(SnackbarEvent(label, "Undo"))
     }
+
+    fun onSingleRowPause(contactId: Long, contactName: String, duration: PauseDuration) =
+        viewModelScope.launch {
+            val prior = contactRepo.getById(contactId)?.pausedUntil
+            pauseContactUseCase(contactId, duration)
+            val label = "Paused $contactName ${duration.snackbarPhrase}"
+            undoStack.put(
+                UndoStack.PendingUndo(
+                    inverse = { contactRepo.setPausedUntil(contactId, prior) },
+                    label = label
+                )
+            )
+            _snackbarEvents.tryEmit(SnackbarEvent(label, "Undo"))
+        }
 
     // ─── Move/Copy via inline ListSelectorSheet ─────────────────────────────────
     //
@@ -410,7 +425,7 @@ class BrowseViewModel @Inject constructor(
         queueOrder: List<Long>,
         query: String,
         filters: Set<BrowseFilter>,
-        callLogDenied: Boolean,
+        callLogDenied: Boolean
     ): BrowseUiState {
         if (memberships.isEmpty()) return BrowseUiState.Empty
 
@@ -479,7 +494,7 @@ class BrowseViewModel @Inject constructor(
                     items = sorted,
                     query = q,
                     name = { (entity, _) -> entity.displayName },
-                    phone = { (entity, _) -> entity.normalizedPhone },
+                    phone = { (entity, _) -> entity.normalizedPhone }
                 )
             }
 
@@ -517,7 +532,7 @@ class BrowseViewModel @Inject constructor(
                     callLogPermissionDenied = callLogDenied,
                     dueIds = dueIds,
                     rowStatus = rowStatus,
-                    queuePositions = queuePositionByEntityId.mapKeys { (entityId, _) -> "c-$entityId" },
+                    queuePositions = queuePositionByEntityId.mapKeys { (entityId, _) -> "c-$entityId" }
                 )
             }
             q.isNotEmpty() -> BrowseUiState.NoMatches(q)

@@ -14,6 +14,7 @@ import app.orbit.data.entity.NoteEntity
 import app.orbit.data.entity.RuleKind
 import app.orbit.data.entity.RuleTemplateEntity
 import app.orbit.data.mappers.toUiContact
+import app.orbit.data.mappers.withCallPatterns
 import app.orbit.data.mappers.withCallStats
 import app.orbit.data.repository.CallEventRepository
 import app.orbit.data.repository.ContactRepository
@@ -33,7 +34,6 @@ import app.orbit.domain.usecase.EditNoteUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
-import kotlinx.serialization.encodeToString
 import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.util.formatAbsolute
 import app.orbit.ui.util.formatDuration
@@ -43,6 +43,8 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -57,6 +59,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
 
 /**
  * ContactDetail ViewModel, with the Notes journaling surface (NOTE-01).
@@ -113,7 +116,10 @@ class ContactDetailViewModel @Inject constructor(
     private val markCalledUseCase: MarkCalledUseCase,
     private val undoStack: UndoStack,
     private val clock: Clock,
-    savedStateHandle: SavedStateHandle,
+    // Buckets call times into day-parts for the "Usually" stat; injected (as on
+    // CardViewViewModel) so tests pin the zone instead of inheriting the host's.
+    private val zoneId: ZoneId,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val contactIdString: String? = savedStateHandle["contactId"]
@@ -141,8 +147,11 @@ class ContactDetailViewModel @Inject constructor(
         if (contactId == null) flowOf(null) else contactRepo.observeById(contactId)
 
     private val membershipsSource: Flow<List<ListMembershipEntity>> =
-        if (contactId == null) flowOf(emptyList())
-        else listRepo.observeMembershipsForContact(contactId)
+        if (contactId == null) {
+            flowOf(emptyList())
+        } else {
+            listRepo.observeMembershipsForContact(contactId)
+        }
 
     // Contact-scoped recent events with explicit limit (50).
     // The DAO already filters by contactId and applies the LIMIT, so this read
@@ -150,8 +159,11 @@ class ContactDetailViewModel @Inject constructor(
     // legacy `callEventRepo.observeAll().map { it.filter { ... }.take(50) }`
     // shape that pulled the entire `call_events` table on every emission.
     private val recentEventsSource: Flow<List<CallEventEntity>> =
-        if (contactId == null) flowOf(emptyList())
-        else callEventRepo.observeForContact(contactId, limit = RECENT_EVENTS_LIMIT)
+        if (contactId == null) {
+            flowOf(emptyList())
+        } else {
+            callEventRepo.observeForContact(contactId, limit = RECENT_EVENTS_LIMIT)
+        }
 
     private val notesSource: Flow<List<NoteEntity>> =
         if (contactId == null) flowOf(emptyList()) else noteRepo.observeByContactId(contactId)
@@ -174,7 +186,7 @@ class ContactDetailViewModel @Inject constructor(
     /**
      * CONTACT-06 — one-shot navigation events. The screen's `LaunchedEffect`
      * collects this flow and routes [NavEvent.RelinkPicker] to
-     * `Routes.pickContacts(contactId, mode = "relink")`. SharedFlow with
+     * `Routes.relinkContact(contactId)`. SharedFlow with
      * `extraBufferCapacity = 1` mirrors [_focusNoteEvent] semantics so a
      * late-collecting screen still receives the event.
      */
@@ -206,7 +218,7 @@ class ContactDetailViewModel @Inject constructor(
         val memberships: List<ListMembershipEntity>,
         val events: List<CallEventEntity>,
         val allLists: List<ListEntity>,
-        val noteEntities: List<NoteEntity>,
+        val noteEntities: List<NoteEntity>
     )
 
     /**
@@ -220,7 +232,7 @@ class ContactDetailViewModel @Inject constructor(
     private data class SixTuple(
         val tuple: FiveTuple,
         val draft: String,
-        val overrideEditorOpen: Boolean = false,
+        val overrideEditorOpen: Boolean = false
     )
 
     val uiState: StateFlow<ContactDetailUiState> =
@@ -229,7 +241,7 @@ class ContactDetailViewModel @Inject constructor(
             membershipsSource,
             recentEventsSource,
             listRepo.observeAll(),
-            notesSource,
+            notesSource
         ) { entity, memberships, events, allLists, noteEntities ->
             FiveTuple(entity, memberships, events, allLists, noteEntities)
         }.combine(_draft) { tuple, draftStr ->
@@ -271,6 +283,15 @@ class ContactDetailViewModel @Inject constructor(
             val unpausePromptVisible = entity.pausedUntil?.let { pu ->
                 pu <= now && !PauseContactUseCase.isIndefinite(pu)
             } ?: false
+            val pausedLabel = entity.pausedUntil
+                ?.takeIf { it.isAfter(now) }
+                ?.let { pu ->
+                    if (PauseContactUseCase.isIndefinite(pu)) {
+                        "Paused until you unpause"
+                    } else {
+                        "Paused until " + pu.atZone(zoneId).format(PAUSED_UNTIL_FORMAT)
+                    }
+                }
 
             // CONTACT-03 — derive RuleOverrideSection
             // inputs. Corrupted-JSON recovery is the try/catch
@@ -285,7 +306,7 @@ class ContactDetailViewModel @Inject constructor(
                 ruleOverrideJson = entity.ruleOverrideJson,
                 memberships = tuple.memberships,
                 allLists = tuple.allLists,
-                templates = templates,
+                templates = templates
             )
             val primaryListName = tuple.memberships.firstOrNull()?.listId?.let { lid ->
                 tuple.allLists.firstOrNull { it.id == lid }?.name
@@ -297,7 +318,14 @@ class ContactDetailViewModel @Inject constructor(
             // for contacts with a populated call history (CallEventEntity
             // rows existed for the contact but the bare toUiContact mapper
             // emitted placeholders).
-            val contactWithStats = entity.toUiContact().withCallStats(tuple.events, now)
+            //
+            // The "Usually" stat reads `bestWindowLabel`, which only the
+            // call-pattern overlay computes. Card View applied it and this
+            // screen did not, so the same person showed "Mornings" on the card
+            // and a blank here.
+            val contactWithStats = entity.toUiContact()
+                .withCallStats(tuple.events, now)
+                .withCallPatterns(tuple.events, zoneId)
 
             if (entity.isOrphaned) {
                 ContactDetailUiState.Orphaned(
@@ -306,7 +334,7 @@ class ContactDetailViewModel @Inject constructor(
                     recentCalls = recentCalls,
                     longestGapLabel = longestGapLabel,
                     recentCallIsManual = recentCallIsManual,
-                    recentCallIsAttempt = recentCallIsAttempt,
+                    recentCallIsAttempt = recentCallIsAttempt
                 )
             } else {
                 ContactDetailUiState.Ready(
@@ -317,6 +345,7 @@ class ContactDetailViewModel @Inject constructor(
                     longestGapLabel = longestGapLabel,
                     draft = draftStr,
                     unpausePromptVisible = unpausePromptVisible,
+                    pausedLabel = pausedLabel,
                     customScheduleVisible = customScheduleVisible,
                     currentTemplateName = currentTemplateName,
                     primaryListName = primaryListName,
@@ -332,13 +361,13 @@ class ContactDetailViewModel @Inject constructor(
                     retroNoteAffordanceFor = scrollToCallEventId,
                     recentCallEventIds = recentCallEventIds,
                     recentCallIsManual = recentCallIsManual,
-                    recentCallIsAttempt = recentCallIsAttempt,
+                    recentCallIsAttempt = recentCallIsAttempt
                 )
             }
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),
-            initialValue = ContactDetailUiState.Loading,
+            initialValue = ContactDetailUiState.Loading
         )
 
     /**
@@ -357,7 +386,7 @@ class ContactDetailViewModel @Inject constructor(
         ruleOverrideJson: String?,
         memberships: List<ListMembershipEntity>,
         allLists: List<ListEntity>,
-        templates: List<RuleTemplateEntity>,
+        templates: List<RuleTemplateEntity>
     ): Pair<String, RuleParams?> {
         if (ruleOverrideJson != null) {
             return try {
@@ -410,18 +439,17 @@ class ContactDetailViewModel @Inject constructor(
      * opened a contact with any history. Lifted formatters live in
      * `app.orbit.ui.util.RelativeTime` so VM and screen share one source.
      */
-    private fun CallEventEntity.toUiCallEntry(now: Instant = Instant.now()): CallEntry =
-        CallEntry(
-            // Entity enum (OUTGOING / INCOMING) → UI enum (Outgoing / Incoming).
-            // Two enums are deliberate: entity layer follows SQL-style upper case,
-            // UI layer follows Kotlin convention. Map at the seam.
-            direction = when (this.direction) {
-                app.orbit.data.entity.CallDirection.OUTGOING -> app.orbit.data.CallDirection.Outgoing
-                app.orbit.data.entity.CallDirection.INCOMING -> app.orbit.data.CallDirection.Incoming
-            },
-            relativeWhen = formatRelative(this.occurredAt, now),
-            lengthLabel = formatDuration(this.durationSeconds),
-        )
+    private fun CallEventEntity.toUiCallEntry(now: Instant = Instant.now()): CallEntry = CallEntry(
+        // Entity enum (OUTGOING / INCOMING) → UI enum (Outgoing / Incoming).
+        // Two enums are deliberate: entity layer follows SQL-style upper case,
+        // UI layer follows Kotlin convention. Map at the seam.
+        direction = when (this.direction) {
+            app.orbit.data.entity.CallDirection.OUTGOING -> app.orbit.data.CallDirection.Outgoing
+            app.orbit.data.entity.CallDirection.INCOMING -> app.orbit.data.CallDirection.Incoming
+        },
+        relativeWhen = formatRelative(this.occurredAt, now),
+        lengthLabel = formatDuration(this.durationSeconds)
+    )
 
     /**
      * NOTE-01 — adds a note via [AddNoteUseCase]; clears the draft on a
@@ -512,14 +540,15 @@ class ContactDetailViewModel @Inject constructor(
                 val occurredAt: Instant = when (whenChoice) {
                     LogConnectionWhen.Today -> now
                     LogConnectionWhen.Yesterday -> now.minus(Duration.ofDays(1))
-                    is LogConnectionWhen.OnDate -> Instant
-                        .ofEpochMilli(whenChoice.utcMidnightMillis)
-                        .atZone(ZoneOffset.UTC)
-                        .toLocalDate()
-                        .atTime(12, 0)
-                        .atZone(ZoneId.systemDefault())
-                        .toInstant()
-                        .coerceAtMost(now)
+                    is LogConnectionWhen.OnDate ->
+                        Instant
+                            .ofEpochMilli(whenChoice.utcMidnightMillis)
+                            .atZone(ZoneOffset.UTC)
+                            .toLocalDate()
+                            .atTime(12, 0)
+                            .atZone(ZoneId.systemDefault())
+                            .toInstant()
+                            .coerceAtMost(now)
                 }
                 val event = CallEventEntity(
                     contactId = cid,
@@ -529,13 +558,15 @@ class ContactDetailViewModel @Inject constructor(
                     // anyway (isRealCall gate / attempt short-circuit).
                     direction = app.orbit.data.entity.CallDirection.OUTGOING,
                     durationSeconds = 0,
-                    source = if (isAttempt) CallSource.ATTEMPT else CallSource.MANUAL,
+                    source = if (isAttempt) CallSource.ATTEMPT else CallSource.MANUAL
                 )
                 markCalledUseCase(cid, event)
                 if (note.isNotBlank()) {
                     addRetroactiveNoteUseCase(cid, note.trim(), occurredAt)
                 }
-                _snackbarEvents.tryEmit(SnackbarEvent(if (isAttempt) "Attempt logged." else "Logged."))
+                _snackbarEvents.tryEmit(
+                    SnackbarEvent(if (isAttempt) "Attempt logged." else "Logged.")
+                )
             }
         }
     }
@@ -550,7 +581,7 @@ class ContactDetailViewModel @Inject constructor(
             id = noteRow.id,
             contactId = noteRow.contactId,
             body = noteRow.body,
-            createdAt = Instant.ofEpochMilli(noteRow.createdAtMs),
+            createdAt = Instant.ofEpochMilli(noteRow.createdAtMs)
         )
         viewModelScope.launch {
             runMutation("Couldn't delete note") {
@@ -567,7 +598,7 @@ class ContactDetailViewModel @Inject constructor(
             id = noteRow.id,
             contactId = noteRow.contactId,
             body = newBody.trim(),
-            createdAt = Instant.ofEpochMilli(noteRow.createdAtMs),
+            createdAt = Instant.ofEpochMilli(noteRow.createdAtMs)
         )
         viewModelScope.launch {
             runMutation("Couldn't update note") { editNoteUseCase(updated) }
@@ -608,17 +639,34 @@ class ContactDetailViewModel @Inject constructor(
     fun onPauseContact(duration: PauseDuration) {
         val cid = contactId ?: return
         val displayName = (uiState.value as? ContactDetailUiState.Ready)?.contact?.name ?: "Contact"
-        val labelSuffix = when (duration) {
-            PauseDuration.OneWeek -> "for 1 week"
-            PauseDuration.OneMonth -> "for 1 month"
-            PauseDuration.Indefinite -> "indefinitely"
-        }
         viewModelScope.launch {
             runMutation("Couldn't pause $displayName") {
                 pauseContact(cid, duration)
                 val inverse: suspend () -> Unit = { contactRepo.setPausedUntil(cid, null) }
-                val label = "Paused $displayName $labelSuffix"
+                val label = "Paused $displayName ${duration.snackbarPhrase}"
                 undoStack.put(UndoStack.PendingUndo(inverse, label))
+                _snackbarEvents.tryEmit(SnackbarEvent(label, "Undo"))
+            }
+        }
+    }
+
+    /**
+     * Overflow → Unpause, while a pause is in force. Restores surfacing now and
+     * offers Undo back to the exact prior pause. The only way out of an
+     * indefinite pause besides its own snackbar: the banner path below only
+     * ever shows once a timed pause has already expired.
+     */
+    fun onUnpauseNow() {
+        val cid = contactId ?: return
+        val displayName = (uiState.value as? ContactDetailUiState.Ready)?.contact?.name ?: "Contact"
+        viewModelScope.launch {
+            runMutation("Couldn't unpause") {
+                val prior = contactRepo.getById(cid)?.pausedUntil
+                contactRepo.setPausedUntil(cid, null)
+                val label = "Unpaused $displayName"
+                undoStack.put(
+                    UndoStack.PendingUndo({ contactRepo.setPausedUntil(cid, prior) }, label)
+                )
                 _snackbarEvents.tryEmit(SnackbarEvent(label, "Undo"))
             }
         }
@@ -634,14 +682,11 @@ class ContactDetailViewModel @Inject constructor(
     /**
      * CONTACT-06 — Re-link tap on the OrphanBanner. Emits a one-shot
      * [NavEvent.RelinkPicker] so the screen's NavHost-side caller can navigate
-     * to `Routes.pickContacts(contactId, mode = "relink")`.
-     *
-     * **Deferral:** the picker treats `mode=relink` as the
-     * default `Add` fall-through today; future work extends
-     * [app.orbit.ui.screens.picker.ContactPickerViewModel] with relink-mode
-     * filter behavior (e.g., hide already-tracked contacts). The
-     * navigation-layer wiring is in place; the picker filter is the
-     * cosmetic deferral.
+     * to `Routes.relinkContact(contactId)`: the picker in Relink mode
+     * (CONTACT-07), which merges the picked phone contact into this one with
+     * [app.orbit.domain.usecase.RelinkContactUseCase]. This contact's id
+     * survives the merge, so popping back lands on the same screen, now
+     * showing the linked contact.
      */
     fun onRelink() {
         val cid = contactId ?: return
@@ -729,7 +774,7 @@ class ContactDetailViewModel @Inject constructor(
      */
     private suspend fun runMutation(
         failureLabel: String = "Couldn't save your change",
-        block: suspend () -> Unit,
+        block: suspend () -> Unit
     ) {
         try {
             block()
@@ -750,7 +795,7 @@ class ContactDetailViewModel @Inject constructor(
         body = body,
         createdAtMs = createdAt.toEpochMilli(),
         relativeTimestamp = formatRelative(createdAt, now),
-        absoluteTimestamp = formatAbsolute(createdAt),
+        absoluteTimestamp = formatAbsolute(createdAt)
     )
 
     private companion object {
@@ -779,3 +824,9 @@ sealed interface LogConnectionWhen {
     data object Yesterday : LogConnectionWhen
     data class OnDate(val utcMidnightMillis: Long) : LogConnectionWhen
 }
+
+/** "12 Oct": short and unambiguous next to "Paused until". */
+private val PAUSED_UNTIL_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern(
+    "d MMM",
+    Locale.getDefault()
+)

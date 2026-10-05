@@ -4,9 +4,9 @@ import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.ContactPhoneEntity
 import app.orbit.data.entity.ListMembershipEntity
+import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
-import java.time.Instant
 
 /**
  * Test-only recording fake for [ContactDao]. Returns no-op defaults for
@@ -21,7 +21,7 @@ import java.time.Instant
  */
 open class RecordingContactDao(
     private val ignoredSnapshots: List<IgnoredSnapshot> = emptyList(),
-    private val pausedSnapshots: List<PausedUntilSnapshot> = emptyList(),
+    private val pausedSnapshots: List<PausedUntilSnapshot> = emptyList()
 ) : ContactDao() {
 
     data class SetIgnoredCall(val ids: List<Long>, val ignored: Boolean)
@@ -32,8 +32,11 @@ open class RecordingContactDao(
 
     // ── Non-batch abstracts: no-op defaults ────────────────────────────
     override fun observeAll(): Flow<List<ContactEntity>> = flowOf(emptyList())
+
     // Bulk paths don't exercise the list-scoped pipeline.
-    override fun observeForListMembers(listId: Long): Flow<List<ContactEntity>> = flowOf(emptyList())
+    override fun observeForListMembers(listId: Long): Flow<List<ContactEntity>> =
+        flowOf(emptyList())
+
     // Bulk paths don't exercise the SmartListEngine NeverCalled path; default
     // to empty.
     override fun observeNeverCalled(): Flow<List<ContactEntity>> = flowOf(emptyList())
@@ -79,7 +82,7 @@ open class RecordingContactDao(
         id: Long,
         isIgnored: Boolean,
         ignoredAt: Instant?,
-        preIgnoreListMembershipsJson: String?,
+        preIgnoreListMembershipsJson: String?
     ): Int = 1
 
     override suspend fun getPreIgnoreSnapshot(id: Long): PreIgnoreSnapshot? = null
@@ -95,7 +98,7 @@ open class RecordingContactDao(
         photoUri: String?,
         phoneContactId: Long,
         isStarred: Boolean,
-        deviceUpdatedAt: Instant?,
+        deviceUpdatedAt: Instant?
     ): Int = 1
 
     open override suspend fun setOrphanedBatch(ids: List<Long>, orphaned: Boolean): Int = ids.size
@@ -106,4 +109,14 @@ open class RecordingContactDao(
         phones.map { 1L }
 
     open override suspend fun deletePhonesForContact(contactId: Long): Int = 0
+
+    // CONTACT-07 re-link merge helpers. RelinkContactUseCaseTest runs against
+    // real Room; no fake-backed test drives these.
+    open override suspend fun getPhonesForContact(contactId: Long): List<ContactPhoneEntity> =
+        emptyList()
+    open override suspend fun reassignPhones(fromContactId: Long, toContactId: Long): Int = 0
+    open override suspend fun getCallEventIdsForContact(contactId: Long): List<Long> = emptyList()
+    open override suspend fun reassignCallEvents(ids: List<Long>, toContactId: Long): Int = 0
+    open override suspend fun getNoteIdsForContact(contactId: Long): List<Long> = emptyList()
+    open override suspend fun reassignNotes(ids: List<Long>, toContactId: Long): Int = 0
 }

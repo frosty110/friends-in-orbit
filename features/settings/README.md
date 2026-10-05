@@ -1,10 +1,10 @@
 # settings
 
 **Status:** in-progress
-**Last reviewed:** 2026-06-09
+**Last reviewed:** 2026-10-05
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/ui/screens/settings/` (`SettingsScreen.kt`, `PermissionsRow.kt`, `AboutSection.kt`, `LicensesDialog.kt`, `ResetDataRow.kt`/`ResetConfirmDialog.kt`, `export/` for export + import); reset behavior in `android/app/src/main/java/app/orbit/data/repository/ResetService.kt`
-- Tests: `android/app/src/test/java/app/orbit/ui/screens/settings/` (`SettingsViewModelTest`, `PermissionRowActionTest`, `PickerThresholdsValidationTest`, `export/ImportViewModelTest`, `ignored/SettingsIgnoredViewModelTest`), `android/app/src/test/java/app/orbit/data/repository/ResetServiceTest.kt`
+- Tests: `android/app/src/test/java/app/orbit/ui/screens/settings/` (`SettingsViewModelTest`, `PermissionRowActionTest`, `PickerThresholdsValidationTest`, `export/ImportViewModelTest`, `ignored/SettingsIgnoredViewModelTest`), `android/app/src/test/java/app/orbit/data/repository/ResetServiceTest.kt`, `android/app/src/test/java/app/orbit/data/dao/ContactDaoIgnoredTest.kt`
 
 ---
 
@@ -24,7 +24,7 @@ As a user, I come to Settings rarely: to manage ignored contacts, to resync the 
 - One status row per permission (Contacts, Call log, Notifications). The trailing action matches the actual state: **Granted** → quiet "Allowed" label, no button; **Denied** → "Allow" button that fires the runtime permission launcher directly; **Permanently denied** → "Open Android Settings" deep link (the only honest action once the OS auto-denies).
 
 **Privacy section.**
-- Ignored contacts entry — opens the management surface (sources: `features/privacy-and-lock/README.md`).
+- Ignored contacts entry — opens the management surface (sources: `features/privacy-and-lock/README.md`). Its subtitle reads "{N} ignored" or "No ignored contacts". Archived contacts are not counted, so N always equals the rows on Settings > Ignored: both read one query, `ContactDao.observeIgnored`, which excludes archived rows.
 
 > Removed 2026-04-28 (whole-app review): biometric-lock toggle and minimal-mode toggle.
 > Both features are out of v1. Quick-hide on focus loss survives as auto-only behavior
@@ -36,6 +36,7 @@ As a user, I come to Settings rarely: to manage ignored contacts, to resync the 
 
 **Data section.**
 - Call log sync status row + "how far back to import" range row + manual resync.
+- Contacts and Call history each have a "Sync now" button. Both are Secondary, not Primary: a sync is maintenance, not the screen's main action, and two Primary buttons spent the accent twice (rules.md Design 5).
 - Export my data — passphrase-encrypted backup via SAF (`ACTION_CREATE_DOCUMENT`), passphrase entered in a bottom sheet.
 - Import backup — SAF open-document → passphrase sheet → explicit replace-confirmation dialog → restore. Outcomes surface as snackbars ("Backup restored." / unreadable / version-too-new / apply-failed).
 - Delete all data — destructive, confirmation required (see Known gotchas for the decided Keystore behavior).

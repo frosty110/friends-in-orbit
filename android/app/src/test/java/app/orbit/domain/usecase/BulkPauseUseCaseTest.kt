@@ -5,9 +5,9 @@ import app.orbit.data.dao.RecordingContactDao
 import app.orbit.data.db.TransactionRunner
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.model.PauseDuration
-import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlinx.coroutines.runBlocking
 
 /**
  * Label pluralization for [BulkPauseUseCase]. The inverse / snapshot
@@ -26,8 +26,8 @@ class BulkPauseUseCaseTest {
         val dao = RecordingContactDao(
             pausedSnapshots = listOf(
                 PausedUntilSnapshot(1L, null),
-                PausedUntilSnapshot(2L, null),
-            ),
+                PausedUntilSnapshot(2L, null)
+            )
         )
         val useCase = BulkPauseUseCase(passThruTx, dao, TestClock())
 
@@ -40,12 +40,30 @@ class BulkPauseUseCaseTest {
     fun result_label_singularizes_for_one_contact() = runBlocking {
         // "1 contact", never "1 contacts".
         val dao = RecordingContactDao(
-            pausedSnapshots = listOf(PausedUntilSnapshot(1L, null)),
+            pausedSnapshots = listOf(PausedUntilSnapshot(1L, null))
         )
         val useCase = BulkPauseUseCase(passThruTx, dao, TestClock())
 
         val result = useCase(listOf(1L), PauseDuration.OneMonth)
 
         assertEquals("Paused 1 contact for 1 month", result.label)
+    }
+
+    @Test
+    fun result_label_reads_naturally_for_an_indefinite_pause() = runBlocking {
+        // Regression: the label was built as "for {label}", which read
+        // "Paused 3 contacts for indefinitely".
+        val dao = RecordingContactDao(
+            pausedSnapshots = listOf(
+                PausedUntilSnapshot(1L, null),
+                PausedUntilSnapshot(2L, null),
+                PausedUntilSnapshot(3L, null)
+            )
+        )
+        val useCase = BulkPauseUseCase(passThruTx, dao, TestClock())
+
+        val result = useCase(listOf(1L, 2L, 3L), PauseDuration.Indefinite)
+
+        assertEquals("Paused 3 contacts indefinitely", result.label)
     }
 }

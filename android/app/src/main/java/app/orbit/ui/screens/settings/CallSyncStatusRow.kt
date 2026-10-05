@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.orbit.ui.components.OrbitButton
+import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -27,12 +28,12 @@ fun CallSyncStatusRow(
     lastSyncedAtMs: Long,
     inFlight: Boolean,
     enabled: Boolean,
-    onSyncNow: () -> Unit,
+    onSyncNow: () -> Unit
 ) = SyncStatusRow(
     lastSyncedAtMs = lastSyncedAtMs,
     inFlight = inFlight,
     enabled = enabled,
-    onSyncNow = onSyncNow,
+    onSyncNow = onSyncNow
 )
 
 /**
@@ -47,17 +48,21 @@ fun ContactsSyncRow(
     lastSyncedAtMs: Long,
     inFlight: Boolean,
     enabled: Boolean,
-    onSyncNow: () -> Unit,
+    onSyncNow: () -> Unit
 ) = SyncStatusRow(
     lastSyncedAtMs = lastSyncedAtMs,
     inFlight = inFlight,
     enabled = enabled,
-    onSyncNow = onSyncNow,
+    onSyncNow = onSyncNow
 )
 
 /**
  * Shared sync-status row: a 'Last synced …' / 'Never synced.' meta line over a
- * 'Sync now' primary button with an inline spinner when [inFlight].
+ * 'Sync now' secondary button with an inline spinner when [inFlight].
+ *
+ * Secondary, not Primary: Settings shows this row twice (contacts and call
+ * history), and a sync is maintenance, not the one action the screen exists
+ * for. Two Primary buttons spent the accent twice (rules.md Design 5).
  *
  * The button is disabled when [enabled] is false (the backing permission is not
  * granted) or when [inFlight] is true (a sync is already running). The
@@ -69,12 +74,12 @@ private fun SyncStatusRow(
     lastSyncedAtMs: Long,
     inFlight: Boolean,
     enabled: Boolean,
-    onSyncNow: () -> Unit,
+    onSyncNow: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
         val now = System.currentTimeMillis()
         val rel = remember(lastSyncedAtMs, now) {
@@ -83,29 +88,30 @@ private fun SyncStatusRow(
             } else {
                 "Last synced " +
                     DateUtils.getRelativeTimeSpanString(
-                        lastSyncedAtMs, now, DateUtils.MINUTE_IN_MILLIS,
+                        lastSyncedAtMs, now, DateUtils.MINUTE_IN_MILLIS
                     ).toString().lowercase()
             }
         }
         Text(
             text = rel,
-            style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
+            style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted)
         )
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 8.dp)
         ) {
             OrbitButton(
                 text = if (inFlight) "Syncing…" else "Sync now",
                 onClick = onSyncNow,
                 enabled = enabled && !inFlight,
+                variant = OrbitButtonVariant.Secondary
             )
             if (inFlight) {
                 CircularProgressIndicator(
                     color = OrbitTheme.colors.accent,
                     strokeWidth = 2.dp,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }

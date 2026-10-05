@@ -10,8 +10,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -25,6 +23,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -72,8 +72,8 @@ import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitChip
 import app.orbit.ui.components.OrbitDropdownMenu
-import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.picker.SnackbarEvent
@@ -103,9 +103,9 @@ fun CardViewScreen(
     onBrowse: (listId: String) -> Unit,
     onEditList: (listId: String) -> Unit = {},
     onAddContacts: (listId: String) -> Unit = {},
-    onOpenContact: (contactId: String) -> Unit = onCall,   // NOTE-03 — RecentNotesSummary tap target
+    onOpenContact: (contactId: String) -> Unit = onCall, // NOTE-03 — RecentNotesSummary tap target
     onOpenSettings: () -> Unit = {},
-    vm: CardViewViewModel = hiltViewModel(),
+    vm: CardViewViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -119,7 +119,7 @@ fun CardViewScreen(
         vm.onReturnedFromDial()
         callLogDenied = ContextCompat.checkSelfPermission(
             context,
-            Manifest.permission.READ_CALL_LOG,
+            Manifest.permission.READ_CALL_LOG
         ) != PackageManager.PERMISSION_GRANTED
         onPauseOrDispose { }
     }
@@ -145,7 +145,7 @@ fun CardViewScreen(
         onSwipeRight = vm::onSwipeRight,
         onUndo = vm::onUndo,
         onOpenSettings = onOpenSettings,
-        onOpenContact = { contactId -> onOpenContact("c-$contactId") },
+        onOpenContact = { contactId -> onOpenContact("c-$contactId") }
     )
 }
 
@@ -158,14 +158,14 @@ fun CardViewScreen(
 private fun ListActionsMenu(
     onBrowse: () -> Unit,
     onEditList: () -> Unit,
-    onAddContacts: () -> Unit,
+    onAddContacts: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         OrbitIconButton(
             icon = "list",
             onClick = { expanded = true },
-            contentDescription = "List actions",
+            contentDescription = "List actions"
         )
         OrbitDropdownMenu(
             expanded = expanded,
@@ -173,8 +173,8 @@ private fun ListActionsMenu(
             actions = listOf(
                 OrbitMenuAction(label = "Browse people", onClick = onBrowse, icon = "list-bullets"),
                 OrbitMenuAction(label = "Add contacts", onClick = onAddContacts, icon = "plus"),
-                OrbitMenuAction(label = "Edit list", onClick = onEditList, icon = "pencil-simple"),
-            ),
+                OrbitMenuAction(label = "Edit list", onClick = onEditList, icon = "pencil-simple")
+            )
         )
     }
 }
@@ -194,7 +194,7 @@ private fun CardViewContent(
     onSwipeRight: (contactId: Long) -> Unit,
     onUndo: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenContact: (contactId: Long) -> Unit,
+    onOpenContact: (contactId: Long) -> Unit
 ) {
     val curtain = LocalPrivacyCurtain.current
     val appBarTitle = when (state) {
@@ -211,7 +211,7 @@ private fun CardViewContent(
                 message = event.message,
                 actionLabel = event.actionLabel,
                 duration = SnackbarDuration.Short,
-                withDismissAction = false,
+                withDismissAction = false
             )
             if (r == SnackbarResult.ActionPerformed) onUndo()
         }
@@ -225,9 +225,9 @@ private fun CardViewContent(
                 ListActionsMenu(
                     onBrowse = { onBrowse(listId) },
                     onEditList = { onEditList(listId) },
-                    onAddContacts = { onAddContacts(listId) },
+                    onAddContacts = { onAddContacts(listId) }
                 )
-            },
+            }
         )
 
         if (callLogDenied) {
@@ -237,7 +237,7 @@ private fun CardViewContent(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .weight(1f)
         ) {
             when (state) {
                 // F-8 — Loading is the pre-emission placeholder. Rendering
@@ -246,12 +246,12 @@ private fun CardViewContent(
                 CardViewUiState.Loading -> Box(modifier = Modifier.fillMaxSize())
                 CardViewUiState.EmptyNoMembers -> NoMembersShell(
                     onAddContacts = { onAddContacts(listId) },
-                    onGoHome = onBack,
+                    onGoHome = onBack
                 )
                 is CardViewUiState.EmptyNothingEligible -> NothingEligibleShell(
                     state = state,
                     onBrowse = { onBrowse(listId) },
-                    onGoHome = onBack,
+                    onGoHome = onBack
                 )
                 is CardViewUiState.Error -> ErrorShell(state.cause, onGoHome = onBack)
                 is CardViewUiState.Ready -> ReadyCard(
@@ -259,14 +259,14 @@ private fun CardViewContent(
                     onTapToCall = onTapToCall,
                     onSwipeLeft = onSwipeLeft,
                     onSwipeRight = onSwipeRight,
-                    onOpenContact = onOpenContact,
+                    onOpenContact = onOpenContact
                 )
             }
             SnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(OrbitTheme.spacing.x4),
+                    .padding(OrbitTheme.spacing.x4)
             )
         }
     }
@@ -287,7 +287,7 @@ private fun CallLogDeniedNotice(onOpenSettings: () -> Unit) {
             .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x1)
             .clip(OrbitTheme.shapes.md)
             .background(OrbitTheme.colors.bgSubtle)
-            .padding(start = OrbitTheme.spacing.x3),
+            .padding(start = OrbitTheme.spacing.x3)
     ) {
         Text(
             text = "Orbit can't see your calls — cards won't move on on their own",
@@ -295,7 +295,7 @@ private fun CallLogDeniedNotice(onOpenSettings: () -> Unit) {
             color = OrbitTheme.colors.fgMuted,
             modifier = Modifier
                 .weight(1f)
-                .padding(vertical = OrbitTheme.spacing.x2),
+                .padding(vertical = OrbitTheme.spacing.x2)
         )
         InlineTextAction(text = "Open settings", onClick = onOpenSettings)
     }
@@ -309,18 +309,18 @@ private fun CallLogDeniedNotice(onOpenSettings: () -> Unit) {
 private fun InlineTextAction(
     text: String,
     onClick: () -> Unit,
-    color: Color = OrbitTheme.colors.fg,
+    color: Color = OrbitTheme.colors.fg
 ) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .defaultMinSize(
                 minWidth = OrbitTheme.spacing.tapMin,
-                minHeight = OrbitTheme.spacing.tapMin,
+                minHeight = OrbitTheme.spacing.tapMin
             )
             .clip(OrbitTheme.shapes.md)
             .clickable(onClick = onClick)
-            .padding(horizontal = OrbitTheme.spacing.x3),
+            .padding(horizontal = OrbitTheme.spacing.x3)
     ) {
         Text(text = text, style = OrbitTheme.type.button, color = color)
     }
@@ -355,7 +355,7 @@ private fun NoMembersShell(onAddContacts: () -> Unit, onGoHome: () -> Unit) {
         primaryText = "Add contacts",
         onPrimary = onAddContacts,
         secondaryText = "Go home",
-        onSecondary = onGoHome,
+        onSecondary = onGoHome
     )
 }
 
@@ -370,7 +370,7 @@ private fun NoMembersShell(onAddContacts: () -> Unit, onGoHome: () -> Unit) {
 private fun NothingEligibleShell(
     state: CardViewUiState.EmptyNothingEligible,
     onBrowse: () -> Unit,
-    onGoHome: () -> Unit,
+    onGoHome: () -> Unit
 ) {
     val curtain = LocalPrivacyCurtain.current
     val body = if (state.upNextName != null && state.upNextLabel != null) {
@@ -385,7 +385,7 @@ private fun NothingEligibleShell(
         primaryText = "Browse this list",
         onPrimary = onBrowse,
         secondaryText = "Go home",
-        onSecondary = onGoHome,
+        onSecondary = onGoHome
     )
 }
 
@@ -396,25 +396,25 @@ private fun EmptyShell(
     primaryText: String,
     onPrimary: () -> Unit,
     secondaryText: String? = null,
-    onSecondary: (() -> Unit)? = null,
+    onSecondary: (() -> Unit)? = null
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
         modifier = Modifier
             .fillMaxSize()
-            .padding(OrbitTheme.spacing.x8),
+            .padding(OrbitTheme.spacing.x8)
     ) {
         Text(
             text = heading,
             style = OrbitTheme.type.h2,
-            color = OrbitTheme.colors.fg,
+            color = OrbitTheme.colors.fg
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x3))
         Text(
             text = body,
             style = OrbitTheme.type.body,
-            color = OrbitTheme.colors.fgMuted,
+            color = OrbitTheme.colors.fgMuted
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x6))
         OrbitButton(text = primaryText, onClick = onPrimary)
@@ -423,7 +423,7 @@ private fun EmptyShell(
             OrbitButton(
                 text = secondaryText,
                 onClick = onSecondary,
-                variant = OrbitButtonVariant.Ghost,
+                variant = OrbitButtonVariant.Ghost
             )
         }
     }
@@ -435,11 +435,12 @@ private fun ErrorShell(cause: String, onGoHome: () -> Unit) {
         heading = "Something's off here.",
         body = "Pull back and try this list again in a moment.",
         primaryText = "Go home",
-        onPrimary = onGoHome,
+        onPrimary = onGoHome
     )
     // Keep `cause` referenced so the parameter isn't elided; surface only
     // in logs once Timber lands.
-    @Suppress("UNUSED_EXPRESSION") cause
+    @Suppress("UNUSED_EXPRESSION")
+    cause
 }
 
 @Composable
@@ -448,7 +449,7 @@ private fun ReadyCard(
     onTapToCall: (contactId: Long, phone: String) -> Unit,
     onSwipeLeft: (contactId: Long) -> Unit,
     onSwipeRight: (contactId: Long) -> Unit,
-    onOpenContact: (contactId: Long) -> Unit,
+    onOpenContact: (contactId: Long) -> Unit
 ) {
     val contactId = state.contactId
     val contact = state.contact
@@ -465,7 +466,7 @@ private fun ReadyCard(
                 .fillMaxWidth()
                 .weight(1f)
                 .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x3),
-            ghostOverlay = { offsetFraction -> GhostHints(offsetFraction) },
+            ghostOverlay = { offsetFraction -> GhostHints(offsetFraction) }
         ) {
             // Crossfade keyed on contactId — the outgoing face fades while the
             // incoming face fades in, so card advancement reads as one quiet
@@ -478,7 +479,7 @@ private fun ReadyCard(
                 },
                 contentKey = { it.contactId },
                 label = "card face",
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize()
             ) { face ->
                 Box(
                     modifier = Modifier
@@ -486,14 +487,14 @@ private fun ReadyCard(
                         .orbitHeroShadow(OrbitTheme.shapes.xl, OrbitTheme.colors.isDark)
                         .clip(OrbitTheme.shapes.xl)
                         .background(OrbitTheme.colors.surface)
-                        .clickable { onTapToCall(face.contactId, face.contact.phone) },
+                        .clickable { onTapToCall(face.contactId, face.contact.phone) }
                 ) {
                     ContactCardFace(
                         contact = face.contact,
                         listContext = face.listContext,
                         nowHour = face.nowHour,
                         isAheadOfToday = face.isAheadOfToday,
-                        whyNowLine = face.whyNowLine,
+                        whyNowLine = face.whyNowLine
                     )
                 }
             }
@@ -503,7 +504,7 @@ private fun ReadyCard(
         // stats panel. Hidden entirely when empty so the Card stays focused.
         RecentNotesSummary(
             notes = state.recentNotes,
-            onOpenContact = { onOpenContact(contactId) },
+            onOpenContact = { onOpenContact(contactId) }
         )
 
         Row(
@@ -511,7 +512,7 @@ private fun ReadyCard(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = OrbitTheme.spacing.x6, vertical = OrbitTheme.spacing.x5),
+                .padding(horizontal = OrbitTheme.spacing.x6, vertical = OrbitTheme.spacing.x5)
         ) {
             // Buttons animate the card to its anchor (same settle path +
             // haptic as a drag) instead of mutating with zero motion.
@@ -521,7 +522,7 @@ private fun ReadyCard(
                 onClick = { onTapToCall(contactId, contact.phone) },
                 leadingIcon = "phone-call",
                 height = 56.dp,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
             )
             CircleSideButton("arrow-right", onClick = frameState::requestSwipeRight)
         }
@@ -531,7 +532,7 @@ private fun ReadyCard(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = OrbitTheme.spacing.x4),
+                .padding(bottom = OrbitTheme.spacing.x4)
         ) {
             Text(
                 text = "Skip",
@@ -540,13 +541,13 @@ private fun ReadyCard(
                 modifier = Modifier
                     .defaultMinSize(minWidth = 96.dp, minHeight = OrbitTheme.spacing.tapMin)
                     .clickable(onClick = frameState::requestSwipeLeft)
-                    .padding(OrbitTheme.spacing.x3),
+                    .padding(OrbitTheme.spacing.x3)
             )
             Text(
                 text = "·",
                 style = OrbitTheme.type.skipAffordance,
                 color = OrbitTheme.colors.fgSubtle,
-                modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x1),
+                modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x1)
             )
             Text(
                 text = "View details",
@@ -555,7 +556,7 @@ private fun ReadyCard(
                 modifier = Modifier
                     .defaultMinSize(minWidth = 96.dp, minHeight = OrbitTheme.spacing.tapMin)
                     .clickable { onOpenContact(contactId) }
-                    .padding(OrbitTheme.spacing.x3),
+                    .padding(OrbitTheme.spacing.x3)
             )
         }
     }
@@ -580,7 +581,7 @@ private fun BoxScope.GhostHints(offsetFraction: Float) {
                 .alpha(absFrac)
                 .clip(OrbitTheme.shapes.full)
                 .background(OrbitTheme.colors.swipeGhostSooner.copy(alpha = absFrac * 0.18f))
-                .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x1),
+                .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x1)
         ) {
             OrbitChip(label = "Sooner", tone = ChipTone.Sage)
         }
@@ -592,7 +593,7 @@ private fun BoxScope.GhostHints(offsetFraction: Float) {
                 .alpha(absFrac)
                 .clip(OrbitTheme.shapes.full)
                 .background(OrbitTheme.colors.swipeGhostDefer.copy(alpha = absFrac * 0.18f))
-                .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x1),
+                .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x1)
         ) {
             OrbitChip(label = "Later", tone = ChipTone.Stone)
         }
@@ -609,19 +610,20 @@ private fun CircleSideButton(icon: String, onClick: () -> Unit) {
             .clip(OrbitTheme.shapes.full)
             .background(OrbitTheme.colors.surface)
             .border(1.dp, OrbitTheme.colors.line, OrbitTheme.shapes.full)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
     ) {
         PhIcon(name = icon, size = 22.dp, tint = OrbitTheme.colors.fgMuted)
     }
 }
 
+// internal (not private) so CardFaceCurtainTest can compose the face directly.
 @Composable
-private fun ContactCardFace(
+internal fun ContactCardFace(
     contact: Contact,
     listContext: String,
     nowHour: Int,
     isAheadOfToday: Boolean,
-    whyNowLine: String,
+    whyNowLine: String
 ) {
     // 200% font-scale fix (2026-06-09 a11y sweep) — at default scale the
     // weight spacer pins StatRow to the card's bottom edge; at large font
@@ -630,16 +632,28 @@ private fun ContactCardFace(
     // (vertical scroll is cross-axis to CardSwipeFrame's horizontal drag,
     // so swipe handling is unaffected). Default-scale layout is untouched.
     val scrollForFontScale = LocalDensity.current.fontScale > 1.3f
+    // PRIV-03: the face renders contact.name, so it masks it like every other
+    // surface does; the app bar above already reads "Contact" under the curtain,
+    // and a real name (or real initials) on the card below it was the leak.
+    val shownName = if (LocalPrivacyCurtain.current) "Contact" else contact.name
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (scrollForFontScale) Modifier.verticalScroll(rememberScrollState()) else Modifier)
-                .padding(horizontal = OrbitTheme.spacing.x6, vertical = OrbitTheme.spacing.x6),
+                .then(
+                    if (scrollForFontScale) {
+                        Modifier.verticalScroll(
+                            rememberScrollState()
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
+                .padding(horizontal = OrbitTheme.spacing.x6, vertical = OrbitTheme.spacing.x6)
         ) {
             Spacer(Modifier.height(OrbitTheme.spacing.x6))
-            Avatar(name = contact.name, size = 104.dp)
+            Avatar(name = shownName, size = 104.dp)
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
             // Tide marker (2026-05-08) — small framing line above the contact
             // name. `due today` when the engine's nextDueAt has arrived;
@@ -647,13 +661,13 @@ private fun ContactCardFace(
             Text(
                 text = if (isAheadOfToday) "ahead of today" else "due today",
                 style = OrbitTheme.type.eyebrow,
-                color = OrbitTheme.colors.fgMuted,
+                color = OrbitTheme.colors.fgMuted
             )
             Spacer(Modifier.height(OrbitTheme.spacing.x1))
             Text(
-                text = contact.name,
+                text = shownName,
                 style = OrbitTheme.type.contactName,
-                color = OrbitTheme.colors.fg,
+                color = OrbitTheme.colors.fg
             )
             // 2026-06-09 — why-now line from the last connected call
             // ("It's been 3 weeks."). Hidden when there's no history.
@@ -662,7 +676,7 @@ private fun ContactCardFace(
                 Text(
                     text = whyNowLine,
                     style = OrbitTheme.type.meta,
-                    color = OrbitTheme.colors.fgMuted,
+                    color = OrbitTheme.colors.fgMuted
                 )
             }
             Spacer(Modifier.height(OrbitTheme.spacing.x4))
@@ -688,7 +702,7 @@ private fun ContactCardFace(
                 tone = ChipTone.Terracotta,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(OrbitTheme.spacing.x3),
+                    .padding(OrbitTheme.spacing.x3)
             )
         }
     }
@@ -703,12 +717,12 @@ private fun NoCallHistoryPanel() {
             .fillMaxWidth()
             .clip(OrbitTheme.shapes.lg)
             .background(OrbitTheme.colors.bgSubtle)
-            .padding(OrbitTheme.spacing.x4),
+            .padding(OrbitTheme.spacing.x4)
     ) {
         Text(
             text = "No call history yet",
             style = OrbitTheme.type.meta,
-            color = OrbitTheme.colors.fgMuted,
+            color = OrbitTheme.colors.fgMuted
         )
     }
 }
@@ -729,24 +743,24 @@ private fun UsuallyAnswersCard(contact: Contact, nowHour: Int) {
             .fillMaxWidth()
             .clip(OrbitTheme.shapes.lg)
             .background(OrbitTheme.colors.bgSubtle)
-            .padding(OrbitTheme.spacing.x4),
+            .padding(OrbitTheme.spacing.x4)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
             ) {
                 Text(
                     text = "Usually answers",
-                    style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted),
+                    style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted)
                 )
                 TooltipBox(
                     positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
                     tooltip = { PlainTooltip { Text(USUALLY_TOOLTIP) } },
-                    state = rememberTooltipState(isPersistent = false),
+                    state = rememberTooltipState(isPersistent = false)
                 ) {
                     // 48dp tap target per rules.md design rule 3
                     // (the bare 14dp glyph was the whole target). The glyph
@@ -754,13 +768,13 @@ private fun UsuallyAnswersCard(contact: Contact, nowHour: Int) {
                     // padding replaces the old 6dp spacer.
                     Box(
                         contentAlignment = Alignment.Center,
-                        modifier = Modifier.size(OrbitTheme.spacing.tapMin),
+                        modifier = Modifier.size(OrbitTheme.spacing.tapMin)
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Info,
                             contentDescription = "About this stat",
                             tint = OrbitTheme.colors.fgMuted,
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
@@ -768,7 +782,7 @@ private fun UsuallyAnswersCard(contact: Contact, nowHour: Int) {
             Text(
                 text = contact.bestWindowLabel,
                 color = OrbitTheme.colors.fg,
-                style = OrbitTheme.type.statValue,
+                style = OrbitTheme.type.statValue
             )
         }
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
@@ -790,7 +804,7 @@ private fun HeatStrip(heat: FloatArray, nowHour: Int) {
         horizontalArrangement = Arrangement.spacedBy(2.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .height(26.dp),
+            .height(26.dp)
     ) {
         heat.forEachIndexed { i, v ->
             Box(
@@ -799,7 +813,17 @@ private fun HeatStrip(heat: FloatArray, nowHour: Int) {
                     .fillMaxSize()
                     .clip(OrbitTheme.shapes.xs)
                     .background(OrbitTheme.tones.heatColor(v))
-                    .then(if (i == nowHour) Modifier.border(1.5.dp, OrbitTheme.colors.fg, OrbitTheme.shapes.xs) else Modifier),
+                    .then(
+                        if (i == nowHour) {
+                            Modifier.border(
+                                1.5.dp,
+                                OrbitTheme.colors.fg,
+                                OrbitTheme.shapes.xs
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
             )
         }
     }
@@ -807,7 +831,7 @@ private fun HeatStrip(heat: FloatArray, nowHour: Int) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
         listOf("12a", "6a", "12p", "6p", "12a").forEach {
             Text(it, style = OrbitTheme.type.timelineAxis, color = OrbitTheme.colors.fgSubtle)
@@ -821,7 +845,7 @@ private fun StatRow(contact: Contact) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = OrbitTheme.spacing.x4),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         // 2026-06-09 — hydrated by withCallStats; blanks coalesce to honest
         // placeholders. "Pickup" was dropped: call_events stores connected
@@ -831,7 +855,11 @@ private fun StatRow(contact: Contact) {
         Divider(28.dp)
         Stat("Avg length", contact.avgLengthLabel.ifBlank { "—" }, Modifier.weight(1f))
         Divider(28.dp)
-        Stat("Calls", if (contact.totalCalls > 0) "${contact.totalCalls}" else "—", Modifier.weight(1f))
+        Stat(
+            "Calls",
+            if (contact.totalCalls > 0) "${contact.totalCalls}" else "—",
+            Modifier.weight(1f)
+        )
     }
 }
 
@@ -839,17 +867,17 @@ private fun StatRow(contact: Contact) {
 internal fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier,
+        modifier = modifier
     ) {
         Text(
             text = label,
-            style = OrbitTheme.type.timelineAxis.copy(color = OrbitTheme.colors.fgMuted),
+            style = OrbitTheme.type.timelineAxis.copy(color = OrbitTheme.colors.fgMuted)
         )
         Text(
             text = value,
             color = OrbitTheme.colors.fg,
             style = OrbitTheme.type.statValue,
-            modifier = Modifier.padding(top = 2.dp),
+            modifier = Modifier.padding(top = 2.dp)
         )
     }
 }
@@ -860,7 +888,7 @@ private fun Divider(height: Dp) {
         modifier = Modifier
             .width(1.dp)
             .height(height)
-            .background(OrbitTheme.colors.lineSoft),
+            .background(OrbitTheme.colors.lineSoft)
     )
 }
 
@@ -875,18 +903,15 @@ private fun Divider(height: Dp) {
  * the VM's `toNoteRow(now)` mapper.
  */
 @Composable
-private fun RecentNotesSummary(
-    notes: List<NoteRow>,
-    onOpenContact: () -> Unit,
-) {
+private fun RecentNotesSummary(notes: List<NoteRow>, onOpenContact: () -> Unit) {
     if (notes.isEmpty()) return
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(
                 horizontal = OrbitTheme.spacing.x6,
-                vertical = OrbitTheme.spacing.x2,
-            ),
+                vertical = OrbitTheme.spacing.x2
+            )
     ) {
         notes.forEach { note ->
             key(note.id) {
@@ -894,17 +919,17 @@ private fun RecentNotesSummary(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onOpenContact() }
-                        .padding(vertical = OrbitTheme.spacing.x2),
+                        .padding(vertical = OrbitTheme.spacing.x2)
                 ) {
                     Text(
                         text = note.relativeTimestamp,
-                        style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
+                        style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted)
                     )
                     Text(
                         text = note.body,
                         style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                         maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -929,7 +954,7 @@ private val previewContact: Contact = Contact(
     heat = FloatArray(24) { h -> if (h in 18..21) 1f - (21 - h) * 0.2f else 0f },
     history = emptyList(),
     notes = emptyList(),
-    patternNote = "Usually calls in the evening.",
+    patternNote = "Usually calls in the evening."
 )
 
 private val previewState: CardViewUiState = CardViewUiState.Ready(
@@ -939,7 +964,7 @@ private val previewState: CardViewUiState = CardViewUiState.Ready(
     queueSize = 5,
     recentNotes = emptyList(),
     nowHour = 19,
-    whyNowLine = "It's been 11 days.",
+    whyNowLine = "It's been 11 days."
 )
 
 private val previewStateAhead: CardViewUiState = CardViewUiState.Ready(
@@ -950,7 +975,7 @@ private val previewStateAhead: CardViewUiState = CardViewUiState.Ready(
     recentNotes = emptyList(),
     nowHour = 19,
     isAheadOfToday = true,
-    whyNowLine = "You talked yesterday.",
+    whyNowLine = "You talked yesterday."
 )
 
 @Composable
@@ -969,7 +994,7 @@ private fun PreviewContent(state: CardViewUiState, callLogDenied: Boolean = fals
         onSwipeRight = {},
         onUndo = {},
         onOpenSettings = {},
-        onOpenContact = {},
+        onOpenContact = {}
     )
 }
 
@@ -1013,8 +1038,8 @@ private fun CardViewContentNothingEligiblePreview() {
         PreviewContent(
             state = CardViewUiState.EmptyNothingEligible(
                 upNextName = "Avery Quinn",
-                upNextLabel = "on Tuesday",
-            ),
+                upNextLabel = "on Tuesday"
+            )
         )
     }
 }

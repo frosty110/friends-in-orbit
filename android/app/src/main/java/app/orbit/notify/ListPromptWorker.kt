@@ -12,7 +12,6 @@ import app.orbit.MainActivity
 import app.orbit.R
 import app.orbit.data.repository.ListRepository
 import app.orbit.nav.Routes
-import app.orbit.ui.screens.lists.spansMidnight
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.time.LocalTime
@@ -49,7 +48,7 @@ open class ListPromptWorker @AssistedInject constructor(
     @Assisted private val appContext: Context,
     @Assisted params: WorkerParameters,
     private val nudgeScheduler: NudgeScheduler,
-    private val listRepo: ListRepository,
+    private val listRepo: ListRepository
 ) : CoroutineWorker(appContext, params) {
 
     companion object {
@@ -149,24 +148,21 @@ open class ListPromptWorker @AssistedInject constructor(
      * - Midnight-spanning range (start > end, e.g. 22:00–02:00): [time] is inside
      *   when it is ≥ start OR ≤ end (wraps around midnight).
      *
-     * Mirror of [spansMidnight] from [app.orbit.ui.screens.lists.ActiveHoursEditor]
-     * — same invariant, now in the fire-time gate path.
+     * Delegates to [isInActiveWindow], the definition the scheduler also uses to
+     * decide whether a chosen time can ever post.
      */
     internal fun isWithinActiveHours(time: LocalTime, start: LocalTime, end: LocalTime): Boolean =
-        if (spansMidnight(start, end)) {
-            // Midnight-spanning: inside if time >= start OR time <= end
-            time >= start || time <= end
-        } else {
-            // Normal range: inside if start <= time <= end
-            time >= start && time <= end
-        }
+        isInActiveWindow(time, start, end)
 
     // ─── Notification post ────────────────────────────────────────────────────
 
     private fun postNudge(listId: Long, listName: String, dueCount: Int) {
         val pendingIntent = buildTapIntent(listId)
 
-        val notification = NotificationCompat.Builder(appContext, OrbitNotifications.CHANNEL_LIST_PROMPT)
+        val notification = NotificationCompat.Builder(
+            appContext,
+            OrbitNotifications.CHANNEL_LIST_PROMPT
+        )
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(NotificationCopy.nudgeTitle(listName))
             .setContentText(NotificationCopy.nudgeBody(listName, dueCount))
@@ -200,7 +196,7 @@ open class ListPromptWorker @AssistedInject constructor(
             appContext,
             NotificationIds.listPrompt(listId),
             intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
     }
 

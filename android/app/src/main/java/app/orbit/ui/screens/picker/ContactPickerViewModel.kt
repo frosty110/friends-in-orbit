@@ -24,6 +24,7 @@ import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.CopyContactsUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MoveContactsUseCase
+import app.orbit.domain.usecase.RelinkContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -105,6 +106,7 @@ class ContactPickerViewModel @Inject constructor(
     private val appPrefs: AppPrefs,
     private val moveUseCase: MoveContactsUseCase,
     private val copyUseCase: CopyContactsUseCase,
+    private val relinkUseCase: RelinkContactUseCase,
     private val ignoreUseCase: IgnoreContactUseCase,
     private val unignoreUseCase: UnignoreContactUseCase,
     private val undoStack: UndoStack,
@@ -112,7 +114,7 @@ class ContactPickerViewModel @Inject constructor(
     private val clock: Clock,
     private val commitBus: PickerCommitBus,
     @ApplicationScope private val appScope: CoroutineScope,
-    savedStateHandle: SavedStateHandle,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     // ─── Nav args ───────────────────────────────────────────────────────────────────────
@@ -132,6 +134,7 @@ class ContactPickerViewModel @Inject constructor(
         when (savedStateHandle["mode"] ?: "") {
             "move" -> PickerMode.Move
             "copy" -> PickerMode.Copy
+            "relink" -> PickerMode.Relink
             else -> PickerMode.Add
         }
 
@@ -140,6 +143,11 @@ class ContactPickerViewModel @Inject constructor(
     // terminal NotFound phase so the Move commit can never silently no-op.
     private val sourceListId: Long? =
         savedStateHandle.get<String>("sourceListId")?.toLongOrNull()
+
+    // CONTACT-07: the orphan a Relink route re-links. A Relink route has no
+    // target list; this id takes its place, parsed just as defensively.
+    private val relinkContactId: Long? =
+        savedStateHandle.get<String>("relinkContactId")?.toLongOrNull()
 
     // ─── Mutable state flows ───────────────────────────────────────────────────────────
     //
@@ -172,7 +180,7 @@ class ContactPickerViewModel @Inject constructor(
                 scope = viewModelScope,
                 started = SharingStarted.Eagerly,
                 initialValue = savedStateHandle.get<Array<String>>(KEY_ACTIVE_FILTERS)
-                    ?.mapNotNull(::decodePickerFilter)?.toSet().orEmpty(),
+                    ?.mapNotNull(::decodePickerFilter)?.toSet().orEmpty()
             )
 
     private val selectedIdsFlow: StateFlow<Set<Long>> =
@@ -182,7 +190,7 @@ class ContactPickerViewModel @Inject constructor(
                 scope = viewModelScope,
                 started = SharingStarted.Eagerly,
                 initialValue = savedStateHandle.get<LongArray>(KEY_SELECTED_IDS)
-                    ?.toSet().orEmpty(),
+                    ?.toSet().orEmpty()
             )
 
     private val _showIgnored = MutableStateFlow(false)
@@ -200,7 +208,7 @@ class ContactPickerViewModel @Inject constructor(
             SORT_MOST_CALLED -> PickerSort.ByMostCalled
             SORT_RECENTLY_SAVED -> PickerSort.ByRecentlySaved
             else -> PickerSort.ByName
-        },
+        }
     )
 
     init {
@@ -210,7 +218,13 @@ class ContactPickerViewModel @Inject constructor(
         // A Move route without a sourceListId is equally malformed: there is no
         // list to move FROM, so the commit could only be a silent no-op. Make
         // the invalid state unreachable instead.
-        if (targetListId == null || (mode == PickerMode.Move && sourceListId == null)) {
+        // A Relink route needs the orphan's id and nothing else.
+        val routeIsValid = when (mode) {
+            PickerMode.Relink -> relinkContactId != null
+            PickerMode.Move -> targetListId != null && sourceListId != null
+            PickerMode.Add, PickerMode.Copy -> targetListId != null
+        }
+        if (!routeIsValid) {
             _permissionPhase.value = ContactPickerUiState.Phase.NotFound
         } else {
             refreshPermission()
@@ -228,7 +242,7 @@ class ContactPickerViewModel @Inject constructor(
     fun refreshPermission() {
         val granted = ContextCompat.checkSelfPermission(
             appContext,
-            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.READ_CONTACTS
         ) == PackageManager.PERMISSION_GRANTED
         _permissionPhase.value = if (granted) {
             ContactPickerUiState.Phase.Ready
@@ -270,7 +284,13 @@ class ContactPickerViewModel @Inject constructor(
 
     fun onToggleSelect(id: Long) {
         val current = selectedIdsFlow.value
-        val next = if (id in current) current - id else current + id
+        val next = when {
+            id in current -> current - id
+            // CONTACT-07: an orphan re-links to exactly one phone contact, so a
+            // new pick replaces the old one rather than joining it.
+            mode == PickerMode.Relink -> setOf(id)
+            else -> current + id
+        }
         savedStateHandleRef[KEY_SELECTED_IDS] = next.toLongArray()
     }
 
@@ -281,6 +301,10 @@ class ContactPickerViewModel @Inject constructor(
      * would miss rows the LazyColumn hasn't materialized yet.
      */
     fun onSelectAllMatching(filteredIds: Set<Long>) {
+        // The screen never offers select-all in Relink (canSelectAllMatching
+        // is false there); refuse here too so a stale tap cannot stage a
+        // multi-contact merge.
+        if (mode == PickerMode.Relink) return
         val next = selectedIdsFlow.value + filteredIds
         savedStateHandleRef[KEY_SELECTED_IDS] = next.toLongArray()
     }
@@ -333,6 +357,10 @@ class ContactPickerViewModel @Inject constructor(
     fun onCommit() {
         val ids = selectedIdsFlow.value.toList()
         if (ids.isEmpty()) return
+        if (mode == PickerMode.Relink) {
+            commitRelink(ids)
+            return
+        }
         // NotFound surface short-circuits commit. The action bar isn't
         // rendered in NotFound, but a race where the surface re-enters Ready
         // momentarily before settling shouldn't dispatch on a null id.
@@ -354,11 +382,16 @@ class ContactPickerViewModel @Inject constructor(
                                 ListMembershipEntity(
                                     listId = listId,
                                     contactId = id,
-                                    addedAt = now,
+                                    addedAt = now
                                 )
-                            },
+                            }
                         )
-                        val inverse: suspend () -> Unit = { listMembershipDao.removeAll(listId, ids) }
+                        val inverse: suspend () -> Unit = {
+                            listMembershipDao.removeAll(
+                                listId,
+                                ids
+                            )
+                        }
                         inverse to "Added ${ids.size} to $targetName"
                     }
 
@@ -383,6 +416,9 @@ class ContactPickerViewModel @Inject constructor(
                             if (r.label.isEmpty()) null else r.inverse to r.label
                         }
                     }
+
+                    // onCommit hands Relink to commitRelink before this point.
+                    PickerMode.Relink -> null
                 }
 
                 if (dispatched != null) {
@@ -393,6 +429,43 @@ class ContactPickerViewModel @Inject constructor(
                     // Per project convention "no silent fallbacks": a Move that
                     // dispatched nothing is a failed save, not a quiet exit.
                     commitBus.publish(SnackbarEvent("Couldn't save that"))
+                }
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                commitBus.publish(SnackbarEvent("Couldn't save that"))
+            } finally {
+                _isCommitting.value = false
+            }
+        }
+    }
+
+    /**
+     * CONTACT-07: re-link the route's orphan to the one picked phone contact
+     * via [RelinkContactUseCase]. Same lifecycle as the list commits above:
+     * [appScope] so the merge survives the pop back to Contact detail, the
+     * inverse on [UndoStack], and the outcome on [PickerCommitBus]. A refused
+     * merge (the use case returns null: the orphan was restored by a sync, or
+     * the pick stopped being a live phone contact) is a failed save, never a
+     * quiet exit.
+     */
+    private fun commitRelink(ids: List<Long>) {
+        val orphanId = relinkContactId ?: return
+        // Single-select is enforced in onToggleSelect; a multi-id selection
+        // here would mean that broke, and merging an arbitrary one of them
+        // would be a guess.
+        val liveId = ids.singleOrNull() ?: return
+        _isCommitting.value = true
+        savedStateHandleRef[KEY_SELECTED_IDS] = LongArray(0)
+        appScope.launch {
+            try {
+                val result = relinkUseCase(orphanId = orphanId, liveId = liveId)
+                if (result == null) {
+                    commitBus.publish(SnackbarEvent("Couldn't save that"))
+                } else {
+                    undoStack.put(
+                        UndoStack.PendingUndo(inverse = result.inverse, label = result.label)
+                    )
+                    commitBus.publish(SnackbarEvent(result.label, "Undo"))
                 }
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
@@ -450,8 +523,8 @@ class ContactPickerViewModel @Inject constructor(
                 undoStack.put(
                     UndoStack.PendingUndo(
                         inverse = { ignoreUseCase(contactId, displayName) },
-                        label = "Restored $displayName",
-                    ),
+                        label = "Restored $displayName"
+                    )
                 )
                 commitBus.publish(SnackbarEvent("Restored $displayName", "Undo"))
             } catch (t: Throwable) {
@@ -513,8 +586,11 @@ class ContactPickerViewModel @Inject constructor(
             .map { contacts -> contacts.map(ContactEntity::id) }
             .distinctUntilChanged()
             .flatMapLatest { ids ->
-                if (ids.isEmpty()) flowOf(emptyMap())
-                else callEventRepo.observeAggregatesForContacts(ids)
+                if (ids.isEmpty()) {
+                    flowOf(emptyMap())
+                } else {
+                    callEventRepo.observeAggregatesForContacts(ids)
+                }
             }
 
     private val rawSourcesFlow = combine(
@@ -522,7 +598,7 @@ class ContactPickerViewModel @Inject constructor(
         listMembershipDao.observeAll(),
         callAggregatesFlow,
         listRepo.observeAll(),
-        appPrefs.pickerThresholds,
+        appPrefs.pickerThresholds
     ) { contacts, memberships, callAggregates, lists, thresholds ->
         RawPickerSources(contacts, memberships, callAggregates, lists, thresholds)
     }
@@ -535,7 +611,7 @@ class ContactPickerViewModel @Inject constructor(
                 callAggregates = raw.callAggregates,
                 lists = raw.lists,
                 thresholds = raw.thresholds,
-                phoneByContactId = phoneById,
+                phoneByContactId = phoneById
             )
         }
             // Run the percentile bucketing + cross-ref reduction off
@@ -548,9 +624,17 @@ class ContactPickerViewModel @Inject constructor(
 
     // When targetListId is null the picker is terminal-NotFound; surface an
     // empty target name and avoid wiring the observe Flow to a missing id.
+    //
+    // In Relink mode the "target" is the orphan being re-linked, so the CTA
+    // reads "Re-link {name}".
     private val targetListNameFlow: Flow<String> =
-        targetListId?.let { id -> listRepo.observeById(id).map { it?.name.orEmpty() } }
-            ?: kotlinx.coroutines.flow.flowOf("")
+        if (mode == PickerMode.Relink) {
+            relinkContactId?.let { id -> contactRepo.observeById(id).map { it?.displayName.orEmpty() } }
+                ?: kotlinx.coroutines.flow.flowOf("")
+        } else {
+            targetListId?.let { id -> listRepo.observeById(id).map { it?.name.orEmpty() } }
+                ?: kotlinx.coroutines.flow.flowOf("")
+        }
 
     /**
      * PICK-01 — non-archived lists for the "In list…"
@@ -600,7 +684,7 @@ class ContactPickerViewModel @Inject constructor(
             _isCommitting,
             targetListNameFlow,
             availableListsFlow,
-            deviceEmptyFlow,
+            deviceEmptyFlow
         ) { phase, committing, name, lists, deviceEmpty ->
             PickerChrome(phase, committing, name, lists, deviceEmpty)
         }
@@ -615,14 +699,14 @@ class ContactPickerViewModel @Inject constructor(
             searchQueryFlow,
             filterConfigFlow,
             selectedIdsFlow,
-            chromeFlow,
+            chromeFlow
         ) { allContacts, query, config, selected, chrome ->
             ContactPickerUiState(
                 phase = resolvePickerPhase(
                     basePhase = chrome.phase,
                     isCommitting = chrome.isCommitting,
                     deviceEmpty = chrome.deviceEmpty,
-                    hasAnyContacts = allContacts.isNotEmpty(),
+                    hasAnyContacts = allContacts.isNotEmpty()
                 ),
                 mode = mode,
                 targetListName = chrome.targetListName,
@@ -632,7 +716,7 @@ class ContactPickerViewModel @Inject constructor(
                 allContacts = allContacts,
                 selectedIds = selected,
                 availableLists = chrome.availableLists,
-                sortBy = config.sortBy,
+                sortBy = config.sortBy
             )
         }
             .stateIn(
@@ -647,8 +731,8 @@ class ContactPickerViewModel @Inject constructor(
                     showIgnored = false,
                     allContacts = emptyList(),
                     selectedIds = emptySet(),
-                    availableLists = emptyList(),
-                ),
+                    availableLists = emptyList()
+                )
             )
 
     // ─── Domain projection ─────────────────────────────────────────────────────────────
@@ -670,10 +754,17 @@ class ContactPickerViewModel @Inject constructor(
         callAggregates: Map<Long, CallAgg>,
         lists: List<ListEntity>,
         thresholds: PickerThresholds,
-        phoneByContactId: Map<Long, app.orbit.data.android.PhoneContact>,
+        phoneByContactId: Map<Long, app.orbit.data.android.PhoneContact>
     ): List<PickerContact> {
-        // Skip orphans — strict contact creation.
-        val live = contacts.filterNot { it.isOrphaned }
+        // Skip orphans (strict contact creation). In Relink mode, narrow to the
+        // rows the merge accepts (CONTACT-07): one definition, shared with
+        // RelinkContactUseCase, so the picker never offers a pick it refuses.
+        val orphanId = relinkContactId
+        val live = if (mode == PickerMode.Relink && orphanId != null) {
+            contacts.filter { RelinkContactUseCase.isRelinkTarget(it, orphanId) }
+        } else {
+            contacts.filterNot { it.isOrphaned }
+        }
         if (live.isEmpty()) return emptyList()
 
         // Per-contact aggregates come from SQL push-down. Ids
@@ -692,14 +783,27 @@ class ContactPickerViewModel @Inject constructor(
         val nCalled = countsAsc.size
         // top X% — high-count cutoff. Bottom Y% — low-count cutoff (still ≥1 call).
         val commonlyCutoff: Int? =
-            if (nCalled == 0) null
-            else countsAsc[(nCalled - (nCalled * thresholds.commonlyTopPct) / 100).coerceIn(0, nCalled - 1)]
+            if (nCalled == 0) {
+                null
+            } else {
+                countsAsc[
+                    (nCalled - (nCalled * thresholds.commonlyTopPct) / 100).coerceIn(
+                        0,
+                        nCalled - 1
+                    )
+                ]
+            }
         val rarelyCutoff: Int? =
-            if (nCalled == 0) null
-            else countsAsc[((nCalled * thresholds.rarelyBottomPct) / 100).coerceIn(0, nCalled - 1)]
+            if (nCalled == 0) {
+                null
+            } else {
+                countsAsc[((nCalled * thresholds.rarelyBottomPct) / 100).coerceIn(0, nCalled - 1)]
+            }
 
         val now = clock.now()
-        val recentlyAddedThreshold = now.minus(Duration.ofDays(thresholds.recentlyAddedDays.toLong()))
+        val recentlyAddedThreshold = now.minus(
+            Duration.ofDays(thresholds.recentlyAddedDays.toLong())
+        )
         val longGapThreshold = now.minus(Duration.ofDays(thresholds.longGapDays.toLong()))
 
         val built = live.map { c ->
@@ -732,7 +836,7 @@ class ContactPickerViewModel @Inject constructor(
                 isRarelyCalled = isRarely,
                 isRecentlyAdded = isRecentlyAdded,
                 isLongGap = isLongGap,
-                isStarred = c.isStarred,
+                isStarred = c.isStarred
             )
         }
         // In Add mode, a contact already on the target list isn't a candidate to
@@ -770,7 +874,7 @@ class ContactPickerViewModel @Inject constructor(
         val CALL_FREQUENCY_FILTERS: Set<PickerFilter> = setOf(
             PickerFilter.CommonlyCalled,
             PickerFilter.RarelyCalled,
-            PickerFilter.NeverCalled,
+            PickerFilter.NeverCalled
         )
     }
 
@@ -786,7 +890,7 @@ class ContactPickerViewModel @Inject constructor(
         val memberships: List<ListMembershipEntity>,
         val callAggregates: Map<Long, CallAgg>,
         val lists: List<ListEntity>,
-        val thresholds: PickerThresholds,
+        val thresholds: PickerThresholds
     )
 
     /**
@@ -796,7 +900,7 @@ class ContactPickerViewModel @Inject constructor(
     private data class FilterConfig(
         val activeFilters: Set<PickerFilter>,
         val showIgnored: Boolean,
-        val sortBy: PickerSort,
+        val sortBy: PickerSort
     )
 
     /**
@@ -810,7 +914,7 @@ class ContactPickerViewModel @Inject constructor(
         val isCommitting: Boolean,
         val targetListName: String,
         val availableLists: List<PickerListSummary>,
-        val deviceEmpty: Boolean?,
+        val deviceEmpty: Boolean?
     )
 }
 
@@ -836,7 +940,7 @@ internal fun resolvePickerPhase(
     basePhase: ContactPickerUiState.Phase,
     isCommitting: Boolean,
     deviceEmpty: Boolean?,
-    hasAnyContacts: Boolean,
+    hasAnyContacts: Boolean
 ): ContactPickerUiState.Phase = when {
     isCommitting -> ContactPickerUiState.Phase.Committing
     basePhase == ContactPickerUiState.Phase.Ready &&

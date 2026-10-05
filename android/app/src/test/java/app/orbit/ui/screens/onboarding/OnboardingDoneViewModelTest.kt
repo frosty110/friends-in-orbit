@@ -57,6 +57,7 @@ class OnboardingDoneViewModelTest {
             val prefs = buildAppPrefs()
             prefs.setOnboardingComplete(false)
             prefs.setLastOnboardingStep(null)
+            prefs.setOnboardingListId(null)
         }
         val prefsDir = java.io.File(context.filesDir.parentFile, "datastore")
         if (prefsDir.exists()) prefsDir.deleteRecursively()
@@ -98,6 +99,20 @@ class OnboardingDoneViewModelTest {
         }
         assertEquals(null, cleared, "the resume key must be cleared on completion")
     }
+
+    @Test
+    fun `init forgets the onboarding list so a later re-onboarding starts a new one`() =
+        runBlocking {
+            val prefs = buildAppPrefs()
+            prefs.setOnboardingListId(42L)
+            withTimeout(30_000L) { prefs.onboardingListId.filter { it != null }.first() }
+
+            OnboardingDoneViewModel(prefs)
+
+            val cleared =
+                withTimeout(30_000L) { prefs.onboardingListId.filter { it == null }.first() }
+            assertEquals(null, cleared)
+        }
 
     // ============================================================================
     // Test 3 — the `completed` StateFlow flips true only after the write lands;

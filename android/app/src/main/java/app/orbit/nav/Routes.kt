@@ -2,27 +2,31 @@ package app.orbit.nav
 
 // Single source of truth for nav paths. Screens reference these, never literals.
 object Routes {
-    const val Home              = "home"
-    const val Card              = "card/{listId}"
-    const val Browse            = "browse/{listId}"
+    const val Home = "home"
+    const val Card = "card/{listId}"
+    const val Browse = "browse/{listId}"
+
     // NOTE-02 / LOG-03 — optional query args for "open contact and focus the
     // Notes input" / "open contact and scroll to a specific call event". When
     // both args are absent the path matches `contact/{id}`
     // because Navigation Compose treats `?key={key}` as truly optional with
     // nullable defaults configured in the composable() registration.
-    const val Contact           = "contact/{contactId}?focusNote={focusNote}&scrollToCallEventId={scrollToCallEventId}"
+    const val Contact = "contact/{contactId}?focusNote={focusNote}&scrollToCallEventId={scrollToCallEventId}"
+
     // `openCreate` is an optional Bool query arg (default false). When true,
     // ListsManagerScreen initializes its create-list bottom sheet expanded —
     // used by Home's "Create your first list" / "New list" CTAs so a single
     // tap from Home lands the user directly in the list-creation form.
-    const val Lists             = "lists?openCreate={openCreate}"
-    const val ListConfig        = "lists/{listId}/config"
-    const val Settings          = "settings"
+    const val Lists = "lists?openCreate={openCreate}"
+    const val ListConfig = "lists/{listId}/config"
+    const val Settings = "settings"
+
     /** IGNORE-06 — Settings → Ignored full nav destination. */
-    const val SettingsIgnored   = "settings/ignored"
+    const val SettingsIgnored = "settings/ignored"
+
     /** LOG-01 — In-app call log full nav destination. */
-    const val CallLog           = "call-log"
-    const val GlobalSearch      = "search"
+    const val CallLog = "call-log"
+    const val GlobalSearch = "search"
 
     // Onboarding flow (post-2026-04-28 whole-app review):
     // Welcome → Contacts perm → Call log perm → Notifications perm
@@ -34,32 +38,35 @@ object Routes {
     // non-skippable (G2). First-list creation is required for activation (E1).
     // The OnboardFirstList route carries a {listId} path arg so the screen can
     // hydrate the production ListConfigViewModel via SavedStateHandle.
-    const val OnboardWelcome       = "onboard/welcome"
-    const val OnboardPermContacts  = "onboard/permissions/contacts"
-    const val OnboardPermCallLog   = "onboard/permissions/call-log"
-    const val OnboardPermNotifs    = "onboard/permissions/notifications"
-    const val OnboardSync          = "onboard/sync"
-    const val OnboardPreview       = "onboard/preview"
-    const val OnboardFirstList     = "onboard/first-list/{listId}"
-    const val OnboardDone          = "onboard/done"
+    const val OnboardWelcome = "onboard/welcome"
+    const val OnboardPermContacts = "onboard/permissions/contacts"
+    const val OnboardPermCallLog = "onboard/permissions/call-log"
+    const val OnboardPermNotifs = "onboard/permissions/notifications"
+    const val OnboardSync = "onboard/sync"
+    const val OnboardPreview = "onboard/preview"
+    const val OnboardFirstList = "onboard/first-list/{listId}"
+    const val OnboardDone = "onboard/done"
 
     // Picker routes (BULK-05 / BULK-06).
     // PickContacts: "Add contacts" entry — pick from address book into a target list.
     //   - targetListId: which list contacts will be added to
-    //   - mode: "add" (default) | "move" | "copy" — drives BatchCounter CTA copy
+    //   - mode: "add" (default) | "move" | "copy" | "relink"; drives BatchCounter CTA copy
     //   - sourceListId: REQUIRED for mode=move (which list the contacts leave);
     //     a move route without it lands on the picker's NotFound terminal state
     //     (the Move commit dispatches MoveContactsUseCase).
+    //   - relinkContactId: REQUIRED for mode=relink (CONTACT-07), which takes no
+    //     targetListId; the orphan being re-linked. Build it with [relinkContact].
     // PickLists: reverse picker — given a contact, pick which lists to add them to.
     const val PickContacts =
-        "pick/contacts?targetListId={targetListId}&mode={mode}&sourceListId={sourceListId}"
-    const val PickLists    = "pick/lists?contactId={contactId}"
+        "pick/contacts?targetListId={targetListId}&mode={mode}" +
+            "&sourceListId={sourceListId}&relinkContactId={relinkContactId}"
+    const val PickLists = "pick/lists?contactId={contactId}"
 
-    fun card(listId: String)         = "card/$listId"
-    fun browse(listId: String)       = "browse/$listId"
-    fun contact(contactId: String)   = "contact/$contactId"
-    fun listConfig(listId: String)   = "lists/$listId/config"
-    fun firstList(listId: String)    = "onboard/first-list/$listId"
+    fun card(listId: String) = "card/$listId"
+    fun browse(listId: String) = "browse/$listId"
+    fun contact(contactId: String) = "contact/$contactId"
+    fun listConfig(listId: String) = "lists/$listId/config"
+    fun firstList(listId: String) = "onboard/first-list/$listId"
     fun lists(openCreate: Boolean = false): String =
         if (openCreate) "lists?openCreate=true" else "lists?openCreate=false"
 
@@ -76,7 +83,7 @@ object Routes {
     fun contactWithFocus(
         contactId: String,
         focusNote: Boolean = false,
-        scrollToCallEventId: Long? = null,
+        scrollToCallEventId: Long? = null
     ): String {
         val params = buildList<String> {
             if (focusNote) add("focusNote=1")
@@ -101,4 +108,13 @@ object Routes {
             "pick/contacts?targetListId=$targetListId&mode=$mode&sourceListId=$sourceListId"
         }
     fun pickLists(contactId: String) = "pick/lists?contactId=$contactId"
+
+    /**
+     * CONTACT-07: the picker in Relink mode for one orphaned contact. Its own
+     * builder, not [pickContacts]: that one's first argument is a LIST id, and
+     * passing a contact id there is exactly how Re-link used to add people to
+     * an unrelated list.
+     */
+    fun relinkContact(orphanContactId: String) =
+        "pick/contacts?mode=relink&relinkContactId=$orphanContactId"
 }

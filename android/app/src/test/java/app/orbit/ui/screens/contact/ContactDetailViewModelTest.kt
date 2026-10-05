@@ -4,11 +4,11 @@ import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import app.orbit.data.dao.RecordingListMembershipDao
 import app.orbit.data.db.TransactionRunner
-import app.orbit.data.entity.ListEntity
-import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.CallSource
+import app.orbit.data.entity.ListEntity
+import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.entity.NoteEntity
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
@@ -19,7 +19,6 @@ import app.orbit.domain.contactFixture
 import app.orbit.domain.model.PauseDuration
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.undo.UndoStack
-import kotlinx.serialization.encodeToString
 import app.orbit.domain.usecase.AddNoteUseCase
 import app.orbit.domain.usecase.AddRetroactiveNoteUseCase
 import app.orbit.domain.usecase.ArchiveContactUseCase
@@ -31,6 +30,7 @@ import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.testutil.MainDispatcherRule
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -58,15 +58,13 @@ class ContactDetailViewModelTest {
 
     private val T0: Instant = Instant.parse("2026-01-01T12:00:00Z")
 
-    private fun fixture(
-        contactIdArg: String? = "c-5",
-    ): Setup {
+    private fun fixture(contactIdArg: String? = "c-5"): Setup {
         val contactRepo = FakeContactRepository()
         val noteRepo = FakeNoteRepository()
         val clock = TestClock(T0)
         val pauseContact = PauseContactUseCase(
             contactRepo = contactRepo,
-            clock = clock,
+            clock = clock
         )
         // ContactDetailViewModel's ctor takes listRepo + callEventRepo.
         val listRepo = app.orbit.domain.FakeListRepository()
@@ -90,7 +88,7 @@ class ContactDetailViewModelTest {
             contactRepo = contactRepo,
             listMembershipDao = membershipDao,
             listRepo = listRepo,
-            clock = clock,
+            clock = clock
         )
         // ArchiveContactUseCase wired into the VM. Real use case over the same
         // FakeContactRepository so the captured setArchivedCalls list shows the
@@ -116,7 +114,7 @@ class ContactDetailViewModelTest {
             callEventRepo = callEventRepo,
             ruleTemplateRepo = ruleTemplateRepo,
             clock = clock,
-            json = JsonProvider.json,
+            json = JsonProvider.json
         )
         val undoStack = UndoStack()
         val savedState = SavedStateHandle(mapOf("contactId" to contactIdArg))
@@ -136,7 +134,8 @@ class ContactDetailViewModelTest {
             markCalledUseCase = markCalledUseCase,
             undoStack = undoStack,
             clock = clock,
-            savedStateHandle = savedState,
+            zoneId = java.time.ZoneOffset.UTC,
+            savedStateHandle = savedState
         )
         return Setup(vm, contactRepo, noteRepo, listRepo, callEventRepo)
     }
@@ -146,7 +145,7 @@ class ContactDetailViewModelTest {
         val contactRepo: FakeContactRepository,
         val noteRepo: FakeNoteRepository,
         val listRepo: FakeListRepository,
-        val callEventRepo: app.orbit.domain.FakeCallEventRepository,
+        val callEventRepo: app.orbit.domain.FakeCallEventRepository
     )
 
     // ============================================================================
@@ -173,8 +172,8 @@ class ContactDetailViewModelTest {
         contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
         noteRepo.seed(
             listOf(
-                NoteEntity(id = 1L, contactId = 5L, createdAt = T0, body = "Met at the park"),
-            ),
+                NoteEntity(id = 1L, contactId = 5L, createdAt = T0, body = "Met at the park")
+            )
         )
         vm.uiState.test(timeout = 2.seconds) {
             val next = awaitItem()
@@ -212,6 +211,81 @@ class ContactDetailViewModelTest {
     // ============================================================================
 
     @Test
+    fun `an active pause is reported, indefinite or timed`() = runTest {
+        // Regression: nothing on this screen showed that a person was paused.
+        val sentinel = app.orbit.domain.usecase.PauseContactUseCase.INDEFINITE_PAUSE_SENTINEL
+        val setup = fixture(contactIdArg = "c-5")
+        setup.contactRepo.seed(
+            listOf(contactFixture(id = 5L, displayName = "Sarah", pausedUntil = sentinel))
+        )
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state !is ContactDetailUiState.Ready) state = awaitItem()
+            assertEquals("Paused until you unpause", state.pausedLabel)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val timed = fixture(contactIdArg = "c-5")
+        // T0 is 2026-01-01T12:00Z; ten days later is 11 Jan.
+        timed.contactRepo.seed(
+            listOf(
+                contactFixture(
+                    id = 5L,
+                    displayName = "Sarah",
+                    pausedUntil = T0.plusSeconds(10 * 24 * 3600L)
+                )
+            )
+        )
+        timed.vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state !is ContactDetailUiState.Ready) state = awaitItem()
+            assertEquals("Paused until 11 Jan", state.pausedLabel)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `no pause, or an expired one, reports nothing`() = runTest {
+        val setup = fixture(contactIdArg = "c-5")
+        setup.contactRepo.seed(
+            listOf(
+                contactFixture(id = 5L, displayName = "Sarah", pausedUntil = T0.minusSeconds(60))
+            )
+        )
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state !is ContactDetailUiState.Ready) state = awaitItem()
+            assertNull(state.pausedLabel)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `onUnpauseNow ends an indefinite pause with Undo`() = runTest {
+        // Regression: there was no Unpause anywhere, so an indefinite pause
+        // outlived its snackbar permanently.
+        val sentinel = app.orbit.domain.usecase.PauseContactUseCase.INDEFINITE_PAUSE_SENTINEL
+        val setup = fixture(contactIdArg = "c-5")
+        setup.contactRepo.seed(
+            listOf(contactFixture(id = 5L, displayName = "Sarah", pausedUntil = sentinel))
+        )
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state !is ContactDetailUiState.Ready) state = awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        setup.vm.snackbarEvents.test(timeout = 2.seconds) {
+            setup.vm.onUnpauseNow()
+            val event = awaitItem()
+            assertEquals("Unpaused Sarah", event.message)
+            assertEquals("Undo", event.actionLabel)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertNull(setup.contactRepo.getById(5L)?.pausedUntil)
+    }
+
+    @Test
     fun `onPauseContact sets pausedUntil via use case`() = runTest {
         val (vm, contactRepo, _) = fixture(contactIdArg = "c-5")
         contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
@@ -237,14 +311,14 @@ class ContactDetailViewModelTest {
         setup.listRepo.seed(
             listOf(
                 ListEntity(id = 1L, name = "Inner orbit", sortOrder = 0),
-                ListEntity(id = 2L, name = "Late night", sortOrder = 1),
-            ),
+                ListEntity(id = 2L, name = "Late night", sortOrder = 1)
+            )
         )
         setup.listRepo.seedMemberships(
             listOf(
                 ListMembershipEntity(contactId = 5L, listId = 1L, addedAt = T0),
-                ListMembershipEntity(contactId = 5L, listId = 2L, addedAt = T0),
-            ),
+                ListMembershipEntity(contactId = 5L, listId = 2L, addedAt = T0)
+            )
         )
         setup.vm.uiState.test(timeout = 2.seconds) {
             // Skip Loading + intermediate Ready emissions until the one with
@@ -281,31 +355,32 @@ class ContactDetailViewModelTest {
         assertEquals(
             0,
             setup.contactRepo.setRuleOverrideCalls.size,
-            "opening the override editor must not write ruleOverrideJson",
+            "opening the override editor must not write ruleOverrideJson"
         )
     }
 
     @Test
-    fun `onOpenOverride flips the editor branch in uiState without a persisted override`() = runTest {
-        val setup = fixture(contactIdArg = "c-5")
-        setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+    fun `onOpenOverride flips the editor branch in uiState without a persisted override`() =
+        runTest {
+            val setup = fixture(contactIdArg = "c-5")
+            setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
 
-        setup.vm.onOpenOverride()
-        setup.vm.uiState.test(timeout = 2.seconds) {
-            var ready: ContactDetailUiState.Ready? = null
-            while (ready?.hasOverride != true) {
-                val next = awaitItem()
-                if (next is ContactDetailUiState.Ready) ready = next
+            setup.vm.onOpenOverride()
+            setup.vm.uiState.test(timeout = 2.seconds) {
+                var ready: ContactDetailUiState.Ready? = null
+                while (ready?.hasOverride != true) {
+                    val next = awaitItem()
+                    if (next is ContactDetailUiState.Ready) ready = next
+                }
+                assertEquals(
+                    null,
+                    ready.currentParams,
+                    "peek-open editor renders defaults; nothing decoded from storage"
+                )
+                cancelAndIgnoreRemainingEvents()
             }
-            assertEquals(
-                null,
-                ready.currentParams,
-                "peek-open editor renders defaults; nothing decoded from storage",
-            )
-            cancelAndIgnoreRemainingEvents()
+            assertEquals(0, setup.contactRepo.setRuleOverrideCalls.size)
         }
-        assertEquals(0, setup.contactRepo.setRuleOverrideCalls.size)
-    }
 
     @Test
     fun `onClearOverride closes a peeked-open editor`() = runTest {
@@ -382,60 +457,93 @@ class ContactDetailViewModelTest {
     // ============================================================================
 
     @Test
-    fun `onAddRetroactiveNote back-dates createdAt to the call's occurredAt via byId lookup`() = runTest {
+    fun `Usually reads the call pattern, the same as the card`() = runTest {
+        // Regression: Contact detail never applied the call-pattern overlay, so
+        // "Usually" was always blank while Card View showed "Mornings".
         val setup = fixture(contactIdArg = "c-5")
         setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
-        // Seed a call event 14 minutes ago — the use case must use this
-        // event's occurredAt as the note's createdAt, NOT the clock's now.
-        val occurred = T0.minusSeconds(14 * 60L)
         setup.callEventRepo.seed(
-            listOf(
+            (1L..3L).map { day ->
                 CallEventEntity(
-                    id = 42L,
+                    id = day,
                     contactId = 5L,
-                    occurredAt = occurred,
+                    // 08:15 UTC on three different days: a morning pattern.
+                    occurredAt = Instant.parse("2025-12-2${day}T08:15:00Z"),
                     direction = CallDirection.OUTGOING,
-                    durationSeconds = 180,
-                    source = CallSource.CALL_LOG,
-                ),
-            ),
-        )
-
-        setup.vm.onAddRetroactiveNote(callEventId = 42L, body = "Was a great chat")
-        advanceUntilIdle()
-
-        assertEquals(1, setup.noteRepo.insertCalls.size)
-        val captured = setup.noteRepo.insertCalls[0]
-        assertEquals(5L, captured.contactId)
-        assertEquals("Was a great chat", captured.body)
-        // The load-bearing assertion: the back-dated timestamp matches the
-        // call's occurredAt — proves byId returned the right row AND the
-        // use case wired createdAt = occurredAt (not clock.now()).
-        assertEquals(occurred, captured.createdAt)
-    }
-
-    @Test
-    fun `corrupted ruleOverrideJson recovers via try-catch and flips to recovering copy`() = runTest {
-        val setup = fixture(contactIdArg = "c-5")
-        setup.contactRepo.seed(
-            listOf(
-                contactFixture(
-                    id = 5L,
-                    displayName = "Sarah",
-                    ruleOverrideJson = "this-is-not-valid-json",
-                ),
-            ),
-        )
-        setup.vm.uiState.test(timeout = 2.seconds) {
-            var ready: ContactDetailUiState.Ready? = null
-            while (ready == null) {
-                val next = awaitItem()
-                if (next is ContactDetailUiState.Ready) ready = next
+                    durationSeconds = 600,
+                    source = CallSource.CALL_LOG
+                )
             }
-            assertTrue(ready.hasOverride, "hasOverride should be true when ruleOverrideJson != null")
-            assertEquals(null, ready.currentParams)
-            assertEquals("Custom schedule (recovering)", ready.currentTemplateName)
+        )
+
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state !is ContactDetailUiState.Ready) state = awaitItem()
+            assertEquals("Mornings", state.contact.bestWindowLabel)
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun `onAddRetroactiveNote back-dates createdAt to the call's occurredAt via byId lookup`() =
+        runTest {
+            val setup = fixture(contactIdArg = "c-5")
+            setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+            // Seed a call event 14 minutes ago — the use case must use this
+            // event's occurredAt as the note's createdAt, NOT the clock's now.
+            val occurred = T0.minusSeconds(14 * 60L)
+            setup.callEventRepo.seed(
+                listOf(
+                    CallEventEntity(
+                        id = 42L,
+                        contactId = 5L,
+                        occurredAt = occurred,
+                        direction = CallDirection.OUTGOING,
+                        durationSeconds = 180,
+                        source = CallSource.CALL_LOG
+                    )
+                )
+            )
+
+            setup.vm.onAddRetroactiveNote(callEventId = 42L, body = "Was a great chat")
+            advanceUntilIdle()
+
+            assertEquals(1, setup.noteRepo.insertCalls.size)
+            val captured = setup.noteRepo.insertCalls[0]
+            assertEquals(5L, captured.contactId)
+            assertEquals("Was a great chat", captured.body)
+            // The load-bearing assertion: the back-dated timestamp matches the
+            // call's occurredAt — proves byId returned the right row AND the
+            // use case wired createdAt = occurredAt (not clock.now()).
+            assertEquals(occurred, captured.createdAt)
+        }
+
+    @Test
+    fun `corrupted ruleOverrideJson recovers via try-catch and flips to recovering copy`() =
+        runTest {
+            val setup = fixture(contactIdArg = "c-5")
+            setup.contactRepo.seed(
+                listOf(
+                    contactFixture(
+                        id = 5L,
+                        displayName = "Sarah",
+                        ruleOverrideJson = "this-is-not-valid-json"
+                    )
+                )
+            )
+            setup.vm.uiState.test(timeout = 2.seconds) {
+                var ready: ContactDetailUiState.Ready? = null
+                while (ready == null) {
+                    val next = awaitItem()
+                    if (next is ContactDetailUiState.Ready) ready = next
+                }
+                assertTrue(
+                    ready.hasOverride,
+                    "hasOverride should be true when ruleOverrideJson != null"
+                )
+                assertEquals(null, ready.currentParams)
+                assertEquals("Custom schedule (recovering)", ready.currentTemplateName)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 }

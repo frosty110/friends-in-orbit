@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.ui.layout.Layout
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,18 +26,19 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -109,7 +109,7 @@ internal fun ListConfigBody(
     onSmartRuleChange: (SmartListRule) -> Unit,
     onConfirmConvert: () -> Unit,
     onRemoveMember: (Long, String) -> Unit = { _, _ -> },
-    onAddContacts: () -> Unit = {},
+    onAddContacts: () -> Unit = {}
 ) {
     var showConvertDialog by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -127,7 +127,7 @@ internal fun ListConfigBody(
                 .fillMaxWidth()
                 .imePadding()
                 .padding(horizontal = 16.dp, vertical = 4.dp)
-                .padding(bottom = 32.dp),
+                .padding(bottom = 32.dp)
         ) {
             ListConfigBodySections(
                 state = state,
@@ -143,7 +143,7 @@ internal fun ListConfigBody(
                 onSmartRuleChange = onSmartRuleChange,
                 onShowConvertDialog = { showConvertDialog = true },
                 onRemoveMember = onRemoveMember,
-                onAddContacts = onAddContacts,
+                onAddContacts = onAddContacts
             )
         }
     } else {
@@ -169,13 +169,13 @@ internal fun ListConfigBody(
                     onSmartRuleChange = onSmartRuleChange,
                     onShowConvertDialog = { showConvertDialog = true },
                     onRemoveMember = onRemoveMember,
-                    onAddContacts = onAddContacts,
+                    onAddContacts = onAddContacts
                 )
             }
 
             SnackbarHost(
                 hostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
     }
@@ -189,10 +189,10 @@ internal fun ListConfigBody(
                 triggerConvertExtracted(
                     onConfirmConvert = onConfirmConvert,
                     scope = scope,
-                    snackbarHostState = snackbarHostState,
+                    snackbarHostState = snackbarHostState
                 )
             },
-            onDismiss = { showConvertDialog = false },
+            onDismiss = { showConvertDialog = false }
         )
     }
 }
@@ -218,7 +218,7 @@ private fun ColumnScope.ListConfigBodySections(
     onSmartRuleChange: (SmartListRule) -> Unit,
     onShowConvertDialog: () -> Unit,
     onRemoveMember: (Long, String) -> Unit,
-    onAddContacts: () -> Unit,
+    onAddContacts: () -> Unit
 ) {
     if (isOnboarding) {
         // BLOCKER 1 fix — name editor is required so onboarding
@@ -241,7 +241,7 @@ private fun ColumnScope.ListConfigBodySections(
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
             )
         }
     } else {
@@ -253,17 +253,20 @@ private fun ColumnScope.ListConfigBodySections(
         SettingGroup(title = "Name") {
             ListNameRenameRow(
                 currentName = state.name,
-                onCommit = onNameChange,
+                onCommit = onNameChange
             )
         }
     }
 
-    if (state.type == ListType.STATIC) {
+    // Cadence applies to smart lists too: their members surface on the card
+    // like anyone else's, so they need a rhythm. This used to be static-only,
+    // which left a smart list with no way to get one.
+    run {
         SettingGroup(title = "Cadence") {
             RuleTemplatePicker(
                 currentKind = state.ruleKind,
                 templates = emptyList(),
-                onSelect = onRuleTemplateChange,
+                onSelect = onRuleTemplateChange
             )
         }
 
@@ -279,7 +282,7 @@ private fun ColumnScope.ListConfigBodySections(
                         // cap silently turn "aim for every 30 days" into every
                         // 14 (see RuleParams.KeepInTouch.withIntervalHours KDoc).
                         onRuleParamsChange(keepInTouch.withIntervalHours(hours))
-                    },
+                    }
                 )
             }
         } else {
@@ -294,7 +297,7 @@ private fun ColumnScope.ListConfigBodySections(
                         style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
                     )
                 }
             }
@@ -306,7 +309,7 @@ private fun ColumnScope.ListConfigBodySections(
             start = state.activeHoursStart,
             end = state.activeHoursEnd,
             onAlwaysActiveToggled = onAlwaysActiveToggled,
-            onTimesChanged = onActiveHoursChange,
+            onTimesChanged = onActiveHoursChange
         )
     }
 
@@ -315,7 +318,7 @@ private fun ColumnScope.ListConfigBodySections(
             label = "Reminders",
             sub = "Notify me when I should reach out.",
             value = state.notificationsEnabled,
-            onChange = onNotificationsToggle,
+            onChange = onNotificationsToggle
         )
         // Onboarding hides the full nudge editor (below) to stay lean, but the
         // nudge is on by default — so state its schedule here, where the list is
@@ -335,7 +338,7 @@ private fun ColumnScope.ListConfigBodySections(
             NudgeScheduleSection(
                 schedule = state.nudgeSchedule,
                 notificationsEnabled = state.notificationsEnabled,
-                onScheduleChange = onNudgeScheduleChange,
+                onScheduleChange = onNudgeScheduleChange
             )
         }
     }
@@ -346,7 +349,7 @@ private fun ColumnScope.ListConfigBodySections(
             SettingGroup(title = "Smart rule") {
                 SmartRuleEditor(
                     rule = rule,
-                    onChange = onSmartRuleChange,
+                    onChange = onSmartRuleChange
                 )
             }
         }
@@ -357,7 +360,7 @@ private fun ColumnScope.ListConfigBodySections(
             members = state.members,
             isSmart = state.type == ListType.SMART,
             onRemoveMember = onRemoveMember,
-            onAddContacts = onAddContacts,
+            onAddContacts = onAddContacts
         )
     }
 
@@ -367,14 +370,14 @@ private fun ColumnScope.ListConfigBodySections(
             text = "Convert to static list",
             onClick = onShowConvertDialog,
             variant = OrbitButtonVariant.Destructive,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
         )
         Text(
             text = "One-time action. The rule will be cleared and current members locked in.",
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgSubtle),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 10.dp, start = 20.dp, end = 20.dp),
+                .padding(top = 10.dp, start = 20.dp, end = 20.dp)
         )
     }
 
@@ -387,7 +390,7 @@ private fun ColumnScope.ListConfigBodySections(
         OrbitButton(
             text = "Done",
             onClick = onDone,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
@@ -402,7 +405,7 @@ private fun ColumnScope.ListConfigBodySections(
 private fun triggerConvertExtracted(
     onConfirmConvert: () -> Unit,
     scope: CoroutineScope,
-    snackbarHostState: SnackbarHostState,
+    snackbarHostState: SnackbarHostState
 ) {
     onConfirmConvert()
     scope.launch {
@@ -416,10 +419,7 @@ private fun triggerConvertExtracted(
  * `ListConfigBody` rather than directly.
  */
 @Composable
-private fun IntervalSliderLocal(
-    currentHours: Int,
-    onCommit: (Int) -> Unit,
-) {
+private fun IntervalSliderLocal(currentHours: Int, onCommit: (Int) -> Unit) {
     val initialDays = (currentHours / 24f).coerceAtLeast(1f)
     var days by remember(currentHours) { mutableFloatStateOf(initialDays) }
     Column(Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
@@ -427,12 +427,12 @@ private fun IntervalSliderLocal(
             Text(
                 text = "Aim for every",
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
             )
             val rounded = days.toInt().coerceAtLeast(1)
             Text(
                 text = "$rounded ${if (rounded == 1) "day" else "days"}",
-                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.accentPress),
+                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.accentPress)
             )
         }
         Slider(
@@ -446,9 +446,9 @@ private fun IntervalSliderLocal(
             colors = SliderDefaults.colors(
                 thumbColor = OrbitTheme.colors.accent,
                 activeTrackColor = OrbitTheme.colors.accent,
-                inactiveTrackColor = OrbitTheme.colors.line,
+                inactiveTrackColor = OrbitTheme.colors.line
             ),
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = 4.dp)
         )
         IntervalScaleLabels(modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
     }
@@ -470,7 +470,7 @@ private val INTERVAL_TICKS: List<Pair<String, Int>> = listOf(
     "1d" to 1,
     "2w" to 14,
     "1m" to 30,
-    "2m" to 60,
+    "2m" to 60
 )
 
 /**
@@ -493,12 +493,16 @@ private fun IntervalScaleLabels(modifier: Modifier = Modifier) {
             INTERVAL_TICKS.forEach { (label, _) ->
                 Text(
                     text = label,
-                    style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
+                    style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle)
                 )
             }
-        },
+        }
     ) { measurables, constraints ->
-        val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
+        val placeables = measurables.map {
+            it.measure(
+                constraints.copy(minWidth = 0, minHeight = 0)
+            )
+        }
         val width = constraints.maxWidth
         val height = placeables.maxOfOrNull { it.height } ?: 0
         layout(width, height) {
@@ -547,10 +551,7 @@ private fun rhythmNoteFor(kind: RuleKind): String? = when (kind) {
  * touches the DAO directly.
  */
 @Composable
-private fun ListNameRenameRow(
-    currentName: String,
-    onCommit: (String) -> Unit,
-) {
+private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
     var editing by rememberSaveable { mutableStateOf(false) }
     // Guards the focus-loss commit below. onFocusChanged fires once with
     // isFocused=false the moment the field enters composition — before the
@@ -602,12 +603,12 @@ private fun ListNameRenameRow(
                             focusManager.clearFocus()
                         }
                         .semantics { contentDescription = "Save list name" },
-                    contentAlignment = Alignment.Center,
+                    contentAlignment = Alignment.Center
                 ) {
                     PhIcon(
                         name = "check",
                         size = 20.dp,
-                        tint = OrbitTheme.colors.accent,
+                        tint = OrbitTheme.colors.accent
                     )
                 }
             },
@@ -621,7 +622,7 @@ private fun ListNameRenameRow(
                     } else if (hasFocused && editing) {
                         commit()
                     }
-                },
+                }
         )
     } else {
         Row(
@@ -629,24 +630,24 @@ private fun ListNameRenameRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { editing = true }
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
             Text(
                 text = currentName.ifBlank { "Unnamed list" },
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
             )
             Box(
                 modifier = Modifier
                     .size(OrbitTheme.spacing.tapMin)
                     .clickable { editing = true }
                     .semantics { contentDescription = "Rename list" },
-                contentAlignment = Alignment.Center,
+                contentAlignment = Alignment.Center
             ) {
                 PhIcon(
                     name = "pencil-simple",
                     size = 18.dp,
-                    tint = OrbitTheme.colors.fgMuted,
+                    tint = OrbitTheme.colors.fgMuted
                 )
             }
         }

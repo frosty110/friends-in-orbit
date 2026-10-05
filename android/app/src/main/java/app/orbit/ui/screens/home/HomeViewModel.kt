@@ -34,12 +34,15 @@ import kotlinx.coroutines.launch
  * what an action tap and a dismissal MEAN: undo-archive, undo-delete, or
  * nothing. [payloadListId] carries the affected list across the snackbar
  * boundary so the collector can route back to a typed VM method.
+ *
+ * Lists Manager emits this same type: its archive and delete must behave
+ * exactly like Home's (features/orbit-lists), so the two share one contract.
  */
 data class HomeSnackbarEvent(
     val message: String,
     val actionLabel: String? = null,
     val payloadListId: Long? = null,
-    val kind: Kind = Kind.PLAIN,
+    val kind: Kind = Kind.PLAIN
 ) {
     enum class Kind { PLAIN, ARCHIVE_UNDO, DELETE_UNDO }
 }
@@ -77,7 +80,7 @@ data class HomeSnackbarEvent(
 class HomeViewModel @Inject constructor(
     homeFeed: HomeFeed,
     private val listRepo: ListRepository,
-    private val clock: Clock,
+    private val clock: Clock
 ) : ViewModel() {
 
     // Long-press menu snackbar surface (archive/delete Undo + mute confirmation
@@ -146,14 +149,14 @@ class HomeViewModel @Inject constructor(
             visibleTiles,
             listRepo.observeMemberCountsByListId(),
             dueContactCount,
-            homeFeed.enrichment,
+            homeFeed.enrichment
         ) { tiles, memberCounts, dueContacts, enrichment ->
             val now = clock.now()
             val visible = tiles.map { tile ->
                 withEnrichment(
                     tile.copy(memberCount = memberCounts[tile.id] ?: 0),
                     enrichment[tile.id],
-                    now,
+                    now
                 )
             }
             if (visible.isEmpty()) HomeUiState.Empty else readyState(visible, dueContacts)
@@ -173,25 +176,28 @@ class HomeViewModel @Inject constructor(
                         val now = clock.now()
                         readyState(
                             tiles.map { withEnrichment(it, enrichment[it.id], now) },
-                            tiles.sumOf { it.dueCount },
+                            tiles.sumOf { it.dueCount }
                         )
                     }
-                    ?: HomeUiState.Loading,
+                    ?: HomeUiState.Loading
             )
 
     /** Folds the per-list [ListEnrichment] (Next up + rhythm) into a tile. */
-    private fun withEnrichment(tile: ListTileState, e: ListEnrichment?, now: Instant): ListTileState =
-        tile.copy(
-            nextUp = e?.nextUp?.let { raw ->
-                NextUp(
-                    contactId = raw.contactId,
-                    name = raw.name,
-                    photoUri = raw.photoUri,
-                    why = recencyWhy(raw.lastCalledAt, now),
-                )
-            },
-            rhythm = e?.rhythm ?: emptyList(),
-        )
+    private fun withEnrichment(
+        tile: ListTileState,
+        e: ListEnrichment?,
+        now: Instant
+    ): ListTileState = tile.copy(
+        nextUp = e?.nextUp?.let { raw ->
+            NextUp(
+                contactId = raw.contactId,
+                name = raw.name,
+                photoUri = raw.photoUri,
+                why = recencyWhy(raw.lastCalledAt, now)
+            )
+        },
+        rhythm = e?.rhythm ?: emptyList()
+    )
 
     /**
      * Warm, neutral recency line for the Next-up person (HOME-3) — context, not
@@ -216,7 +222,7 @@ class HomeViewModel @Inject constructor(
         HomeUiState.Ready(
             lists = visible,
             hasPermissions = true,
-            dueContactCount = dueContacts,
+            dueContactCount = dueContacts
         )
 
     /**
@@ -230,7 +236,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             runMutation { listRepo.updateNotificationsEnabled(listId, enable) }
             _snackbarEvents.tryEmit(
-                HomeSnackbarEvent(message = if (enable) "Prompts on." else "Prompts muted."),
+                HomeSnackbarEvent(message = if (enable) "Prompts on." else "Prompts muted.")
             )
         }
     }
@@ -244,8 +250,8 @@ class HomeViewModel @Inject constructor(
                     message = "List archived.",
                     actionLabel = "Undo",
                     payloadListId = listId,
-                    kind = HomeSnackbarEvent.Kind.ARCHIVE_UNDO,
-                ),
+                    kind = HomeSnackbarEvent.Kind.ARCHIVE_UNDO
+                )
             )
         }
     }
@@ -269,8 +275,8 @@ class HomeViewModel @Inject constructor(
                 message = "List deleted.",
                 actionLabel = "Undo",
                 payloadListId = listId,
-                kind = HomeSnackbarEvent.Kind.DELETE_UNDO,
-            ),
+                kind = HomeSnackbarEvent.Kind.DELETE_UNDO
+            )
         )
     }
 

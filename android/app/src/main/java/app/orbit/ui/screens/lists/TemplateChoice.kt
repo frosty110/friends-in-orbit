@@ -12,12 +12,18 @@ import app.orbit.domain.smart.SmartListRule
  * order, and tests assert on the id ordering.
  *
  * Each entry maps to a single fresh [app.orbit.data.entity.ListEntity] shape:
- *   - Four "static named" templates (Inner orbit, Family, Mentors, Drifted) all
- *     attach to the seeded [RuleKind.KEEP_IN_TOUCH] template — that gives them a
- *     sensible cadence the moment the user creates the list.
+ *   - Four "static named" templates (Inner orbit, Family, Mentors, Drifted)
+ *     attach to the seeded [RuleKind.KEEP_IN_TOUCH] template with their own
+ *     [intervalDays], written as the list's override at creation exactly as the
+ *     interval slider would write it. They used to share the template's 2-day
+ *     default, so "Mentors: Quarterly check-ins" surfaced each mentor every
+ *     2 days. Each subtitle now names the rhythm the list actually gets.
+ *   - Intervals stay within the slider's 1–60 day range (ADR 0010), which is
+ *     why Mentors promises "every couple of months" rather than quarterly.
  *   - "Recently added, not called" is the only SMART entry; it carries
  *     [SmartListRule.RecentlyAddedNotCalled] with the SMART-02 default
- *     `daysWindow = 30`.
+ *     `daysWindow = 30`, and KEEP_IN_TOUCH like every other template so its
+ *     members surface on the card (a smart list with no cadence surfaced no one).
  *   - "Start from blank" requires the user to type a name; the rule kind still
  *     defaults to KEEP_IN_TOUCH so the new list is immediately surfaceable.
  *
@@ -37,44 +43,49 @@ data class TemplateChoice(
     val defaultName: String,
     val smartRule: SmartListRule?,
     val ruleKind: RuleKind?,
+    /** Keep-in-touch interval written at creation; null keeps the template default (2 days). */
+    val intervalDays: Int? = null
 ) {
     companion object {
         val Catalog: List<TemplateChoice> = listOf(
             TemplateChoice(
                 id = "inner_orbit",
                 displayName = "Inner orbit",
-                subtitle = "Closest people, called often.",
+                subtitle = "Closest people, about weekly.",
                 iconName = "heart",
                 type = ListType.STATIC,
                 defaultName = "Inner orbit",
                 smartRule = null,
                 ruleKind = RuleKind.KEEP_IN_TOUCH,
+                intervalDays = 7
             ),
             TemplateChoice(
                 id = "family",
                 displayName = "Family",
-                subtitle = "Steady, longer cadence.",
+                subtitle = "Steady, every couple of weeks.",
                 iconName = "users",
                 type = ListType.STATIC,
                 defaultName = "Family",
                 smartRule = null,
                 ruleKind = RuleKind.KEEP_IN_TOUCH,
+                intervalDays = 14
             ),
             TemplateChoice(
                 id = "mentors",
                 displayName = "Mentors",
-                subtitle = "Quarterly check-ins.",
+                subtitle = "Every couple of months.",
                 // Spec'd `compass` not in assets/icons/ — `star` reads as guidance.
                 iconName = "star",
                 type = ListType.STATIC,
                 defaultName = "Mentors",
                 smartRule = null,
                 ruleKind = RuleKind.KEEP_IN_TOUCH,
+                intervalDays = 60
             ),
             TemplateChoice(
                 id = "drifted",
                 displayName = "Drifted",
-                subtitle = "People you've meant to reach.",
+                subtitle = "Reconnect about once a month.",
                 // Spec'd `wind` not in assets/icons/ — clock-counter-clockwise
                 // carries the "time since last call" sense better than wind anyway.
                 iconName = "clock-counter-clockwise",
@@ -82,6 +93,7 @@ data class TemplateChoice(
                 defaultName = "Drifted",
                 smartRule = null,
                 ruleKind = RuleKind.KEEP_IN_TOUCH,
+                intervalDays = 30
             ),
             TemplateChoice(
                 id = "recently_added_not_called",
@@ -91,7 +103,7 @@ data class TemplateChoice(
                 type = ListType.SMART,
                 defaultName = "Recently added, not called",
                 smartRule = SmartListRule.RecentlyAddedNotCalled(daysWindow = 30),
-                ruleKind = null,
+                ruleKind = RuleKind.KEEP_IN_TOUCH
             ),
             TemplateChoice(
                 id = "blank",
@@ -101,8 +113,8 @@ data class TemplateChoice(
                 type = ListType.STATIC,
                 defaultName = "",
                 smartRule = null,
-                ruleKind = RuleKind.KEEP_IN_TOUCH,
-            ),
+                ruleKind = RuleKind.KEEP_IN_TOUCH
+            )
         )
     }
 }

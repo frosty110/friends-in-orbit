@@ -45,11 +45,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import app.orbit.ui.components.PhIcon
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -61,6 +60,7 @@ import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitSearchField
+import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.openPhoneContact
 import java.time.Instant
@@ -110,14 +110,14 @@ fun ContactPickerScreen(
     onBack: () -> Unit,
     onCommit: () -> Unit,
     onSkip: (() -> Unit)? = null,
-    vm: ContactPickerViewModel = hiltViewModel(),
+    vm: ContactPickerViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // Permission launcher — granted boolean callback into the VM.
     val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
+        ActivityResultContracts.RequestPermission()
     ) { granted -> vm.onPermissionResult(granted) }
 
     // Lifecycle-aware permission refresh — same pattern as
@@ -161,7 +161,7 @@ fun ContactPickerScreen(
         onOpenSettings = {
             val intent = buildOpenAppSettingsIntent(context.packageName)
             context.startActivity(intent)
-        },
+        }
     )
 }
 
@@ -176,6 +176,8 @@ internal fun pickerModeTitle(mode: PickerMode, selectionCount: Int): String {
         PickerMode.Add -> "Add contacts"
         PickerMode.Move -> "Move $selectionCount $noun"
         PickerMode.Copy -> "Copy $selectionCount $noun"
+        // CONTACT-07: one pick, so no count.
+        PickerMode.Relink -> "Re-link contact"
     }
 }
 
@@ -197,7 +199,7 @@ private fun ContactPickerContent(
     onCommit: () -> Unit,
     onSkip: (() -> Unit)?,
     onPermissionGrant: () -> Unit,
-    onOpenSettings: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     // ── Search box state — ONE source of truth for the typed text.
     //
@@ -238,7 +240,7 @@ private fun ContactPickerContent(
                 OrbitIconButton(
                     icon = "arrow-left",
                     onClick = onBack,
-                    contentDescription = "Back",
+                    contentDescription = "Back"
                 )
             },
             // Gated on the FIELD's text, not the VM's debounced copy, and it
@@ -250,10 +252,12 @@ private fun ContactPickerContent(
                     OrbitIconButton(
                         icon = "x",
                         onClick = { searchInput = "" },
-                        contentDescription = "Clear search",
+                        contentDescription = "Clear search"
                     )
                 }
-            } else null,
+            } else {
+                null
+            }
         )
 
         // Keeping the soft keyboard from covering the BatchCounter and the
@@ -266,7 +270,7 @@ private fun ContactPickerContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .imePadding(),
+                .imePadding()
         ) {
             when (state.phase) {
                 ContactPickerUiState.Phase.LoadingPermission -> {
@@ -279,7 +283,7 @@ private fun ContactPickerContent(
                 ContactPickerUiState.Phase.EmptyDevice ->
                     EmptyDeviceContacts()
                 ContactPickerUiState.Phase.NotFound ->
-                    NotFoundEmpty()
+                    NotFoundEmpty(state.mode)
                 ContactPickerUiState.Phase.Ready,
                 ContactPickerUiState.Phase.Committing -> ReadyContent(
                     state = state,
@@ -295,7 +299,7 @@ private fun ContactPickerContent(
                     onUnignore = onUnignore,
                     onOpenInPhone = onOpenInPhone,
                     onCommit = onCommit,
-                    onSkip = onSkip,
+                    onSkip = onSkip
                 )
             }
         }
@@ -321,7 +325,7 @@ private fun ReadyContent(
     onUnignore: (PickerContact) -> Unit,
     onOpenInPhone: (PickerContact) -> Unit,
     onCommit: () -> Unit,
-    onSkip: (() -> Unit)?,
+    onSkip: (() -> Unit)?
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -355,7 +359,7 @@ private fun ReadyContent(
             placeholder = "Search name or number",
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x2),
+                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x2)
         )
 
         Row(
@@ -364,12 +368,12 @@ private fun ReadyContent(
                 .fillMaxWidth()
                 .padding(
                     horizontal = OrbitTheme.spacing.x4,
-                    vertical = OrbitTheme.spacing.x1,
-                ),
+                    vertical = OrbitTheme.spacing.x1
+                )
         ) {
             SortControl(
                 sortBy = state.sortBy,
-                onSetSort = onSetSort,
+                onSetSort = onSetSort
             )
             Spacer(modifier = Modifier.weight(1f))
             // Quiet, reversible entry for the wired showIgnored toggle. Only
@@ -377,7 +381,7 @@ private fun ReadyContent(
             if (state.ignoredCount > 0 || state.showIgnored) {
                 ShowIgnoredControl(
                     showIgnored = state.showIgnored,
-                    onToggle = onShowIgnoredToggle,
+                    onToggle = onShowIgnoredToggle
                 )
             }
         }
@@ -392,7 +396,7 @@ private fun ReadyContent(
             val callDependent = listOf(
                 PickerFilter.CommonlyCalled,
                 PickerFilter.RarelyCalled,
-                PickerFilter.LongGap,
+                PickerFilter.LongGap
             )
             val anyGreyed = callDependent.any {
                 it !in state.activeFilters && it.countFor(state) == 0
@@ -420,7 +424,7 @@ private fun ReadyContent(
                     .forEach { onToggleFilter(it) }
             },
             disabledHint = filterDisabledHint,
-            modifier = Modifier.padding(vertical = OrbitTheme.spacing.x2),
+            modifier = Modifier.padding(vertical = OrbitTheme.spacing.x2)
         )
 
         // Select-all surfaces whenever search OR filters narrow the list; over
@@ -432,8 +436,8 @@ private fun ReadyContent(
                 onClick = { onSelectAllMatching(matchingIds) },
                 modifier = Modifier.padding(
                     horizontal = OrbitTheme.spacing.x4,
-                    vertical = OrbitTheme.spacing.x1,
-                ),
+                    vertical = OrbitTheme.spacing.x1
+                )
             )
         } else if (state.selectAllCapExceeded) {
             Text(
@@ -443,8 +447,8 @@ private fun ReadyContent(
                 color = OrbitTheme.colors.fgMuted,
                 modifier = Modifier.padding(
                     horizontal = OrbitTheme.spacing.x4,
-                    vertical = OrbitTheme.spacing.x1,
-                ),
+                    vertical = OrbitTheme.spacing.x1
+                )
             )
         }
 
@@ -492,7 +496,7 @@ private fun ReadyContent(
                 // resolve to a device contact — a call-log-only row has no
                 // phoneContactId and the intent would dead-end.
                 onOpenInPhone = if (contact.phoneContactId != null) onOpenInPhone else null,
-                modifier = Modifier.animateItem(),
+                modifier = Modifier.animateItem()
             )
         }
 
@@ -511,12 +515,12 @@ private fun ReadyContent(
                         "Try a shorter name or remove a filter."
                     } else {
                         "Try removing a chip or widening your thresholds in Settings."
-                    },
+                    }
                 )
                 else -> LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = OrbitTheme.spacing.x2),
+                    contentPadding = PaddingValues(bottom = OrbitTheme.spacing.x2)
                 ) {
                     if (sections.isNotEmpty()) {
                         sections.forEachIndexed { sectionIndex, section ->
@@ -529,13 +533,13 @@ private fun ReadyContent(
                             }
                             items(
                                 items = section.contacts,
-                                key = { it.contactId },
+                                key = { it.contactId }
                             ) { contact -> this.pickerRow(contact) }
                         }
                     } else {
                         items(
                             items = state.filteredContacts,
-                            key = { it.contactId },
+                            key = { it.contactId }
                         ) { contact -> this.pickerRow(contact) }
                     }
                 }
@@ -553,7 +557,7 @@ private fun ReadyContent(
                         }
                     },
                     activeIndex = activeSectionIndex,
-                    modifier = Modifier.align(Alignment.CenterEnd),
+                    modifier = Modifier.align(Alignment.CenterEnd)
                 )
             }
         }
@@ -569,7 +573,7 @@ private fun ReadyContent(
                     mode = state.mode,
                     isCommitting = state.phase == ContactPickerUiState.Phase.Committing,
                     onClear = onClearSelection,
-                    onCommit = onCommit,
+                    onCommit = onCommit
                 )
             }
         } else if (onSkip != null) {
@@ -578,7 +582,7 @@ private fun ReadyContent(
                 onClick = onSkip,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(OrbitTheme.spacing.x4),
+                    .padding(OrbitTheme.spacing.x4)
             )
         }
     }
@@ -592,7 +596,7 @@ private fun ReadyContent(
 private fun SortControl(
     sortBy: PickerSort,
     onSetSort: (PickerSort) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -603,7 +607,7 @@ private fun SortControl(
         // "Recently called" — absorbs the intent of the removed "Called recently"
         // filter (surface recent callers by ordering, not by hiding others).
         PickerSort.ByRecency to "Recently called",
-        PickerSort.ByRecentlySaved to "Recently added",
+        PickerSort.ByRecentlySaved to "Recently added"
     )
     val currentLabel = when (sortBy) {
         PickerSort.ByName -> "Alphabetical"
@@ -620,41 +624,43 @@ private fun SortControl(
                 .clickable { expanded = true }
                 .padding(
                     horizontal = OrbitTheme.spacing.x3,
-                    vertical = OrbitTheme.spacing.x2,
-                ),
+                    vertical = OrbitTheme.spacing.x2
+                )
         ) {
             PhIcon(
                 name = "sliders-horizontal",
                 size = 16.dp,
-                tint = OrbitTheme.colors.fgMuted,
+                tint = OrbitTheme.colors.fgMuted
             )
             Spacer(Modifier.width(OrbitTheme.spacing.x2))
             Text(
                 text = "Sort: $currentLabel",
                 style = OrbitTheme.type.meta,
-                color = OrbitTheme.colors.fg,
+                color = OrbitTheme.colors.fg
             )
             Spacer(Modifier.width(OrbitTheme.spacing.x1))
             PhIcon(
                 name = "caret-down",
                 size = 12.dp,
-                tint = OrbitTheme.colors.fgMuted,
+                tint = OrbitTheme.colors.fgMuted
             )
         }
         DropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
+            onDismissRequest = { expanded = false }
         ) {
             options.forEach { (sort, label) ->
                 DropdownMenuItem(
                     text = { Text(label) },
                     trailingIcon = if (sort == sortBy) {
                         { PhIcon(name = "check", size = 16.dp, tint = OrbitTheme.colors.accent) }
-                    } else null,
+                    } else {
+                        null
+                    },
                     onClick = {
                         onSetSort(sort)
                         expanded = false
-                    },
+                    }
                 )
             }
         }
@@ -670,7 +676,7 @@ private fun SortControl(
 private fun ShowIgnoredControl(
     showIgnored: Boolean,
     onToggle: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -681,19 +687,19 @@ private fun ShowIgnoredControl(
             .clickable { onToggle(!showIgnored) }
             .padding(
                 horizontal = OrbitTheme.spacing.x3,
-                vertical = OrbitTheme.spacing.x2,
-            ),
+                vertical = OrbitTheme.spacing.x2
+            )
     ) {
         PhIcon(
             name = if (showIgnored) "eye" else "eye-slash",
             size = 16.dp,
-            tint = OrbitTheme.colors.fgMuted,
+            tint = OrbitTheme.colors.fgMuted
         )
         Spacer(Modifier.width(OrbitTheme.spacing.x2))
         Text(
             text = if (showIgnored) "Hide ignored" else "Show ignored",
             style = OrbitTheme.type.meta,
-            color = OrbitTheme.colors.fg,
+            color = OrbitTheme.colors.fg
         )
     }
 }
@@ -709,7 +715,7 @@ private const val SEARCH_DEBOUNCE_MS = 150L
 private data class PickerSection(
     val letter: String,
     val contacts: List<PickerContact>,
-    val headerItemIndex: Int,
+    val headerItemIndex: Int
 )
 
 /**
@@ -741,7 +747,7 @@ private fun buildPickerSections(contacts: List<PickerContact>): List<PickerSecti
         val section = PickerSection(
             letter = letter,
             contacts = members,
-            headerItemIndex = itemIndex,
+            headerItemIndex = itemIndex
         )
         itemIndex += 1 + members.size
         section
@@ -763,8 +769,8 @@ private fun SectionHeader(letter: String) {
             .background(OrbitTheme.colors.bg)
             .padding(
                 horizontal = OrbitTheme.spacing.x4,
-                vertical = OrbitTheme.spacing.x1,
-            ),
+                vertical = OrbitTheme.spacing.x1
+            )
     )
 }
 
@@ -772,24 +778,24 @@ private fun SectionHeader(letter: String) {
 private fun EmptyState(heading: String, body: String) {
     Box(
         modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
-            modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x6),
+            modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x6)
         ) {
             Text(
                 text = heading,
                 style = OrbitTheme.type.h3,
                 color = OrbitTheme.colors.fg,
-                textAlign = TextAlign.Center,
+                textAlign = TextAlign.Center
             )
             Text(
                 text = body,
                 style = OrbitTheme.type.body,
                 color = OrbitTheme.colors.fgMuted,
-                textAlign = TextAlign.Center,
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -801,17 +807,18 @@ private fun EmptyState(heading: String, body: String) {
  * actions). Keeps copy terse and sentence-case per voice rules.
  */
 @Composable
-private fun NotFoundEmpty() {
+private fun NotFoundEmpty(mode: PickerMode) {
     Box(
         modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "List not found",
+            // Re-link routes carry a contact, not a list.
+            text = if (mode == PickerMode.Relink) "Contact not found" else "List not found",
             style = OrbitTheme.type.h3,
             color = OrbitTheme.colors.fg,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x6),
+            modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x6)
         )
     }
 }
@@ -838,7 +845,7 @@ private fun ContactPickerReadyPreviewLight() {
             onCommit = {},
             onSkip = null,
             onPermissionGrant = {},
-            onOpenSettings = {},
+            onOpenSettings = {}
         )
     }
 }
@@ -863,7 +870,7 @@ private fun ContactPickerReadyPreviewDark() {
             onCommit = {},
             onSkip = null,
             onPermissionGrant = {},
-            onOpenSettings = {},
+            onOpenSettings = {}
         )
     }
 }
@@ -874,7 +881,7 @@ private fun ContactPickerRationalePreviewLight() {
     OrbitTheme(darkTheme = false) {
         ContactPickerContent(
             state = previewReadyState().copy(
-                phase = ContactPickerUiState.Phase.PermissionRationale,
+                phase = ContactPickerUiState.Phase.PermissionRationale
             ),
             onBack = {},
             onSearchChanged = {},
@@ -890,7 +897,7 @@ private fun ContactPickerRationalePreviewLight() {
             onCommit = {},
             onSkip = null,
             onPermissionGrant = {},
-            onOpenSettings = {},
+            onOpenSettings = {}
         )
     }
 }
@@ -901,7 +908,7 @@ private fun ContactPickerDeniedPreviewLight() {
     OrbitTheme(darkTheme = false) {
         ContactPickerContent(
             state = previewReadyState().copy(
-                phase = ContactPickerUiState.Phase.PermissionDenied,
+                phase = ContactPickerUiState.Phase.PermissionDenied
             ),
             onBack = {},
             onSearchChanged = {},
@@ -917,7 +924,7 @@ private fun ContactPickerDeniedPreviewLight() {
             onCommit = {},
             onSkip = null,
             onPermissionGrant = {},
-            onOpenSettings = {},
+            onOpenSettings = {}
         )
     }
 }
@@ -939,7 +946,7 @@ private fun previewReadyState(darkSelectionDemo: Boolean = false): ContactPicker
             isCommonlyCalled = true,
             isRarelyCalled = false,
             isRecentlyAdded = false,
-            isLongGap = false,
+            isLongGap = false
         ),
         PickerContact(
             contactId = 2L,
@@ -955,7 +962,7 @@ private fun previewReadyState(darkSelectionDemo: Boolean = false): ContactPicker
             isCommonlyCalled = false,
             isRarelyCalled = false,
             isRecentlyAdded = true,
-            isLongGap = false,
+            isLongGap = false
         ),
         PickerContact(
             contactId = 3L,
@@ -971,8 +978,8 @@ private fun previewReadyState(darkSelectionDemo: Boolean = false): ContactPicker
             isCommonlyCalled = false,
             isRarelyCalled = true,
             isRecentlyAdded = false,
-            isLongGap = true,
-        ),
+            isLongGap = true
+        )
     )
     return ContactPickerUiState(
         phase = ContactPickerUiState.Phase.Ready,
@@ -982,7 +989,7 @@ private fun previewReadyState(darkSelectionDemo: Boolean = false): ContactPicker
         activeFilters = if (darkSelectionDemo) setOf(PickerFilter.LongGap) else emptySet(),
         showIgnored = false,
         allContacts = sample,
-        selectedIds = if (darkSelectionDemo) setOf(1L, 2L) else setOf(1L),
+        selectedIds = if (darkSelectionDemo) setOf(1L, 2L) else setOf(1L)
     )
 }
 
@@ -1009,7 +1016,7 @@ private fun ContactPickerContentPreview() {
             onCommit = {},
             onSkip = null,
             onPermissionGrant = {},
-            onOpenSettings = {},
+            onOpenSettings = {}
         )
     }
 }

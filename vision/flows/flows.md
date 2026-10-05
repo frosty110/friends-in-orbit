@@ -6,7 +6,7 @@
 
 **Published copy:** https://claude.ai/artifact/XVatbjrA7kJ2VzvvwkWimp (private to its owner until shared). Notes left there are saved to the page.
 
-**Bugs found while building it:** [findings.md](findings.md) lists 14, from smart lists that never surface anyone to an indefinite pause that cannot be undone. Each one also shows on its screen in the prototype.
+**Bugs found while building it:** [findings.md](findings.md) lists 14, from smart lists that never surface anyone to an indefinite pause that cannot be undone. All 14 were fixed on 2026-10-05 (B14 in part), and the prototype now shows the fixed behaviour. Each bug still shows on its screen in the prototype's side panel, marked fixed, with what changed.
 
 **Built from:** the Compose source at commit `15b6bfb` (2026-10-04), read screen by screen. Copy is verbatim from the code, with one exception: the app uses em dashes in about a dozen strings, and the prototype shows those as a spaced hyphen. Data is the synthetic cast from `android/scripts/seed-avd.py` plus a few invented address-book names. Nothing here is a real contact.
 
@@ -202,23 +202,23 @@ Each journey is playable in the Flows view. Order matters within a journey, so t
 
 ## Docs vs code
 
-Reading the code against `features/PAGE_VIEWS.md` and the feature specs turned up these gaps. The prototype follows the code in every case. None of these docs were changed here.
+Reading the code against `features/PAGE_VIEWS.md` and the feature specs turned up these gaps. The prototype follows the code in every case. The 2026-10-05 bug fixes closed some rows; those say so. The docs for the other rows were not changed.
 
 | Where | The docs say | The code does |
 |---|---|---|
 | S10 Home | "N people ready" header, due-count pills on tiles, a "Surprise me" button, "All caught up" | None of these. Surprise me was removed ([ADR 0007](../../features/_foundations/ADRs/0007-surprise-me-cross-list.md) superseded). Cards show "Next up" plus a 7-day rhythm strip. Home never shows a caught-up state. The screenshot in `00-home/` predates this. |
 | Up next / Queue | Its own screen, `queue/{listId}` ([page view](../../features/page-views/queue.md)) | No such route. The numbered queue is part of S13 Browse. |
 | S11 Card view | A "Pickup" stat | Last called, Avg length, Calls. Tapping anywhere on the card face also dials. |
-| S20 Contact detail | Usual answer time among the stats | Always shows a blank: the screen never computes it, though S11 shows it for the same person. Paused and ignored people look no different here. |
+| S20 Contact detail | Usual answer time among the stats | Fixed 2026-10-05: "Usually" shows the same answer as S11 ([B9](findings.md#low)), and a paused person shows "Paused until ..." with Unpause ([B3](findings.md#high)). Ignored people still look no different here. |
 | S01 Welcome | "Who made it" and in-screen feedback email | Neither. Feedback lives in Settings, About. |
-| S13 Browse | Row tap opens the person; long-press opens quick actions | Probably swallowed by the row's own inert tap handler. See [B7](findings.md#b7--browse-rows-probably-ignore-taps--reasoned). |
+| S13 Browse | Row tap opens the person; long-press opens quick actions | Fixed 2026-10-05. The row's own inert tap handler swallowed both; a test against the old code confirmed it. See [B7](findings.md#medium). |
 | S31 List settings | No mention | A Nudges section (days and times) and a Done exit both ship. |
-| S32 Add contacts | Add, Move, Copy modes; "Skip for now" during onboarding | Only Add is reachable. Skip for now never shows. Re-link from S20 opens plain Add mode. |
+| S32 Add contacts | Add, Move, Copy modes; "Skip for now" during onboarding | Only Add is reachable, plus a Re-link mode from S20 since the [B2](findings.md#high) fix. Skip for now never shows. |
 | S42 Call history | A plain chronological list | Adds All, Incoming, Outgoing filters, sticky day headers, and a long-press menu. |
 | S40 Settings | No mention | Appearance (five themes, light and dark, an accent dial) and Import backup ship. |
 | S50 Notifications | Daily digest, time-of-day prompts, incoming follow-up | Only one notification exists: the per-list nudge. |
 | S51 Widgets | Listed as a stub in `features/INDEX.md` | Both widgets ship. They always show real names. |
-| S52 Privacy curtain | Names hidden when the app loses focus | Mostly. The card face name, the phone number on S20, and "from {list}" in S42 stay visible; notifications and widgets ignore it. |
+| S52 Privacy curtain | Names hidden when the app loses focus | Mostly. The card face name is masked since the [B11](findings.md#low) fix. Reported but not confirmed: the phone number on S20 and "from {list}" in S42 stay visible, and notifications and widgets ignore it. |
 | Copy | [voice.md](../../features/_foundations/voice.md) | About a dozen strings join two clauses with an em dash, for example the defer snackbar and the call-log notice on S11. The prototype shows a spaced hyphen there. |
 
 ---

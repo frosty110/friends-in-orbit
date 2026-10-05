@@ -1,6 +1,7 @@
 package app.orbit.notify
 
 import app.orbit.domain.JsonProvider
+import app.orbit.ui.screens.lists.spansMidnight
 import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.ZonedDateTime
@@ -73,14 +74,20 @@ object LocalTimeSerializer : KSerializer<LocalTime> {
  */
 @Serializable
 data class NudgeSchedule(
-    val days: Set<@Serializable(with = DayOfWeekSerializer::class) DayOfWeek>,
-    val times: List<@Serializable(with = LocalTimeSerializer::class) LocalTime>,
+    val days: Set<
+        @Serializable(with = DayOfWeekSerializer::class)
+        DayOfWeek
+        >,
+    val times: List<
+        @Serializable(with = LocalTimeSerializer::class)
+        LocalTime
+        >
 ) {
     companion object {
         /** Default schedule: all 7 days at 10:00. Sealed by D-03 (default-ON). */
         val DEFAULT = NudgeSchedule(
             days = DayOfWeek.values().toSet(),
-            times = listOf(LocalTime.of(10, 0)),
+            times = listOf(LocalTime.of(10, 0))
         )
 
         /**
@@ -139,3 +146,24 @@ fun NudgeSchedule.nextSlot(now: ZonedDateTime): ZonedDateTime? {
     }
     return null
 }
+
+// ─── Active-hours window ─────────────────────────────────────────────────────
+
+/**
+ * True when [time] falls inside the [start]..[end] active-hours window,
+ * inclusive on both ends, wrapping past midnight when [end] is before [start]
+ * (e.g. 22:00–02:00).
+ *
+ * The single definition shared by the fire-time gate ([ListPromptWorker]) and
+ * the scheduler ([NudgeScheduler.effectiveSchedule]). The scheduler decides
+ * whether a chosen time can ever post by asking exactly the question the gate
+ * will ask at fire time, so the two cannot drift apart.
+ */
+fun isInActiveWindow(time: LocalTime, start: LocalTime, end: LocalTime): Boolean =
+    if (spansMidnight(start, end)) {
+        // Midnight-spanning: inside if time >= start OR time <= end
+        time >= start || time <= end
+    } else {
+        // Normal range: inside if start <= time <= end
+        time >= start && time <= end
+    }

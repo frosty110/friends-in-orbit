@@ -18,11 +18,11 @@ import app.orbit.domain.JsonProvider
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.contactFixture
 import app.orbit.domain.listFixture
+import app.orbit.domain.membershipFixture
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.ruleTemplateFixture
 import app.orbit.domain.smart.SmartListEngine
 import app.orbit.domain.smart.SmartListRule
-import app.orbit.domain.membershipFixture
 import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.BulkRemoveFromListUseCase
 import app.orbit.notify.NudgeSchedule
@@ -52,14 +52,24 @@ import org.robolectric.annotation.Config
  */
 private class RecordingNudgeScheduler : NudgeScheduler(
     context = ApplicationProvider.getApplicationContext<Context>(),
-    listRepo = FakeListRepository(),
+    listRepo = FakeListRepository()
 ) {
-    data class ScheduleCall(val listId: Long, val schedule: NudgeSchedule, val activeHoursStart: LocalTime?)
+    data class ScheduleCall(
+        val listId: Long,
+        val schedule: NudgeSchedule,
+        val activeHoursStart: LocalTime?,
+        val activeHoursEnd: LocalTime?
+    )
 
     val scheduleCalls: MutableList<ScheduleCall> = mutableListOf()
 
-    override fun schedule(listId: Long, schedule: NudgeSchedule, activeHoursStart: LocalTime?) {
-        scheduleCalls += ScheduleCall(listId, schedule, activeHoursStart)
+    override fun schedule(
+        listId: Long,
+        schedule: NudgeSchedule,
+        activeHoursStart: LocalTime?,
+        activeHoursEnd: LocalTime?
+    ) {
+        scheduleCalls += ScheduleCall(listId, schedule, activeHoursStart, activeHoursEnd)
     }
 }
 
@@ -102,12 +112,20 @@ class ListConfigViewModelTest {
             id = 1L,
             name = "Inner orbit",
             type = ListType.STATIC,
-            ruleTemplateId = 1L,
+            ruleTemplateId = 1L
         ),
         templates: List<app.orbit.data.entity.RuleTemplateEntity> = listOf(
-            ruleTemplateFixture(id = 1L, kind = RuleKind.KEEP_IN_TOUCH, params = RuleParams.KeepInTouch()),
-            ruleTemplateFixture(id = 2L, kind = RuleKind.LATE_NIGHT, params = RuleParams.LateNight()),
-        ),
+            ruleTemplateFixture(
+                id = 1L,
+                kind = RuleKind.KEEP_IN_TOUCH,
+                params = RuleParams.KeepInTouch()
+            ),
+            ruleTemplateFixture(
+                id = 2L,
+                kind = RuleKind.LATE_NIGHT,
+                params = RuleParams.LateNight()
+            )
+        )
     ): Setup {
         val listRepo = FakeListRepository().apply { seed(listOf(list)) }
         val templateRepo = FakeRuleTemplateRepository().apply { seed(templates) }
@@ -126,10 +144,15 @@ class ListConfigViewModelTest {
             ruleTemplateRepo = templateRepo,
             contactRepo = contactRepo,
             smartListEngine = engine,
-            bulkRemoveFromListUseCase = BulkRemoveFromListUseCase(passThruTx, recDao, listRepo, clock),
+            bulkRemoveFromListUseCase = BulkRemoveFromListUseCase(
+                passThruTx,
+                recDao,
+                listRepo,
+                clock
+            ),
             undoStack = undoStack,
             nudgeScheduler = nudgeScheduler,
-            savedStateHandle = SavedStateHandle(mapOf("listId" to savedStateListId)),
+            savedStateHandle = SavedStateHandle(mapOf("listId" to savedStateListId))
         )
         return Setup(vm, listRepo, templateRepo, contactRepo, recDao, undoStack, nudgeScheduler)
     }
@@ -141,7 +164,7 @@ class ListConfigViewModelTest {
         val contactRepo: FakeContactRepository,
         val recDao: RecordingListMembershipDao,
         val undoStack: UndoStack,
-        val nudgeScheduler: RecordingNudgeScheduler = RecordingNudgeScheduler(),
+        val nudgeScheduler: RecordingNudgeScheduler = RecordingNudgeScheduler()
     )
 
     // ────────────────────────────────────────────────────────────────────────
@@ -179,7 +202,7 @@ class ListConfigViewModelTest {
         }
         assertTrue(
             s.listRepo.updateRuleTemplateCalls.isEmpty(),
-            "no write when the template row cannot be resolved",
+            "no write when the template row cannot be resolved"
         )
     }
 
@@ -194,14 +217,14 @@ class ListConfigViewModelTest {
     fun `setRuleTemplate clears params override when switching templates`() = runTest {
         val overrideJson = json.encodeToString(
             RuleParams.serializer(),
-            RuleParams.KeepInTouch().withIntervalHours(30 * 24),
+            RuleParams.KeepInTouch().withIntervalHours(30 * 24)
         )
         val list = listFixture(
             id = 1L,
             name = "Inner orbit",
             type = ListType.STATIC,
             ruleTemplateId = 1L,
-            ruleParamsOverrideJson = overrideJson,
+            ruleParamsOverrideJson = overrideJson
         )
         val (vm, listRepo, _, _) = fixture(list = list)
         vm.setRuleTemplate(RuleKind.LATE_NIGHT)
@@ -217,64 +240,66 @@ class ListConfigViewModelTest {
     fun `setRuleTemplate preserves override when re-selecting the current template`() = runTest {
         val overrideJson = json.encodeToString(
             RuleParams.serializer(),
-            RuleParams.KeepInTouch().withIntervalHours(30 * 24),
+            RuleParams.KeepInTouch().withIntervalHours(30 * 24)
         )
         val list = listFixture(
             id = 1L,
             name = "Inner orbit",
             type = ListType.STATIC,
             ruleTemplateId = 1L,
-            ruleParamsOverrideJson = overrideJson,
+            ruleParamsOverrideJson = overrideJson
         )
         val (vm, listRepo, _, _) = fixture(list = list)
         vm.setRuleTemplate(RuleKind.KEEP_IN_TOUCH)
         assertTrue(
             listRepo.setRuleParamsOverrideJsonCalls.isEmpty(),
-            "re-selecting the active template must not clear the user's tuning",
+            "re-selecting the active template must not clear the user's tuning"
         )
         assertTrue(
             listRepo.updateRuleTemplateCalls.isEmpty(),
-            "re-selecting the active template is a write no-op",
+            "re-selecting the active template is a write no-op"
         )
     }
 
     @Test
-    fun `uiState decodes to the new template defaults after a switch clears the override`() = runTest {
-        val overrideJson = json.encodeToString(
-            RuleParams.serializer(),
-            RuleParams.KeepInTouch().withIntervalHours(30 * 24),
-        )
-        val list = listFixture(
-            id = 1L,
-            name = "Inner orbit",
-            type = ListType.STATIC,
-            ruleTemplateId = 1L,
-            ruleParamsOverrideJson = overrideJson,
-        )
-        val (vm, _, _, _) = fixture(list = list)
-        vm.uiState.test(timeout = 2.seconds) {
-            val initial = awaitReady { it.ruleParams is RuleParams.KeepInTouch }
-            assertEquals(
-                30 * 24,
-                (initial.ruleParams as RuleParams.KeepInTouch).cooldownMinHours,
-                "before the switch, the override carries the tuned interval",
+    fun `uiState decodes to the new template defaults after a switch clears the override`() =
+        runTest {
+            val overrideJson = json.encodeToString(
+                RuleParams.serializer(),
+                RuleParams.KeepInTouch().withIntervalHours(30 * 24)
             )
-
-            vm.setRuleTemplate(RuleKind.LATE_NIGHT)
-
-            val after = awaitReady { it.ruleKind == RuleKind.LATE_NIGHT }
-            assertEquals(
-                RuleParams.LateNight(),
-                after.ruleParams,
-                "after the switch, the cleared override decodes through to the template defaults",
+            val list = listFixture(
+                id = 1L,
+                name = "Inner orbit",
+                type = ListType.STATIC,
+                ruleTemplateId = 1L,
+                ruleParamsOverrideJson = overrideJson
             )
-            cancelAndIgnoreRemainingEvents()
+            val (vm, _, _, _) = fixture(list = list)
+            vm.uiState.test(timeout = 2.seconds) {
+                val initial = awaitReady { it.ruleParams is RuleParams.KeepInTouch }
+                assertEquals(
+                    30 * 24,
+                    (initial.ruleParams as RuleParams.KeepInTouch).cooldownMinHours,
+                    "before the switch, the override carries the tuned interval"
+                )
+
+                vm.setRuleTemplate(RuleKind.LATE_NIGHT)
+
+                val after = awaitReady { it.ruleKind == RuleKind.LATE_NIGHT }
+                assertEquals(
+                    RuleParams.LateNight(),
+                    after.ruleParams,
+                    "after the switch, the cleared override decodes through to the " +
+                        "template defaults"
+                )
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     /** Awaits the next [ListConfigUiState.Ready] emission matching [predicate]. */
     private suspend fun ReceiveTurbine<ListConfigUiState>.awaitReady(
-        predicate: (ListConfigUiState.Ready) -> Boolean,
+        predicate: (ListConfigUiState.Ready) -> Boolean
     ): ListConfigUiState.Ready {
         while (true) {
             val state = awaitItem()
@@ -353,8 +378,8 @@ class ListConfigViewModelTest {
             ruleTemplateId = null,
             smartRuleJson = json.encodeToString(
                 SmartListRule.serializer(),
-                SmartListRule.RecentlyAddedNotCalled(daysWindow = 30),
-            ),
+                SmartListRule.RecentlyAddedNotCalled(daysWindow = 30)
+            )
         )
         val (vm, listRepo, _, _) = fixture(list = smartList)
         val updated = SmartListRule.RecentlyAddedNotCalled(daysWindow = 60)
@@ -389,8 +414,8 @@ class ListConfigViewModelTest {
             ruleTemplateId = null,
             smartRuleJson = json.encodeToString(
                 SmartListRule.serializer(),
-                SmartListRule.RecentlyAddedNotCalled(daysWindow = 30),
-            ),
+                SmartListRule.RecentlyAddedNotCalled(daysWindow = 30)
+            )
         )
         val (vm, listRepo, _, _) = fixture(list = smartList)
         vm.confirmConvert()
@@ -398,7 +423,30 @@ class ListConfigViewModelTest {
         assertEquals(
             listOf(1L),
             listRepo.convertSmartToStaticCalls,
-            "confirmConvert should dispatch the listId exactly once",
+            "confirmConvert should dispatch the listId exactly once"
+        )
+    }
+
+    @Test
+    fun `confirmConvert gives a list with no cadence Keep in touch`() = runTest {
+        // Regression: a smart list had no cadence, so after converting it the
+        // Cadence section showed nothing selected and the list surfaced no one.
+        val smartList = listFixture(
+            id = 1L,
+            name = "Recently added, not called",
+            type = ListType.SMART,
+            ruleTemplateId = null,
+            smartRuleJson = json.encodeToString(
+                SmartListRule.serializer(),
+                SmartListRule.RecentlyAddedNotCalled(daysWindow = 30)
+            )
+        )
+        val (vm, listRepo, _, _) = fixture(list = smartList)
+        vm.confirmConvert()
+        assertEquals(
+            listOf(1L to 1L),
+            listRepo.updateRuleTemplateCalls.toList(),
+            "KEEP_IN_TOUCH is template id 1 in the fixture"
         )
     }
 
@@ -408,7 +456,7 @@ class ListConfigViewModelTest {
         vm.confirmConvert()
         assertTrue(
             listRepo.convertSmartToStaticCalls.isEmpty(),
-            "no convert dispatch when listId is null",
+            "no convert dispatch when listId is null"
         )
     }
 
@@ -416,14 +464,14 @@ class ListConfigViewModelTest {
     fun `vm resolves override in uiState`() = runTest {
         val overrideJson = json.encodeToString(
             RuleParams.serializer(),
-            RuleParams.KeepInTouch(cooldownMinHours = 720),
+            RuleParams.KeepInTouch(cooldownMinHours = 720)
         )
         val list = listFixture(
             id = 1L,
             name = "Overridden",
             type = ListType.STATIC,
             ruleTemplateId = 1L,
-            ruleParamsOverrideJson = overrideJson,
+            ruleParamsOverrideJson = overrideJson
         )
         val (vm, _, _, _) = fixture(list = list)
         vm.uiState.test(timeout = 2.seconds) {
@@ -434,7 +482,7 @@ class ListConfigViewModelTest {
             assertEquals(
                 720,
                 params.cooldownMinHours,
-                "override beats template default — Ready.ruleParams carries the override value",
+                "override beats template default — Ready.ruleParams carries the override value"
             )
             cancelAndIgnoreRemainingEvents()
         }
@@ -460,7 +508,7 @@ class ListConfigViewModelTest {
                     assertEquals(
                         ids.toList(),
                         state.members.map { it.id },
-                        "all 25 members projected, id ASC — none truncated",
+                        "all 25 members projected, id ASC — none truncated"
                     )
                     break
                 }
@@ -482,12 +530,12 @@ class ListConfigViewModelTest {
         s.listRepo.seedMemberships(
             listOf(
                 membershipFixture(contactId = 5L, listId = 1L),
-                membershipFixture(contactId = 9L, listId = 1L),
-            ),
+                membershipFixture(contactId = 9L, listId = 1L)
+            )
         )
         s.recDao.seed(
             membershipFixture(contactId = 5L, listId = 1L),
-            membershipFixture(contactId = 9L, listId = 1L),
+            membershipFixture(contactId = 9L, listId = 1L)
         )
         s.vm.onRemoveMember(contactId = 5L, contactName = "Mom")
         assertEquals(1, s.recDao.removeCalls.size, "expected one removeAll dispatch")
@@ -529,7 +577,11 @@ class ListConfigViewModelTest {
         // Drop forward dispatches so the next assertion isolates the inverse.
         s.recDao.clearCalls()
         s.vm.onUndo()
-        assertEquals(1, s.recDao.insertCalls.size, "expected one insertAll from the inverse closure")
+        assertEquals(
+            1,
+            s.recDao.insertCalls.size,
+            "expected one insertAll from the inverse closure"
+        )
         val reinserted = s.recDao.insertCalls.last().memberships
         assertEquals(1, reinserted.size)
         assertEquals(5L, reinserted[0].contactId)
@@ -569,7 +621,11 @@ class ListConfigViewModelTest {
         val (vm, listRepo, _, _) = fixture()
         val before = listRepo.updateNameCalls.size
         vm.setName("   ")
-        assertEquals(before, listRepo.updateNameCalls.size, "blank input must not dispatch updateName")
+        assertEquals(
+            before,
+            listRepo.updateNameCalls.size,
+            "blank input must not dispatch updateName"
+        )
     }
 
     @Test
@@ -577,7 +633,11 @@ class ListConfigViewModelTest {
         val (vm, listRepo, _, _) = fixture()
         val before = listRepo.updateNameCalls.size
         vm.setName("")
-        assertEquals(before, listRepo.updateNameCalls.size, "empty input must not dispatch updateName")
+        assertEquals(
+            before,
+            listRepo.updateNameCalls.size,
+            "empty input must not dispatch updateName"
+        )
     }
 
     @Test
@@ -614,13 +674,13 @@ class ListConfigViewModelTest {
             type = ListType.STATIC,
             ruleTemplateId = 1L,
             activeHoursStart = LocalTime.of(9, 0),
-            activeHoursEnd = LocalTime.of(17, 0),
+            activeHoursEnd = LocalTime.of(17, 0)
         )
         val s = fixture(list = list)
 
         val newSchedule = NudgeSchedule(
             days = setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY),
-            times = listOf(LocalTime.of(8, 30)),
+            times = listOf(LocalTime.of(8, 30))
         )
         s.vm.onNudgeScheduleChange(newSchedule)
 
@@ -639,8 +699,26 @@ class ListConfigViewModelTest {
         assertEquals(
             LocalTime.of(9, 0),
             sched.activeHoursStart,
-            "activeHoursStart must be forwarded to preserve the D-09 implicit slot",
+            "activeHoursStart must be forwarded to preserve the D-09 implicit slot"
         )
+        assertEquals(
+            LocalTime.of(17, 0),
+            sched.activeHoursEnd,
+            "activeHoursEnd must be forwarded: D-09 decides against the whole window"
+        )
+    }
+
+    @Test
+    fun `setActiveHours re-anchors the nudge chain against the new window`() = runTest {
+        // Regression: the effective schedule depends on the window, but a window
+        // edit used to leave the previously queued slot in place.
+        val s = fixture()
+        s.vm.setActiveHours(LocalTime.of(21, 0), LocalTime.of(23, 0))
+        val sched = s.nudgeScheduler.scheduleCalls.lastOrNull()
+        assertNotNull(sched, "a window edit must reschedule the list's nudges")
+        assertEquals(1L, sched.listId)
+        assertEquals(LocalTime.of(21, 0), sched.activeHoursStart)
+        assertEquals(LocalTime.of(23, 0), sched.activeHoursEnd)
     }
 
     @Test
@@ -649,11 +727,11 @@ class ListConfigViewModelTest {
         s.vm.onNudgeScheduleChange(NudgeSchedule.DEFAULT)
         assertTrue(
             s.listRepo.setNudgeScheduleJsonCalls.isEmpty(),
-            "no write dispatch when listId is null",
+            "no write dispatch when listId is null"
         )
         assertTrue(
             s.nudgeScheduler.scheduleCalls.isEmpty(),
-            "no reschedule when listId is null",
+            "no reschedule when listId is null"
         )
     }
 }

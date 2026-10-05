@@ -23,14 +23,14 @@ open class RecordingListMembershipDao : ListMembershipDao {
         val fromListId: Long,
         val toListId: Long,
         val ids: List<Long>,
-        val nowMs: Long,
+        val nowMs: Long
     )
     data class RemoveCall(val fromListId: Long, val ids: List<Long>)
     data class InsertCall(val memberships: List<ListMembershipEntity>)
     data class UpdateNextDueAtCall(
         val contactId: Long,
         val listId: Long,
-        val nextDueAt: Instant?,
+        val nextDueAt: Instant?
     )
 
     val moveCalls: MutableList<MoveCall> = mutableListOf()
@@ -60,8 +60,7 @@ open class RecordingListMembershipDao : ListMembershipDao {
         updateNextDueAtCalls.clear()
     }
 
-    override fun observeAll(): Flow<List<ListMembershipEntity>> =
-        flowOf(emptyList())
+    override fun observeAll(): Flow<List<ListMembershipEntity>> = flowOf(emptyList())
 
     override fun observeByListId(listId: Long): Flow<List<ListMembershipEntity>> =
         flowOf(emptyList())
@@ -79,8 +78,7 @@ open class RecordingListMembershipDao : ListMembershipDao {
     override suspend fun getMembershipsForContact(contactId: Long): List<ListMembershipEntity> =
         emptyList()
 
-    override suspend fun getMembersOfList(listId: Long): List<ListMembershipEntity> =
-        emptyList()
+    override suspend fun getMembersOfList(listId: Long): List<ListMembershipEntity> = emptyList()
 
     // The four methods below are `open` so use-case tests
     // (IgnoreContactUseCaseTest, UnignoreContactUseCaseTest) can override
@@ -102,11 +100,9 @@ open class RecordingListMembershipDao : ListMembershipDao {
 
     override suspend fun deleteByPair(contactId: Long, listId: Long): Int = 1
 
-    override suspend fun updateNextDueAt(
-        contactId: Long,
-        listId: Long,
-        nextDueAt: Instant?,
-    ): Int {
+    override suspend fun deleteAllForContact(contactId: Long): Int = 0
+
+    override suspend fun updateNextDueAt(contactId: Long, listId: Long, nextDueAt: Instant?): Int {
         updateNextDueAtCalls += UpdateNextDueAtCall(contactId, listId, nextDueAt)
         return 1
     }
@@ -119,16 +115,10 @@ open class RecordingListMembershipDao : ListMembershipDao {
         insertCalls += InsertCall(memberships.toList())
     }
 
-    override suspend fun moveAll(
-        fromListId: Long,
-        toListId: Long,
-        ids: List<Long>,
-        nowMs: Long,
-    ) {
+    override suspend fun moveAll(fromListId: Long, toListId: Long, ids: List<Long>, nowMs: Long) {
         moveCalls += MoveCall(fromListId, toListId, ids.toList(), nowMs)
     }
 
     // Bulk paths don't exercise this; default to empty map.
-    override fun observeMemberCountsByListId(): Flow<Map<Long, Int>> =
-        flowOf(emptyMap())
+    override fun observeMemberCountsByListId(): Flow<Map<Long, Int>> = flowOf(emptyMap())
 }
