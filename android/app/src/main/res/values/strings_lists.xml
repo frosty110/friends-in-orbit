@@ -235,4 +235,6 @@
     <string name="lists_error_title">Orbit couldn\'t load your lists</string>
     <!-- The screen could not read its data; shown with Try again. -->
     <string name="lists_config_error_title">Orbit couldn\'t load this list</string>
+    <!-- Screen-reader hint for tapping a row on Lists: it opens that list's cards. -->
+    <string name="lists_row_open">Open list</string>
 </resources>

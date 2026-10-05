@@ -78,7 +78,7 @@ fun ListRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(onClickLabel = stringResource(R.string.lists_row_open), onClick = onClick)
             .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x3),
     ) {
         // Drag handle — own 48dp touch region.

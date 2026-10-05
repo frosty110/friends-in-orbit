@@ -267,7 +267,9 @@ private fun OrbitNavGraph(
             ListsManagerScreen(
                 vm = hiltViewModel<ListsManagerViewModel>(),
                 onBack = { nav.popBackStack() },
-                onOpenList = { listId -> nav.navigate(Routes.listConfig(listId)) },
+                // LIST-23: tapping a list opens its deck, as on Home. List
+                // settings stays one step away in the row's menu.
+                onOpenList = { listId -> nav.navigate(Routes.card(listId)) },
                 onAddContacts = { listId -> nav.navigate(Routes.pickContacts(listId)) },
                 openCreateOnLaunch = entry.arguments?.getBoolean("openCreate") == true
             )
