@@ -2,6 +2,7 @@ package app.orbit.ui.screens.calllog
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.annotation.StringRes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,6 +37,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewFontScale
@@ -45,6 +48,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.orbit.R
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
@@ -59,7 +63,10 @@ import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 import app.orbit.ui.util.dialPhoneNumber
+import app.orbit.ui.util.formatDuration
 
 /**
  * Chronological in-app call log, per the call-history spec (README §Behavior):
@@ -109,6 +116,9 @@ import app.orbit.ui.util.dialPhoneNumber
  * the display name (rows and title) renders as the literal "Contact", the
  * avatar drops its photo, and the "from {list}" context is left out, since
  * list names are masked everywhere else too (ListContextChip).
+ *
+ * Copy lives in strings_calllog.xml (UX rubric 3.4); day headings and
+ * durations arrive as [app.orbit.ui.util.UiText] from the VM.
  */
 @Composable
 fun CallLogScreen(
@@ -164,21 +174,21 @@ private fun CallLogContent(
     // What the person is called on this screen. Blank until their row loads.
     val personName = when {
         person == null || person.name.isBlank() -> ""
-        curtain -> "Contact"
+        curtain -> stringResource(R.string.components_curtain_contact)
         else -> person.name
     }
     OrbitScreen {
         OrbitAppBar(
             title = when {
-                person == null -> "Call history"
+                person == null -> stringResource(R.string.calllog_title)
                 personName.isBlank() -> ""
-                else -> "Calls with $personName"
+                else -> stringResource(R.string.calllog_title_person, personName)
             },
             leading = {
                 OrbitIconButton(
                     icon = "arrow-left",
                     onClick = onBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.components_action_back),
                 )
             },
         )
@@ -189,32 +199,30 @@ private fun CallLogContent(
             is CallLogUiState.Empty -> OrbitScreenMessage(
                 icon = "phone",
                 title = if (person != null && personName.isNotBlank()) {
-                    "No calls with ${firstName(personName)} yet"
+                    stringResource(R.string.calllog_empty_title_person, firstName(personName))
                 } else {
-                    "No calls yet"
+                    stringResource(R.string.calllog_empty_title)
                 },
                 body = if (person != null && personName.isNotBlank()) {
-                    "When you and ${firstName(personName)} talk, the call shows up here."
+                    stringResource(R.string.calllog_empty_body_person, firstName(personName))
                 } else {
-                    "Calls with the people in your contacts show up here."
+                    stringResource(R.string.calllog_empty_body)
                 },
             )
             is CallLogUiState.PermissionDenied -> OrbitScreenMessage(
                 icon = "phone-slash",
-                title = "Orbit can't see your calls",
-                body = "Call history comes from your phone's call log, and Orbit " +
-                    "doesn't have access to it. Turn it on in Settings and your " +
-                    "calls will appear here. They stay on this device.",
-                actionLabel = "Open settings",
+                title = stringResource(R.string.calllog_denied_title),
+                body = stringResource(R.string.calllog_denied_body),
+                actionLabel = stringResource(R.string.calllog_open_settings),
                 onAction = onOpenSettings,
                 // The only thing to do on this screen, so it takes the accent.
                 actionVariant = OrbitButtonVariant.Primary,
             )
             is CallLogUiState.Error -> OrbitScreenMessage(
                 icon = "warning-circle",
-                title = "Couldn't load your calls",
-                body = "Something went wrong reading them. Try again in a moment.",
-                actionLabel = "Try again",
+                title = stringResource(R.string.calllog_error_title),
+                body = stringResource(R.string.calllog_error_body),
+                actionLabel = stringResource(R.string.calllog_try_again),
                 onAction = onRetry,
                 actionVariant = OrbitButtonVariant.Primary,
             )
@@ -263,7 +271,7 @@ private fun CallLogDeniedNotice(onOpenSettings: () -> Unit) {
             .padding(start = OrbitTheme.spacing.x3),
     ) {
         Text(
-            text = "Orbit can't see new calls, so this list may be missing some.",
+            text = stringResource(R.string.calllog_denied_notice),
             style = OrbitTheme.type.meta,
             color = OrbitTheme.colors.fgMuted,
             modifier = Modifier
@@ -278,7 +286,11 @@ private fun CallLogDeniedNotice(onOpenSettings: () -> Unit) {
                 .clickable(role = Role.Button, onClick = onOpenSettings)
                 .padding(horizontal = OrbitTheme.spacing.x3),
         ) {
-            Text(text = "Open settings", style = OrbitTheme.type.button, color = OrbitTheme.colors.fg)
+            Text(
+                text = stringResource(R.string.calllog_open_settings),
+                style = OrbitTheme.type.button,
+                color = OrbitTheme.colors.fg,
+            )
         }
     }
 }
@@ -304,7 +316,7 @@ private fun DirectionFilterRow(
     ) {
         CallLogDirectionFilter.entries.forEach { filter ->
             OrbitFilterChip(
-                label = filter.label,
+                label = stringResource(filter.label),
                 selected = filter == selected,
                 onClick = { onSelect(filter) },
                 role = Role.RadioButton,
@@ -319,11 +331,13 @@ private fun DirectionFilterRow(
  */
 @Composable
 private fun FilteredEmptyState(filter: CallLogDirectionFilter) {
-    val line = when (filter) {
-        CallLogDirectionFilter.INCOMING -> "No incoming calls yet."
-        CallLogDirectionFilter.OUTGOING -> "No outgoing calls yet."
-        CallLogDirectionFilter.ALL -> "No calls yet."
-    }
+    val line = stringResource(
+        when (filter) {
+            CallLogDirectionFilter.INCOMING -> R.string.calllog_filtered_empty_incoming
+            CallLogDirectionFilter.OUTGOING -> R.string.calllog_filtered_empty_outgoing
+            CallLogDirectionFilter.ALL -> R.string.calllog_filtered_empty_all
+        },
+    )
     Text(
         text = line,
         style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
@@ -351,7 +365,7 @@ private fun ReadyList(
     ) {
         sections.forEach { section ->
             stickyHeader(key = "day-${section.epochDay}", contentType = "day-header") {
-                DayHeader(label = section.label)
+                DayHeader(label = section.label.asString())
             }
             items(
                 items = section.rows,
@@ -383,7 +397,7 @@ private fun ReadyList(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = "Show $step more",
+                        text = pluralStringResource(R.plurals.calllog_show_more, step, step),
                         style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                     )
                 }
@@ -411,11 +425,21 @@ private fun DayHeader(label: String) {
 }
 
 /** How a row is titled in the one-person log, where every row is the same person. */
+@Composable
 private fun CallLogKind.personTitle(firstName: String): String = when (this) {
-    CallLogKind.Outgoing -> "You called"
-    CallLogKind.Incoming -> "$firstName called"
-    CallLogKind.Logged -> "You logged a connection"
-    CallLogKind.Attempted -> "You tried to reach them"
+    CallLogKind.Outgoing -> stringResource(R.string.calllog_person_you_called)
+    CallLogKind.Incoming -> stringResource(R.string.calllog_person_they_called, firstName)
+    CallLogKind.Logged -> stringResource(R.string.calllog_person_logged)
+    CallLogKind.Attempted -> stringResource(R.string.calllog_person_attempted)
+}
+
+/** The direction word in everyone's log: "Outgoing", "Incoming", "Logged", "Attempted". */
+@StringRes
+private fun CallLogKind.directionWord(): Int = when (this) {
+    CallLogKind.Outgoing -> R.string.calllog_direction_outgoing
+    CallLogKind.Incoming -> R.string.calllog_direction_incoming
+    CallLogKind.Logged -> R.string.calllog_direction_logged
+    CallLogKind.Attempted -> R.string.calllog_direction_attempted
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -427,8 +451,9 @@ private fun CallLogRowComposable(
     onCallAgain: () -> Unit,
 ) {
     val curtain = LocalPrivacyCurtain.current
-    val baseName = if (curtain) "Contact" else row.name
-    val nameWithSuffix = if (row.isIgnored) "$baseName (ignored)" else baseName
+    val baseName = if (curtain) stringResource(R.string.components_curtain_contact) else row.name
+    val nameWithSuffix = if (row.isIgnored) stringResource(R.string.calllog_name_ignored, baseName) else baseName
+    val openDetailsLabel = stringResource(R.string.calllog_open_details)
     val nameColor = if (row.isIgnored) OrbitTheme.colors.fgSubtle else OrbitTheme.colors.fg
     val subtitleColor = if (row.isIgnored) OrbitTheme.colors.fgSubtle else OrbitTheme.colors.fgMuted
     val avatarAlpha = if (row.isIgnored) 0.5f else 1.0f
@@ -444,9 +469,9 @@ private fun CallLogRowComposable(
                 .heightIn(min = OrbitTheme.spacing.tapMin)
                 .combinedClickable(
                     onClick = onOpen,
-                    onClickLabel = "Open contact",
+                    onClickLabel = openDetailsLabel,
                     onLongClick = { menuOpen = true },
-                    onLongClickLabel = "Show quick actions",
+                    onLongClickLabel = stringResource(R.string.calllog_show_quick_actions),
                 )
                 .padding(
                     horizontal = OrbitTheme.spacing.x4,
@@ -485,14 +510,21 @@ private fun CallLogRowComposable(
                     text = if (onePerson) row.kind.personTitle(firstName(personName.orEmpty())) else nameWithSuffix,
                     style = OrbitTheme.type.body.copy(color = nameColor),
                 )
+                val fromList = if (row.listName.isNotBlank()) {
+                    stringResource(R.string.calllog_from_list, row.listName)
+                } else {
+                    null
+                }
+                val duration = row.durationLabel?.asString()
+                val directionWord = stringResource(row.kind.directionWord())
                 val subtitle = buildList {
                     // List names are masked under the curtain (ListContextChip),
                     // and in the one-person log every row would repeat it.
-                    if (!onePerson && !curtain && row.listContext.isNotBlank()) add(row.listContext)
-                    // Blank for manual events (user-logged connections) — their
-                    // subtitle reads "Logged" via directionWord instead.
-                    if (row.durationLabel.isNotBlank()) add(row.durationLabel)
-                    if (!onePerson) add(row.directionWord)
+                    if (!onePerson && !curtain && fromList != null) add(fromList)
+                    // None for manual events (user-logged connections): their
+                    // subtitle reads "Logged" via the direction word instead.
+                    if (duration != null) add(duration)
+                    if (!onePerson) add(directionWord)
                 }.joinToString(" · ")
                 if (subtitle.isNotBlank()) {
                     Text(
@@ -524,8 +556,8 @@ private fun CallLogRowComposable(
             expanded = menuOpen,
             onDismissRequest = { menuOpen = false },
             actions = listOf(
-                OrbitMenuAction(label = "Call again", onClick = onCallAgain),
-                OrbitMenuAction(label = "Open contact", onClick = onOpen),
+                OrbitMenuAction(label = stringResource(R.string.calllog_call_again), onClick = onCallAgain),
+                OrbitMenuAction(label = openDetailsLabel, onClick = onOpen),
             ),
         )
     }
@@ -541,8 +573,8 @@ private val RowAvatarSize = 44.dp
 private fun previewRow(
     id: Long,
     name: String,
-    listContext: String,
-    durationLabel: String,
+    listName: String,
+    durationMinutes: Int?,
     kind: CallLogKind,
     timeLabel: String,
 ): CallLogRow = CallLogRow(
@@ -551,14 +583,8 @@ private fun previewRow(
     name = name,
     phone = "+1555000$id",
     photoUri = null,
-    listContext = listContext,
-    durationLabel = durationLabel,
-    directionWord = when (kind) {
-        CallLogKind.Outgoing -> "Outgoing"
-        CallLogKind.Incoming -> "Incoming"
-        CallLogKind.Logged -> "Logged"
-        CallLogKind.Attempted -> "Attempted"
-    },
+    listName = listName,
+    durationLabel = durationMinutes?.let { formatDuration(it * 60) },
     directionIconName = when (kind) {
         CallLogKind.Outgoing -> "phone-outgoing"
         CallLogKind.Incoming -> "phone-incoming"
@@ -570,21 +596,24 @@ private fun previewRow(
     kind = kind,
 )
 
+/** "Wednesday 3 June", built the way formatDayHeader builds it. */
+private val PREVIEW_WEDNESDAY: UiText = UiText.res(R.string.time_day_named, "Wednesday", 3, "June")
+
 private val previewSections: List<CallLogDaySection> = listOf(
     CallLogDaySection(
         epochDay = 20_500L,
-        label = "Today",
-        rows = listOf(previewRow(3L, "Sam Okafor", "from Late night", "", CallLogKind.Logged, "9:12am")),
+        label = UiText.res(R.string.time_day_today),
+        rows = listOf(previewRow(3L, "Sam Okafor", "Late night", null, CallLogKind.Logged, "9:12am")),
     ),
     CallLogDaySection(
         epochDay = 20_499L,
-        label = "Yesterday",
-        rows = listOf(previewRow(2L, "Jordan Lee", "", "3 min", CallLogKind.Incoming, "8:05pm")),
+        label = UiText.res(R.string.time_day_yesterday),
+        rows = listOf(previewRow(2L, "Jordan Lee", "", 3, CallLogKind.Incoming, "8:05pm")),
     ),
     CallLogDaySection(
         epochDay = 20_497L,
-        label = "Wednesday 3 June",
-        rows = listOf(previewRow(1L, "Avery Quinn", "from Inner orbit", "14 min", CallLogKind.Outgoing, "4:30pm")),
+        label = PREVIEW_WEDNESDAY,
+        rows = listOf(previewRow(1L, "Avery Quinn", "Inner orbit", 14, CallLogKind.Outgoing, "4:30pm")),
     ),
 )
 
@@ -600,18 +629,18 @@ private val previewPersonState: CallLogUiState = CallLogUiState.Ready(
     sections = listOf(
         CallLogDaySection(
             epochDay = 20_500L,
-            label = "Today",
+            label = UiText.res(R.string.time_day_today),
             rows = listOf(
-                previewRow(5L, "Avery Quinn", "from Inner orbit", "22 min", CallLogKind.Incoming, "9:40am"),
-                previewRow(4L, "Avery Quinn", "from Inner orbit", "", CallLogKind.Attempted, "8:02am"),
+                previewRow(5L, "Avery Quinn", "Inner orbit", 22, CallLogKind.Incoming, "9:40am"),
+                previewRow(4L, "Avery Quinn", "Inner orbit", null, CallLogKind.Attempted, "8:02am"),
             ),
         ),
         CallLogDaySection(
             epochDay = 20_497L,
-            label = "Wednesday 3 June",
+            label = PREVIEW_WEDNESDAY,
             rows = listOf(
-                previewRow(1L, "Avery Quinn", "from Inner orbit", "14 min", CallLogKind.Outgoing, "4:30pm"),
-                previewRow(6L, "Avery Quinn", "from Inner orbit", "", CallLogKind.Logged, "11:15am"),
+                previewRow(1L, "Avery Quinn", "Inner orbit", 14, CallLogKind.Outgoing, "4:30pm"),
+                previewRow(6L, "Avery Quinn", "Inner orbit", null, CallLogKind.Logged, "11:15am"),
             ),
         ),
     ),

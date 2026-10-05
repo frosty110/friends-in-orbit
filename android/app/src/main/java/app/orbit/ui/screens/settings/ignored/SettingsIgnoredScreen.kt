@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewFontScale
@@ -94,6 +95,8 @@ private fun SettingsIgnoredContent(
     onUndo: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+    // Snackbar copy is UiText; resolved when shown.
+    val context = LocalContext.current
 
     // Snackbar event collector — mirrors the BrowseListScreen pattern.
     // VM emits SnackbarEvent on un-ignore commit; Undo tap runs the inverse
@@ -101,8 +104,8 @@ private fun SettingsIgnoredContent(
     LaunchedEffect(Unit) {
         snackbarEvents.collect { event ->
             val r = snackbarHostState.showSnackbar(
-                message = event.message,
-                actionLabel = event.actionLabel,
+                message = event.message.asString(context),
+                actionLabel = event.actionLabel?.asString(context),
                 duration = SnackbarDuration.Short,
                 withDismissAction = false,
             )

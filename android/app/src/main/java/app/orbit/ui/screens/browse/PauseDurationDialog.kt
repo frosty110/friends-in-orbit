@@ -9,7 +9,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.domain.model.PauseDuration
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
@@ -20,7 +22,7 @@ import app.orbit.ui.theme.OrbitTheme
  * Material3 [AlertDialog] with three stacked Secondary [OrbitButton]
  * choices + a Ghost Cancel.
  *
- * Locked copy (verbatim):
+ * Locked copy (strings_browse.xml):
  *  - Title: "Pause for how long?"
  *  - Choice 1: "1 week"
  *  - Choice 2: "1 month"
@@ -44,7 +46,7 @@ fun PauseDurationDialog(
         containerColor = OrbitTheme.colors.surface,
         title = {
             Text(
-                text = "Pause for how long?",
+                text = stringResource(R.string.browse_pause_title),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         },
@@ -54,19 +56,19 @@ fun PauseDurationDialog(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 OrbitButton(
-                    text = "1 week",
+                    text = stringResource(R.string.browse_pause_week),
                     onClick = { onSelect(PauseDuration.OneWeek) },
                     variant = OrbitButtonVariant.Secondary,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OrbitButton(
-                    text = "1 month",
+                    text = stringResource(R.string.browse_pause_month),
                     onClick = { onSelect(PauseDuration.OneMonth) },
                     variant = OrbitButtonVariant.Secondary,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OrbitButton(
-                    text = "Indefinitely",
+                    text = stringResource(R.string.browse_pause_indefinitely),
                     onClick = { onSelect(PauseDuration.Indefinite) },
                     variant = OrbitButtonVariant.Secondary,
                     modifier = Modifier.fillMaxWidth(),
@@ -77,7 +79,7 @@ fun PauseDurationDialog(
         confirmButton = {},
         dismissButton = {
             OrbitButton(
-                text = "Cancel",
+                text = stringResource(R.string.components_action_cancel),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
             )

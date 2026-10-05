@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
+import app.orbit.R
 import app.orbit.data.dao.RecordingListMembershipDao
 import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.CallEventEntity
@@ -17,6 +18,7 @@ import app.orbit.domain.callEventFixture
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.contactFixture
 import app.orbit.testutil.MainDispatcherRule
+import app.orbit.ui.util.UiText
 import java.io.IOException
 import java.time.Instant
 import java.time.LocalDateTime
@@ -154,7 +156,11 @@ class CallLogViewModelTest {
         )
         vm.uiState.test(timeout = 5.seconds) {
             val ready = awaitReady()
-            assertEquals(listOf("Today", "Yesterday"), ready.sections.map { it.label })
+            // "Today", "Yesterday" (strings_time.xml, via formatDayHeader).
+            assertEquals(
+                listOf(UiText.res(R.string.time_day_today), UiText.res(R.string.time_day_yesterday)),
+                ready.sections.map { it.label },
+            )
             assertEquals(listOf(1L), ready.sections[0].rows.map { it.callEventId })
             assertEquals(listOf(2L), ready.sections[1].rows.map { it.callEventId })
             cancelAndIgnoreRemainingEvents()

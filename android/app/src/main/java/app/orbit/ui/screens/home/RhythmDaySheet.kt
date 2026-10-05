@@ -39,6 +39,7 @@ import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.asString
+import app.orbit.ui.util.formatDuration
 
 /**
  * HOME-8 — the day behind a rhythm bar.
@@ -153,7 +154,10 @@ private fun RhythmCallRow(
     curtain: Boolean,
     onClick: () -> Unit,
 ) {
-    val name = if (curtain) stringResource(R.string.components_curtain_someone) else call.contactName
+    val name = when {
+        curtain -> stringResource(R.string.components_curtain_someone)
+        else -> call.contactName ?: stringResource(R.string.home_rhythm_someone)
+    }
     val rim = directionColor(call.direction)
 
     Row(
@@ -187,7 +191,7 @@ private fun RhythmCallRow(
                 text = stringResource(
                     R.string.home_rhythm_call_meta,
                     stringResource(directionWord(call.direction)),
-                    call.durationLabel,
+                    call.durationLabel.asString(),
                     call.timeLabel,
                 ),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
@@ -259,7 +263,7 @@ private val previewCalls = listOf(
         photoUri = null,
         durationSeconds = 14 * 60,
         direction = CallDirection.OUTGOING,
-        durationLabel = "14 min",
+        durationLabel = formatDuration(14 * 60),
         timeLabel = "4:30pm",
     ),
     RhythmCall(
@@ -269,7 +273,7 @@ private val previewCalls = listOf(
         photoUri = null,
         durationSeconds = 26 * 60,
         direction = CallDirection.INCOMING,
-        durationLabel = "26 min",
+        durationLabel = formatDuration(26 * 60),
         timeLabel = "8:05pm",
     ),
 )

@@ -29,7 +29,8 @@
     <!-- WIDGET-08: TalkBack labels. The name is the one the widget shows. -->
     <string name="widget_call_person">Call %1$s</string>
     <string name="widget_open_person">Open %1$s in Orbit</string>
-    <string name="widget_open_orbit">Open Orbit</string>
+    <!-- TalkBack label of the empty widget: what it says, then what a tap does. -->
+    <string name="widget_empty_a11y">All quiet for now. Open Orbit</string>
     <!-- Sample people in the widget picker previews (WIDGET-09). Their
          avatar colours in colors.xml are the ones the Warm theme gives these
          names; WidgetPreviewResourcesTest keeps the two in step. -->

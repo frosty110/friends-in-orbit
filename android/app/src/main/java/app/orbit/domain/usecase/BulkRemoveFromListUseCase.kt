@@ -29,16 +29,17 @@ class BulkRemoveFromListUseCase @Inject constructor(
     /**
      * @property inverse Suspending closure the snackbar's "Undo" runs to
      *                   re-insert the removed memberships.
-     * @property label Snackbar copy: "Removed {N} from {sourceListName}".
+     * @property count How many people were removed, for the caller's snackbar
+     *                 (string resources; the domain layer holds no copy). 0
+     *                 for an empty batch.
      */
-    data class Result(val inverse: suspend () -> Unit, val label: String)
+    data class Result(val inverse: suspend () -> Unit, val count: Int)
 
     suspend operator fun invoke(
         listId: Long,
         contactIds: List<Long>,
-        sourceListName: String,
     ): Result {
-        if (contactIds.isEmpty()) return Result(inverse = {}, label = "")
+        if (contactIds.isEmpty()) return Result(inverse = {}, count = 0)
         val snapshot: List<ListMembershipEntity> = txRunner.withTransaction {
             val priors = contactIds.mapNotNull { id -> dao.get(id, listId) }
             dao.removeAll(listId, contactIds)
@@ -59,7 +60,7 @@ class BulkRemoveFromListUseCase @Inject constructor(
                 // changed back, so the widget refresh must mirror the forward path.
                 widgetRefreshTrigger.scheduleRefresh()
             },
-            label = "Removed ${contactIds.size} from $sourceListName",
+            count = contactIds.size,
         )
     }
 }

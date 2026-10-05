@@ -1,8 +1,10 @@
 package app.orbit.ui.screens.picker
 
 import app.cash.turbine.test
+import app.orbit.R
 import app.orbit.domain.undo.UndoStack
 import app.orbit.testutil.MainDispatcherRule
+import app.orbit.ui.util.UiText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
@@ -42,7 +44,7 @@ class PickerCommitSnackbarHostViewModelTest {
         val (vm, undoStack, _) = fixture()
         var ran = false
         undoStack.put(
-            UndoStack.PendingUndo(inverse = { ran = true }, label = "Added 1 to In touch"),
+            UndoStack.PendingUndo(inverse = { ran = true }),
         )
 
         vm.onUndo()
@@ -57,13 +59,13 @@ class PickerCommitSnackbarHostViewModelTest {
         undoStack.put(
             UndoStack.PendingUndo(
                 inverse = { throw IllegalStateException("simulated cipher failure") },
-                label = "Added 1 to In touch",
             ),
         )
 
         commitBus.events.test {
             vm.onUndo()
-            assertEquals("Couldn't undo that", awaitItem().message)
+            // "Couldn't undo that" (strings_picker.xml).
+            assertEquals(UiText.res(R.string.picker_snackbar_undo_failed), awaitItem().message)
         }
     }
 

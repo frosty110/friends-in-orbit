@@ -37,6 +37,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
@@ -44,6 +46,7 @@ import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.orbit.R
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
@@ -127,9 +130,9 @@ private fun ListPickerContent(
     val curtain = LocalPrivacyCurtain.current
     OrbitScreen {
         val title = if (state.contactName.isNotBlank() && !curtain) {
-            "Add ${state.contactName} to lists"
+            stringResource(R.string.picker_lists_title_named, state.contactName)
         } else {
-            "Add to lists"
+            stringResource(R.string.picker_lists_title)
         }
         OrbitAppBar(
             title = title,
@@ -137,7 +140,7 @@ private fun ListPickerContent(
                 OrbitIconButton(
                     icon = "arrow-left",
                     onClick = onBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.components_action_back),
                 )
             },
         )
@@ -153,14 +156,14 @@ private fun ListPickerContent(
                 }
                 // C6: missing/malformed contactId nav arg: terminal empty state.
                 ListPickerViewModel.UiState.Phase.NotFound -> OrbitScreenMessage(
-                    title = "Contact not found",
-                    body = "They may have been removed. Go back and try again.",
+                    title = stringResource(R.string.picker_contact_not_found),
+                    body = stringResource(R.string.picker_lists_contact_not_found_body),
                 )
                 ListPickerViewModel.UiState.Phase.Error -> OrbitScreenMessage(
                     icon = "warning-circle",
-                    title = "Couldn't load your lists",
-                    body = "Something went wrong reading them. Try again in a moment.",
-                    actionLabel = "Try again",
+                    title = stringResource(R.string.picker_lists_error_title),
+                    body = stringResource(R.string.picker_error_body),
+                    actionLabel = stringResource(R.string.picker_try_again),
                     onAction = onRetry,
                     actionVariant = OrbitButtonVariant.Primary,
                 )
@@ -192,9 +195,9 @@ private fun ReadyContent(
             // commit CTA. The only action here, so it takes the accent.
             OrbitScreenMessage(
                 icon = "list-bullets",
-                title = "No lists yet",
-                body = "Make one here and add this person in one more tap.",
-                actionLabel = "New list",
+                title = stringResource(R.string.picker_lists_empty_title),
+                body = stringResource(R.string.picker_lists_empty_body),
+                actionLabel = stringResource(R.string.picker_lists_new_list),
                 onAction = onNewList,
                 actionVariant = OrbitButtonVariant.Primary,
             )
@@ -259,7 +262,7 @@ private fun ListPickerRow(
     ) {
         Text(
             // List names are masked under the privacy curtain (ListContextChip).
-            text = if (curtain) "List" else name,
+            text = if (curtain) stringResource(R.string.components_curtain_list) else name,
             style = OrbitTheme.type.body,
             color = OrbitTheme.colors.fg,
             modifier = Modifier.weight(1f),
@@ -268,7 +271,7 @@ private fun ListPickerRow(
             // "added" read as "just added" as easily as "already in" (vision
             // PICK-1), and was lowercase.
             Text(
-                text = "Already added",
+                text = stringResource(R.string.picker_lists_already_added),
                 style = OrbitTheme.type.meta,
                 color = OrbitTheme.colors.fgMuted,
                 modifier = Modifier
@@ -294,11 +297,7 @@ private fun ListPickerFooter(
 ) {
     if (selectionCount == 0) return
 
-    val ctaCopy = if (selectionCount == 1) {
-        "Add to 1 list"
-    } else {
-        "Add to $selectionCount lists"
-    }
+    val ctaCopy = pluralStringResource(R.plurals.picker_lists_commit, selectionCount, selectionCount)
 
     Box(
         modifier = modifier
@@ -317,7 +316,7 @@ private fun ListPickerFooter(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = "$selectionCount selected",
+                text = pluralStringResource(R.plurals.picker_selected_count, selectionCount, selectionCount),
                 style = OrbitTheme.type.body,
                 color = OrbitTheme.colors.fg,
                 modifier = Modifier.weight(1f),
@@ -345,11 +344,16 @@ internal fun ClearSelectionAction(enabled: Boolean, onClear: () -> Unit) {
         modifier = Modifier
             .defaultMinSize(minWidth = OrbitTheme.spacing.tapMin, minHeight = OrbitTheme.spacing.tapMin)
             .clip(OrbitTheme.shapes.md)
-            .clickable(enabled = enabled, role = Role.Button, onClickLabel = "Clear the selection", onClick = onClear)
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClickLabel = stringResource(R.string.picker_clear_selection),
+                onClick = onClear,
+            )
             .padding(horizontal = OrbitTheme.spacing.x2),
     ) {
         Text(
-            text = "Clear",
+            text = stringResource(R.string.picker_clear),
             style = OrbitTheme.type.button,
             color = OrbitTheme.colors.fgMuted,
         )
@@ -391,7 +395,7 @@ private fun CreateListNameDialog(
         containerColor = OrbitTheme.colors.surface,
         title = {
             Text(
-                text = "New list",
+                text = stringResource(R.string.picker_lists_new_list),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         },
@@ -403,7 +407,7 @@ private fun CreateListNameDialog(
                 textStyle = LocalTextStyle.current.merge(OrbitTheme.type.body),
                 placeholder = {
                     Text(
-                        text = "Name this list",
+                        text = stringResource(R.string.picker_lists_name_hint),
                         style = OrbitTheme.type.body,
                         color = OrbitTheme.colors.fgMuted,
                     )
@@ -420,14 +424,14 @@ private fun CreateListNameDialog(
         },
         confirmButton = {
             OrbitButton(
-                text = "Create",
+                text = stringResource(R.string.picker_lists_create),
                 onClick = { commit() },
                 variant = OrbitButtonVariant.Primary,
             )
         },
         dismissButton = {
             OrbitButton(
-                text = "Cancel",
+                text = stringResource(R.string.components_action_cancel),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
             )

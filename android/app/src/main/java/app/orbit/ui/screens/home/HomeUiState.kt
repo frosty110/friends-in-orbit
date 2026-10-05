@@ -115,7 +115,10 @@ data class NextUp(
  * are hydrated in `HomeFeed.enrichOne` from the list's member contacts;
  * [durationLabel] and [timeLabel] are pre-formatted there too, so the
  * composables stay free of `Instant` and the JVM clock (the same B3 invariant
- * `CallLogRow` follows).
+ * `CallLogRow` follows). [durationLabel] is [UiText] (strings_time.xml);
+ * [timeLabel] is digits and the locale's am/pm marker, so a String.
+ * [contactName] is null for someone no longer on the list; the sheet says
+ * "Someone".
  *
  * Manual "Logged" connections never reach here: they're written with
  * `durationSeconds = 0` and the 3-minute rhythm floor drops them, so
@@ -125,11 +128,11 @@ data class NextUp(
 data class RhythmCall(
     val callEventId: Long,
     val contactId: Long,
-    val contactName: String,
+    val contactName: String?,
     val photoUri: String?,
     val durationSeconds: Int,
     val direction: CallDirection,
-    val durationLabel: String,   // "14 min"
+    val durationLabel: UiText,   // "14 min"
     val timeLabel: String,       // "4:30pm"
 )
 

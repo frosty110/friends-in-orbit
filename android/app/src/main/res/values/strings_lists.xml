@@ -25,6 +25,11 @@
     <string name="lists_snackbar_archived">List archived.</string>
     <string name="lists_snackbar_deleted">List deleted.</string>
     <string name="lists_snackbar_restored">List restored.</string>
+    <!-- List settings, after taking one person off the list (with Undo). %1$s: their name. -->
+    <string name="lists_snackbar_member_removed">Removed %1$s</string>
+    <string name="lists_snackbar_member_removed_unnamed">Removed them</string>
+    <!-- List settings, when a change to the list could not be saved. -->
+    <string name="lists_snackbar_update_failed">Couldn\'t update list</string>
 
     <!-- Subtitle under a smart list's name: its rule, then its setting. -->
     <plurals name="lists_rule_summary_recently_added">
@@ -45,7 +50,7 @@
     <!-- Chip on a list that fills itself from a rule. -->
     <string name="lists_row_smart_chip">Smart list</string>
     <!-- %1$s: the list's name. -->
-    <string name="lists_row_add_contacts">Add contacts to %1$s</string>
+    <string name="lists_row_add_people">Add people to %1$s</string>
     <string name="lists_row_more_actions">More actions for %1$s</string>
     <string name="lists_menu_rename">Rename</string>
     <string name="lists_menu_list_settings">List settings</string>
@@ -202,6 +207,24 @@
     <string name="lists_nudge_weekdays">Weekdays</string>
     <string name="lists_nudge_weekends">Weekends</string>
     <string name="lists_nudge_onboarding_hint">Change the days or time any time in this list\'s settings.</string>
+    <string name="lists_nudge_add_time">Add time</string>
+    <string name="lists_nudge_add_time_a11y">Add a nudge time</string>
+    <!-- Screen-reader name of a nudge time's remove button. %1$s: the time, "10am". -->
+    <string name="lists_nudge_remove_time">Remove %1$s</string>
+    <!-- Screen-reader name of a day chip. %1$s: the day, "Monday". -->
+    <string name="lists_nudge_day_selected">%1$s, selected</string>
+    <string name="lists_nudge_day_unselected">%1$s, unselected</string>
+    <!-- The schedule as one line. %1$s: the days ("Every day", "Weekdays", "Sun, Wed"),
+         %2$s: the times, below. "Every day at 10am". -->
+    <string name="lists_nudge_summary">%1$s at %2$s</string>
+    <!-- Two times: "10am and 6pm". -->
+    <string name="lists_nudge_times_two">%1$s and %2$s</string>
+    <!-- Three or more: %1$s is every time but the last, joined by commas. "9am, 1pm, and 6pm". -->
+    <string name="lists_nudge_times_many">%1$s, and %2$s</string>
+    <string name="lists_nudge_summary_no_days">No days selected: nudges off</string>
+    <string name="lists_nudge_summary_no_time">No time set: tap “Add time”</string>
+    <!-- Shown while this list's nudges are paused. -->
+    <string name="lists_nudge_paused_badge">Nudges paused</string>
 
     <!-- Active hours. "9am to 5pm". -->
     <string name="lists_hours_to">to</string>
@@ -215,12 +238,16 @@
     <string name="lists_hours_readout_range">%1$s – %2$s</string>
     <string name="lists_hours_readout_overnight">%1$s – %2$s (overnight)</string>
 
-    <!-- Convert-to-static confirmation. -->
-    <string name="lists_convert_title">Convert to a static list?</string>
+    <!-- Confirmation for "Make this a regular list": a smart list stops filling itself and
+         keeps the people on it now. Same words as the button and the note under it.
+         %1$d: how many people are on the list now. -->
+    <string name="lists_convert_title">Make this a regular list?</string>
     <plurals name="lists_convert_body">
-        <item quantity="one">This snapshots %1$d person as permanent members. The rule will no longer update membership.</item>
-        <item quantity="other">This snapshots %1$d people as permanent members. The rule will no longer update membership.</item>
+        <item quantity="one">The %1$d person here now stays, and the list stops adding people by itself. This can\'t be undone.</item>
+        <item quantity="other">The %1$d people here now stay, and the list stops adding people by itself. This can\'t be undone.</item>
     </plurals>
+    <!-- The same when the smart list matches no one right now. -->
+    <string name="lists_convert_body_empty">No one is on this list right now, and it stops adding people by itself. This can\'t be undone.</string>
     <!-- %1$s: up to three names, comma separated. -->
     <string name="lists_convert_preview">Including: %1$s</string>
     <!-- %1$s: three names, %2$d: how many more people. -->
@@ -229,6 +256,6 @@
         <item quantity="other">Including: %1$s and %2$d more</item>
     </plurals>
     <string name="lists_convert_body_with_preview" translatable="false">%1$s\n\n%2$s</string>
-    <string name="lists_convert_confirm">Convert</string>
+    <string name="lists_convert_confirm">Make it regular</string>
 
 </resources>

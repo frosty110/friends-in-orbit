@@ -3,6 +3,7 @@ package app.orbit.ui.screens.lists
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListType
@@ -20,6 +21,7 @@ import app.orbit.domain.usecase.BulkRemoveFromListUseCase
 import app.orbit.notify.NudgeSchedule
 import app.orbit.notify.NudgeScheduler
 import app.orbit.ui.screens.picker.SnackbarEvent
+import app.orbit.ui.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalTime
 import javax.inject.Inject
@@ -416,15 +418,19 @@ class ListConfigViewModel @Inject constructor(
         val id = listId ?: return
         viewModelScope.launch {
             runMutation {
-                val sourceListName = listRepo.getById(id)?.name.orEmpty()
                 val result = bulkRemoveFromListUseCase(
                     listId = id,
                     contactIds = listOf(contactId),
-                    sourceListName = sourceListName
                 )
-                undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
+                undoStack.put(UndoStack.PendingUndo(result.inverse))
                 _snackbarEvents.tryEmit(
-                    SnackbarEvent("Removed ${contactName.ifBlank { "contact" }}", "Undo")
+                    SnackbarEvent.undoable(
+                        if (contactName.isBlank()) {
+                            UiText.res(R.string.lists_snackbar_member_removed_unnamed)
+                        } else {
+                            UiText.res(R.string.lists_snackbar_member_removed, contactName)
+                        }
+                    )
                 )
             }
         }
@@ -446,7 +452,7 @@ class ListConfigViewModel @Inject constructor(
      * still propagates correctly when the screen leaves the back stack.
      */
     private suspend fun runMutation(
-        failureLabel: String = "Couldn't update list",
+        failureLabel: UiText = UiText.res(R.string.lists_snackbar_update_failed),
         block: suspend () -> Unit
     ) {
         try {

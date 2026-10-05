@@ -180,7 +180,9 @@ class RelinkContactUseCaseTest {
         runTest {
             val result = assertNotNull(useCase(orphanId = 10L, liveId = 20L))
 
-            assertEquals("Re-linked to Mum", result.label)
+            // The snackbar's "Re-linked to Mum" is built from this name
+            // (strings_picker.xml; SnackbarCopyTest).
+            assertEquals("Mum", result.linkedName)
             assertNull(db.contactDao().get(20L), "the emptied live row is deleted")
             val merged = assertNotNull(db.contactDao().get(10L))
             assertFalse(merged.isOrphaned)

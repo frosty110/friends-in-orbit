@@ -11,15 +11,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import app.orbit.R
 import app.orbit.di.ApplicationScope
 import app.orbit.domain.undo.UndoStack
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -61,7 +67,7 @@ class PickerCommitSnackbarHostViewModel @Inject constructor(
                 pending.inverse()
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
-                commitBus.publish(SnackbarEvent("Couldn't undo that"))
+                commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_undo_failed)))
             }
         }
     }
@@ -83,13 +89,15 @@ fun PickerCommitSnackbarHost(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    // Event copy is UiText (strings_picker.xml and shared); resolved when shown.
+    val context = LocalContext.current
 
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             vm.events.collect { event ->
                 val r = snackbarHostState.showSnackbar(
-                    message = event.message,
-                    actionLabel = event.actionLabel,
+                    message = event.message.asString(context),
+                    actionLabel = event.actionLabel?.asString(context),
                     duration = SnackbarDuration.Short,
                     withDismissAction = false,
                 )
@@ -111,10 +119,10 @@ private fun PickerCommitSnackbarPreview() {
     OrbitTheme {
         Snackbar(
             action = {
-                TextButton(onClick = {}) { Text("Undo") }
+                TextButton(onClick = {}) { Text(stringResource(R.string.components_action_undo)) }
             },
         ) {
-            Text("Added 3 to In touch")
+            Text(pluralStringResource(R.plurals.picker_snackbar_added, 3, 3, "In touch"))
         }
     }
 }

@@ -199,8 +199,8 @@ class CallLogViewModel @Inject constructor(
                 // MANUAL, durationSeconds = 0) render "Logged" + a check-circle.
                 // Attempt surface — reach-outs that didn't connect (source =
                 // ATTEMPT, durationSeconds = 0) render "Attempted" + phone-slash.
-                // Both carry a blank durationLabel, skipped by the row's
-                // subtitle builder.
+                // Both carry no durationLabel, skipped by the row's subtitle
+                // builder.
                 val isManual = ev.source == CallSource.MANUAL
                 val isAttempt = ev.source == CallSource.ATTEMPT
                 val kind = when {
@@ -209,11 +209,12 @@ class CallLogViewModel @Inject constructor(
                     ev.direction == CallDirection.OUTGOING -> CallLogKind.Outgoing
                     else -> CallLogKind.Incoming
                 }
-                val (directionWord, directionIcon) = when (kind) {
-                    CallLogKind.Attempted -> "Attempted" to "phone-slash"
-                    CallLogKind.Logged -> "Logged" to "check-circle"
-                    CallLogKind.Outgoing -> "Outgoing" to "phone-outgoing"
-                    CallLogKind.Incoming -> "Incoming" to "phone-incoming"
+                // The direction word is the screen's (strings_calllog.xml, from kind).
+                val directionIcon = when (kind) {
+                    CallLogKind.Attempted -> "phone-slash"
+                    CallLogKind.Logged -> "check-circle"
+                    CallLogKind.Outgoing -> "phone-outgoing"
+                    CallLogKind.Incoming -> "phone-incoming"
                 }
                 LogItem(
                     occurredAt = ev.occurredAt,
@@ -225,9 +226,8 @@ class CallLogViewModel @Inject constructor(
                         name = contact.displayName,
                         phone = contact.phoneNumber,
                         photoUri = contact.photoUri,
-                        listContext = if (listName.isBlank()) "" else "from $listName",
-                        durationLabel = if (isManual || isAttempt) "" else formatDuration(ev.durationSeconds),
-                        directionWord = directionWord,
+                        listName = listName,
+                        durationLabel = if (isManual || isAttempt) null else formatDuration(ev.durationSeconds),
                         directionIconName = directionIcon,
                         timeLabel = formatWallClock(ev.occurredAt, zone),
                         isIgnored = contact.isIgnored,

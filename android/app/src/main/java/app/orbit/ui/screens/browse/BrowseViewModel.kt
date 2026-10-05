@@ -3,6 +3,7 @@ package app.orbit.ui.screens.browse
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.Contact
 import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.ContactEntity
@@ -24,7 +25,10 @@ import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MoveContactsUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.ui.screens.picker.SnackbarEvent
+import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatRelative
+import app.orbit.ui.util.pausedPeopleSnackbar
+import app.orbit.ui.util.pausedSnackbar
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Duration
 import java.time.Instant
@@ -301,9 +305,13 @@ class BrowseViewModel @Inject constructor(
         _isCommitting.value = true
         try {
             val sourceListName = listRepo.getById(srcListId)?.name ?: ""
-            val result = bulkRemoveFromListUseCase(srcListId, ids, sourceListName)
-            undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
-            _snackbarEvents.tryEmit(SnackbarEvent(result.label, "Undo"))
+            val result = bulkRemoveFromListUseCase(srcListId, ids)
+            undoStack.put(UndoStack.PendingUndo(result.inverse))
+            _snackbarEvents.tryEmit(
+                SnackbarEvent.undoable(
+                    UiText.plural(R.plurals.browse_snackbar_removed, result.count, result.count, sourceListName)
+                )
+            )
             onExitMultiSelect()
         } finally {
             _isCommitting.value = false
@@ -316,8 +324,10 @@ class BrowseViewModel @Inject constructor(
         _isCommitting.value = true
         try {
             val result = bulkIgnoreUseCase(ids)
-            undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
-            _snackbarEvents.tryEmit(SnackbarEvent(result.label, "Undo"))
+            undoStack.put(UndoStack.PendingUndo(result.inverse))
+            _snackbarEvents.tryEmit(
+                SnackbarEvent.undoable(UiText.plural(R.plurals.browse_snackbar_ignored, result.count, result.count))
+            )
             onExitMultiSelect()
         } finally {
             _isCommitting.value = false
@@ -330,8 +340,8 @@ class BrowseViewModel @Inject constructor(
         _isCommitting.value = true
         try {
             val result = bulkPauseUseCase(ids, duration)
-            undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
-            _snackbarEvents.tryEmit(SnackbarEvent(result.label, "Undo"))
+            undoStack.put(UndoStack.PendingUndo(result.inverse))
+            _snackbarEvents.tryEmit(SnackbarEvent.undoable(pausedPeopleSnackbar(result.count, duration)))
             onExitMultiSelect()
         } finally {
             _isCommitting.value = false
@@ -352,9 +362,11 @@ class BrowseViewModel @Inject constructor(
     // inverse closure here against `contactRepo.setPausedUntil(id, prior)`.
 
     fun onSingleRowIgnore(contactId: Long, contactName: String) = viewModelScope.launch {
-        val result = ignoreContactUseCase(contactId, contactName)
-        undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
-        _snackbarEvents.tryEmit(SnackbarEvent(result.label, "Undo"))
+        val result = ignoreContactUseCase(contactId)
+        undoStack.put(UndoStack.PendingUndo(result.inverse))
+        _snackbarEvents.tryEmit(
+            SnackbarEvent.undoable(UiText.res(R.string.components_snackbar_ignored, contactName))
+        )
     }
 
     /**
@@ -364,28 +376,18 @@ class BrowseViewModel @Inject constructor(
     fun onSingleRowUnpause(contactId: Long, contactName: String) = viewModelScope.launch {
         val prior = contactRepo.getById(contactId)?.pausedUntil
         contactRepo.setPausedUntil(contactId, null)
-        val label = "Unpaused $contactName"
-        undoStack.put(
-            UndoStack.PendingUndo(
-                inverse = { contactRepo.setPausedUntil(contactId, prior) },
-                label = label
-            )
+        undoStack.put(UndoStack.PendingUndo(inverse = { contactRepo.setPausedUntil(contactId, prior) }))
+        _snackbarEvents.tryEmit(
+            SnackbarEvent.undoable(UiText.res(R.string.components_snackbar_unpaused, contactName))
         )
-        _snackbarEvents.tryEmit(SnackbarEvent(label, "Undo"))
     }
 
     fun onSingleRowPause(contactId: Long, contactName: String, duration: PauseDuration) =
         viewModelScope.launch {
             val prior = contactRepo.getById(contactId)?.pausedUntil
             pauseContactUseCase(contactId, duration)
-            val label = "Paused $contactName ${duration.snackbarPhrase}"
-            undoStack.put(
-                UndoStack.PendingUndo(
-                    inverse = { contactRepo.setPausedUntil(contactId, prior) },
-                    label = label
-                )
-            )
-            _snackbarEvents.tryEmit(SnackbarEvent(label, "Undo"))
+            undoStack.put(UndoStack.PendingUndo(inverse = { contactRepo.setPausedUntil(contactId, prior) }))
+            _snackbarEvents.tryEmit(SnackbarEvent.undoable(pausedSnackbar(contactName, duration)))
         }
 
     // ─── Move/Copy via inline ListSelectorSheet ─────────────────────────────────
@@ -401,9 +403,12 @@ class BrowseViewModel @Inject constructor(
         if (ids.isEmpty()) return@launch
         _isCommitting.value = true
         try {
-            val result = moveUseCase(srcListId, targetListId, ids, targetListName)
-            undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
-            _snackbarEvents.tryEmit(SnackbarEvent(result.label, "Undo"))
+            val result = moveUseCase(srcListId, targetListId, ids)
+            emitBatchResult(
+                result.count,
+                result.inverse,
+                UiText.plural(R.plurals.components_snackbar_moved, result.count, result.count, targetListName),
+            )
             onExitMultiSelect()
         } finally {
             _isCommitting.value = false
@@ -415,13 +420,31 @@ class BrowseViewModel @Inject constructor(
         if (ids.isEmpty()) return@launch
         _isCommitting.value = true
         try {
-            val result = copyUseCase(targetListId, ids, targetListName)
-            undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
-            _snackbarEvents.tryEmit(SnackbarEvent(result.label, "Undo"))
+            val result = copyUseCase(targetListId, ids)
+            emitBatchResult(
+                result.count,
+                result.inverse,
+                UiText.plural(R.plurals.components_snackbar_copied, result.count, result.count, targetListName),
+            )
             onExitMultiSelect()
         } finally {
             _isCommitting.value = false
         }
+    }
+
+    /**
+     * Move and Copy report a count of 0 when they short-circuit (a missing or
+     * archived destination). That used to put an empty snackbar with Undo on
+     * screen, an Undo for nothing; it is now a failed save (rules.md Code 3),
+     * the way the contact picker reports the same case.
+     */
+    private fun emitBatchResult(count: Int, inverse: suspend () -> Unit, message: UiText) {
+        if (count == 0) {
+            _snackbarEvents.tryEmit(SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)))
+            return
+        }
+        undoStack.put(UndoStack.PendingUndo(inverse))
+        _snackbarEvents.tryEmit(SnackbarEvent.undoable(message))
     }
 
     fun onUndo() = viewModelScope.launch {
@@ -435,7 +458,7 @@ class BrowseViewModel @Inject constructor(
      * surface used by bulk-action and single-row mutations.
      */
     fun onContactIdParseFail() {
-        _snackbarEvents.tryEmit(SnackbarEvent("Couldn't open contact"))
+        _snackbarEvents.tryEmit(SnackbarEvent(UiText.res(R.string.browse_snackbar_open_failed)))
     }
 
     private fun buildState(
@@ -566,7 +589,7 @@ class BrowseViewModel @Inject constructor(
 
     /**
      * Helper — overlay a relative-time `lastCalledLabel` on the minimal-safe
-     * Contact projection. Empty label triggers "Never called" in BrowseRow.
+     * Contact projection. A null label triggers "Never called" in BrowseRow.
      *
      * Delegates to the shared [formatRelative]
      * (`ui/util/RelativeTime.kt`): local calendar-day comparison + honest
@@ -574,7 +597,7 @@ class BrowseViewModel @Inject constructor(
      * CallLogViewModel convention ([ZoneId.systemDefault] held in a field).
      */
     private fun Contact.withLastCallLabel(lastCallAt: Instant?, now: Instant): Contact {
-        if (lastCallAt == null) return copy(lastCalledLabel = "")
+        if (lastCallAt == null) return copy(lastCalledLabel = null)
         return copy(lastCalledLabel = formatRelative(lastCallAt, now, zone))
     }
 

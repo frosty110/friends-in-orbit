@@ -2,6 +2,7 @@ package app.orbit.ui.screens.contact
 
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import app.orbit.R
 import app.orbit.data.dao.RecordingListMembershipDao
 import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.CallDirection
@@ -30,6 +31,7 @@ import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.testutil.MainDispatcherRule
+import app.orbit.ui.util.UiText
 import java.io.IOException
 import java.time.Instant
 import kotlin.test.assertEquals
@@ -262,7 +264,8 @@ class ContactDetailViewModelTest {
         setup.vm.uiState.test(timeout = 2.seconds) {
             var state = awaitItem()
             while (state !is ContactDetailUiState.Ready) state = awaitItem()
-            assertEquals("Paused until you unpause", state.pausedLabel)
+            // "Paused until you unpause" (strings_contact.xml).
+            assertEquals(UiText.res(R.string.contact_paused_indefinitely), state.pausedLabel)
             cancelAndIgnoreRemainingEvents()
         }
 
@@ -280,7 +283,8 @@ class ContactDetailViewModelTest {
         timed.vm.uiState.test(timeout = 2.seconds) {
             var state = awaitItem()
             while (state !is ContactDetailUiState.Ready) state = awaitItem()
-            assertEquals("Paused until 11 Jan", state.pausedLabel)
+            // "Paused until 11 Jan": the date is formatted in the VM, the words are a resource.
+            assertEquals(UiText.res(R.string.contact_paused_until, "11 Jan"), state.pausedLabel)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -319,8 +323,8 @@ class ContactDetailViewModelTest {
         setup.vm.snackbarEvents.test(timeout = 2.seconds) {
             setup.vm.onUnpauseNow()
             val event = awaitItem()
-            assertEquals("Unpaused Sarah", event.message)
-            assertEquals("Undo", event.actionLabel)
+            assertEquals(UiText.res(R.string.components_snackbar_unpaused, "Sarah"), event.message)
+            assertEquals(UiText.res(R.string.components_action_undo), event.actionLabel)
             cancelAndIgnoreRemainingEvents()
         }
         assertNull(setup.contactRepo.getById(5L)?.pausedUntil)
@@ -520,7 +524,7 @@ class ContactDetailViewModelTest {
         setup.vm.uiState.test(timeout = 2.seconds) {
             var state = awaitItem()
             while (state !is ContactDetailUiState.Ready) state = awaitItem()
-            assertEquals("Mornings", state.contact.bestWindowLabel)
+            assertEquals(UiText.res(R.string.time_daypart_mornings), state.contact.bestWindowLabel)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -583,7 +587,11 @@ class ContactDetailViewModelTest {
                     "hasOverride should be true when ruleOverrideJson != null"
                 )
                 assertEquals(null, ready.currentParams)
-                assertEquals("Custom schedule (recovering)", ready.currentTemplateName)
+                // Nothing to name: with an override stored, the section shows
+                // the editor (on defaults), never the "Follows the ... rhythm"
+                // sentence. It used to hold "Custom schedule (recovering)",
+                // which no branch displayed.
+                assertNull(ready.currentTemplateName)
                 cancelAndIgnoreRemainingEvents()
             }
         }

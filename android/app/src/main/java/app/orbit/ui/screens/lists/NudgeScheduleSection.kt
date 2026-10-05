@@ -32,7 +32,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.orbit.R
-import app.orbit.notify.NotificationCopy
 import app.orbit.notify.NudgeSchedule
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
@@ -48,8 +47,11 @@ import java.util.Locale
  * Renders (top to bottom):
  *  - 1a: Row of seven day-of-week chips (S M T W T F S).
  *  - 1b: Column of removable time chips plus an "Add time" affordance.
- *  - 1c: Schedule summary line (D-06 format rules via NotificationCopy.scheduleSummary).
- *  - 1d: Muted badge when notificationsEnabled = false (D-04).
+ *  - 1c: Schedule summary line (D-06 format rules, [scheduleSummary]).
+ *  - 1d: "Nudges paused" badge when notificationsEnabled = false (D-04).
+ *
+ * Copy lives in strings_lists.xml (`lists_nudge_*`); it used to be constants
+ * on NotificationCopy, some with em dashes.
  *
  * Save-on-change: every chip tap calls [onScheduleChange] immediately — no Apply
  * button. Mirrors every other ListConfigBody control.
@@ -105,6 +107,7 @@ internal fun NudgeScheduleSection(
             }
 
             // "Add time" affordance
+            val addTimeDescription = stringResource(R.string.lists_nudge_add_time_a11y)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -114,7 +117,7 @@ internal fun NudgeScheduleSection(
                     .background(OrbitTheme.colors.bgSubtle)
                     .clickable { editingTimeIndex = ADD_TIME_SENTINEL }
                     .padding(horizontal = OrbitTheme.spacing.x4)
-                    .semantics { contentDescription = NotificationCopy.A11Y_ADD_TIME },
+                    .semantics { contentDescription = addTimeDescription },
                 horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
             ) {
                 PhIcon(
@@ -123,7 +126,7 @@ internal fun NudgeScheduleSection(
                     tint = OrbitTheme.colors.fg,
                 )
                 Text(
-                    text = NotificationCopy.LABEL_ADD_TIME,
+                    text = stringResource(R.string.lists_nudge_add_time),
                     style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                 )
             }
@@ -191,7 +194,10 @@ private fun DayChipRow(
             // tint with an ink ring, not seven accent fills on one screen.
             val bgColor = if (selected) OrbitTheme.colors.accentTint else OrbitTheme.colors.bgSubtle
             val labelColor = if (selected) OrbitTheme.colors.fg else OrbitTheme.colors.fgMuted
-            val cd = NotificationCopy.a11yDayChip(day.fullName(), selected)
+            val cd = stringResource(
+                if (selected) R.string.lists_nudge_day_selected else R.string.lists_nudge_day_unselected,
+                day.fullName(),
+            )
 
             Box(
                 contentAlignment = Alignment.Center,
@@ -264,12 +270,13 @@ private fun TimeChipRow(
         }
 
         // Remove (X) button
+        val removeDescription = stringResource(R.string.lists_nudge_remove_time, formattedTime)
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(OrbitTheme.spacing.tapMin)
                 .clickable(onClick = onRemove)
-                .semantics { contentDescription = NotificationCopy.a11yRemoveTime(formattedTime) },
+                .semantics { contentDescription = removeDescription },
         ) {
             PhIcon(
                 name = "x",
@@ -285,13 +292,13 @@ private fun ScheduleSummaryLine(schedule: NudgeSchedule) {
     when {
         schedule.days.isEmpty() -> {
             Text(
-                text = NotificationCopy.SUMMARY_NO_DAYS,
+                text = stringResource(R.string.lists_nudge_summary_no_days),
                 style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
             )
         }
         schedule.times.isEmpty() -> {
             Text(
-                text = NotificationCopy.SUMMARY_NO_TIME,
+                text = stringResource(R.string.lists_nudge_summary_no_time),
                 style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
             )
         }
@@ -299,7 +306,7 @@ private fun ScheduleSummaryLine(schedule: NudgeSchedule) {
             val dayLabel = dayGroupLabel(schedule.days)
             val timeStrings = schedule.times.sorted().map { formatHour12(it) }
             Text(
-                text = NotificationCopy.scheduleSummary(dayLabel, timeStrings),
+                text = scheduleSummary(dayLabel, timeStrings),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fg),
             )
         }
@@ -331,7 +338,7 @@ internal fun OnboardingNudgeSummary(schedule: NudgeSchedule?) {
         verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1),
     ) {
         Text(
-            text = NotificationCopy.scheduleSummary(
+            text = scheduleSummary(
                 dayGroupLabel(effective.days),
                 effective.times.sorted().map { formatHour12(it) },
             ),
@@ -363,7 +370,7 @@ private fun MutedBadge() {
         )
         Spacer(Modifier.width(OrbitTheme.spacing.x1))
         Text(
-            text = NotificationCopy.LABEL_MUTED_BADGE,
+            text = stringResource(R.string.lists_nudge_paused_badge),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fg),
         )
     }
@@ -382,13 +389,43 @@ private val SUNDAY_FIRST: List<DayOfWeek> = listOf(
     DayOfWeek.SATURDAY,
 )
 
+/**
+ * The schedule as a sentence (D-06), from pre-formatted parts:
+ *
+ * | Schedule state | Result |
+ * |---|---|
+ * | All 7 days, one time | "Every day at {t}" |
+ * | Mon–Fri, one time | "Weekdays at {t}" |
+ * | Sat–Sun, one time | "Weekends at {t}" |
+ * | Other days | "{days} at {t}" ("Sun, Wed at 10am") |
+ * | Two times | "... at {t1} and {t2}" |
+ * | Three or more | "... at {t1}, {t2}, and {t3}" |
+ *
+ * [dayGroupLabel] comes from [dayGroupLabel], [timeStrings] (non-empty) from
+ * [formatHour12]. Moved here from NotificationCopy, its only caller being
+ * this file; the words are strings_lists.xml's.
+ */
+@Composable
+private fun scheduleSummary(dayGroupLabel: String, timeStrings: List<String>): String {
+    val timePart = when (timeStrings.size) {
+        1 -> timeStrings[0]
+        2 -> stringResource(R.string.lists_nudge_times_two, timeStrings[0], timeStrings[1])
+        else -> stringResource(
+            R.string.lists_nudge_times_many,
+            timeStrings.dropLast(1).joinToString(", "),
+            timeStrings.last(),
+        )
+    }
+    return stringResource(R.string.lists_nudge_summary, dayGroupLabel, timePart)
+}
+
 /** The locale's full day name, for accessibility content descriptions. */
 private fun DayOfWeek.fullName(): String = getDisplayName(TextStyle.FULL, Locale.getDefault())
 
 /**
  * Returns the D-06 day-group label for the given set of days.
  *
- * Rules (from NotificationCopy.scheduleSummary KDoc / UI-SPEC section 1c):
+ * Rules (from [scheduleSummary] / UI-SPEC section 1c):
  *  - All 7 days → "Every day"
  *  - Mon–Fri only → "Weekdays"
  *  - Sat–Sun only → "Weekends"

@@ -35,7 +35,7 @@ import org.junit.Test
  *   3. **B1 — `isArchived` filter:** an ignored AND archived contact is filtered
  *      out so only the non-archived ignored row appears.
  *   4. `onUnignore(...)` flips `isIgnored = false` via the real
- *      [UnignoreContactUseCase] and emits a `SnackbarEvent("Restored {Name}", "Undo")`.
+ *      [UnignoreContactUseCase] and emits a "Restored {Name}" snackbar with Undo.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsIgnoredViewModelTest {
@@ -122,8 +122,12 @@ class SettingsIgnoredViewModelTest {
         val row = ready.ignored[0]
         assertEquals(42L, row.id)
         assertEquals("Alex Chen", row.name)
-        // "Ignored {today}" (strings_settings.xml); the span comes from formatRelative.
-        assertEquals(UiText.res(R.string.settings_ignored_relative, "today"), row.ignoredRelativeLabel)
+        // "Ignored {today}" (strings_settings.xml); "today" is formatRelative's
+        // UiText (strings_time.xml), nested as the argument.
+        assertEquals(
+            UiText.res(R.string.settings_ignored_relative, UiText.res(R.string.time_ago_today)),
+            row.ignoredRelativeLabel,
+        )
     }
 
     // ============================================================================
@@ -165,8 +169,9 @@ class SettingsIgnoredViewModelTest {
         vm.snackbarEvents.test(timeout = 2.seconds) {
             vm.onUnignore(42L, "Alex Chen")
             val event = awaitItem()
-            assertEquals("Restored Alex Chen", event.message)
-            assertEquals("Undo", event.actionLabel)
+            // "Restored Alex Chen" / "Undo" (SnackbarCopyTest pins the English).
+            assertEquals(UiText.res(R.string.components_snackbar_restored, "Alex Chen"), event.message)
+            assertEquals(UiText.res(R.string.components_action_undo), event.actionLabel)
             cancelAndIgnoreRemainingEvents()
         }
 
@@ -178,6 +183,8 @@ class SettingsIgnoredViewModelTest {
         // UndoStack carries an inverse closure — peek (do not consume).
         val pending = undoStack.peek()
         assertTrue(pending != null, "Undo closure must be queued for snackbar Undo tap")
-        assertEquals("Restored Alex Chen", pending.label)
+        // Its inverse re-ignores (the words are on the event above).
+        pending.inverse()
+        assertEquals(true, contactRepo.markIgnoredCalls.last().isIgnored)
     }
 }

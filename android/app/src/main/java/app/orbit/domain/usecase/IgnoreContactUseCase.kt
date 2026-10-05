@@ -42,11 +42,12 @@ class IgnoreContactUseCase @Inject constructor(
      * @property inverse Suspending closure that flips the four ignore columns
      *                   back to (false, null, null) — undo within the snackbar
      *                   window; no drift restore needed.
-     * @property label Snackbar copy: "Ignored {contactName}".
+     *                   The snackbar's words ("Ignored Sam") are the caller's,
+     *                   from string resources.
      */
-    data class Result(val inverse: suspend () -> Unit, val label: String)
+    data class Result(val inverse: suspend () -> Unit)
 
-    suspend operator fun invoke(contactId: Long, contactName: String): Result {
+    suspend operator fun invoke(contactId: Long): Result {
         val now = clock.now()
         // H2 fix — the membership snapshot read MUST happen inside the same
         // transaction as `markIgnored` so a concurrent membership write between
@@ -104,7 +105,6 @@ class IgnoreContactUseCase @Inject constructor(
                 // The 30s KEEP debounce coalesces the forward+undo pair.
                 widgetRefreshTrigger.scheduleRefresh()
             },
-            label = "Ignored $contactName",
         )
     }
 }

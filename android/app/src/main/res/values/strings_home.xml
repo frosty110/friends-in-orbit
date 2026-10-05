@@ -63,7 +63,7 @@
     <string name="home_rhythm_legend_you">You</string>
     <!-- "Them" = calls you received. -->
     <string name="home_rhythm_legend_them">Them</string>
-    <string name="home_rhythm_legend_a11y">Bar outlines show direction: one colour for calls you made, another for calls you received</string>
+    <string name="home_rhythm_legend_a11y">Bar outlines show direction: one color for calls you made, another for calls you received</string>
     <!-- Screen-reader hint on a day column that has calls. -->
     <string name="home_rhythm_see_day">See this day</string>
     <plurals name="home_rhythm_day_calls">
@@ -91,6 +91,8 @@
     <string name="home_direction_they_called">They called</string>
     <!-- One call's row: direction, length, time. "You called · 14 min · 4:30pm". -->
     <string name="home_rhythm_call_meta">%1$s · %2$s · %3$s</string>
+    <!-- Stands in for the name of someone who has left the list since the call. -->
+    <string name="home_rhythm_someone">Someone</string>
 
     <!-- The one reflective line at the foot of Home. -->
     <string name="home_reflection">The call that makes your day can make someone else\'s. You deserve to be the one who reaches out.</string>

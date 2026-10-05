@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.ContactsContract
 import android.widget.Toast
+import app.orbit.R
 
 /**
  * Opens the device's own contact card for [phoneContactId] via `ACTION_VIEW`.
@@ -28,7 +29,8 @@ import android.widget.Toast
  * `AndroidManifest.xml` is mandatory on Android 11+ or the resolve returns null
  * even when a contacts app IS installed.
  *
- * Toast copy is voice-audited: factual, sentence case, no apology.
+ * Toast copy (strings_components.xml) is voice-audited: factual, sentence
+ * case, no apology.
  */
 fun Context.openPhoneContact(phoneContactId: Long) {
     val uri = ContentUris.withAppendedId(
@@ -39,6 +41,6 @@ fun Context.openPhoneContact(phoneContactId: Long) {
     if (intent.resolveActivity(packageManager) != null) {
         startActivity(intent)
     } else {
-        Toast.makeText(this, "No contacts app installed", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.components_toast_no_contacts_app), Toast.LENGTH_SHORT).show()
     }
 }

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import app.orbit.R
 
 /**
  * Opens the system dialer pre-filled with [phone] via `ACTION_DIAL`. CORE-02
@@ -16,8 +17,8 @@ import android.widget.Toast
  * on Android 11+ (minSdk 31) — without it, `resolveActivity` returns null even
  * when a dialer IS installed.
  *
- * Toast copy "No dialer app installed" is voice-audited: factual, sentence
- * case, no exclamation, no apology.
+ * Toast copy "No dialer app installed" (strings_components.xml) is
+ * voice-audited: factual, sentence case, no exclamation, no apology.
  */
 fun Context.dialPhoneNumber(phone: String) {
     val intent = Intent(Intent.ACTION_DIAL).apply {
@@ -26,6 +27,6 @@ fun Context.dialPhoneNumber(phone: String) {
     if (intent.resolveActivity(packageManager) != null) {
         startActivity(intent)
     } else {
-        Toast.makeText(this, "No dialer app installed", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.components_toast_no_dialer), Toast.LENGTH_SHORT).show()
     }
 }

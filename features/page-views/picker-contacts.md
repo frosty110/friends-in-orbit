@@ -1,4 +1,4 @@
-# Add contacts / picker
+# Add people / picker
 
 **Route:** `pick/contacts`
 **Group:** Lists
@@ -8,7 +8,7 @@
 
 What a user expects to see or do here:
 
-- Pick people from the address book into a list (Add / Move / Copy — title reflects mode)
+- Pick people from the address book into a list (Add / Move / Copy; the title says which: "Add people", "Move 3 people", "Copy 1 person". It said "Add contacts" and "Move 3 contacts" until 2026-10-05: the app says "people" for the people in Orbit)
 - Search by name or number, with one clear control
 - Sort: Alphabetical / Most called / Recently called / Recently added, from a 48dp control; the current order is ticked
 - Filter by call frequency, recency, "On a list" and "Not on a list"; applied filters sit in their own always-visible row, each with an x

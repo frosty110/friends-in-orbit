@@ -83,7 +83,10 @@ import app.orbit.ui.theme.orbitCardShadow
 import app.orbit.ui.theme.orbitHeroShadow
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.asString
+import app.orbit.ui.util.axisTickLabels
 import app.orbit.ui.util.dialPhoneNumber
+import app.orbit.ui.util.formatDuration
+import app.orbit.ui.util.formatSpan
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -173,8 +176,8 @@ private fun ListActionsMenu(
             onDismissRequest = { expanded = false },
             actions = listOf(
                 OrbitMenuAction(label = stringResource(R.string.card_menu_browse), onClick = onBrowse, icon = "list-bullets"),
-                OrbitMenuAction(label = stringResource(R.string.card_menu_add_contacts), onClick = onAddContacts, icon = "plus"),
-                OrbitMenuAction(label = stringResource(R.string.card_menu_edit_list), onClick = onEditList, icon = "pencil-simple")
+                OrbitMenuAction(label = stringResource(R.string.card_menu_add_people), onClick = onAddContacts, icon = "plus"),
+                OrbitMenuAction(label = stringResource(R.string.card_menu_list_settings), onClick = onEditList, icon = "pencil-simple")
             )
         )
     }
@@ -365,7 +368,7 @@ private fun CallLogDeniedNoticePreview() {
 
 /**
  * Tide-marker empty state #1 — the list has zero non-archived non-ignored
- * members. 2026-06-09: the primary action is now the fix ("Add contacts"),
+ * members. 2026-06-09: the primary action is now the fix ("Add people"),
  * not an exit. Sentence case, no exclamation marks — voice rules.
  */
 @Composable
@@ -373,7 +376,7 @@ private fun NoMembersShell(onAddContacts: () -> Unit, onGoHome: () -> Unit) {
     EmptyShell(
         heading = stringResource(R.string.card_no_members_heading),
         body = stringResource(R.string.card_no_members_body),
-        primaryText = stringResource(R.string.card_add_contacts),
+        primaryText = stringResource(R.string.card_add_people),
         onPrimary = onAddContacts,
         secondaryText = stringResource(R.string.card_go_home),
         onSecondary = onGoHome
@@ -751,7 +754,10 @@ internal fun ContactCardFace(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = stringResource(R.string.card_last_note_meta, lastNote.relativeTimestamp),
+                    text = stringResource(
+                        R.string.card_last_note_meta,
+                        lastNote.relativeTimestamp?.asString().orEmpty()
+                    ),
                     style = OrbitTheme.type.meta,
                     color = OrbitTheme.colors.fgMuted
                 )
@@ -843,7 +849,7 @@ private fun UsuallyAnswersCard(contact: Contact, nowHour: Int) {
                 )
             }
             Text(
-                text = contact.bestWindowLabel,
+                text = contact.bestWindowLabel?.asString().orEmpty(),
                 color = OrbitTheme.colors.fg,
                 style = OrbitTheme.type.statValue
             )
@@ -896,15 +902,9 @@ private fun HeatStrip(heat: FloatArray, nowHour: Int) {
             .padding(top = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // Midnight, 6am, noon, 6pm, midnight (strings_time.xml, shared with a
-        // list's active hours bar).
-        listOf(
-            R.string.time_axis_midnight,
-            R.string.time_axis_6am,
-            R.string.time_axis_noon,
-            R.string.time_axis_6pm,
-            R.string.time_axis_midnight,
-        ).forEach {
+        // Midnight, 6am, noon, 6pm, midnight in the phone's 12 or 24 hour
+        // style (strings_time.xml, shared with a list's active hours bar).
+        axisTickLabels().forEach {
             Text(stringResource(it), style = OrbitTheme.type.timelineAxis, color = OrbitTheme.colors.fgSubtle)
         }
     }
@@ -924,9 +924,17 @@ private fun StatRow(contact: Contact) {
         // recorded) is the truthful third stat.
         val none = stringResource(R.string.card_stat_none)
         val never = stringResource(R.string.card_stat_never)
-        Stat(stringResource(R.string.card_stat_last_called), contact.lastCalledLabel.ifBlank { never }, Modifier.weight(1f))
+        Stat(
+            stringResource(R.string.card_stat_last_called),
+            contact.lastCalledLabel?.asString() ?: never,
+            Modifier.weight(1f)
+        )
         Divider(28.dp)
-        Stat(stringResource(R.string.card_stat_avg_length), contact.avgLengthLabel.ifBlank { none }, Modifier.weight(1f))
+        Stat(
+            stringResource(R.string.card_stat_avg_length),
+            contact.avgLengthLabel?.asString() ?: none,
+            Modifier.weight(1f)
+        )
         Divider(28.dp)
         Stat(
             stringResource(R.string.card_stat_calls),
@@ -972,13 +980,13 @@ private val previewContact: Contact = Contact(
     id = "preview-1",
     name = "Avery Quinn",
     phone = "+1 555 0100",
-    lastCalledLabel = "11 days ago",
-    avgLengthLabel = "14 min",
+    lastCalledLabel = UiText.plural(R.plurals.time_ago_days, 11, 11),
+    avgLengthLabel = formatDuration(14 * 60),
     pickupRateLabel = "",
     totalCalls = 12,
     due = true,
     listIds = listOf("inner-orbit"),
-    bestWindowLabel = "Evenings",
+    bestWindowLabel = UiText.res(R.string.time_daypart_evenings),
     heat = FloatArray(24) { h -> if (h in 18..21) 1f - (21 - h) * 0.2f else 0f },
     history = emptyList(),
     notes = emptyList(),
@@ -996,14 +1004,14 @@ private val previewState: CardViewUiState = CardViewUiState.Ready(
             contactId = 1L,
             body = "Starting the new job on Monday. Ask how the first week went.",
             createdAtMs = 0L,
-            relativeTimestamp = "12 days ago",
+            relativeTimestamp = UiText.plural(R.plurals.time_ago_days, 12, 12),
             absoluteTimestamp = "",
         )
     ),
     nowHour = 19,
     whyNowLine = UiText.res(
         R.string.card_why_two_lines,
-        UiText.res(R.string.card_why_span, "11 days"),
+        UiText.res(R.string.card_why_span, formatSpan(11)),
         UiText.plural(R.plurals.card_rhythm_weeks, 2, 2),
     )
 )

@@ -50,9 +50,9 @@ object OrbitNotifications {
         nm.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_LIST_PROMPT,
-                NotificationCopy.CHANNEL_LABEL_LIST_PROMPTS,
+                NotificationCopy.CHANNEL_LABEL_LIST_PROMPTS.asString(context),
                 NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply { description = NotificationCopy.CHANNEL_DESC_LIST_PROMPTS }
+            ).apply { description = NotificationCopy.CHANNEL_DESC_LIST_PROMPTS.asString(context) }
         )
     }
 }

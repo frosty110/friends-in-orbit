@@ -3,6 +3,7 @@ package app.orbit.ui.screens.picker
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
+import app.orbit.R
 import app.orbit.data.dao.RecordingListMembershipDao
 import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.entity.RuleKind
@@ -16,6 +17,7 @@ import app.orbit.domain.membershipFixture
 import app.orbit.domain.ruleTemplateFixture
 import app.orbit.domain.undo.UndoStack
 import app.orbit.testutil.MainDispatcherRule
+import app.orbit.ui.util.UiText
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -378,7 +380,7 @@ class ListPickerViewModelTest {
         )
         commitBus.events.test {
             vm.onCreateList("Night owls")
-            assertEquals("Couldn't create the list", awaitItem().message)
+            assertEquals(UiText.res(R.string.picker_snackbar_create_list_failed), awaitItem().message)
         }
         assertTrue(s.listRepo.createCalls.isEmpty())
     }
@@ -454,7 +456,7 @@ class ListPickerViewModelTest {
             testScheduler.advanceUntilIdle()
 
             // Write landed and the result reached the app-level bus anyway.
-            assertEquals("Added to 1 list", awaitItem().message)
+            assertEquals(addedToLists(1), awaitItem().message)
         }
         assertEquals(1, dao.insertCalls.size)
         val inserted = dao.insertCalls[0].memberships
@@ -472,8 +474,8 @@ class ListPickerViewModelTest {
         s.commitBus.events.test {
             s.vm.onCommit()
             val event = awaitItem()
-            assertEquals("Added to 2 lists", event.message)
-            assertEquals("Undo", event.actionLabel)
+            assertEquals(addedToLists(2), event.message)
+            assertEquals(UNDO, event.actionLabel)
         }
         assertEquals(1, s.membershipDao.insertCalls.size)
     }
@@ -487,8 +489,8 @@ class ListPickerViewModelTest {
         s.commitBus.events.test {
             s.vm.onCommit()
             val event = awaitItem()
-            assertEquals("Added to 1 list", event.message)
-            assertEquals("Undo", event.actionLabel)
+            assertEquals(addedToLists(1), event.message)
+            assertEquals(UNDO, event.actionLabel)
         }
         val inserted = s.membershipDao.insertCalls.single().memberships
         assertEquals(listOf(1L), inserted.map { it.listId })
@@ -524,7 +526,7 @@ class ListPickerViewModelTest {
         s.commitBus.events.test {
             s.vm.onCommit()
             val event = awaitItem()
-            assertEquals("Couldn't save that", event.message)
+            assertEquals(UiText.res(R.string.picker_snackbar_save_failed), event.message)
             assertNull("failure toast carries no action", event.actionLabel)
         }
         assertNull("failed commit must not record an undo", s.undoStack.peek())
@@ -548,5 +550,13 @@ class ListPickerViewModelTest {
             setOf(1L to listOf(12L), 2L to listOf(12L)),
             s.membershipDao.removeCalls.map { it.fromListId to it.ids }.toSet(),
         )
+    }
+
+    // Snackbar copy is UiText; SnackbarCopyTest pins its English ("Added to 1
+    // list", "Added to 2 lists"), so these compare which resource was meant.
+    private fun addedToLists(n: Int): UiText = UiText.plural(R.plurals.picker_snackbar_added_to_lists, n, n)
+
+    private companion object {
+        val UNDO: UiText = UiText.res(R.string.components_action_undo)
     }
 }

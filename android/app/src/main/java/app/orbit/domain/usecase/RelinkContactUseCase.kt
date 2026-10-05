@@ -56,9 +56,10 @@ class RelinkContactUseCase @Inject constructor(
 ) {
     /**
      * @property inverse Suspending closure that splits the two rows back apart.
-     * @property label Snackbar copy: "Re-linked to {phone contact name}".
+     * @property linkedName The phone contact's display name, for the caller's
+     *                      snackbar ("Re-linked to Mum", string resources).
      */
-    data class Result(val inverse: suspend () -> Unit, val label: String)
+    data class Result(val inverse: suspend () -> Unit, val linkedName: String)
 
     /** Everything the forward merge changes, captured before it runs. */
     private data class Snapshot(
@@ -128,7 +129,7 @@ class RelinkContactUseCase @Inject constructor(
         widgetRefreshTrigger.scheduleRefresh()
         return Result(
             inverse = { undo(snapshot) },
-            label = "Re-linked to ${snapshot.live.displayName}"
+            linkedName = snapshot.live.displayName
         )
     }
 

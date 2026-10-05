@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
@@ -38,6 +39,7 @@ import app.orbit.ui.screens.lists.ListConfigUiState
 import app.orbit.ui.screens.lists.ListConfigViewModel
 import app.orbit.ui.screens.lists.SettingGroup
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.asString
 import java.time.LocalTime
 
 /**
@@ -78,6 +80,8 @@ fun OnboardingFirstListScreen(
     val state by vm.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    // Snackbar copy is UiText (strings_lists.xml); resolved when shown.
+    val context = LocalContext.current
     // Same handling as the production ListConfigScreen: Short, and an Undo
     // tap (member remove) pops the VM's UndoStack. The host is passed to
     // OnboardingScaffold below; without one on screen, the first showSnackbar
@@ -87,8 +91,8 @@ fun OnboardingFirstListScreen(
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             vm.snackbarEvents.collect { event ->
                 val result = snackbarHostState.showSnackbar(
-                    message = event.message,
-                    actionLabel = event.actionLabel,
+                    message = event.message.asString(context),
+                    actionLabel = event.actionLabel?.asString(context),
                     duration = SnackbarDuration.Short,
                     withDismissAction = false
                 )

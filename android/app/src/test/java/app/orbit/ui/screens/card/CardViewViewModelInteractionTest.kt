@@ -463,9 +463,13 @@ class CardViewViewModelInteractionTest {
         setup.vm.uiState.test(timeout = 2.seconds) {
             val state = awaitItem()
             assertTrue(state is CardViewUiState.Ready, "expected Ready, got $state")
-            // "It's been {3 days}." from strings_card.xml; the span still comes from formatSpan.
+            // "It's been {3 days}." from strings_card.xml; the span is formatSpan's
+            // UiText ("3 days", strings_time.xml), nested as the argument.
             assertEquals(
-                app.orbit.ui.util.UiText.res(app.orbit.R.string.card_why_span, "3 days"),
+                app.orbit.ui.util.UiText.res(
+                    app.orbit.R.string.card_why_span,
+                    app.orbit.ui.util.UiText.plural(app.orbit.R.plurals.time_span_days, 3, 3),
+                ),
                 state.whyNowLine,
             )
             assertTrue(!state.isAheadOfToday, "past nextDueAt → due today, not ahead")

@@ -28,10 +28,11 @@ class BulkIgnoreUseCase @Inject constructor(
      * @property inverse Suspending closure that restores each contact's prior
      *                   `isIgnored` flag — grouped by prior value to dispatch
      *                   at most two `setIgnoredBatch` calls (one per group).
-     * @property label Snackbar copy: "Ignored {N} contacts" ("1 contact"
-     *                  when the batch is a single row).
+     * @property count How many people the batch ignored, for the caller's
+     *                  snackbar ("Ignored 3 people", a plural in string
+     *                  resources; the domain layer holds no copy).
      */
-    data class Result(val inverse: suspend () -> Unit, val label: String)
+    data class Result(val inverse: suspend () -> Unit, val count: Int)
 
     suspend operator fun invoke(contactIds: List<Long>): Result {
         val snapshot: List<IgnoredSnapshot> = txRunner.withTransaction {
@@ -47,11 +48,7 @@ class BulkIgnoreUseCase @Inject constructor(
                     }
                 }
             },
-            label = if (contactIds.size == 1) {
-                "Ignored 1 contact"
-            } else {
-                "Ignored ${contactIds.size} contacts"
-            },
+            count = contactIds.size,
         )
     }
 }

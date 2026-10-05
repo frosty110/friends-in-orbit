@@ -16,11 +16,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitIconButton
@@ -82,10 +85,10 @@ fun MultiSelectActionBar(
             OrbitIconButton(
                 icon = "x",
                 onClick = onExit,
-                contentDescription = "Exit selection",
+                contentDescription = stringResource(R.string.browse_select_exit),
             )
             Text(
-                text = "$count selected",
+                text = pluralStringResource(R.plurals.browse_selected_count, count, count),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
                 modifier = Modifier
                     .weight(1f)
@@ -97,7 +100,7 @@ fun MultiSelectActionBar(
             OrbitIconButton(
                 icon = "dots-three-vertical",
                 onClick = onOverflow,
-                contentDescription = "More batch actions",
+                contentDescription = stringResource(R.string.browse_select_more),
             )
         }
         // A flow row, not equal weights: at 200% font scale a third of the
@@ -110,17 +113,17 @@ fun MultiSelectActionBar(
                 .padding(horizontal = OrbitTheme.spacing.x2, vertical = OrbitTheme.spacing.x1),
         ) {
             OrbitButton(
-                text = "Move to…",
+                text = stringResource(R.string.browse_select_move),
                 onClick = onMove,
                 variant = OrbitButtonVariant.Ghost,
             )
             OrbitButton(
-                text = "Copy to…",
+                text = stringResource(R.string.browse_select_copy),
                 onClick = onCopy,
                 variant = OrbitButtonVariant.Ghost,
             )
             OrbitButton(
-                text = "Remove",
+                text = stringResource(R.string.browse_select_remove),
                 onClick = onRemove,
                 variant = OrbitButtonVariant.Ghost,
             )

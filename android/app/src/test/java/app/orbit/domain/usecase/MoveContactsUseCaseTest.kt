@@ -22,7 +22,7 @@ import org.junit.Test
  *   forward — `moveAll(fromListId, toListId, ids, nowMs)`
  *   inverse — `removeAll(toListId, newlyAdded)` + `insertAll(sourceSnapshot)`
  *
- * The use case short-circuits to `Result(inverse = {}, label = "")` when
+ * The use case short-circuits to `Result(inverse = {}, count = 0)` when
  *   - `contactIds` is empty, or
  *   - `fromListId == toListId`, or
  *   - the destination list is missing or archived.
@@ -53,7 +53,7 @@ class MoveContactsUseCaseTest {
         val dao = RecordingListMembershipDao()
         val useCase = MoveContactsUseCase(passThruTx, dao, listDaoWithBoth(), FakeListRepository(), fixedClock)
 
-        useCase(fromListId = 10L, toListId = 20L, contactIds = listOf(1L, 2L, 3L), targetListName = "Target")
+        useCase(fromListId = 10L, toListId = 20L, contactIds = listOf(1L, 2L, 3L))
 
         val call = dao.moveCalls.single()
         assertEquals(10L, call.fromListId)
@@ -63,13 +63,14 @@ class MoveContactsUseCaseTest {
     }
 
     @Test
-    fun result_label_uses_target_name_and_count() = runTest {
+    fun result_reports_the_count_moved() = runTest {
         val dao = RecordingListMembershipDao()
         val useCase = MoveContactsUseCase(passThruTx, dao, listDaoWithBoth(), FakeListRepository(), fixedClock)
 
-        val result = useCase(10L, 20L, listOf(1L, 2L), "Inner orbit")
+        val result = useCase(10L, 20L, listOf(1L, 2L))
 
-        assertEquals("Moved 2 to Inner orbit", result.label)
+        // "Moved 2 to Inner orbit" is the caller's plural (SnackbarCopyTest).
+        assertEquals(2, result.count)
     }
 
     @Test
@@ -83,7 +84,7 @@ class MoveContactsUseCaseTest {
         )
         val useCase = MoveContactsUseCase(passThruTx, dao, listDaoWithBoth(), FakeListRepository(), fixedClock)
 
-        val result = useCase(10L, 20L, listOf(1L, 2L), "Target")
+        val result = useCase(10L, 20L, listOf(1L, 2L))
         dao.clearCalls() // discard the forward dispatch — assert only on the inverse
         result.inverse.invoke()
 
@@ -106,12 +107,12 @@ class MoveContactsUseCaseTest {
         val dao = RecordingListMembershipDao()
         val useCase = MoveContactsUseCase(passThruTx, dao, listDaoWithBoth(), FakeListRepository(), fixedClock)
 
-        val result = useCase(10L, 20L, emptyList(), "Target")
+        val result = useCase(10L, 20L, emptyList())
 
         assertTrue(dao.moveCalls.isEmpty())
         assertTrue(dao.removeCalls.isEmpty())
         assertTrue(dao.insertCalls.isEmpty())
-        assertEquals("", result.label)
+        assertEquals(0, result.count)
     }
 
     @Test
@@ -119,10 +120,10 @@ class MoveContactsUseCaseTest {
         val dao = RecordingListMembershipDao()
         val useCase = MoveContactsUseCase(passThruTx, dao, listDaoWithBoth(), FakeListRepository(), fixedClock)
 
-        val result = useCase(10L, 10L, listOf(1L), "Same")
+        val result = useCase(10L, 10L, listOf(1L))
 
         assertTrue(dao.moveCalls.isEmpty())
-        assertEquals("", result.label)
+        assertEquals(0, result.count)
     }
 
     @Test
@@ -136,10 +137,10 @@ class MoveContactsUseCaseTest {
         )
         val useCase = MoveContactsUseCase(passThruTx, dao, listDaoArchived, FakeListRepository(), fixedClock)
 
-        val result = useCase(10L, 20L, listOf(1L), "Archived target")
+        val result = useCase(10L, 20L, listOf(1L))
 
         assertTrue(dao.moveCalls.isEmpty())
-        assertEquals("", result.label)
+        assertEquals(0, result.count)
     }
 
     @Test
@@ -151,9 +152,9 @@ class MoveContactsUseCaseTest {
         )
         val useCase = MoveContactsUseCase(passThruTx, dao, listDaoSourceOnly, FakeListRepository(), fixedClock)
 
-        val result = useCase(10L, 20L, listOf(1L), "Missing")
+        val result = useCase(10L, 20L, listOf(1L))
 
         assertTrue(dao.moveCalls.isEmpty())
-        assertEquals("", result.label)
+        assertEquals(0, result.count)
     }
 }

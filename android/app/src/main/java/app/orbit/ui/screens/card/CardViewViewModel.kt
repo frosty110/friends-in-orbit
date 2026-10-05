@@ -269,9 +269,8 @@ class CardViewViewModel @Inject constructor(
      * membership) on the depth-1 [UndoStack] and emit the snackbar. The
      * recompute keeps `lists.dueCount` consistent after the restore.
      *
-     * [label] is the snackbar's text and travels as [UiText] in [CardMessage].
-     * `UndoStack.PendingUndo.label` is a domain String nothing reads, so it
-     * gets a fixed, non-copy tag rather than English.
+     * [label] is the snackbar's text and travels as [UiText] in [CardMessage]
+     * (`UndoStack.PendingUndo` carries only the inverse).
      */
     private fun stageUndo(prior: List<ListMembershipEntity>, label: UiText) {
         val inverse: suspend () -> Unit = {
@@ -285,7 +284,7 @@ class CardViewViewModel @Inject constructor(
                 listRepo.recomputeDueCountForList(membership.listId, clock.now())
             }
         }
-        undoStack.put(UndoStack.PendingUndo(inverse, UNDO_TAG))
+        undoStack.put(UndoStack.PendingUndo(inverse))
         val token = ++undoToken
         _messages.tryEmit(CardMessage.Undoable(text = label, token = token))
     }
@@ -375,8 +374,8 @@ class CardViewViewModel @Inject constructor(
      * Honest one-line framing from the most recent call event (manual marks
      * count, the user told us they talked): "It's been 3 weeks." Null when
      * there is no history at all — the screen's neutral "No call history yet"
-     * panel covers that case instead. formatSpan still returns English; it
-     * slots into the resource sentence until RelativeTime returns UiText.
+     * panel covers that case instead. formatSpan's [UiText] ("3 weeks") nests
+     * as the sentence's argument.
      */
     private fun whyNowLine(recentCalls: List<CallEventEntity>, now: Instant): UiText? {
         val lastCallAt = recentCalls
@@ -451,6 +450,3 @@ class CardViewViewModel @Inject constructor(
 
 /** How long to wait for the call log to confirm a call before saying nothing. */
 private const val CALL_ACK_WAIT_MS = 15_000L
-
-/** Non-copy tag for `UndoStack.PendingUndo.label`; see [CardViewViewModel.stageUndo]. */
-private const val UNDO_TAG = "card-later-sooner"

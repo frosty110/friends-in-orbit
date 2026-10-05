@@ -15,8 +15,10 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.domain.model.PauseDuration
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
@@ -84,26 +86,26 @@ fun PauseSheet(
             verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
         ) {
             Text(
-                text = "Pause for how long?",
+                text = stringResource(R.string.contact_pause_title),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
             OrbitButton(
-                text = "1 week",
+                text = stringResource(R.string.contact_pause_week),
                 onClick = { commitAndDismiss(PauseDuration.OneWeek) },
                 variant = OrbitButtonVariant.Secondary,
                 modifier = Modifier.fillMaxWidth(),
             )
             OrbitButton(
-                text = "1 month",
+                text = stringResource(R.string.contact_pause_month),
                 onClick = { commitAndDismiss(PauseDuration.OneMonth) },
                 variant = OrbitButtonVariant.Secondary,
                 modifier = Modifier.fillMaxWidth(),
             )
             OrbitButton(
-                text = "Until you unpause",
+                text = stringResource(R.string.contact_pause_until_unpause),
                 onClick = { commitAndDismiss(PauseDuration.Indefinite) },
                 variant = OrbitButtonVariant.Secondary,
                 modifier = Modifier.fillMaxWidth(),
@@ -134,26 +136,26 @@ private fun PauseSheetPreviewSurface() {
         verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
     ) {
         Text(
-            text = "Pause for how long?",
+            text = stringResource(R.string.contact_pause_title),
             style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x3))
         OrbitButton(
-            text = "1 week",
+            text = stringResource(R.string.contact_pause_week),
             onClick = {},
             variant = OrbitButtonVariant.Secondary,
             modifier = Modifier.fillMaxWidth(),
         )
         OrbitButton(
-            text = "1 month",
+            text = stringResource(R.string.contact_pause_month),
             onClick = {},
             variant = OrbitButtonVariant.Secondary,
             modifier = Modifier.fillMaxWidth(),
         )
         OrbitButton(
-            text = "Until you unpause",
+            text = stringResource(R.string.contact_pause_until_unpause),
             onClick = {},
             variant = OrbitButtonVariant.Secondary,
             modifier = Modifier.fillMaxWidth(),

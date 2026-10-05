@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.contact.sections
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -25,10 +26,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.data.entity.RuleKind
 import app.orbit.domain.rule.RuleParams
 import app.orbit.ui.components.OrbitButton
@@ -36,6 +40,8 @@ import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.screens.lists.RuleTemplatePicker
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 
 /**
  * Per-contact rule override editor (CONTACT-03).
@@ -45,7 +51,8 @@ import app.orbit.ui.theme.OrbitTheme
  * section in/out as the contact's membership count crosses the threshold.
  *
  * **No-override branch (`hasOverride == false`):** shows eyebrow "Custom
- * schedule" + body "Follows the {template} rhythm from {primaryListName}." +
+ * schedule" + body "Follows the {template} rhythm from {primaryListName}."
+ * ("from its list" when [primaryListName] is null, under the curtain) +
  * Secondary "Set a schedule for this person" button (2026-10-05: it was a
  * Primary "Override", a second accent element and engineering vocabulary).
  *
@@ -73,9 +80,11 @@ import app.orbit.ui.theme.OrbitTheme
  *
  * **Corrupted JSON recovery.** When the VM cannot decode `ruleOverrideJson`
  * (`currentParams == null`), the screen passes a fresh default RuleParams
- * here and the eyebrow flips to "Custom schedule (recovering)" via the
- * `currentTemplateName` argument. The user can then tap Reset to default to
- * clear the corrupted column.
+ * here; an override is stored, so the editor branch shows and the user can
+ * tap Reset to default to clear the corrupted column.
+ *
+ * Copy lives in strings_contact.xml; the interval slider reuses List
+ * settings' slider strings (strings_lists.xml), since it mirrors that slider.
  *
  * Token-clean — zero hardcoded color/shape/fontSize. Sentence case copy with
  * zero exclamation marks (voice contract).
@@ -83,8 +92,8 @@ import app.orbit.ui.theme.OrbitTheme
 @Composable
 fun RuleOverrideSection(
     listsOnSize: Int,
-    currentTemplateName: String,
-    primaryListName: String,
+    currentTemplateName: UiText?,
+    primaryListName: String?,
     hasOverride: Boolean,
     currentParams: RuleParams,
     onOverride: () -> Unit,
@@ -102,12 +111,20 @@ fun RuleOverrideSection(
         modifier = modifier,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            SectionLabel(text = "Custom schedule")
+            SectionLabel(text = stringResource(R.string.contact_schedule_title))
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
 
             if (!hasOverride) {
+                // The VM always names the inherited rhythm here; "keep in
+                // touch" is its own fallback for a list without a template.
+                val rhythm = currentTemplateName?.asString()
+                    ?: stringResource(R.string.contact_rhythm_name_keep_in_touch)
                 Text(
-                    text = "Follows the ${currentTemplateName.lowercase()} rhythm from $primaryListName.",
+                    text = if (primaryListName != null) {
+                        stringResource(R.string.contact_schedule_follows, rhythm, primaryListName)
+                    } else {
+                        stringResource(R.string.contact_schedule_follows_hidden_list, rhythm)
+                    },
                     style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
                 )
                 Spacer(Modifier.height(OrbitTheme.spacing.x3))
@@ -115,7 +132,7 @@ fun RuleOverrideSection(
                 // screen's one accent element (rules.md §Design 5), and
                 // "Override" was engineering vocabulary (rubric D7).
                 OrbitButton(
-                    text = "Set a schedule for this person",
+                    text = stringResource(R.string.contact_schedule_set),
                     onClick = onOverride,
                     variant = OrbitButtonVariant.Secondary,
                 )
@@ -123,7 +140,7 @@ fun RuleOverrideSection(
                 OverrideEditor(params = currentParams, onChange = onParamsChange)
                 Spacer(Modifier.height(OrbitTheme.spacing.x3))
                 OrbitButton(
-                    text = "Reset to default",
+                    text = stringResource(R.string.contact_schedule_reset),
                     onClick = onResetDefault,
                     variant = OrbitButtonVariant.Ghost,
                 )
@@ -159,7 +176,7 @@ private fun OverrideEditor(params: RuleParams, onChange: (RuleParams) -> Unit) {
                 onCommit = { days -> onChange(commitOverrideInterval(params, days)) },
             )
             is RuleParams.LateNight, is RuleParams.Energize -> Text(
-                text = rhythmNoteFor(params.toRuleKind()).orEmpty(),
+                text = rhythmNoteFor(params.toRuleKind())?.let { stringResource(it) }.orEmpty(),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -206,19 +223,20 @@ private fun IntervalDaysSlider(
             .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4),
     ) {
         val rounded = days.toInt().coerceAtLeast(1)
-        val everyLabel = "Every $rounded ${if (rounded == 1) "day" else "days"}"
+        val everyLabel = pluralStringResource(R.plurals.lists_interval_every_days, rounded, rounded)
+        val aimLabel = stringResource(R.string.lists_interval_aim)
         Row(
             verticalAlignment = Alignment.Bottom,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = "Aim for every",
+                text = aimLabel,
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                 modifier = Modifier.weight(1f),
             )
             // Ink, not accentPress: the Call button is the screen's accent.
             Text(
-                text = "$rounded ${if (rounded == 1) "day" else "days"}",
+                text = pluralStringResource(R.plurals.lists_interval_days, rounded, rounded),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         }
@@ -242,7 +260,7 @@ private fun IntervalDaysSlider(
                 // TalkBack read "10 percent"; it now says what the value means
                 // (rubric D8: sliders announce meaningful values).
                 .semantics {
-                    contentDescription = "Aim for every"
+                    contentDescription = aimLabel
                     stateDescription = everyLabel
                 },
         )
@@ -251,11 +269,11 @@ private fun IntervalDaysSlider(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "1 day",
+                text = pluralStringResource(R.plurals.lists_interval_days, 1, 1),
                 style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
             )
             Text(
-                text = "60 days",
+                text = pluralStringResource(R.plurals.lists_interval_days, 60, 60),
                 style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
             )
         }
@@ -275,10 +293,11 @@ private fun RuleParams.toRuleKind(): RuleKind = when (this) {
  * replicated rather than widened). Subject reworded from "This list" to the
  * rhythm itself — here the note describes a per-contact override, not a list.
  */
-private fun rhythmNoteFor(kind: RuleKind): String? = when (kind) {
+@StringRes
+private fun rhythmNoteFor(kind: RuleKind): Int? = when (kind) {
     RuleKind.KEEP_IN_TOUCH -> null
-    RuleKind.LATE_NIGHT -> "The late night rhythm runs on its own: slower and more patient, with nothing to set."
-    RuleKind.ENERGIZE -> "The energize rhythm runs on its own: quicker, with nothing to set."
+    RuleKind.LATE_NIGHT -> R.string.contact_rhythm_note_late_night
+    RuleKind.ENERGIZE -> R.string.contact_rhythm_note_energize
 }
 
 private fun defaultParamsFor(kind: RuleKind): RuleParams = when (kind) {
@@ -296,7 +315,7 @@ private fun PreviewNoOverrideLight() {
         Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x4)) {
             RuleOverrideSection(
                 listsOnSize = 2,
-                currentTemplateName = "Keep in touch",
+                currentTemplateName = UiText.res(R.string.contact_rhythm_name_keep_in_touch),
                 primaryListName = "Inner orbit",
                 hasOverride = false,
                 currentParams = RuleParams.KeepInTouch(),
@@ -315,7 +334,7 @@ private fun PreviewWithOverrideDark() {
         Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x4)) {
             RuleOverrideSection(
                 listsOnSize = 2,
-                currentTemplateName = "Keep in touch",
+                currentTemplateName = UiText.res(R.string.contact_rhythm_name_keep_in_touch),
                 primaryListName = "Inner orbit",
                 hasOverride = true,
                 // Built via withIntervalHours so the preview carries the same
@@ -336,7 +355,7 @@ private fun PreviewGatedOff() {
         Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x4)) {
             RuleOverrideSection(
                 listsOnSize = 1,
-                currentTemplateName = "Keep in touch",
+                currentTemplateName = UiText.res(R.string.contact_rhythm_name_keep_in_touch),
                 primaryListName = "Inner orbit",
                 hasOverride = false,
                 currentParams = RuleParams.KeepInTouch(),

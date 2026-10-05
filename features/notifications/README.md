@@ -62,10 +62,10 @@ Defined 2026-10-05; NOTIF-01 to NOTIF-12 record what the code already cites, NOT
 
 - **NOTIF-01: Permission is checked when a nudge fires.** `POST_NOTIFICATIONS` is asked for on Android 13+ before the first schedule; at fire time the worker checks the system permission and Orbit's app-level switch (`areNotificationsEnabled`) and skips, still re-enqueuing, when either is off.
 - **NOTIF-03: Active hours bound when a nudge may post.** A window that spans midnight (22:00 to 02:00) counts both sides; outside the window the slot is skipped and the next one enqueued.
-- **NOTIF-05: No shame framing.** Every notification string comes from `NotificationCopy` and passes `CopyAuditTest`'s forbidden-pattern audit ("haven't called", "overdue", "streak", "due", "caught up" and others).
+- **NOTIF-05: No shame framing.** Every notification string comes from `NotificationCopy`, whose words live in `res/values/strings_notify.xml` (since 2026-10-05, so a nudge can be translated; `NotificationCopy` picks the sentence and returns a `UiText` the builder resolves with its Context), and passes `CopyAuditTest`'s forbidden-pattern audit ("haven't called", "overdue", "streak", "due", "caught up" and others, and now the em dash). The nudge schedule editor's words ("Add time", "Nudges paused") moved to List settings' `strings_lists.xml` and are audited with them.
 - **NOTIF-06: Do Not Disturb is respected.** A nudge posts only when the system allows all interruptions.
 - **NOTIF-08: No daily digest.** The digest worker is gone and its legacy unique work is cancelled on every cold start.
-- **NOTIF-09: Notification copy is pinned.** `CopyAuditTest` holds golden strings for every nudge text.
+- **NOTIF-09: Notification copy is pinned.** `CopyAuditTest` holds golden strings for every nudge text, resolved against the real English resources under Robolectric.
 - **NOTIF-10: A list's nudge schedule is stored with the list.** Days of the week by times of day, as JSON on the list row, round-tripping exactly.
 - **NOTIF-11: A list's nudge lives and dies with the list.** Archiving or deleting a list cancels its nudge chain; unarchiving re-enqueues it.
 - **NOTIF-12: One self-re-enqueueing chain per list.** Each list's nudge is a one-time work request that enqueues the next slot when it finishes, gate or no gate (ADR 0004).

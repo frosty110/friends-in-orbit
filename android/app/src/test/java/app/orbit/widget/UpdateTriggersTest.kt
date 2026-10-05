@@ -142,7 +142,7 @@ class UpdateTriggersTest {
             widgetRefreshTrigger = trigger,
         )
 
-        useCase(fromListId = 10L, toListId = 20L, contactIds = listOf(1L), targetListName = "Target")
+        useCase(fromListId = 10L, toListId = 20L, contactIds = listOf(1L))
 
         assertEquals(1, trigger.scheduleCalls.size, "MoveContactsUseCase must call scheduleRefresh() once")
     }
@@ -163,7 +163,7 @@ class UpdateTriggersTest {
             widgetRefreshTrigger = trigger,
         )
 
-        useCase(contactId = 1L, contactName = "Alex Chen")
+        useCase(contactId = 1L)
 
         assertEquals(1, trigger.scheduleCalls.size, "IgnoreContactUseCase must call scheduleRefresh() once")
     }
@@ -190,7 +190,7 @@ class UpdateTriggersTest {
             widgetRefreshTrigger = trigger,
         )
 
-        val result = useCase(contactId = 1L, contactName = "Alex Chen")
+        val result = useCase(contactId = 1L)
         result.inverse()
 
         assertEquals(
@@ -229,7 +229,7 @@ class UpdateTriggersTest {
             widgetRefreshTrigger = trigger,
         )
 
-        val result = useCase(fromListId = 10L, toListId = 20L, contactIds = listOf(1L), targetListName = "Target")
+        val result = useCase(fromListId = 10L, toListId = 20L, contactIds = listOf(1L))
         result.inverse()
 
         assertEquals(

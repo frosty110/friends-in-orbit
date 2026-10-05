@@ -1,6 +1,9 @@
 package app.orbit.ui.screens.calllog
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
+import app.orbit.R
+import app.orbit.ui.util.UiText
 
 /**
  * CallLogScreen state contract: calendar-day sections, direction filter,
@@ -100,11 +103,12 @@ sealed interface CallLogScope {
  * Direction filter for the chip row. MANUAL "Logged" events
  * (user-logged connections) count as reaching out, so they stay visible
  * under [ALL] and [OUTGOING] and are hidden only under [INCOMING].
+ * [label] is the chip's string resource (strings_calllog.xml).
  */
-enum class CallLogDirectionFilter(val label: String) {
-    ALL("All"),
-    INCOMING("Incoming"),
-    OUTGOING("Outgoing"),
+enum class CallLogDirectionFilter(@StringRes val label: Int) {
+    ALL(R.string.calllog_filter_all),
+    INCOMING(R.string.calllog_filter_incoming),
+    OUTGOING(R.string.calllog_filter_outgoing),
 }
 
 /**
@@ -113,25 +117,27 @@ enum class CallLogDirectionFilter(val label: String) {
  * @property epochDay [java.time.LocalDate.toEpochDay] of the section's day —
  *                    stable LazyColumn key for the sticky header.
  * @property label    "Today" / "Yesterday" / "Wednesday 3 June" via
- *                    [app.orbit.ui.util.formatDayHeader].
+ *                    [app.orbit.ui.util.formatDayHeader], as [UiText].
  */
 @Immutable
 data class CallLogDaySection(
     val epochDay: Long,
-    val label: String,
+    val label: UiText,
     val rows: List<CallLogRow>,
 )
 
 /**
  * Render-ready row for [CallLogScreen]. All formatters (wall-clock time,
- * duration label, direction word/icon) are pre-computed on the VM so the
+ * duration label, direction icon) are pre-computed on the VM so the
  * composable never touches `Instant` or the JVM clock — see the B3 invariant.
+ * The words are resources: [durationLabel] is [UiText], and the screen words
+ * the direction from [kind] and "from {list}" from [listName]
+ * (strings_calllog.xml).
  *
- * `listContext` is the formatted "from {ListName}" subtitle fragment. The
- * list context is the contact's most-recent
- * [ListMembership] (max `addedAt`); when the contact has zero memberships
- * (orphan path) the fragment is the empty string and the row's subtitle
- * collapses to "{duration} · {direction}".
+ * `listName` is the contact's most-recent [ListMembership] (max `addedAt`),
+ * shown as "from {listName}"; when the contact has zero memberships
+ * (orphan path) it is the empty string and the row's subtitle collapses to
+ * "{duration} · {direction}".
  *
  * `phone` feeds the long-press "Call again" quick action (`ACTION_DIAL` via
  * [app.orbit.ui.util.dialPhoneNumber]; never dialled by the app itself).
@@ -151,16 +157,15 @@ data class CallLogRow(
     val name: String,
     val phone: String,
     val photoUri: String?,
-    val listContext: String,            // "" when no membership
-    val durationLabel: String,          // "" for manual events (subtitle skips blanks)
-    val directionWord: String,          // "Outgoing" / "Incoming" / "Logged" (manual)
+    val listName: String,               // "" when no membership
+    val durationLabel: UiText?,         // null for manual and attempted events (subtitle skips it)
     val directionIconName: String,      // "phone-outgoing" / "phone-incoming" / "check-circle" (manual)
     val timeLabel: String,              // "4:30pm"
     val isIgnored: Boolean,
     // What happened, for the one-person log (LOG-04), where every row is the
     // same person and the row leads with the event instead ("You called",
     // "Sam called"). The screen words it so the privacy curtain can mask the
-    // name; [directionWord] stays for the everyone view's subtitle.
+    // name; in the everyone view it is the subtitle's direction word.
     val kind: CallLogKind,
 )
 

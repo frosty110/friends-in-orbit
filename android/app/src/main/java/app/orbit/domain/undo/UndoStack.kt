@@ -23,9 +23,12 @@ class UndoStack @Inject constructor() {
 
     /**
      * One pending undo: the suspending [inverse] lambda the snackbar will run on
-     * "Undo" tap, plus the [label] used for snackbar copy ("Moved 3 to Inner orbit").
+     * "Undo" tap. It used to carry a `label` String too, which nothing ever
+     * read (the snackbar's words travel in the screen's own event, as string
+     * resources); it was removed on 2026-10-05 so no English copy sits in the
+     * domain layer.
      */
-    data class PendingUndo(val inverse: suspend () -> Unit, val label: String)
+    data class PendingUndo(val inverse: suspend () -> Unit)
 
     @Volatile private var pending: PendingUndo? = null
 

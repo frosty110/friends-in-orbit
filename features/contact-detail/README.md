@@ -22,7 +22,7 @@ As a user, I open a contact to see their full call history, the lists they're on
 
 **Hero.** Photo, name, phone number, Call action, and "Log a connection" — a sheet that records a manual call event (`CallSource.MANUAL`) for calls Orbit couldn't observe.
 
-**Stats card.** Last call, total calls, average length, longest gap, and "Usually": the part of the day this person is usually called (Mornings, Afternoons, Evenings or Late nights), the same reading Card view shows. "Usually" and "Average length" need three connected calls and "Longest gap" two; below that each says "Not enough calls yet" (2026-10-05; it was a bare dash, which read as broken, vision CONTACT-3). The label is "Average length", not "Avg length". All neutral framing, no streaks, no achievements. Longest gap surfaced without shame framing.
+**Stats card.** Last call, total calls, average length, longest gap, and "Usually": the part of the day this person is usually called (Mornings, Afternoons, Evenings or Late nights), the same reading Card view shows. Its info tip reads "Based on when you usually answer or call this person." (it said "this contact" until 2026-10-05, as Card view's did). "Usually" and "Average length" need three connected calls and "Longest gap" two; below that each says "Not enough calls yet" (2026-10-05; it was a bare dash, which read as broken, vision CONTACT-3). The label is "Average length", not "Avg length". All neutral framing, no streaks, no achievements. Longest gap surfaced without shame framing.
 
 **Lists chip row.** Every list this contact is on, or "Not on any list yet". Under the privacy curtain each chip reads "List", like every list-name surface (it read "Contact"). Not yet clickable (see open questions).
 

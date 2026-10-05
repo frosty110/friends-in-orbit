@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import app.orbit.R
 import app.orbit.data.Contact
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 
 /**
  * Reusable row used by Browse + Global Search.
@@ -173,10 +175,10 @@ fun BrowseRow(
             }
             if (showCallMeta) {
                 val lastCalled = contact.lastCalledLabel
-                val secondaryText = if (lastCalled.isBlank()) {
+                val secondaryText = if (lastCalled == null) {
                     stringResource(R.string.components_browse_row_never_called)
                 } else {
-                    stringResource(R.string.components_browse_row_last_call, lastCalled)
+                    stringResource(R.string.components_browse_row_last_call, lastCalled.asString())
                 }
                 Text(
                     text = secondaryText,
@@ -213,17 +215,17 @@ fun BrowseRow(
 }
 
 // 2026-06-09 #19 — preview fixtures for the new due / status / no-meta states.
-private fun previewContact(name: String, lastCalled: String) = Contact(
+private fun previewContact(name: String, lastCalled: UiText?) = Contact(
     id = "preview-$name",
     name = name,
     phone = "+1 555 0100",
     lastCalledLabel = lastCalled,
-    avgLengthLabel = "",
+    avgLengthLabel = null,
     pickupRateLabel = "",
     totalCalls = 0,
     due = false,
     listIds = emptyList(),
-    bestWindowLabel = "",
+    bestWindowLabel = null,
     heat = FloatArray(24) { 0f },
     history = emptyList(),
     notes = emptyList(),
@@ -236,7 +238,7 @@ private fun BrowseRowPreview() {
     OrbitTheme {
         Column(modifier = Modifier.background(OrbitTheme.colors.bg)) {
             BrowseRow(
-                contact = previewContact("Avery Quinn", "3 days ago"),
+                contact = previewContact("Avery Quinn", UiText.plural(R.plurals.time_ago_days, 3, 3)),
                 onTap = {},
                 onDial = {},
                 due = true,
@@ -244,13 +246,13 @@ private fun BrowseRowPreview() {
                 isHead = true
             )
             BrowseRow(
-                contact = previewContact("Sam Patel", "2 months ago"),
+                contact = previewContact("Sam Patel", UiText.plural(R.plurals.time_ago_months, 2, 2)),
                 onTap = {},
                 onDial = {},
-                statusLabel = "Paused"
+                statusLabel = stringResource(R.string.browse_row_paused)
             )
             BrowseRow(
-                contact = previewContact("Jordan Lee", ""),
+                contact = previewContact("Jordan Lee", null),
                 onTap = {},
                 onDial = {},
                 showCallMeta = false

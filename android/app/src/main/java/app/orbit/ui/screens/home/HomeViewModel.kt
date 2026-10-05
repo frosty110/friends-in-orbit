@@ -214,9 +214,8 @@ class HomeViewModel @Inject constructor(
         if (lastCalledAt == null) return UiText.res(R.string.home_why_never)
         val days = ChronoUnit.DAYS.between(lastCalledAt, now)
         // The app's one span formatter (voice.md glossary), so Home and the
-        // card never word the same gap two ways. formatSpan still returns
-        // English; it slots into the resource sentence as an argument until
-        // RelativeTime returns UiText too.
+        // card never word the same gap two ways. formatSpan's UiText
+        // ("3 weeks") nests as the resource sentence's argument.
         return when {
             days <= 0L -> UiText.res(R.string.home_why_today)
             days == 1L -> UiText.res(R.string.home_why_yesterday)

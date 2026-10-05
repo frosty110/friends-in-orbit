@@ -49,7 +49,7 @@ class OrbitMenuOrderTest {
 
     @Test
     fun `a menu with no destructive action is left alone`() {
-        val labels = listOf("Browse people", "Add contacts", "Edit list")
+        val labels = listOf("Browse people", "Add people", "List settings")
         assertEquals(labels, labels.map { action(it) }.orderedForMenu().map { it.label })
     }
 

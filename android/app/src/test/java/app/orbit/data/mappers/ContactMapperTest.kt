@@ -1,10 +1,13 @@
 package app.orbit.data.mappers
 
+import app.orbit.R
 import app.orbit.data.entity.CallSource
 import app.orbit.domain.callEventFixture
 import app.orbit.domain.contactFixture
+import app.orbit.ui.util.UiText
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import org.junit.Test
 
@@ -14,6 +17,10 @@ import org.junit.Test
  * (unverified connections, not measured calls); averaging them in dragged a
  * 22-minute average down to 19 after a single logged connection. They still
  * count toward `totalCalls` and drive `lastCalledLabel`.
+ *
+ * The labels are [UiText] (strings_time.xml), so the assertions compare what
+ * the mapper means to say: "22 min" is the minutes plural with 22, "today"
+ * is time_ago_today.
  */
 class ContactMapperTest {
 
@@ -40,14 +47,14 @@ class ContactMapperTest {
             ),
         )
         val hydrated = base.withCallStats(events, now)
-        assertEquals("22 min", hydrated.avgLengthLabel)
+        assertEquals(minutes(22), hydrated.avgLengthLabel)
         // The mark still counts as a call and still moves "last called".
         assertEquals(3, hydrated.totalCalls)
-        assertEquals("today", hydrated.lastCalledLabel)
+        assertEquals(TODAY, hydrated.lastCalledLabel)
     }
 
     @Test
-    fun `manual-only history yields the no-measured-calls dash`() {
+    fun `manual-only history yields no average`() {
         val base = contactFixture(id = 1L).toUiContact()
         val events = listOf(
             callEventFixture(
@@ -62,7 +69,9 @@ class ContactMapperTest {
             ),
         )
         val hydrated = base.withCallStats(events, now)
-        assertEquals("—", hydrated.avgLengthLabel)
+        // No measured call, so no average (it used to be an em dash; each
+        // screen now words the gap itself).
+        assertNull(hydrated.avgLengthLabel)
         assertEquals(2, hydrated.totalCalls)
     }
 
@@ -84,10 +93,10 @@ class ContactMapperTest {
             ),
         )
         val hydrated = base.withCallStats(events, now)
-        assertEquals("10 min", hydrated.avgLengthLabel)
+        assertEquals(minutes(10), hydrated.avgLengthLabel)
         // The attempt is excluded — one connection only.
         assertEquals(1, hydrated.totalCalls)
-        assertEquals("today", hydrated.lastCalledLabel)
+        assertEquals(TODAY, hydrated.lastCalledLabel)
     }
 
     @Test
@@ -101,11 +110,11 @@ class ContactMapperTest {
             ),
         )
         val hydrated = base.withCallStats(events, now)
-        // No connection ever → blank "last contacted" (screen renders
-        // "Never called"), zero call count, dash average.
-        assertEquals("", hydrated.lastCalledLabel)
+        // No connection ever → no "last contacted" (screen renders
+        // "Never called"), zero call count, no average.
+        assertNull(hydrated.lastCalledLabel)
         assertEquals(0, hydrated.totalCalls)
-        assertEquals("—", hydrated.avgLengthLabel)
+        assertNull(hydrated.avgLengthLabel)
     }
 
     @Test
@@ -113,5 +122,11 @@ class ContactMapperTest {
         // assertSame, not assertEquals — Contact.equals compares id only.
         val base = contactFixture(id = 1L).toUiContact()
         assertSame(base, base.withCallStats(emptyList(), now))
+    }
+
+    private fun minutes(n: Int): UiText = UiText.plural(R.plurals.time_duration_minutes, n, n)
+
+    private companion object {
+        val TODAY: UiText = UiText.res(R.string.time_ago_today)
     }
 }

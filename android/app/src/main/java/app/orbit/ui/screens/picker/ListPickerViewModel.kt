@@ -3,6 +3,7 @@ package app.orbit.ui.screens.picker
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.dao.ListMembershipDao
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListMembershipEntity
@@ -14,6 +15,7 @@ import app.orbit.data.repository.RuleTemplateRepository
 import app.orbit.di.ApplicationScope
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.undo.UndoStack
+import app.orbit.ui.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -248,7 +250,7 @@ class ListPickerViewModel @Inject constructor(
                 _selectedListIds.value = _selectedListIds.value + newListId
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
-                commitBus.publish(SnackbarEvent("Couldn't create the list"))
+                commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_create_list_failed)))
             }
         }
     }
@@ -288,21 +290,17 @@ class ListPickerViewModel @Inject constructor(
                     )
                 }
                 listMembershipDao.insertAll(memberships)
-                val label = if (ids.size == 1) {
-                    "Added to 1 list"
-                } else {
-                    "Added to ${ids.size} lists"
-                }
+                val message = UiText.plural(R.plurals.picker_snackbar_added_to_lists, ids.size, ids.size)
                 val inverse: suspend () -> Unit = {
                     ids.forEach { listId ->
                         listMembershipDao.removeAll(listId, listOf(cId))
                     }
                 }
-                undoStack.put(UndoStack.PendingUndo(inverse = inverse, label = label))
-                commitBus.publish(SnackbarEvent(label, "Undo"))
+                undoStack.put(UndoStack.PendingUndo(inverse = inverse))
+                commitBus.publish(SnackbarEvent.undoable(message))
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
-                commitBus.publish(SnackbarEvent("Couldn't save that"))
+                commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
             } finally {
                 _isCommitting.value = false
             }

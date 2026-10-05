@@ -474,12 +474,13 @@ private fun Divider() {
 private fun EmptyState(onOpenApp: Action) {
     val context = LocalContext.current
     val text = context.getString(R.string.widget_empty)
-    val openLabel = context.getString(R.string.widget_open_orbit)
+    // One whole sentence for TalkBack, not the two strings glued in code.
+    val description = context.getString(R.string.widget_empty_a11y)
     val compact = LocalSize.current.height < WidgetBreakpoints.Compact.height
     WidgetFrame(
         modifier = GlanceModifier
             .clickable(onOpenApp)
-            .semantics { contentDescription = "$text $openLabel" },
+            .semantics { contentDescription = description },
         strip = compact,
     ) {
         val glyph: @Composable () -> Unit = {

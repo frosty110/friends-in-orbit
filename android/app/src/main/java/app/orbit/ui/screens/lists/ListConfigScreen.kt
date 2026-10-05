@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -46,6 +47,7 @@ import app.orbit.ui.components.OrbitSwitch
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
+import app.orbit.ui.util.asString
 import java.time.LocalTime
 
 /**
@@ -104,6 +106,8 @@ fun ListConfigScreen(
     // LaunchedEffect re-keys on it so a host swap re-establishes the
     // collector.
     val lifecycleOwner = LocalLifecycleOwner.current
+    // Snackbar copy is UiText (strings_lists.xml); resolved when shown.
+    val context = LocalContext.current
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             vm.snackbarEvents.collect { event ->
@@ -112,8 +116,8 @@ fun ListConfigScreen(
                 // UndoStack pop. Other emitters (failure surface, convert
                 // success) emit without an action label and short-circuit.
                 val result = snackbarHostState.showSnackbar(
-                    message = event.message,
-                    actionLabel = event.actionLabel,
+                    message = event.message.asString(context),
+                    actionLabel = event.actionLabel?.asString(context),
                     duration = SnackbarDuration.Short,
                     withDismissAction = false,
                 )

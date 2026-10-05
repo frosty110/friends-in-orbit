@@ -39,9 +39,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.data.NoteRow
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
@@ -53,6 +55,8 @@ import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 
 /**
  * NOTE-01 — Notes journaling section on Contact Detail.
@@ -105,7 +109,7 @@ fun NotesSection(
                 tint = OrbitTheme.colors.fgMuted,
             )
             Spacer(Modifier.width(OrbitTheme.spacing.x2))
-            SectionLabel(text = "Notes")
+            SectionLabel(text = stringResource(R.string.contact_notes_title))
         }
         Spacer(Modifier.height(OrbitTheme.spacing.x3))
 
@@ -131,7 +135,7 @@ fun NotesSection(
                     ) {
                         if (draft.isEmpty()) {
                             Text(
-                                text = "Add a note",
+                                text = stringResource(R.string.contact_notes_hint),
                                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
                             )
                         }
@@ -150,7 +154,7 @@ fun NotesSection(
                     ),
             )
             OrbitButton(
-                text = "Add",
+                text = stringResource(R.string.contact_notes_add),
                 onClick = onAdd,
                 enabled = draft.isNotBlank(),
                 // Secondary — the hero Call button is the screen's one
@@ -163,7 +167,7 @@ fun NotesSection(
         // Notes list (Column — parent screen is the LazyColumn)
         if (notes.isEmpty()) {
             Text(
-                text = "No notes yet.",
+                text = stringResource(R.string.contact_notes_empty),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.padding(vertical = OrbitTheme.spacing.x3),
             )
@@ -259,11 +263,13 @@ private fun NoteRowItem(
                         .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
                         .clickable(
                             role = Role.Button,
-                            onClickLabel = if (showAbsolute) "Show how long ago" else "Show the date",
+                            onClickLabel = stringResource(
+                                if (showAbsolute) R.string.contact_notes_show_relative else R.string.contact_notes_show_date,
+                            ),
                         ) { showAbsolute = !showAbsolute },
                 ) {
                     Text(
-                        text = if (showAbsolute) note.absoluteTimestamp else note.relativeTimestamp,
+                        text = if (showAbsolute) note.absoluteTimestamp else note.relativeTimestamp?.asString().orEmpty(),
                         style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                     )
                 }
@@ -273,19 +279,19 @@ private fun NoteRowItem(
                             icon = "dots-three-vertical",
                             onClick = { menuOpen = true },
                             tint = OrbitTheme.colors.fgMuted,
-                            contentDescription = "More actions for this note",
+                            contentDescription = stringResource(R.string.contact_notes_more_actions),
                         )
                         OrbitDropdownMenu(
                             expanded = menuOpen,
                             onDismissRequest = { menuOpen = false },
                             actions = listOf(
                                 OrbitMenuAction(
-                                    label = "Edit",
+                                    label = stringResource(R.string.contact_notes_edit),
                                     onClick = { editing = true },
                                     icon = "pencil-simple",
                                 ),
                                 OrbitMenuAction(
-                                    label = "Delete",
+                                    label = stringResource(R.string.components_action_delete),
                                     onClick = { onDelete(note) },
                                     icon = "trash",
                                     tone = OrbitMenuTone.Destructive,
@@ -314,7 +320,7 @@ private fun NoteRowItem(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         OrbitButton(
-                            text = "Cancel",
+                            text = stringResource(R.string.components_action_cancel),
                             onClick = {
                                 editing = false
                                 draftEdit = note.body
@@ -323,7 +329,7 @@ private fun NoteRowItem(
                         )
                         Spacer(Modifier.width(OrbitTheme.spacing.x2))
                         OrbitButton(
-                            text = "Save",
+                            text = stringResource(R.string.components_action_save),
                             onClick = {
                                 onEditCommit(note, draftEdit.trim())
                                 editing = false
@@ -336,7 +342,7 @@ private fun NoteRowItem(
                     }
                 } else {
                     Text(
-                        text = if (curtain) "Note hidden" else note.body,
+                        text = if (curtain) stringResource(R.string.contact_notes_hidden) else note.body,
                         style = OrbitTheme.type.body.copy(
                             color = if (curtain) OrbitTheme.colors.fgMuted else OrbitTheme.colors.fg,
                         ),
@@ -345,7 +351,7 @@ private fun NoteRowItem(
                             .combinedClickable(
                                 onClick = {},
                                 onLongClick = { if (!curtain) editing = true },
-                                onLongClickLabel = "Edit note",
+                                onLongClickLabel = stringResource(R.string.contact_notes_edit_note),
                             ),
                     )
                 }
@@ -361,7 +367,7 @@ private fun NoteRowItem(
 private fun previewNote(
     id: Long,
     body: String,
-    relative: String = "14 days ago",
+    relative: UiText = UiText.plural(R.plurals.time_ago_days, 14, 14),
     absolute: String = "mar 14 · 2:14 pm",
 ): NoteRow = NoteRow(
     id = id,
@@ -371,6 +377,8 @@ private fun previewNote(
     relativeTimestamp = relative,
     absoluteTimestamp = absolute,
 )
+
+private val PREVIEW_TODAY: UiText = UiText.res(R.string.time_ago_today)
 
 @Preview(name = "NotesSection — empty, light")
 @Composable
@@ -396,8 +404,8 @@ private fun NotesSectionPreviewPopulatedLight() {
         Column(Modifier.padding(OrbitTheme.spacing.x4)) {
             NotesSection(
                 notes = listOf(
-                    previewNote(1L, "Met for coffee. He just moved into a new place.", "today", "today · 9:14 am"),
-                    previewNote(2L, "Asked about the kids. Sounds steady.", "3 days ago"),
+                    previewNote(1L, "Met for coffee. He just moved into a new place.", PREVIEW_TODAY, "today · 9:14 am"),
+                    previewNote(2L, "Asked about the kids. Sounds steady.", UiText.plural(R.plurals.time_ago_days, 3, 3)),
                     previewNote(3L, "Long catch-up call. Owes me a hike."),
                 ),
                 draft = "Followed up about the gig",
@@ -417,8 +425,8 @@ private fun NotesSectionPreviewPopulatedDark() {
         Column(Modifier.padding(OrbitTheme.spacing.x4)) {
             NotesSection(
                 notes = listOf(
-                    previewNote(1L, "Met for coffee. He just moved into a new place.", "today", "today · 9:14 am"),
-                    previewNote(2L, "Asked about the kids. Sounds steady.", "3 days ago"),
+                    previewNote(1L, "Met for coffee. He just moved into a new place.", PREVIEW_TODAY, "today · 9:14 am"),
+                    previewNote(2L, "Asked about the kids. Sounds steady.", UiText.plural(R.plurals.time_ago_days, 3, 3)),
                 ),
                 draft = "",
                 onDraftChange = {},
@@ -437,7 +445,7 @@ private fun NotesSectionPreviewPopulated200() {
         Column(Modifier.padding(OrbitTheme.spacing.x4)) {
             NotesSection(
                 notes = listOf(
-                    previewNote(1L, "Met for coffee. He just moved into a new place.", "today", "today · 9:14 am"),
+                    previewNote(1L, "Met for coffee. He just moved into a new place.", PREVIEW_TODAY, "today · 9:14 am"),
                 ),
                 draft = "",
                 onDraftChange = {},

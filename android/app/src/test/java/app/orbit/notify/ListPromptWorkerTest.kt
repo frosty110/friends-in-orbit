@@ -229,7 +229,7 @@ class ListPromptWorkerTest {
             "notification title must be list name",
         )
         assertEquals(
-            NotificationCopy.nudgeBody(listName, 3),
+            NotificationCopy.nudgeBody(listName, 3).asString(context),
             postedNotif.notification.extras.getString("android.text"),
             "notification body must follow D-18 format",
         )
@@ -376,7 +376,7 @@ class ListPromptWorkerTest {
 
         val posted = postedNotification()
         assertEquals("Family", posted.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
-        assertEquals(NotificationCopy.nudgeNamedBody("Kai"), bodyOf(posted))
+        assertEquals(NotificationCopy.nudgeNamedBody("Kai").asString(context), bodyOf(posted))
         assertNotNull(posted.getLargeIcon(), "the nudge carries the person's face")
         val action = posted.actions?.singleOrNull()
         assertNotNull(action, "exactly one action: Call")
@@ -393,7 +393,7 @@ class ListPromptWorkerTest {
         buildWorker(listId).doWork()
 
         val posted = postedNotification()
-        assertEquals(NotificationCopy.nudgeNamedBody("Kai"), bodyOf(posted))
+        assertEquals(NotificationCopy.nudgeNamedBody("Kai").asString(context), bodyOf(posted))
         assertTrue(posted.actions.isNullOrEmpty(), "no button that does nothing on a dialer-less device")
     }
 
@@ -409,7 +409,7 @@ class ListPromptWorkerTest {
         buildWorker(listId).doWork()
 
         val posted = postedNotification()
-        assertEquals(NotificationCopy.nudgeBody("Family", 1), bodyOf(posted))
+        assertEquals(NotificationCopy.nudgeBody("Family", 1).asString(context), bodyOf(posted))
         assertNull(posted.getLargeIcon(), "no face when the name is held back")
         assertTrue(posted.actions.isNullOrEmpty(), "no Call action when the name is held back")
         assertLockScreenSafe(posted, forbidden = listOf("Family", "Kai"))
@@ -434,7 +434,7 @@ class ListPromptWorkerTest {
         buildWorker(listId).doWork()
 
         val posted = postedNotification()
-        assertEquals(NotificationCopy.nudgeNamedBody("Priya"), bodyOf(posted))
+        assertEquals(NotificationCopy.nudgeNamedBody("Priya").asString(context), bodyOf(posted))
         assertEquals("Call Priya", posted.actions?.single()?.title.toString())
         assertEquals(8L, appPrefs.nudgeLastNamedContactId(listId))
     }
@@ -482,8 +482,8 @@ class ListPromptWorkerTest {
         val public = assertNotNull(posted.publicVersion, "a public version for the lock screen")
         val title = public.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
         val text = public.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
-        assertEquals(NotificationCopy.PUBLIC_TITLE, title)
-        assertEquals(NotificationCopy.PUBLIC_BODY, text)
+        assertEquals(NotificationCopy.PUBLIC_TITLE.asString(context), title)
+        assertEquals(NotificationCopy.PUBLIC_BODY.asString(context), text)
         forbidden.forEach { word ->
             assertFalse(title.contains(word) || text.contains(word), "lock screen must not show '$word'")
         }

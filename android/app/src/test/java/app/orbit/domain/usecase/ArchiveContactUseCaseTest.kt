@@ -15,22 +15,23 @@ import org.junit.Test
 class ArchiveContactUseCaseTest {
 
     @Test
-    fun `archives the contact and labels the snackbar`() = runTest {
+    fun `archives the contact`() = runTest {
+        // The snackbar's "Archived Alex" is the caller's copy now
+        // (strings_contact.xml; SnackbarCopyTest).
         val repo = FakeContactRepository(listOf(contactFixture(id = 7L)))
 
-        val result = ArchiveContactUseCase(repo)(contactId = 7L, contactName = "Alex")
+        ArchiveContactUseCase(repo)(contactId = 7L)
 
         val args = repo.setArchivedCalls.single()
         assertEquals(7L, args.contactId)
         assertTrue(args.archived)
-        assertEquals("Archived Alex", result.label)
     }
 
     @Test
     fun `inverse unarchives the contact`() = runTest {
         val repo = FakeContactRepository(listOf(contactFixture(id = 7L, isArchived = true)))
 
-        val result = ArchiveContactUseCase(repo)(contactId = 7L, contactName = "Alex")
+        val result = ArchiveContactUseCase(repo)(contactId = 7L)
         result.inverse()
 
         // Forward write (true) then the undo write (false).

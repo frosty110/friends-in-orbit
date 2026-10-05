@@ -172,9 +172,10 @@ open class HomeFeed @Inject constructor(
                             callEventId = ev.id,
                             contactId = ev.contactId,
                             // A member removed from the list between the call
-                            // and now still has its bar; "Someone" keeps the
-                            // day honest rather than dropping the call.
-                            contactName = contact?.displayName ?: "Someone",
+                            // and now still has its bar; a null name renders as
+                            // "Someone" (strings_home.xml), which keeps the day
+                            // honest rather than dropping the call.
+                            contactName = contact?.displayName,
                             photoUri = contact?.photoUri,
                             durationSeconds = ev.durationSeconds,
                             direction = ev.direction,

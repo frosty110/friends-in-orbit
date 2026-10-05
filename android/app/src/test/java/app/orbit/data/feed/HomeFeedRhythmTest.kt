@@ -2,6 +2,7 @@ package app.orbit.data.feed
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import app.orbit.R
 import app.orbit.data.AppPrefs
 import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.CallEventEntity
@@ -113,7 +114,7 @@ class HomeFeedRhythmTest {
         assertEquals(1L, bar.callEventId)
         assertEquals("Kai Mensah", bar.contactName)
         assertEquals(CallDirection.OUTGOING, bar.direction)
-        assertEquals("14 min", bar.durationLabel)
+        assertEquals("14 min", bar.durationLabel.asString(ApplicationProvider.getApplicationContext<Application>()))
         // Wall-clock formatting is zone-dependent; assert the shape, not the hour.
         assertTrue(bar.timeLabel.endsWith("am") || bar.timeLabel.endsWith("pm"), bar.timeLabel)
         assertNull(bar.photoUri)
@@ -165,7 +166,13 @@ class HomeFeedRhythmTest {
 
         val yesterday = rhythm[5].calls
         assertEquals(1, yesterday.size)
-        assertEquals("Someone", yesterday.single().contactName)
+        // No name rides on the bar; the day sheet says "Someone" in its place
+        // (strings_home.xml).
+        assertNull(yesterday.single().contactName)
+        assertEquals(
+            "Someone",
+            ApplicationProvider.getApplicationContext<Application>().getString(R.string.home_rhythm_someone),
+        )
         assertEquals(9L, yesterday.single().contactId)
     }
 

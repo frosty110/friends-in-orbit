@@ -35,10 +35,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.PhIcon
@@ -149,7 +151,7 @@ fun LogConnectionSheet(
             onDismissRequest = ::closePicker,
             confirmButton = {
                 OrbitButton(
-                    text = "Done",
+                    text = stringResource(R.string.components_action_done),
                     onClick = {
                         datePickerState.selectedDateMillis?.let { pickedDateMillis = it }
                         closePicker()
@@ -160,7 +162,7 @@ fun LogConnectionSheet(
             },
             dismissButton = {
                 OrbitButton(
-                    text = "Cancel",
+                    text = stringResource(R.string.components_action_cancel),
                     onClick = ::closePicker,
                     variant = OrbitButtonVariant.Ghost,
                 )
@@ -202,18 +204,18 @@ private fun LogConnectionSheetContent(
             ),
     ) {
         Text(
-            text = if (isAttempt) "Log an attempt" else "Log a connection",
+            text = stringResource(
+                if (isAttempt) R.string.contact_log_title_attempt else R.string.contact_log_title_connection,
+            ),
             style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
-            text = if (isAttempt) {
-                "A voicemail or no answer: you reached out but didn't connect."
-            } else {
-                "For calls Orbit can't see, like a video call or time together in person."
-            },
+            text = stringResource(
+                if (isAttempt) R.string.contact_log_body_attempt else R.string.contact_log_body_connection,
+            ),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
@@ -222,17 +224,17 @@ private fun LogConnectionSheetContent(
         ModeToggle(isAttempt = isAttempt, onModeChange = onModeChange)
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
         WhenOptionRow(
-            label = "Today",
+            label = stringResource(R.string.contact_log_today),
             selected = selected == 0,
             onSelect = { onSelect(0) },
         )
         WhenOptionRow(
-            label = "Yesterday",
+            label = stringResource(R.string.contact_log_yesterday),
             selected = selected == 1,
             onSelect = { onSelect(1) },
         )
         WhenOptionRow(
-            label = pickedDateLabel ?: "Pick a date",
+            label = pickedDateLabel ?: stringResource(R.string.contact_log_pick_date),
             selected = selected == 2,
             onSelect = { onSelect(2) },
         )
@@ -258,7 +260,7 @@ private fun LogConnectionSheetContent(
                 ) {
                     if (note.isEmpty()) {
                         Text(
-                            text = "Add a note (optional)",
+                            text = stringResource(R.string.contact_log_note_hint),
                             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
                         )
                     }
@@ -269,7 +271,9 @@ private fun LogConnectionSheetContent(
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
         OrbitButton(
-            text = if (isAttempt) "Log attempt" else "Log connection",
+            text = stringResource(
+                if (isAttempt) R.string.contact_log_confirm_attempt else R.string.contact_log_confirm_connection,
+            ),
             onClick = onConfirm,
             enabled = confirmEnabled,
             variant = OrbitButtonVariant.Primary,
@@ -299,13 +303,13 @@ private fun ModeToggle(
         horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1),
     ) {
         ModeSegment(
-            label = "We connected",
+            label = stringResource(R.string.contact_log_mode_connected),
             selected = !isAttempt,
             onClick = { onModeChange(false) },
             modifier = Modifier.weight(1f),
         )
         ModeSegment(
-            label = "Couldn't reach them",
+            label = stringResource(R.string.contact_log_mode_attempt),
             selected = isAttempt,
             onClick = { onModeChange(true) },
             modifier = Modifier.weight(1f),

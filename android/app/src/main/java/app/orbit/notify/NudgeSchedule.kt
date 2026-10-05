@@ -6,6 +6,7 @@ import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -37,9 +38,15 @@ object DayOfWeekSerializer : KSerializer<DayOfWeek> {
  * Serializes [LocalTime] as "HH:mm" (e.g. "10:00").
  * The format is intentionally truncated to minutes — schedule precision is
  * minute-granular and the 4-char string matches the migration DEFAULT_JSON literal.
+ *
+ * This is the stored format, not copy: nothing here is shown to a person (the
+ * schedule editor and summary format times with
+ * [app.orbit.ui.util.formatClockTime], in the phone's 12 or 24 hour style).
+ * [Locale.ROOT] pins it so the stored text never depends on the phone's
+ * language.
  */
 object LocalTimeSerializer : KSerializer<LocalTime> {
-    private val formatter = DateTimeFormatter.ofPattern("HH:mm")
+    private val formatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
 
     override val descriptor: SerialDescriptor =
         PrimitiveSerialDescriptor("LocalTime", PrimitiveKind.STRING)

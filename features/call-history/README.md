@@ -27,7 +27,7 @@ As a user, I open the in-app call log to see what I've reached out about recentl
 - Manually logged connections (source = MANUAL) render as "Logged" rows with a check-circle icon and no duration.
 - Filter: direction chips: All / Incoming / Outgoing, one always chosen (radio semantics), in a row that scrolls sideways rather than breaking a label at large font sizes. MANUAL "Logged" rows count as reaching out: visible under All and Outgoing, hidden under Incoming. A narrowing filter that matches nothing keeps the chip row and shows a quiet one-liner.
 - Tap a row → contact-detail scrolled to that call's row, with the inline "Add note to this call" affordance below it (the retroactive-note path).
-- Long-press a row → quick actions: "Call again" (`ACTION_DIAL`) and "Open contact". "Add note" is intentionally absent — tap already lands on the focused call with the note affordance.
+- Long-press a row → quick actions: "Call again" (`ACTION_DIAL`) and "Open details" (the row's tap reads the same to TalkBack; both said "Open contact" until 2026-10-05). "Add note" is intentionally absent: tap already lands on the focused call with the note affordance.
 - Honest pagination: the log renders in 200-row increments with a "Show n more" footer where n is the real next increment (`min(remaining, 200)`); the footer disappears exactly when everything is shown.
 - Ignored contacts stay visible but greyed (50% avatar opacity, subtle name + " (ignored)" suffix); rows remain tappable.
 - **Honest states (LOG-05).** A quiet skeleton while loading. "No calls yet" only when Orbit can read the call log and there are none. Without call log access and with nothing recorded: "Orbit can't see your calls", what that means, and "Open settings" (Orbit's Settings, which owns the grant and the resync, as Card view's notice does; opened from Settings it goes back instead). Without access but with history: the rows, under a notice that new calls won't appear. A failed read: "Couldn't load your calls" with "Try again".
@@ -42,7 +42,7 @@ As a user, I open the in-app call log to see what I've reached out about recentl
 ### Acceptance criteria
 
 - [x] Only calls with a matched `contactId` appear; unmatched number calls are hidden.
-- [x] Duration formatted human-readably via `formatDuration`.
+- [x] Duration formatted human-readably via `formatDuration` (words in `strings_time.xml`, so they translate).
 - [x] Retroactive note flow: tap routes to ContactDetail with `scrollToCallEventId`; the inline "Add note to this call" button anchors the note to that call event (LOG-03).
 - [x] Scrolls smoothly with large histories — virtualized LazyColumn + 200-row pagination increments.
 - [x] "View all calls" on Contact detail shows only that person's calls (LOG-04; `CallLogViewModelTest`).

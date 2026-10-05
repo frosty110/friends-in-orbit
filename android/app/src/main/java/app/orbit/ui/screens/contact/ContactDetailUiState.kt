@@ -5,6 +5,7 @@ import app.orbit.data.CallEntry
 import app.orbit.data.Contact
 import app.orbit.data.NoteRow
 import app.orbit.domain.rule.RuleParams
+import app.orbit.ui.util.UiText
 
 /**
  * ContactDetail state contract (CONTACT-01/02/06).
@@ -15,18 +16,26 @@ import app.orbit.domain.rule.RuleParams
  *
  * The Notes section (NOTE-01) is surfaced via `Ready.notes`, which carries
  * [NoteRow] entries with VM-pre-formatted `relativeTimestamp` +
- * `absoluteTimestamp` String fields per the Clock-injection invariant —
- * the composable never reads a JVM "now". `Ready.draft` carries the input
+ * `absoluteTimestamp` fields per the Clock-injection invariant, so the
+ * composable never reads a JVM "now". `Ready.draft` carries the input
  * text the user has typed but not yet submitted.
+ *
+ * Labels a person reads (`longestGapLabel`, `pausedLabel`,
+ * `currentTemplateName`) are [UiText]: the VM holds no Context and the copy
+ * lives in strings_contact.xml / strings_time.xml (UX rubric 3.4). Null means
+ * "nothing to say", and the screen words that itself.
  *
  * [Ready] also carries the per-contact rule override surface (CONTACT-03).
  * Five fields drive the [RuleOverrideSection]:
  *   - `customScheduleVisible`: derived `listsOn.size >= 2`; the section's
  *     own AnimatedVisibility wraps the body but the screen also conditions
  *     the LazyColumn item on this flag for cleaner recomposition.
- *   - `currentTemplateName`: human-readable template name shown in the
- *     "Inherits {X} from {Y}" copy. When `currentParams == null` (corrupted
- *     JSON), this flips to "Custom schedule (recovering)".
+ *   - `currentTemplateName`: the inherited rhythm's name as it sits
+ *     mid-sentence ("keep in touch") in "Follows the {X} rhythm from {Y}."
+ *     Null when a stored override failed to decode (`currentParams == null`):
+ *     that state always shows the editor, never the sentence, so there is no
+ *     rhythm to name. (It used to hold "Custom schedule (recovering)", which
+ *     no branch of the section ever displayed.)
  *   - `primaryListName`: the first list the contact appears on — drives the
  *     "from {Y}" half of the inherits copy.
  *   - `hasOverride`: true when `Contact.ruleOverrideJson != null` OR the
@@ -50,7 +59,8 @@ sealed interface ContactDetailUiState {
         val notes: List<NoteRow>,
         val listsOn: List<String>,
         val recentCalls: List<CallEntry>,
-        val longestGapLabel: String,
+        // "21 days"; null below two calls, or when they fell on one day.
+        val longestGapLabel: UiText?,
         // NOTE-01 — Notes input draft state, VM-owned.
         val draft: String = "",
         // CONTACT-05 — true when pausedUntil <= clock.now()
@@ -61,10 +71,10 @@ sealed interface ContactDetailUiState {
         // "Paused until you unpause". Drives the status line under the number
         // and swaps the overflow's Pause for Unpause. Before this, an active
         // pause was invisible here and an indefinite one could never be undone.
-        val pausedLabel: String? = null,
+        val pausedLabel: UiText? = null,
         // CONTACT-03 — RuleOverrideSection inputs.
         val customScheduleVisible: Boolean = false,
-        val currentTemplateName: String = "",
+        val currentTemplateName: UiText? = null,
         val primaryListName: String = "",
         val hasOverride: Boolean = false,
         val currentParams: RuleParams? = null,
@@ -103,7 +113,7 @@ sealed interface ContactDetailUiState {
         val contact: Contact,
         val listsOn: List<String>,
         val recentCalls: List<CallEntry>,
-        val longestGapLabel: String,
+        val longestGapLabel: UiText?,
         // Parallel-indexed MANUAL flags — see [Ready.recentCallIsManual].
         val recentCallIsManual: List<Boolean> = emptyList(),
         // Parallel-indexed ATTEMPT flags — see [Ready.recentCallIsAttempt].

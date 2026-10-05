@@ -72,7 +72,7 @@ fun ListRow(
     var menuExpanded by remember { mutableStateOf(false) }
     // Resolved here: the semantics blocks below are not composable.
     val reorderDescription = stringResource(R.string.lists_row_reorder)
-    val addContactsDescription = stringResource(R.string.lists_row_add_contacts, tile.name)
+    val addContactsDescription = stringResource(R.string.lists_row_add_people, tile.name)
     val moreActionsDescription = stringResource(R.string.lists_row_more_actions, tile.name)
     Row(
         verticalAlignment = Alignment.CenterVertically,

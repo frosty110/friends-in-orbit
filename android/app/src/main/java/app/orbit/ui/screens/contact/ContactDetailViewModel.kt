@@ -3,6 +3,7 @@ package app.orbit.ui.screens.contact
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.CallEntry
 import app.orbit.data.NoteRow
 import app.orbit.data.entity.CallEventEntity
@@ -35,9 +36,11 @@ import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.ui.screens.picker.SnackbarEvent
+import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatAbsolute
 import app.orbit.ui.util.formatDuration
 import app.orbit.ui.util.formatRelative
+import app.orbit.ui.util.pausedSnackbar
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Duration
 import java.time.Instant
@@ -102,6 +105,10 @@ import kotlinx.serialization.encodeToString
  * Mapper [toUiCallEntry] continues to use [formatRelative] + [formatDuration]
  * from `app.orbit.ui.util.RelativeTime` — single source of truth shared with
  * the screen's CallHistoryRow render path.
+ *
+ * Every word this VM produces (labels in [ContactDetailUiState], snackbar
+ * events) is [UiText] from strings_contact.xml or a shared resource: the VM
+ * holds no Context, the screen resolves (UX rubric 3.4).
  */
 @HiltViewModel
 class ContactDetailViewModel @Inject constructor(
@@ -312,16 +319,16 @@ class ContactDetailViewModel @Inject constructor(
                 ?.takeIf { it.isAfter(now) }
                 ?.let { pu ->
                     if (PauseContactUseCase.isIndefinite(pu)) {
-                        "Paused until you unpause"
+                        UiText.res(R.string.contact_paused_indefinitely)
                     } else {
-                        "Paused until " + pu.atZone(zoneId).format(PAUSED_UNTIL_FORMAT)
+                        UiText.res(R.string.contact_paused_until, pu.atZone(zoneId).format(PAUSED_UNTIL_FORMAT))
                     }
                 }
 
             // CONTACT-03 — derive RuleOverrideSection
             // inputs. Corrupted-JSON recovery is the try/catch
-            // around decodeFromString; failed decode flips currentParams to
-            // null and currentTemplateName to "Custom schedule (recovering)".
+            // around decodeFromString; failed decode flips currentParams and
+            // currentTemplateName to null (the section shows the editor).
             val customScheduleVisible = listsOn.size >= 2
             // The editor branch renders when an override is
             // PERSISTED or the user peeked the editor open this session.
@@ -396,25 +403,29 @@ class ContactDetailViewModel @Inject constructor(
      * RuleOverrideSection copy.
      *
      * Three branches:
-     *   1. Override exists + decodes cleanly → ("Keep in touch" / "Late
-     *      night" / "Energize" via [labelForKind], decoded RuleParams).
-     *   2. Override exists + decode throws (corrupted JSON) →
-     *      ("Custom schedule (recovering)", null). The screen passes a fresh
-     *      default RuleParams so the editor still renders.
+     *   1. Override exists + decodes cleanly → ("keep in touch" / "late
+     *      night" / "energize" via [labelForKind], decoded RuleParams).
+     *   2. Override exists + decode throws (corrupted JSON) → (null, null).
+     *      The screen passes a fresh default RuleParams so the editor still
+     *      renders; with an override stored the section never shows the
+     *      "Follows the ... rhythm" sentence, so there is no name to give.
      *   3. No override → (template name from primary list, null params).
+     *
+     * The name is the lowercase form that sits mid-sentence
+     * (strings_contact.xml, `contact_rhythm_name_*`).
      */
     private fun deriveOverrideDisplay(
         ruleOverrideJson: String?,
         memberships: List<ListMembershipEntity>,
         allLists: List<ListEntity>,
         templates: List<RuleTemplateEntity>
-    ): Pair<String, RuleParams?> {
+    ): Pair<UiText?, RuleParams?> {
         if (ruleOverrideJson != null) {
             return try {
                 val params = JsonProvider.json.decodeFromString<RuleParams>(ruleOverrideJson)
                 Pair(labelForKind(params.toRuleKind()), params)
             } catch (_: Throwable) {
-                Pair("Custom schedule (recovering)", null)
+                Pair(null, null)
             }
         }
         // No per-contact override — show the template inherited from the
@@ -425,7 +436,7 @@ class ContactDetailViewModel @Inject constructor(
         val primaryList = primaryListId?.let { lid -> allLists.firstOrNull { it.id == lid } }
         val templateId = primaryList?.ruleTemplateId
         val templateKind = templateId?.let { tid -> templates.firstOrNull { it.id == tid } }?.kind
-        val name = templateKind?.let(::labelForKind) ?: "Keep in touch"
+        val name = labelForKind(templateKind ?: RuleKind.KEEP_IN_TOUCH)
         return Pair(name, null)
     }
 
@@ -435,22 +446,29 @@ class ContactDetailViewModel @Inject constructor(
         is RuleParams.Energize -> RuleKind.ENERGIZE
     }
 
-    private fun labelForKind(kind: RuleKind): String = when (kind) {
-        RuleKind.KEEP_IN_TOUCH -> "Keep in touch"
-        RuleKind.LATE_NIGHT -> "Late night"
-        RuleKind.ENERGIZE -> "Energize"
-    }
+    private fun labelForKind(kind: RuleKind): UiText = UiText.res(
+        when (kind) {
+            RuleKind.KEEP_IN_TOUCH -> R.string.contact_rhythm_name_keep_in_touch
+            RuleKind.LATE_NIGHT -> R.string.contact_rhythm_name_late_night
+            RuleKind.ENERGIZE -> R.string.contact_rhythm_name_energize
+        }
+    )
 
-    /** Longest gap between consecutive call events. "—" if < 2 events. */
-    private fun computeLongestGap(events: List<CallEventEntity>): String {
-        if (events.size < 2) return "—"
+    /**
+     * Longest gap between consecutive call events: "21 days". Null if fewer
+     * than two events, or if they all fell on one day: the screen then says
+     * "Not enough calls yet" (it used to be an em dash the screen filtered).
+     */
+    private fun computeLongestGap(events: List<CallEventEntity>): UiText? {
+        if (events.size < 2) return null
         val sorted = events.sortedBy { it.occurredAt }
         var maxDays = 0L
         for (i in 1 until sorted.size) {
             val days = Duration.between(sorted[i - 1].occurredAt, sorted[i].occurredAt).toDays()
             if (days > maxDays) maxDays = days
         }
-        return if (maxDays == 0L) "—" else "$maxDays days"
+        if (maxDays == 0L) return null
+        return maxDays.toInt().let { UiText.plural(R.plurals.time_span_days, it, it) }
     }
 
     /**
@@ -479,7 +497,7 @@ class ContactDetailViewModel @Inject constructor(
     fun addNote(body: String) {
         val cid = contactId ?: return
         viewModelScope.launch {
-            runMutation("Couldn't add note") {
+            runMutation(UiText.res(R.string.contact_snackbar_add_note_failed)) {
                 val rowId = addNoteUseCase(cid, body)
                 if (rowId != null) _draft.value = ""
             }
@@ -513,11 +531,13 @@ class ContactDetailViewModel @Inject constructor(
     fun onAddRetroactiveNote(callEventId: Long, body: String) {
         val cid = contactId ?: return
         viewModelScope.launch {
-            runMutation("Couldn't add note") {
+            runMutation(UiText.res(R.string.contact_snackbar_add_note_failed)) {
                 // O(1) primary-key lookup. NOT observeAll().first().
                 val event = callEventRepo.byId(callEventId) ?: return@runMutation
                 val rowId = addRetroactiveNoteUseCase(cid, body, event.occurredAt)
-                if (rowId != null) _snackbarEvents.tryEmit(SnackbarEvent("Note saved", null))
+                if (rowId != null) {
+                    _snackbarEvents.tryEmit(SnackbarEvent(UiText.res(R.string.contact_snackbar_note_saved)))
+                }
             }
         }
     }
@@ -556,7 +576,7 @@ class ContactDetailViewModel @Inject constructor(
     fun onLogConnection(whenChoice: LogConnectionWhen, note: String, isAttempt: Boolean = false) {
         val cid = contactId ?: return
         viewModelScope.launch {
-            runMutation("Couldn't log that") {
+            runMutation(UiText.res(R.string.contact_snackbar_log_failed)) {
                 val now = clock.now()
                 val occurredAt: Instant = when (whenChoice) {
                     LogConnectionWhen.Today -> now
@@ -586,7 +606,11 @@ class ContactDetailViewModel @Inject constructor(
                     addRetroactiveNoteUseCase(cid, note.trim(), occurredAt)
                 }
                 _snackbarEvents.tryEmit(
-                    SnackbarEvent(if (isAttempt) "Attempt logged." else "Logged.")
+                    SnackbarEvent(
+                        UiText.res(
+                            if (isAttempt) R.string.contact_snackbar_attempt_logged else R.string.contact_snackbar_logged
+                        )
+                    )
                 )
             }
         }
@@ -605,10 +629,10 @@ class ContactDetailViewModel @Inject constructor(
             createdAt = Instant.ofEpochMilli(noteRow.createdAtMs)
         )
         viewModelScope.launch {
-            runMutation("Couldn't delete note") {
+            runMutation(UiText.res(R.string.contact_snackbar_delete_note_failed)) {
                 val result = deleteNoteUseCase(noteEntity)
-                undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
-                _snackbarEvents.tryEmit(SnackbarEvent(result.label, "Undo"))
+                undoStack.put(UndoStack.PendingUndo(result.inverse))
+                _snackbarEvents.tryEmit(SnackbarEvent.undoable(UiText.res(R.string.contact_snackbar_note_deleted)))
             }
         }
     }
@@ -622,13 +646,13 @@ class ContactDetailViewModel @Inject constructor(
             createdAt = Instant.ofEpochMilli(noteRow.createdAtMs)
         )
         viewModelScope.launch {
-            runMutation("Couldn't update note") { editNoteUseCase(updated) }
+            runMutation(UiText.res(R.string.contact_snackbar_update_note_failed)) { editNoteUseCase(updated) }
         }
     }
 
     /** Snackbar "Undo" tap — pops UndoStack and runs the inverse closure. */
     fun onUndo() = viewModelScope.launch {
-        runMutation("Couldn't undo") { undoStack.take()?.inverse?.invoke() }
+        runMutation(UiText.res(R.string.contact_snackbar_undo_failed)) { undoStack.take()?.inverse?.invoke() }
     }
 
     /**
@@ -641,10 +665,12 @@ class ContactDetailViewModel @Inject constructor(
     fun onIgnore(contactName: String) {
         val cid = contactId ?: return
         viewModelScope.launch {
-            runMutation("Couldn't ignore $contactName") {
-                val result = ignoreContactUseCase(cid, contactName)
-                undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
-                _snackbarEvents.tryEmit(SnackbarEvent(result.label, "Undo"))
+            runMutation(UiText.res(R.string.contact_snackbar_ignore_failed, contactName)) {
+                val result = ignoreContactUseCase(cid)
+                undoStack.put(UndoStack.PendingUndo(result.inverse))
+                _snackbarEvents.tryEmit(
+                    SnackbarEvent.undoable(UiText.res(R.string.components_snackbar_ignored, contactName))
+                )
             }
         }
     }
@@ -659,14 +685,13 @@ class ContactDetailViewModel @Inject constructor(
      */
     fun onPauseContact(duration: PauseDuration) {
         val cid = contactId ?: return
-        val displayName = (uiState.value as? ContactDetailUiState.Ready)?.contact?.name ?: "Contact"
+        val displayName = readyNameOrStandIn()
         viewModelScope.launch {
-            runMutation("Couldn't pause $displayName") {
+            runMutation(UiText.res(R.string.contact_snackbar_pause_failed, displayName)) {
                 pauseContact(cid, duration)
                 val inverse: suspend () -> Unit = { contactRepo.setPausedUntil(cid, null) }
-                val label = "Paused $displayName ${duration.snackbarPhrase}"
-                undoStack.put(UndoStack.PendingUndo(inverse, label))
-                _snackbarEvents.tryEmit(SnackbarEvent(label, "Undo"))
+                undoStack.put(UndoStack.PendingUndo(inverse))
+                _snackbarEvents.tryEmit(SnackbarEvent.undoable(pausedSnackbar(displayName, duration)))
             }
         }
     }
@@ -679,16 +704,15 @@ class ContactDetailViewModel @Inject constructor(
      */
     fun onUnpauseNow() {
         val cid = contactId ?: return
-        val displayName = (uiState.value as? ContactDetailUiState.Ready)?.contact?.name ?: "Contact"
+        val displayName = readyNameOrStandIn()
         viewModelScope.launch {
-            runMutation("Couldn't unpause") {
+            runMutation(UiText.res(R.string.contact_snackbar_unpause_failed)) {
                 val prior = contactRepo.getById(cid)?.pausedUntil
                 contactRepo.setPausedUntil(cid, null)
-                val label = "Unpaused $displayName"
-                undoStack.put(
-                    UndoStack.PendingUndo({ contactRepo.setPausedUntil(cid, prior) }, label)
+                undoStack.put(UndoStack.PendingUndo({ contactRepo.setPausedUntil(cid, prior) }))
+                _snackbarEvents.tryEmit(
+                    SnackbarEvent.undoable(UiText.res(R.string.components_snackbar_unpaused, displayName))
                 )
-                _snackbarEvents.tryEmit(SnackbarEvent(label, "Undo"))
             }
         }
     }
@@ -696,7 +720,7 @@ class ContactDetailViewModel @Inject constructor(
     fun onUnpauseContact() {
         val cid = contactId ?: return
         viewModelScope.launch {
-            runMutation("Couldn't unpause") { contactRepo.setPausedUntil(cid, null) }
+            runMutation(UiText.res(R.string.contact_snackbar_unpause_failed)) { contactRepo.setPausedUntil(cid, null) }
         }
     }
 
@@ -726,10 +750,12 @@ class ContactDetailViewModel @Inject constructor(
     fun onArchive(contactName: String) {
         val cid = contactId ?: return
         viewModelScope.launch {
-            runMutation("Couldn't archive $contactName") {
-                val result = archiveContactUseCase(cid, contactName)
-                undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
-                _snackbarEvents.tryEmit(SnackbarEvent(result.label, "Undo"))
+            runMutation(UiText.res(R.string.contact_snackbar_archive_failed, contactName)) {
+                val result = archiveContactUseCase(cid)
+                undoStack.put(UndoStack.PendingUndo(result.inverse))
+                _snackbarEvents.tryEmit(
+                    SnackbarEvent.undoable(UiText.res(R.string.contact_snackbar_archived, contactName))
+                )
             }
         }
     }
@@ -794,7 +820,7 @@ class ContactDetailViewModel @Inject constructor(
      * stack.
      */
     private suspend fun runMutation(
-        failureLabel: String = "Couldn't save your change",
+        failureLabel: UiText = UiText.res(R.string.components_snackbar_save_failed),
         block: suspend () -> Unit
     ) {
         try {
@@ -818,6 +844,15 @@ class ContactDetailViewModel @Inject constructor(
         relativeTimestamp = formatRelative(createdAt, now),
         absoluteTimestamp = formatAbsolute(createdAt)
     )
+
+    /**
+     * The person's name for a snackbar, or the curtain's neutral "Contact"
+     * when the screen isn't showing a person yet (the old literal fallback).
+     * A [UiText] stand-in nests as an argument like a name does.
+     */
+    private fun readyNameOrStandIn(): Any =
+        (uiState.value as? ContactDetailUiState.Ready)?.contact?.name
+            ?: UiText.res(R.string.components_curtain_contact)
 
     private companion object {
         /**
