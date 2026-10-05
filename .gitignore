@@ -31,3 +31,6 @@ Thumbs.db
 # Node — convenience scripts only; no runtime deps
 yarn.lock
 node_modules/
+
+# Agent worktrees created by Claude Code sessions (local only)
+.claude/worktrees/
