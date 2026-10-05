@@ -181,7 +181,7 @@ class ResetServiceTest {
             "widget periodic sweep must be cancelled",
         )
         // ...and ONE final refresh is re-enqueued AFTER the wipe so placed
-        // widgets re-render "No one due" instead of the wiped contact's name.
+        // widgets re-render the empty state instead of the wiped contact's name.
         assertTrue(
             statesFor(wm, WidgetUpdateScheduler.UNIQUE_WORK)
                 .any { it == WorkInfo.State.ENQUEUED },

@@ -289,4 +289,39 @@ class WidgetSurfaceUseCaseTest {
         assertNull(result.primary, "ignored contact should not appear as primary")
         assertEquals(emptyList(), result.alternatives, "alternatives should be empty for ignored contact")
     }
+
+    // ─── WIDGET-08 / LAUNCH-01: the list each person came from ────────────────
+
+    /**
+     * A tap on a widget person (and "Call next") opens the deck of the list
+     * that surfaced them. A person on two lists comes from the one where they
+     * rank earliest, the same list the dedupe keeps.
+     */
+    @Test
+    fun eachShownPerson_carriesTheListThatSurfacedThem() = runTest {
+        val shared = contactFixture(id = 1L)
+        val other = contactFixture(id = 2L)
+        val listA = listFixture(id = 10L, ruleTemplateId = 1L)
+        val listB = listFixture(id = 20L, ruleTemplateId = 1L)
+        val listC = listFixture(id = 30L, ruleTemplateId = 1L)
+
+        val useCase = buildUseCase(
+            contacts    = listOf(shared, other),
+            lists       = listOf(listA, listB, listC),
+            memberships = listOf(
+                membershipFixture(contactId = 1L, listId = 10L, nextDueAt = T0.minusSeconds(100)),
+                membershipFixture(contactId = 1L, listId = 20L, nextDueAt = T0.minusSeconds(500)),
+                membershipFixture(contactId = 2L, listId = 30L, nextDueAt = T0.minusSeconds(50)),
+            ),
+        )
+
+        val result = useCase()
+        assertEquals(1L, result.primary?.id)
+        assertEquals(listOf(2L), result.alternatives.map { it.id })
+        assertEquals(
+            mapOf(1L to 20L, 2L to 30L),
+            result.listIdByContactId,
+            "the shared person comes from list 20, where they are most overdue; every shown person has a list",
+        )
+    }
 }

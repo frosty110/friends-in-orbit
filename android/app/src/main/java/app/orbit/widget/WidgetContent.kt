@@ -1,36 +1,48 @@
 // android/app/src/main/java/app/orbit/widget/WidgetContent.kt
 //
-// Shared Glance composables used by OrbitWidget2x2 and OrbitWidget4x2.
-// All composables are package-internal.
+// Shared Glance composables used by OrbitWidget2x2 ("Next call") and
+// OrbitWidget4x2 ("Call suggestions").
 //
 // THEME NOTE: All color access is via GlanceTheme.colors.* (M3 slot aliases)
-// inside OrbitWidgetTheme. Zero Color(0x..) literals (THEME-02 grep-enforced).
-// All text styles are OrbitWidgetTextStyles.* — zero fontSize = N.sp literals
-// (THEME-02b grep-enforced). Spacing from WidgetSpacing.xN.dp.
+// inside OrbitWidgetTheme, plus the avatar's day and night pairs from
+// WidgetAvatarColors. Zero Color(0x..) literals (THEME-02 grep-enforced).
+// All text styles are OrbitWidgetTextStyles.* and sizes WidgetSizes.* /
+// WidgetSpacing.* (rules.md Design 1).
 //
-// PHOTO LOADING NOTE (UI-SPEC §Minimal Mode avatar note): Glance does not
-// support Coil or any third-party image loader at compose time for v1. Even
-// when photoUri is non-null, the avatar renders the first-initial fallback.
-// Minimal mode replaces the initial with a bundled silhouette (person icon,
-// res/drawable/widget_ic_person — review WR-08).
+// 2026-10-05 (UX rubric plan item 3.2). Before: a square first initial on a
+// grey tile, a bare phone glyph, a 12sp alternatives list, square corners on
+// a rounded home screen, and one fixed size each. Now:
+// - WIDGET-07 responsive: every size gets an arrangement (WidgetLayouts.kt).
+// - WIDGET-08 only Call dials: a tap on a person opens their deck in Orbit,
+//   and the labelled accent Call button is the one control that opens the
+//   dialer, as on Card view (CARD-01). A stray tap on a widget used to dial.
+// - WIDGET-10 the empty state says "All quiet for now."
+// - WIDGET-11 it looks like Orbit: Android's own widget corner radius, the
+//   theme's colours in light and dark, and the app's avatar (photo, else the
+//   two-letter monogram on its palette colour, always a circle).
 //
-// TAP-TO-DIAL: uses actionStartActivity(Intent(ACTION_DIAL)) — Glance
-// generates FLAG_IMMUTABLE PendingIntents. No CALL_PHONE (PRIV-05).
+// TAP-TO-DIAL: ACTION_DIAL through actionStartActivity, which Glance wraps in
+// a FLAG_IMMUTABLE PendingIntent. No CALL_PHONE (PRIV-05).
 package app.orbit.widget
 
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.action.Action
 import androidx.glance.action.clickable
-import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.appWidgetBackground
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.background
+import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
@@ -46,11 +58,12 @@ import androidx.glance.layout.width
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.text.Text
+import androidx.glance.text.TextAlign
 import app.orbit.MainActivity
 import app.orbit.R
 import app.orbit.data.entity.ContactEntity
-import app.orbit.domain.usecase.WidgetSurfaceData
 import app.orbit.ui.theme.OrbitWidgetTextStyles
+import app.orbit.ui.theme.WidgetSizes
 import app.orbit.ui.theme.WidgetSpacing
 
 // ─── Intent helpers ──────────────────────────────────────────────────────────
@@ -79,376 +92,429 @@ fun dialIntent(contact: ContactEntity): Intent =
 fun openHomeIntent(context: Context): Intent =
     Intent(context, MainActivity::class.java)
 
-// ─── Avatar ──────────────────────────────────────────────────────────────────
+// ─── Entry points ────────────────────────────────────────────────────────────
+
+/** "Next call": one person, arranged for the widget's size. */
+@Composable
+fun NextCallBody(people: List<WidgetPerson>, onOpenApp: Action) {
+    val lead = people.firstOrNull()
+    if (lead == null) {
+        EmptyState(onOpenApp)
+        return
+    }
+    val size = LocalSize.current
+    val layout = nextCallLayout(size)
+    WidgetFrame(strip = layout == WidgetLayout.STRIP) {
+        LeadPerson(lead, layout)
+    }
+}
+
+/** "Call suggestions": the lead person and, where there is room, up to two more. */
+@Composable
+fun SuggestionsBody(people: List<WidgetPerson>, onOpenApp: Action) {
+    val lead = people.firstOrNull()
+    if (lead == null) {
+        EmptyState(onOpenApp)
+        return
+    }
+    val size = LocalSize.current
+    val others = people.drop(1).take(alternativeSlots(size))
+    val layout = suggestionsLayout(size, others.size)
+    WidgetFrame(strip = layout == WidgetLayout.STRIP) {
+        when (layout) {
+            WidgetLayout.SPLIT -> Row(modifier = GlanceModifier.fillMaxSize()) {
+                Box(modifier = GlanceModifier.defaultWeight().fillMaxHeight()) {
+                    LeadPerson(lead, WidgetLayout.COMPACT)
+                }
+                Divider()
+                Column(
+                    modifier = GlanceModifier.defaultWeight().fillMaxHeight(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Half a 4×2 has no width for a name and a call button
+                    // side by side, so these rows open the person's deck,
+                    // one tap from their Call button.
+                    others.forEach { OtherPerson(it, withCall = false) }
+                }
+            }
+            // Centred, so a tall widget is composed around its people rather
+            // than leaving an empty band under them (UX rubric D3).
+            WidgetLayout.STACK -> Column(
+                modifier = GlanceModifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                LeadPerson(lead, WidgetLayout.WIDE)
+                Spacer(GlanceModifier.height(WidgetSpacing.x2.dp))
+                others.forEach { OtherPerson(it, withCall = true) }
+            }
+            else -> LeadPerson(lead, layout)
+        }
+    }
+}
+
+// ─── Frame ───────────────────────────────────────────────────────────────────
 
 /**
- * Circular avatar at [sizeDp]dp.
- *
- * In minimal mode: renders the bundled person-silhouette vector
- * ([R.drawable.widget_ic_person]) to avoid leaking the contact's initial on
- * the home screen (T-11-04 / WIDGET-04).
- *
- * In normal mode: renders the contact's first initial on a surfaceVariant
- * background. Glance does not load Coil/photoUri at compose time for v1 —
- * even when [photoUri] is non-null the initial fallback is rendered
- * (UI-SPEC §Minimal Mode avatar note). Production-fidelity photo loading
- * is a v1.1 deferred item.
+ * The widget's card: the theme's surface, Android's own widget corner radius
+ * (so it matches every other widget on the home screen, whatever the
+ * launcher's shape), and marked as the widget background so launchers can
+ * animate it as one piece. A one-row [strip] keeps only a sliver of padding
+ * above and below, so its 48dp Call button fits a single row.
  */
-@androidx.compose.runtime.Composable
-fun ContactAvatar(
-    displayName: String,
-    photoUri: String?,
-    minimalMode: Boolean,
-    sizeDp: Int,
+@Composable
+private fun WidgetFrame(
     modifier: GlanceModifier = GlanceModifier,
+    strip: Boolean = false,
+    content: @Composable () -> Unit,
 ) {
-    if (minimalMode) {
-        // Silhouette: no name or photo visible — T-11-04 mitigation (WIDGET-04)
-        Box(
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .appWidgetBackground()
+            .cornerRadius(android.R.dimen.system_app_widget_background_radius)
+            .background(
+                ImageProvider(R.drawable.widget_shape_card),
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.surface),
+            )
+            .padding(
+                horizontal = WidgetSpacing.x3.dp,
+                vertical = if (strip) WidgetSpacing.x1.dp else WidgetSpacing.x3.dp,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
+    }
+}
+
+// ─── The lead person ─────────────────────────────────────────────────────────
+
+/** The person a widget leads with, in the arrangement [layout] asks for. */
+@Composable
+private fun LeadPerson(person: WidgetPerson, layout: WidgetLayout) {
+    val context = LocalContext.current
+    val size = LocalSize.current
+    val openLabel = context.getString(R.string.widget_open_person, person.name)
+    val body = GlanceModifier.clickable(person.open).semantics { contentDescription = openLabel }
+    when (layout) {
+        WidgetLayout.STRIP -> Row(
+            modifier = body.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PersonAvatar(person, WidgetSizes.avatarSmall)
+            if (stripShowsName(size)) {
+                Spacer(GlanceModifier.width(WidgetSpacing.x3.dp))
+                Name(person, maxLines = 1, modifier = GlanceModifier.defaultWeight())
+                Spacer(GlanceModifier.width(WidgetSpacing.x2.dp))
+            } else {
+                // Too narrow for a name: the face says who, and TalkBack
+                // reads the name from the row's label.
+                Spacer(GlanceModifier.defaultWeight())
+            }
+            CallButton(person, labelled = false)
+        }
+
+        WidgetLayout.WIDE -> Row(
+            modifier = body.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PersonAvatar(person, WidgetSizes.avatarLarge)
+            Spacer(GlanceModifier.width(WidgetSpacing.x3.dp))
+            Name(person, maxLines = 2, modifier = GlanceModifier.defaultWeight())
+            Spacer(GlanceModifier.width(WidgetSpacing.x2.dp))
+            CallButton(person, labelled = false)
+        }
+
+        WidgetLayout.HERO -> {
+            val avatar = heroAvatarDp(size)
+            Column(
+                modifier = body.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                PersonAvatar(person, avatar)
+                Spacer(GlanceModifier.height(WidgetSpacing.x2.dp))
+                Name(
+                    person,
+                    maxLines = if (avatar == WidgetSizes.avatarLarge) 2 else 1,
+                    align = TextAlign.Center,
+                )
+                Spacer(GlanceModifier.height(WidgetSpacing.x2.dp))
+                CallButton(person, labelled = true)
+            }
+        }
+
+        // COMPACT, and the lead pane of SPLIT. A 36dp face so face and Call
+        // fit side by side in the narrowest square (110dp).
+        else -> Column(modifier = body.fillMaxSize()) {
+            Row(
+                modifier = GlanceModifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PersonAvatar(person, WidgetSizes.avatarSmall)
+                Spacer(GlanceModifier.defaultWeight())
+                CallButton(person, labelled = false)
+            }
+            Spacer(GlanceModifier.defaultWeight())
+            Name(person, maxLines = 1)
+        }
+    }
+}
+
+// ─── Everyone else ───────────────────────────────────────────────────────────
+
+/**
+ * A person after the lead: avatar and name in a full-width 48dp row that opens
+ * their deck. With [withCall], a quiet phone button at the end dials them: the
+ * muted icon a list of people may carry (rules.md Design 6), so the accent
+ * stays on the lead's Call (Design 5).
+ */
+@Composable
+private fun OtherPerson(person: WidgetPerson, withCall: Boolean) {
+    val context = LocalContext.current
+    val openLabel = context.getString(R.string.widget_open_person, person.name)
+    Row(
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .height(WidgetSizes.tapMin.dp)
+            .clickable(person.open)
+            .semantics { contentDescription = openLabel },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PersonAvatar(person, WidgetSizes.avatarSmall)
+        Spacer(GlanceModifier.width(WidgetSpacing.x3.dp))
+        Text(
+            text = person.name,
+            style = OrbitWidgetTextStyles.body.copy(color = GlanceTheme.colors.onSurface),
+            maxLines = 1,
+            modifier = GlanceModifier.defaultWeight(),
+        )
+        val call = person.call
+        if (withCall && call != null) {
+            val callLabel = context.getString(R.string.widget_call_person, person.name)
+            Box(
+                modifier = GlanceModifier
+                    .size(WidgetSizes.tapMin.dp)
+                    .clickable(call)
+                    .semantics { contentDescription = callLabel },
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    provider = ImageProvider(R.drawable.ph_phone),
+                    contentDescription = null,
+                    modifier = GlanceModifier.size(WidgetSizes.icon.dp),
+                    colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
+                )
+            }
+        }
+    }
+}
+
+// ─── Parts ───────────────────────────────────────────────────────────────────
+
+@Composable
+private fun Name(
+    person: WidgetPerson,
+    maxLines: Int,
+    modifier: GlanceModifier = GlanceModifier,
+    align: TextAlign = TextAlign.Start,
+) {
+    Text(
+        text = person.name,
+        style = OrbitWidgetTextStyles.contactName.copy(
+            color = GlanceTheme.colors.onSurface,
+            textAlign = align,
+        ),
+        maxLines = maxLines,
+        modifier = modifier,
+    )
+}
+
+/**
+ * The lead person's Call control, the widget's one accent element (rules.md
+ * Design 5): a pill reading "Call" where the widget is a roomy square, and a
+ * round phone button where it is not. Either way TalkBack reads "Call {name}".
+ * Absent on a device with no dialer.
+ */
+@Composable
+private fun CallButton(person: WidgetPerson, labelled: Boolean) {
+    val call = person.call ?: return
+    val context = LocalContext.current
+    val callLabel = context.getString(R.string.widget_call_person, person.name)
+    val shape = GlanceModifier
+        .height(WidgetSizes.tapMin.dp)
+        .background(
+            ImageProvider(R.drawable.widget_shape_pill),
+            colorFilter = ColorFilter.tint(GlanceTheme.colors.primary),
+        )
+        .clickable(call)
+        .semantics { contentDescription = callLabel }
+    val icon: @Composable () -> Unit = {
+        Image(
+            provider = ImageProvider(R.drawable.ph_phone),
+            contentDescription = null,
+            modifier = GlanceModifier.size(WidgetSizes.icon.dp),
+            colorFilter = ColorFilter.tint(GlanceTheme.colors.onPrimary),
+        )
+    }
+    if (labelled) {
+        Row(
+            modifier = shape.padding(horizontal = WidgetSpacing.x5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            icon()
+            Spacer(GlanceModifier.width(WidgetSpacing.x2.dp))
+            Text(
+                text = context.getString(R.string.widget_call),
+                style = OrbitWidgetTextStyles.label.copy(color = GlanceTheme.colors.onPrimary),
+                maxLines = 1,
+            )
+        }
+    } else {
+        Box(modifier = shape.width(WidgetSizes.tapMin.dp), contentAlignment = Alignment.Center) {
+            icon()
+        }
+    }
+}
+
+/**
+ * WIDGET-11: the app's avatar. Photo when there is one (already cut to a
+ * circle); otherwise the Inter monogram tinted with the palette colour for the
+ * name, on an oval of the matching background, each a day and night pair so
+ * the widget follows the phone into dark mode on its own. Circles are shape
+ * drawables, not clipped outlines, so they stay round on every host. In
+ * minimal mode (WIDGET-04) a silhouette, so neither a face nor initials
+ * reach the home screen.
+ *
+ * Decorative: the name is always written beside it, as in the app.
+ */
+@Composable
+private fun PersonAvatar(person: WidgetPerson, sizeDp: Int) {
+    val circle = GlanceModifier.size(sizeDp.dp)
+    val face = person.face
+    val photo = face?.photo
+    val monogram = face?.monogram
+    when {
+        photo != null -> Image(
+            provider = ImageProvider(photo),
+            contentDescription = null,
+            modifier = circle,
+        )
+
+        face != null && monogram != null -> Box(
+            modifier = circle.background(
+                ImageProvider(R.drawable.widget_shape_circle),
+                colorFilter = ColorFilter.tint(
+                    ColorProvider(
+                        day = face.colors.backgroundDay,
+                        night = face.colors.backgroundNight,
+                    ),
+                ),
+            ),
             contentAlignment = Alignment.Center,
-            modifier = modifier
-                .size(sizeDp.dp)
-                .background(GlanceTheme.colors.surfaceVariant)
-                .semantics { contentDescription = "Contact" },
         ) {
             Image(
-                // Bundled person vector (review WR-08) — legacy system icons
-                // are OEM-restyled and not guaranteed to be a silhouette.
-                provider = ImageProvider(R.drawable.widget_ic_person),
+                provider = ImageProvider(monogram),
+                contentDescription = null,
+                modifier = GlanceModifier.size(sizeDp.dp),
+                colorFilter = ColorFilter.tint(
+                    ColorProvider(
+                        day = face.colors.foregroundDay,
+                        night = face.colors.foregroundNight,
+                    ),
+                ),
+            )
+        }
+
+        else -> Box(
+            modifier = circle.background(
+                ImageProvider(R.drawable.widget_shape_circle),
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.surfaceVariant),
+            ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                provider = ImageProvider(R.drawable.ph_user),
                 contentDescription = null,
                 modifier = GlanceModifier.size((sizeDp / 2).dp),
                 colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
             )
         }
-    } else {
-        // Initial fallback — photoUri ignored in v1 (Glance photo-loading limitation)
-        val initial = displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = modifier
-                .size(sizeDp.dp)
-                .background(GlanceTheme.colors.surfaceVariant)
-                .semantics { contentDescription = displayName },
-        ) {
-            Text(
-                text = initial,
-                style = OrbitWidgetTextStyles.contactName,
-            )
-        }
     }
 }
 
-// ─── 2×2 Card ────────────────────────────────────────────────────────────────
-
-/**
- * Full 2×2 card body. Root column is one tap target that launches ACTION_DIAL.
- *
- * Layout (UI-SPEC §2×2 Layout Contract):
- *   Avatar 44dp → 8dp gap → Name (or "Contact" in minimal mode) → 8dp gap → Phone icon
- *
- * Per WIDGET-04: in minimal mode the name is "Contact" and the avatar is a silhouette.
- */
-@androidx.compose.runtime.Composable
-fun ContactCard2x2(
-    contact: ContactEntity,
-    minimalMode: Boolean,
-) {
-    val displayedName = if (minimalMode) "Contact" else contact.displayName
-    val callDescription = "Call ${if (minimalMode) "contact" else contact.displayName}"
-
-    Column(
+/** A quiet 1dp rule between the lead and the others. */
+@Composable
+private fun Divider() {
+    Spacer(GlanceModifier.width(WidgetSpacing.x2.dp))
+    Box(
         modifier = GlanceModifier
-            .fillMaxSize()
-            .background(GlanceTheme.colors.surface)
-            .padding(WidgetSpacing.x3.dp)
-            .clickable(actionStartActivity(dialIntent(contact))),
-        verticalAlignment = Alignment.Vertical.CenterVertically,
-        horizontalAlignment = Alignment.Horizontal.CenterHorizontally,
-    ) {
-        ContactAvatar(
-            displayName = contact.displayName,
-            photoUri = contact.photoUri,
-            minimalMode = minimalMode,
-            sizeDp = 44,
-        )
-        Spacer(GlanceModifier.height(WidgetSpacing.x2.dp))
-        Text(
-            text = displayedName,
-            style = OrbitWidgetTextStyles.contactName.copy(
-                color = GlanceTheme.colors.onSurface,
-            ),
-        )
-        Spacer(GlanceModifier.height(WidgetSpacing.x2.dp))
-        // Phone icon — accent tint (UI-SPEC §Color: accent reserved for call CTA)
-        Image(
-            provider = ImageProvider(R.drawable.widget_ic_call),
-            contentDescription = callDescription,
-            modifier = GlanceModifier.size(24.dp),
-            colorFilter = ColorFilter.tint(GlanceTheme.colors.primary),
-        )
-    }
+            .width(1.dp)
+            .fillMaxHeight()
+            .background(GlanceTheme.colors.outline),
+    ) {}
+    Spacer(GlanceModifier.width(WidgetSpacing.x3.dp))
 }
 
 // ─── Empty state ─────────────────────────────────────────────────────────────
 
 /**
- * "No one due" empty state. Displayed when [WidgetSurfaceData.primary] is null.
- * Tapping opens Orbit's Home screen via [onOpenApp].
+ * WIDGET-10: nobody to suggest right now, said like a friend: "All quiet for
+ * now." Not "caught up" or "no one due": Orbit always recommends someone
+ * (HOME-6), so an empty widget is a lull, not a finish line, and counts and
+ * deadlines are the vocabulary the app retired. The Orbit glyph above it, in
+ * the muted tone, so the empty widget is still recognisably Orbit. A tap opens
+ * the app.
  *
- * Copy locked per UI-SPEC §Copywriting Contract: "No one due" (sentence case,
- * no exclamation, no gamification language). Icon below text is 24dp.
+ * It shows only when no list can surface anyone: no lists yet, or everyone
+ * paused. The widget does not add "who comes up next": its source,
+ * WidgetSurfaceUseCase, reads nothing but SurfaceNextUseCase on purpose, and
+ * a second query for upcoming people would be a second copy of its filters.
  */
-@androidx.compose.runtime.Composable
-fun EmptyCaughtUpState(
-    onOpenApp: Action,
-) {
-    Column(
+@Composable
+private fun EmptyState(onOpenApp: Action) {
+    val context = LocalContext.current
+    val text = context.getString(R.string.widget_empty)
+    val openLabel = context.getString(R.string.widget_open_orbit)
+    val compact = LocalSize.current.height < WidgetBreakpoints.Compact.height
+    WidgetFrame(
         modifier = GlanceModifier
-            .fillMaxSize()
-            .background(GlanceTheme.colors.surface)
-            .padding(WidgetSpacing.x3.dp)
             .clickable(onOpenApp)
-            .semantics { contentDescription = "No one due. Tap to open Orbit." },
-        verticalAlignment = Alignment.Vertical.CenterVertically,
-        horizontalAlignment = Alignment.Horizontal.CenterHorizontally,
+            .semantics { contentDescription = "$text $openLabel" },
+        strip = compact,
     ) {
-        Text(
-            text = "No one due",
-            style = OrbitWidgetTextStyles.meta.copy(
-                color = GlanceTheme.colors.onSurfaceVariant,
-            ),
-        )
-        // Empty-state icon: 24dp per UI-SPEC §2×2 Layout Contract.
-        // Bundled info vector (review WR-08), tinted muted — no accent here.
-        Spacer(GlanceModifier.height(WidgetSpacing.x2.dp))
-        Image(
-            provider = ImageProvider(R.drawable.widget_ic_info),
-            contentDescription = null,
-            modifier = GlanceModifier.size(24.dp),
-            colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
-        )
-    }
-}
-
-// ─── WidgetBody2x2 (testable seam) ───────────────────────────────────────────
-
-/**
- * Pure composable body for the 2×2 widget — extracted so tests can exercise
- * the ContactCard2x2 / EmptyCaughtUpState branch without standing up the full
- * Glance widget or the Hilt EntryPoint. Both [OrbitWidget2x2Test] and
- * [MinimalModeTest] call this function directly.
- *
- * Design: JVM-only test seam. provideGlance resolves [data] and [minimalMode]
- * via WidgetEntryPoint, then delegates to this function. Tests inject fake data
- * without needing a real Context or WidgetEntryPoint.
- */
-@androidx.compose.runtime.Composable
-fun WidgetBody2x2(
-    data: WidgetSurfaceData,
-    minimalMode: Boolean,
-    onOpenApp: Action,
-) {
-    if (data.primary == null) {
-        EmptyCaughtUpState(onOpenApp = onOpenApp)
-    } else {
-        ContactCard2x2(contact = data.primary, minimalMode = minimalMode)
-    }
-}
-
-// ─── 4×2 composables ─────────────────────────────────────────────────────────
-
-/**
- * Full 4×2 widget body — static three-column layout: no LazyRow/horizontal
- * scroll exists in Glance 1.1.1, so the layout ships static. Swipe-between is
- * deferred to v1.1.
- *
- * Layout (UI-SPEC §4×2 Layout Contract):
- *   Primary card (~60% left, defaultWeight) | 1dp divider | Alternatives column (~40% right, defaultWeight)
- *
- * Full-width branch (review WR-03): when [alternatives] is empty the divider
- * and right column collapse and the single pane (primary card, or the empty
- * state when [primary] is null) takes the full widget width. This branch is
- * mirrored by [Widget4x2State.isFullWidth] — keep the two predicates in sync.
- *
- * Per WIDGET-04: in minimal mode every name is "Contact" and every avatar is
- * a silhouette. Per WIDGET-02: each card is individually tap-to-dial.
- *
- * [onOpenApp] is the Action to open Orbit Home (used when primary is null).
- * Threading it in keeps this composable Context-free (Glance composables
- * should not capture Context directly).
- */
-@androidx.compose.runtime.Composable
-fun OrbitWidget4x2Content(
-    primary: ContactEntity?,
-    alternatives: List<ContactEntity>,
-    minimalMode: Boolean,
-    onOpenApp: Action,
-) {
-    if (alternatives.isEmpty()) {
-        // Full-width branch (review WR-03): no divider, no right column —
-        // the single pane spans the whole widget. Covers both the
-        // zero-alternatives case and primary == null (the use case never
-        // emits alternatives without a primary).
-        Box(
-            modifier = GlanceModifier
-                .fillMaxSize()
-                .background(GlanceTheme.colors.background)
-                .padding(WidgetSpacing.x2.dp),
-        ) {
-            if (primary == null) {
-                EmptyCaughtUpState(onOpenApp = onOpenApp)
-            } else {
-                PrimaryCard(contact = primary, minimalMode = minimalMode)
-            }
+        val glyph: @Composable () -> Unit = {
+            Image(
+                provider = ImageProvider(R.drawable.ic_notification),
+                contentDescription = null,
+                modifier = GlanceModifier.size(WidgetSizes.glyph.dp),
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
+            )
         }
-        return
-    }
-
-    Row(
-        modifier = GlanceModifier
-            .fillMaxSize()
-            .background(GlanceTheme.colors.background)
-            .padding(WidgetSpacing.x2.dp),
-    ) {
-        // Primary column — takes the left half via defaultWeight
-        Box(modifier = GlanceModifier.defaultWeight()) {
-            if (primary == null) {
-                EmptyCaughtUpState(onOpenApp = onOpenApp)
-            } else {
-                PrimaryCard(contact = primary, minimalMode = minimalMode)
-            }
+        val words: @Composable () -> Unit = {
+            Text(
+                text = text,
+                style = OrbitWidgetTextStyles.body.copy(
+                    color = GlanceTheme.colors.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                ),
+                maxLines = if (compact) 1 else 2,
+            )
         }
-
-        // 1dp vertical divider (UI-SPEC §4×2 Layout §Color secondary semantic)
-        Box(
-            modifier = GlanceModifier
-                .fillMaxHeight()
-                .width(1.dp)
-                .background(GlanceTheme.colors.outline),
-        ) {}
-
-        // Alternatives column — takes the right half via defaultWeight
-        Column(modifier = GlanceModifier.defaultWeight()) {
-            alternatives.forEachIndexed { i, alt ->
-                if (i > 0) Spacer(GlanceModifier.height(WidgetSpacing.x1.dp))
-                AlternativeCard(contact = alt, minimalMode = minimalMode)
+        if (compact) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                glyph()
+                Spacer(GlanceModifier.width(WidgetSpacing.x3.dp))
+                words()
+            }
+        } else {
+            Column(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                glyph()
+                Spacer(GlanceModifier.height(WidgetSpacing.x2.dp))
+                words()
             }
         }
     }
-}
-
-/**
- * Primary card in the 4×2 widget — left column, full height.
- *
- * Mirrors [ContactCard2x2] structure but lives inside the 4×2 layout weight.
- * Per UI-SPEC §Color: accent (primary) is reserved for the call icon here only.
- */
-@androidx.compose.runtime.Composable
-fun PrimaryCard(
-    contact: ContactEntity,
-    minimalMode: Boolean,
-) {
-    val displayedName = if (minimalMode) "Contact" else contact.displayName
-    val callDescription = "Call ${if (minimalMode) "contact" else contact.displayName}"
-
-    Column(
-        modifier = GlanceModifier
-            .fillMaxSize()
-            .background(GlanceTheme.colors.surface)
-            .padding(WidgetSpacing.x4.dp)
-            .clickable(actionStartActivity(dialIntent(contact))),
-        verticalAlignment = Alignment.Vertical.CenterVertically,
-        horizontalAlignment = Alignment.Horizontal.CenterHorizontally,
-    ) {
-        ContactAvatar(
-            displayName = contact.displayName,
-            photoUri = contact.photoUri,
-            minimalMode = minimalMode,
-            sizeDp = 44,
-        )
-        Spacer(GlanceModifier.height(WidgetSpacing.x2.dp))
-        Text(
-            text = displayedName,
-            style = OrbitWidgetTextStyles.contactName.copy(
-                color = GlanceTheme.colors.onSurface,
-            ),
-        )
-        Spacer(GlanceModifier.height(WidgetSpacing.x2.dp))
-        // Phone icon — accent tint (UI-SPEC §Color: accent reserved for primary call CTA)
-        Image(
-            provider = ImageProvider(R.drawable.widget_ic_call),
-            contentDescription = callDescription,
-            modifier = GlanceModifier.size(24.dp),
-            colorFilter = ColorFilter.tint(GlanceTheme.colors.primary),
-        )
-    }
-}
-
-/**
- * Alternative card in the 4×2 widget — stacked in the right column.
- *
- * Per UI-SPEC §Spacing exceptions: min height ≥48dp tap floor. Per UI-SPEC
- * §Color: no accent on alternative cards — text uses onSurfaceVariant.
- *
- * In minimal mode the name is "Contact" (WIDGET-04) and the avatar is a
- * silhouette. Content description explicitly states "Call contact" in minimal
- * mode to avoid leaking the real name through a11y.
- */
-@androidx.compose.runtime.Composable
-fun AlternativeCard(
-    contact: ContactEntity,
-    minimalMode: Boolean,
-) {
-    val displayedName = if (minimalMode) "Contact" else contact.displayName
-    val callDescription = "Call ${if (minimalMode) "contact" else contact.displayName}"
-
-    Row(
-        modifier = GlanceModifier
-            // fillMaxWidth within the alternatives column so the tap target
-            // spans the full column (≥48dp floor, review WR-07); height min
-            // 48dp via padding
-            .fillMaxWidth()
-            .padding(horizontal = WidgetSpacing.x2.dp, vertical = WidgetSpacing.x2.dp)
-            .clickable(actionStartActivity(dialIntent(contact)))
-            .semantics { contentDescription = callDescription },
-        verticalAlignment = Alignment.Vertical.CenterVertically,
-    ) {
-        ContactAvatar(
-            displayName = contact.displayName,
-            photoUri = contact.photoUri,
-            minimalMode = minimalMode,
-            sizeDp = 32,
-        )
-        Spacer(GlanceModifier.width(WidgetSpacing.x2.dp))
-        Text(
-            text = displayedName,
-            style = OrbitWidgetTextStyles.meta.copy(
-                color = GlanceTheme.colors.onSurfaceVariant,
-            ),
-        )
-    }
-}
-
-// ─── WidgetBody4x2 (testable seam) ───────────────────────────────────────────
-
-/**
- * Pure composable body for the 4×2 widget — extracted so tests can exercise
- * the three-column layout branch without standing up the full Glance widget
- * or the Hilt EntryPoint. [OrbitWidget4x2Test] and [MinimalModeTest] call this
- * function directly via [selectWidget4x2State].
- *
- * Design: JVM-only test seam mirroring [WidgetBody2x2].
- */
-@androidx.compose.runtime.Composable
-fun WidgetBody4x2(
-    data: WidgetSurfaceData,
-    minimalMode: Boolean,
-    onOpenApp: Action,
-) {
-    OrbitWidget4x2Content(
-        primary = data.primary,
-        alternatives = data.alternatives,
-        minimalMode = minimalMode,
-        onOpenApp = onOpenApp,
-    )
 }

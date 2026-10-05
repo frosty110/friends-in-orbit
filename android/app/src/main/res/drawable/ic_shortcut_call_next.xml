@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- LAUNCH-01: "Call next" shortcut icon. Adaptive, so the launcher masks it
+     to the same shape as Orbit's own icon; the monochrome layer joins themed
+     icons on Android 13+ (the system reads only its alpha). -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/cream" />
+    <foreground android:drawable="@drawable/shortcut_glyph_call_next" />
+    <monochrome android:drawable="@drawable/shortcut_glyph_call_next" />
+</adaptive-icon>

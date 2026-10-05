@@ -1,10 +1,10 @@
 # privacy
 
 **Status:** in-progress (was `privacy-and-lock` until 2026-04-28)
-**Last reviewed:** 2026-06-09
+**Last reviewed:** 2026-10-05 (surfaces outside the app)
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/data/keystore/DatabaseKeyProvider.kt` (Keystore + SQLCipher passphrase wrapping), `android/app/src/main/java/app/orbit/ui/components/PrivacyCurtain.kt` (quick-hide composable), `android/app/src/main/java/app/orbit/AppViewModel.kt` (privacy-curtain flow), `android/app/src/main/java/app/orbit/domain/export/` (`ExportService`, `ImportService`, `PassphraseEncryptor`, `ExportEnvelope`)
-- Tests: `android/app/src/test/java/app/orbit/domain/export/ImportServiceTest.kt`, `android/app/src/test/java/app/orbit/ui/screens/settings/export/ImportViewModelTest.kt`
+- Tests: `android/app/src/test/java/app/orbit/domain/export/ImportServiceTest.kt`, `android/app/src/test/java/app/orbit/ui/screens/settings/export/ImportViewModelTest.kt`; for the surfaces outside the app, `ListPromptWorkerTest` (lock screen, NOTIF-13) and `LauncherShortcutsTest` (LAUNCH-01)
 
 > **2026-04-28 scope change.** Biometric lock and the user-toggled "minimal mode" are removed from v1. ADR 0003 is superseded; the manifest permission, catalog entry, onboarding step, settings toggles, and DataStore keys are all deleted. Privacy substrate is now: encrypted-at-rest (SQLCipher + Keystore) plus auto quick-hide on focus loss. No user-facing privacy toggles.
 
@@ -18,7 +18,7 @@ Orbit holds sensitive signal: who matters to the user, how often they reach out,
 
 ### User story
 
-As a user, I trust that my data is encrypted on my device and never leaves it. When I switch apps or my phone is taken from me, list and contact names auto-anonymize so a glance can't reveal my relationships. I can export my data at any time, encrypted with my own passphrase.
+As a user, I trust that my data is encrypted on my device and never leaves it. When I switch apps or my phone is taken from me, list and contact names auto-anonymize so a glance can't reveal my relationships. (On a locked phone that holds for Orbit's nudges when my Android lock-screen setting hides sensitive content; see "Surfaces outside the app".) I can export my data at any time, encrypted with my own passphrase.
 
 ### Behavior
 
@@ -28,7 +28,26 @@ As a user, I trust that my data is encrypted on my device and never leaves it. W
 
 **Manual export.** Encrypted JSON file, protected by a user-chosen export passphrase (distinct from the Keystore-bound DB passphrase). User-owned, shareable to another device for re-import. No automatic cloud backup.
 
+**Surfaces outside the app** (2026-10-05, UX rubric gate G6: the curtain covers every surface it says it does, and no more is claimed). The curtain is a state of Orbit's own window; the surfaces Android draws for Orbit follow their own rules, set here:
+
+| Surface | What it can show | Rule |
+|---|---|---|
+| Orbit, in the app switcher or after focus loss | "Contact" and "List" in place of names; no photos | PRIV-03 (the curtain); release builds also block the switcher's thumbnail (PRIV-04) |
+| Lock screen, sensitive content hidden | "Someone is ready when you are. Want to call?" Nothing else: no person, list name, note, face or action | NOTIF-13 |
+| Lock screen, all content shown | The full nudge, as in the shade | The user's Android setting. Orbit marks every nudge sensitive (`VISIBILITY_PRIVATE`); whether to show sensitive content when locked is Android's choice to offer and the user's to make. Many phones ship showing it (reasoned, not checked on a device); see `features/notifications/README.md`, open questions |
+| Notification shade, unlocked | The list's name and, once in a row, the list's next person: first name, face, "Call {first name}" | NOTIF-14, NOTIF-15 |
+| Home-screen widgets | Person names and faces; never a list name | The user placed the widget on a home screen that is behind the phone's lock. WIDGET-04 can mask names, but nothing sets it today (`features/widgets/README.md`) |
+| Launcher long-press and pinned shortcuts | "Call next" and "Search" only | LAUNCH-01: fixed words, never a person or a list, because anyone holding the unlocked phone can read them |
+
+Outside the app, a list name appears only in that list's nudge: in the shade, and on the lock screen only where the user's Android setting shows all content. Person names appear on the widgets and in nudges, surfaces the user placed or scheduled; never in a launcher shortcut.
+
 **No cloud sync. No analytics. No telemetry.** Per PRD §v1 Scope and §Privacy & Security.
+
+**Requirements** (2026-10-05; these record what the code already cites):
+
+- **PRIV-03: The privacy curtain.** When Orbit loses focus, contact names render as "Contact" and list names as "List" everywhere they appear, avatar initials derive from the masked name and photos are withheld; restored on focus. Always on.
+- **PRIV-04: No thumbnail in the app switcher.** `FLAG_SECURE` on `MainActivity` in release builds, so recents and screen recordings cannot capture names. Debug builds keep screenshots for review.
+- **PRIV-05: Orbit never places a call itself.** Every dial is `ACTION_DIAL`, which opens the dialer with the number filled in; the user places the call. Orbit holds no `CALL_PHONE` permission.
 
 ### Acceptance criteria
 
@@ -36,7 +55,9 @@ As a user, I trust that my data is encrypted on my device and never leaves it. W
 - [ ] Encrypted Room DB file is unreadable by `sqlite3` CLI on a rooted device.
 - [ ] Export produces a file that re-imports cleanly on a second install.
 - [ ] Data Safety form reflects: local-only, encrypted, user-exportable, no cloud sync.
-- [ ] Widget renders in privacy-curtain visual ("Contact") when the app is backgrounded (per `features/widgets/README.md`).
+- [ ] Widgets never show a list name; they show person names and faces (corrected 2026-10-05: this used to say the widget masks names when the app is backgrounded, which it has not done since minimal mode was cut on 2026-04-28; see "Surfaces outside the app").
+- [x] Every nudge has a lock-screen version with no names, lists, notes or faces (NOTIF-13, `ListPromptWorkerTest`).
+- [x] Launcher shortcuts name no person and no list (LAUNCH-01, `LauncherShortcutsTest`).
 - [ ] FLAG_SECURE is set on `MainActivity` in release builds so the recents thumbnail can't leak names. (Already shipped.)
 
 ### Not in scope

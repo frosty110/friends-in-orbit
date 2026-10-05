@@ -44,9 +44,9 @@ class OrbitWidget2x2Test {
         assertEquals("Alice", state.displayedName)
     }
 
-    /** When WidgetSurfaceData.primary is null, selection returns Empty (renders "No one due"). */
+    /** When WidgetSurfaceData.primary is null, selection returns Empty (renders "All quiet for now.", WIDGET-10). */
     @Test
-    fun emptyState_rendersNoOneDue() {
+    fun emptyState_whenNobodyIsSurfaced() {
         val data = WidgetSurfaceData(primary = null, alternatives = emptyList())
         val state = selectWidget2x2State(data = data, minimalMode = false)
 

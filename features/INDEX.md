@@ -39,8 +39,8 @@ Not features — shared across all work.
 | [call-detection](call-detection/README.md) | in-progress | CALL_LOG read, 90-day import, manual sync, incoming/outgoing |
 | [contacts-ingestion](contacts-ingestion/README.md) | in-progress | ContactsContract read, delta-sync, multi-number matching, orphan handling |
 | [onboarding](onboarding/README.md) | in-progress | First-run flow: permissions, call-log sync gate, suggested first list |
-| [notifications](notifications/README.md) | stub | Daily digest, time-of-day list prompts, incoming follow-up |
-| [widgets](widgets/README.md) | stub | 2x2 + 4x2 home screen widgets |
+| [notifications](notifications/README.md) | shipped | Scheduled per-list nudges that hand over the list's next person (face, Call), once; nothing private on the lock screen |
+| [widgets](widgets/README.md) | shipped | "Next call" and "Call suggestions" home-screen widgets, every size; launcher shortcuts and the themed icon |
 | [privacy-and-lock](privacy-and-lock/README.md) | in-progress | Quick-hide on focus loss, encrypted-at-rest, encrypted export/import. Biometric lock + minimal mode removed 2026-04-28. |
 | [settings](settings/README.md) | in-progress | App-wide configuration page |
 | [life-right-now](life-right-now/README.md) | stub | App-level season (Quiet / Leaning in) that paces the whole app to the user's life; bends cadence instead of enforcing it |

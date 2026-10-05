@@ -7,30 +7,35 @@
 // NEVER rename either class — existing placed widgets break silently on FQN
 // change.
 //
-// provideGlance reads minimalMode once via .first() before entering
-// provideContent — widgets are one-shot renders; reading inside the composable
-// would require a collected Flow and break the stateless-widget contract
-// (Pitfall 4).
+// provideGlance reads everything once, before provideContent: the people
+// (with their bitmaps), minimal mode and the appearance. Widgets are one-shot
+// renders; reading inside the composable would require a collected Flow and
+// break the stateless-widget contract.
+//
+// WIDGET-07: SizeMode.Responsive. The widget resizes from one row to a wide
+// card (WidgetBreakpoints.nextCall), and each size has its own arrangement.
 package app.orbit.widget
 
 import android.content.Context
 import androidx.glance.GlanceId
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.first
-import app.orbit.ui.theme.OrbitDarkMode
-import app.orbit.ui.theme.OrbitThemeId
 import app.orbit.ui.theme.OrbitWidgetTheme
-import app.orbit.ui.theme.ThemeSettings
 import app.orbit.ui.theme.deviceAccentHue
+import app.orbit.ui.theme.orbitWidgetAvatarTones
 import app.orbit.ui.theme.orbitWidgetColorProviders
+import app.orbit.ui.theme.themeSettingsSnapshot
 
 class OrbitWidget2x2 : GlanceAppWidget() {
 
     override val stateDefinition = PreferencesGlanceStateDefinition
+
+    override val sizeMode = SizeMode.Responsive(WidgetBreakpoints.nextCall)
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val entry = EntryPointAccessors.fromApplication(
@@ -39,22 +44,24 @@ class OrbitWidget2x2 : GlanceAppWidget() {
         )
         // One-shot snapshot — never keep a live Flow open in provideGlance.
         val data = entry.widgetSurfaceUseCase().invoke()
-        // Read minimal mode + appearance before provideContent — one-shot, not
-        // observed inside the composable (Pitfall 4 / WIDGET-04 / THEMING).
+        // Minimal mode + appearance, one-shot (WIDGET-04 / THEMING).
         val prefs = entry.appPrefs()
         val minimalMode = prefs.minimalModeEnabled.first()
-        val themeSettings = ThemeSettings(
-            themeId = OrbitThemeId.fromKey(prefs.colorTheme.first()),
-            darkMode = OrbitDarkMode.fromKey(prefs.darkMode.first()),
-            accentHue = prefs.accentHue.first().let { if (it < 0) null else it },
+        val themeSettings = prefs.themeSettingsSnapshot()
+        val deviceHue = deviceAccentHue(context)
+        val widgetColors = orbitWidgetColorProviders(themeSettings, deviceHue)
+        val people = widgetPeople(
+            context = context,
+            data = data,
+            max = 1,
+            minimalMode = minimalMode,
+            tones = orbitWidgetAvatarTones(themeSettings, deviceHue),
         )
-        val widgetColors = orbitWidgetColorProviders(themeSettings, deviceAccentHue(context))
 
         provideContent {
             OrbitWidgetTheme(colors = widgetColors) {
-                WidgetBody2x2(
-                    data = data,
-                    minimalMode = minimalMode,
+                NextCallBody(
+                    people = people,
                     onOpenApp = actionStartActivity(openHomeIntent(context)),
                 )
             }
@@ -71,12 +78,13 @@ class OrbitWidget2x2 : GlanceAppWidget() {
  * call [selectWidget2x2State] and assert on these sealed values without
  * needing a real Glance composition or Robolectric context.
  *
- * The actual rendering delegates to [WidgetBody2x2] in [OrbitWidget2x2.provideGlance].
+ * The actual rendering is [NextCallBody], fed by [widgetPeople], which applies
+ * the same masking.
  */
 sealed class Widget2x2State {
     /**
      * Rendered when [app.orbit.domain.usecase.WidgetSurfaceData.primary] is null.
-     * The widget shows "No one due" and a tap opens Home.
+     * The widget shows "All quiet for now." (WIDGET-10) and a tap opens Home.
      */
     object Empty : Widget2x2State()
 
@@ -105,7 +113,7 @@ fun selectWidget2x2State(
         Widget2x2State.Empty
     } else {
         Widget2x2State.Contact(
-            displayedName = if (minimalMode) "Contact" else data.primary.displayName,
+            displayedName = if (minimalMode) MINIMAL_NAME else data.primary.displayName,
             avatarIsMinimal = minimalMode,
         )
     }

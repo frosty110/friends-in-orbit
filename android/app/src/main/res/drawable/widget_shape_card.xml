@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WIDGET-11: the widget's card, with Android's own widget corner radius.
+     White, tinted with the theme's surface colour per mode. The live widget
+     also asks the host to clip to the same radius (cornerRadius); the shape
+     keeps the corners round where the host does not. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@android:color/white" />
+    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
+</shape>

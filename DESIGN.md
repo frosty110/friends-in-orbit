@@ -42,6 +42,7 @@ ResolvedTheme(colors, tones) ──provided──▶ LocalOrbitColors / LocalOrb
 | `PressIndication.kt` | `OrbitPressIndication`: the quiet press / hover / focus overlay every clickable gets instead of ripple |
 | `Type.kt` `Shape.kt` `Spacing.kt` `Motion.kt` `Elevation.kt` | Non-color tokens (theme-independent) |
 | `WidgetColors.kt` `WidgetTheme.kt` | Glance widget theming — `orbitWidgetColorProviders(settings)` |
+| `ThemeSettingsSnapshot.kt` | The appearance choice read once, for surfaces drawn outside the app's composition (widgets, a nudge's face) |
 
 ## How theming works (2026-06-22)
 
@@ -50,7 +51,7 @@ ResolvedTheme(colors, tones) ──provided──▶ LocalOrbitColors / LocalOrb
 - **Tones derive.** Avatar palettes, rhythm bars, the heat ramp, and the Home A/B cards all derive from a theme's accent + personality hues (`deriveOrbitTones`), so they track the chosen accent instead of being locked to terracotta.
 - **The accent dial is unbreakable.** `accentForHue` moves lightness until the accent clears 4.5:1 both as a button fill under its label and as text on the page: darker with a white label in light mode, lighter with a warm-ink label in dark mode. A user can never select an inaccessible primary. When the dial is set, the accent-derived tonal surfaces regenerate to track it.
 - **Persistence + live apply.** `AppPrefs` stores `color_theme` / `dark_mode` / `accent_hue` (raw primitives — no UI dependency in the data layer). `AppViewModel` maps them to a `ThemeSettings` StateFlow; the splash holds until it loads (no flash) and the whole app retints live on change. `MainActivity` passes it to `OrbitTheme`.
-- **Widgets follow.** Both home-screen widgets build their Glance colors from the chosen theme; Settings changes trigger `WidgetUpdateScheduler`.
+- **Widgets follow.** Both home-screen widgets build their Glance colors from the chosen theme; Settings changes trigger `WidgetUpdateScheduler`. Every widget colour is a day and night pair, so a widget follows the phone into dark mode without a redraw, and the widgets and a nudge's large icon draw the app's own avatar (`avatarInitials`, `OrbitTones.avatarPalette`; `features/widgets/README.md`, WIDGET-11).
 - **Accessibility is a gate, not a hope.** `ThemeContrastTest` fails the build if any text token misses 4.5:1 on a surface it sits on (button labels and subtle text included), any UI part misses 3:1, a snackbar's action misses 4.5:1 on its inverse bar, or the dial or Wallpaper theme can generate an inaccessible accent for any hue. See `rules.md` §Design 4.
 - **Material parts look like Orbit.** `OrbitTheme` maps every Material 3 colour slot (menus, snackbars, dialogs, sheets, the time picker, checkboxes, chips, text fields), sets Material's type scale in Inter and its shape scale to Orbit's radii. Before 2026-10-05 only ten colour slots were mapped and the rest showed default lavender.
 - **Press, not ripple.** `OrbitPressIndication` is the default indication: a quiet overlay in the foreground colour (10% pressed, 4% hovered) plus a 2dp outline under keyboard focus.

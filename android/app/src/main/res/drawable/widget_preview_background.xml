@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WIDGET-09/11: the widget card for the picker preview and the loading
+     frame, rounded with Android's own widget radius like the live widget. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_preview_surface" />
+    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
+</shape>
