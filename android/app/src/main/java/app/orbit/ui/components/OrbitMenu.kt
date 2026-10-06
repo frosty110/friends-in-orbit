@@ -21,6 +21,11 @@ import app.orbit.ui.theme.OrbitTheme
  *
  *   1. Everyday actions first, in rough order of how often they're used.
  *   2. Destructive actions last, after a divider, in [OrbitColors.danger].
+ *   3. Leading icons are all-or-none within a menu: every row has one or no
+ *      row does, so a blank slot never reads as a missing icon (Browse's row
+ *      menu once showed three icons and one gap). A convention from
+ *      2026-10-06, so menus built before it are brought in line as they are
+ *      touched, not retrofitted in one sweep.
  *
  * Callers list their actions in "most used first" order and mark the
  * destructive ones with [OrbitMenuTone.Destructive]; [orderedForMenu] sinks
@@ -39,7 +44,8 @@ enum class OrbitMenuTone { Default, Destructive }
  * @param tone [OrbitMenuTone.Destructive] paints the row in danger and sinks it
  *   below the divider. Use it for anything that removes, hides, or ends
  *   something the user would have to rebuild by hand (archive, delete, ignore).
- * @param icon optional Phosphor icon name rendered leading the label.
+ * @param icon optional Phosphor icon name rendered leading the label. All or
+ *   none within one menu (contract point 3 above).
  * @param supporting optional second line — used where a destructive action
  *   needs to say what it actually does.
  * @param selected marks the current choice in a menu of options (the picker's

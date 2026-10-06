@@ -19,7 +19,10 @@ import org.robolectric.annotation.Config
  * each screen picks.
  *
  * Two changed on purpose on 2026-10-05: counts of people say "people", not
- * "contacts" ("Ignored 3 people"), as the rest of the app does.
+ * "contacts" ("Ignored 3 people"), as the rest of the app does. On
+ * 2026-10-06 Moved and Copied gained the noun too ("Moved 2 people to Inner
+ * orbit", "Copied 1 person to ..."): they sat on the same screen as "Ignored
+ * 3 people" and dropped it (browse-13; voice.md "People, not contacts").
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = Application::class)
@@ -32,6 +35,7 @@ class SnackbarCopyTest {
     @Test
     fun `one person`() {
         assertEquals("Ignored Alex Chen", UiText.res(R.string.components_snackbar_ignored, "Alex Chen").text())
+        assertEquals("Unignored Alex Chen", UiText.res(R.string.components_snackbar_unignored, "Alex Chen").text())
         assertEquals("Restored Alex Chen", UiText.res(R.string.components_snackbar_restored, "Alex Chen").text())
         assertEquals("Unpaused Kai", UiText.res(R.string.components_snackbar_unpaused, "Kai").text())
         assertEquals("Archived Alex", UiText.res(R.string.contact_snackbar_archived, "Alex").text())
@@ -42,12 +46,20 @@ class SnackbarCopyTest {
     @Test
     fun `moving and copying name the count and the list`() {
         assertEquals(
-            "Moved 2 to Inner orbit",
+            "Moved 2 people to Inner orbit",
             UiText.plural(R.plurals.components_snackbar_moved, 2, 2, "Inner orbit").text(),
         )
         assertEquals(
-            "Copied 2 to Inner orbit",
+            "Moved 1 person to Inner orbit",
+            UiText.plural(R.plurals.components_snackbar_moved, 1, 1, "Inner orbit").text(),
+        )
+        assertEquals(
+            "Copied 2 people to Inner orbit",
             UiText.plural(R.plurals.components_snackbar_copied, 2, 2, "Inner orbit").text(),
+        )
+        assertEquals(
+            "Copied 1 person to Inner orbit",
+            UiText.plural(R.plurals.components_snackbar_copied, 1, 1, "Inner orbit").text(),
         )
         assertEquals(
             "Removed 1 from Inner orbit",

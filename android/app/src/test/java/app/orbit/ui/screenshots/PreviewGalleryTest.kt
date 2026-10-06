@@ -93,6 +93,11 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
      * curtain, and three surfaces were found leaking one at a time
      * (2026-10-05), so this checks them all at once. Findings go to
      * build/screenshots/curtain-report.md; with -Porbit.a11y.strict they fail.
+     *
+     * A field is read through its EditableText, what is drawn and spoken. Its
+     * InputText, the buffer exposed for autofill, is left out on purpose: a
+     * masked field keeps its real text there (CurtainMask draws over the
+     * buffer rather than replacing it, so a name field never saves "List").
      */
     private fun auditCurtain(preview: String) {
         val owner = preview.substringBefore('.')
@@ -171,9 +176,14 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
         // also a smart-list rule's name, which is copy, not anyone's data.
         // Extend this when a preview adds a new name.
         private val FIXTURE_NAMES = listOf(
-            "Avery", "Alex", "Sarah", "Priya", "Marcus", "Kai", "Mara", "Sam", "Jordan", "Bartholomew",
+            "Avery", "Alex", "Sarah", "Priya", "Marcus", "Kai", "Mara", "Sam", "Jordan", "Bartholomew", "Maya",
             "Inner orbit", "People who ground me", "climbing gym",
-        ).map { Regex("\\b${Regex.escape(it)}\\b") }
+        ).map { Regex("\\b${Regex.escape(it)}\\b") } +
+            // Search's previews type "maya" into the field in lowercase, the
+            // way a person types. Until 2026-10-06 the query was not in this
+            // list, so the curtain run passed whether or not the search pill
+            // masked what was typed (browse-8).
+            Regex("\\bmaya\\b")
 
         // Previews exempt from the curtain check, each for a reason:
         // - copy, not anyone's data: the template and rule pickers offer

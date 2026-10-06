@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import app.orbit.R
 import app.orbit.ui.theme.OrbitTheme
@@ -41,6 +42,12 @@ import app.orbit.ui.theme.OrbitTheme
  * dismisses the keyboard (search is live-filtering, there is nothing to
  * submit). Optional [focusRequester] lets a consumer auto-focus the field on
  * entry (GlobalSearch opens straight into typing).
+ *
+ * Under the privacy curtain (PRIV-03) a typed query is a name as often as
+ * not, so the field draws "Contact" over it ([CurtainMask]) while the rows
+ * beneath it already read "Contact". The buffer is untouched, the way List
+ * settings masks its name field: the consumer keeps the real query and the
+ * results it filtered, and gets its text back when the curtain lifts.
  */
 @Composable
 fun OrbitSearchField(
@@ -51,6 +58,8 @@ fun OrbitSearchField(
     focusRequester: FocusRequester? = null,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
+    val curtain = LocalPrivacyCurtain.current
+    val curtainMask = stringResource(R.string.components_curtain_contact)
     // The whole pill is the text field, with the icon, placeholder and clear
     // control in its decoration. The field used to be a one-line strip
     // inside the pill (about 19dp of a 48dp target, so a tap above or below
@@ -64,6 +73,9 @@ fun OrbitSearchField(
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+        // Only over a non-empty query: the placeholder is the field's label
+        // while it is empty, and masking nothing would hide that.
+        visualTransformation = if (curtain && query.isNotEmpty()) CurtainMask(curtainMask) else VisualTransformation.None,
         cursorBrush = SolidColor(OrbitTheme.colors.accent),
         modifier = modifier
             .fillMaxWidth()
