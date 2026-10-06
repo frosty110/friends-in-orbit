@@ -35,7 +35,7 @@
 - Loading: a quiet skeleton
 - Not yet finishable: the helper line, and Done disabled
 - Error: "Orbit couldn't load this list" / "Nothing is lost. Try again in a moment." with Try again
-- Not found (the list is gone): a message with "Start again", which returns to Reading your call history
+- Not found (the list is gone): "List not found", the words List settings and the Add people picker use for a missing list, over "Start again and Orbit will set up a fresh one." with "Start again", which returns to Reading your call history
 - Privacy curtain: the name field reads "List" and people's names "Contact" (PRIV-03)
 
 ## Leads to

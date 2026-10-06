@@ -50,7 +50,7 @@
 - Everyone left is ignored: "Everyone here is ignored" with "Show ignored"
 - Re-link with no one to link to: "No other phone contacts to link to"
 - Nothing matches: "Nothing matches “q”" / "Try a shorter name, part of a number, or one filter fewer.", or "Nothing matches these filters" / "Try removing a filter."
-- The list is gone: "List not found" / "It may have been removed." with "Go back". The person is gone (Re-link): "This person isn't in Orbit anymore" / "They may have been removed." with "Go back"
+- The list is gone: "List not found" / "It may have been deleted." with "Go back", the words List settings uses for a missing list. The person is gone (Re-link): "This person isn't in Orbit anymore" / "They may have been removed." with "Go back"
 - Error: "Couldn't load your contacts" / "Nothing is lost. Try again in a moment." with Try again; the selection survives it (PICK-09)
 - Committing: the bar waits, and a second tap does nothing extra
 - Privacy curtain: names read "Contact", list names "List" ("On 2 lists"), the title drops the person's name, and the search text is masked (PRIV-03)

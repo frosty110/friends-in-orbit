@@ -68,9 +68,12 @@
     <string name="picker_hide_ignored">Hide ignored</string>
 
     <!-- The list or person the picker was opened for is not there: the id was malformed,
-         or the row is gone. The person wording is the one Contact detail uses. -->
+         or the row is gone. The list wording is the one List settings owns
+         (lists_config_not_found and its body): "deleted" is Orbit's verb for a list that
+         is gone, "removed" is for a person leaving a list. The person wording is the one
+         Contact detail uses. -->
     <string name="picker_list_not_found">List not found</string>
-    <string name="picker_list_not_found_body">It may have been removed.</string>
+    <string name="picker_list_not_found_body">It may have been deleted.</string>
     <string name="picker_person_not_found">This person isn\'t in Orbit anymore</string>
     <string name="picker_person_not_found_body">They may have been removed.</string>
 
