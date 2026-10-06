@@ -22,14 +22,16 @@ import java.time.Instant
  *    the evidence CARD-03 waits for before saying "Called {name}".
  *  - `Error` carries no cause string: a database message can quote a query
  *    over PII and nothing on screen reads it (rules.md Code 4). It is
- *    reachable for a failed read and for a malformed list id (CARD-07), and
- *    it offers Try again.
+ *    reachable for a failed read and for a malformed list id (CARD-07). It
+ *    offers Try again only when a retry can re-read something (`canRetry`):
+ *    an id that never parsed has nothing to re-read, so that deck offers Go
+ *    home alone.
  *
  * Card-loop revision (2026-06-09):
  *  - `Ready.queueSize` now carries the list's real due-now count (was the
  *    dead constant 1).
- *  - `Ready.whyNowLine`: VM-built "3 weeks since you last spoke." framing
- *    line derived from the last connected call; null when there is no history.
+ *  - `Ready.whyNowLine`: VM-built "You spoke 3 weeks ago." framing line
+ *    derived from the last connected call; null when there is no history.
  *  - `EmptyNothingEligible` is a data class carrying the optional
  *    soonest-upcoming-member hint so the empty state can say
  *    "{name} comes up {when}." instead of a false "paused or out of reach".
@@ -66,10 +68,9 @@ sealed interface CardViewUiState {
         // Tide marker (2026-05-08) — true when the surfaced contact's
         // engine-computed nextDueAt is in the future at the moment of emission.
         val isAheadOfToday: Boolean = false,
-        // 2026-06-09: why-now framing line ("3 weeks since you last spoke."),
-        // built by the VM from the most recent connected call as UiText
-        // (resolved by the screen). Null when no history; the screen hides the
-        // line then.
+        // 2026-06-09: why-now framing line ("You spoke 3 weeks ago."), built
+        // by the VM from the most recent connected call as UiText (resolved by
+        // the screen). Null when no history; the screen hides the line then.
         val whyNowLine: UiText? = null,
         // The list's type, so the menu and the empty deck can withhold "Add
         // people" on a smart list.
@@ -110,9 +111,16 @@ sealed interface CardViewUiState {
      * A read failed, or the list id could not be parsed (CARD-07). The
      * screen offers Try again and Go home. [listName] is blank when the list
      * itself could not be read.
+     *
+     * [canRetry] is false when there is nothing a retry could re-read: the
+     * route's list id never parsed, so the VM has no feed to re-subscribe
+     * and Try again changed nothing. The screen then offers Go home alone
+     * (rules.md Code 3: a control that does nothing is a silent short-circuit).
+     * Carried on the state rather than decided in the screen so the two
+     * cannot disagree about which Error this is.
      */
     @Immutable
-    data class Error(val listName: String = "") : CardViewUiState
+    data class Error(val listName: String = "", val canRetry: Boolean = true) : CardViewUiState
 }
 
 /** The list's name in any state that knows it; blank while loading or when the list could not be read. */

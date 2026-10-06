@@ -52,6 +52,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -93,8 +94,8 @@ import app.orbit.ui.util.UiText
 import app.orbit.ui.util.asString
 import app.orbit.ui.util.axisTickLabels
 import app.orbit.ui.util.dialPhoneNumber
+import app.orbit.ui.util.formatAgo
 import app.orbit.ui.util.formatDuration
-import app.orbit.ui.util.formatSpan
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -107,8 +108,9 @@ import kotlin.math.abs
 // advancement via [CardSwipeFrame]. A call placed from here advances the deck
 // silently once the call log is synced (no "did you talk?" confirmation).
 // 2026-10-06 card-view audit: every state message is the shared
-// OrbitScreenMessage (the error one with Try again, CARD-07), the app bar is
-// titled in every state, and "Add a note" lands in the note field (NOTE-02).
+// OrbitScreenMessage (the error one with Try again, CARD-07, or Go home alone
+// when nothing can be retried), the app bar is titled in every state, and
+// "Add a note" lands in the note field (NOTE-02).
 
 /**
  * @param onOpenContact opens a person's page from the face or "Open details".
@@ -281,6 +283,17 @@ internal fun CardViewContent(
         else -> listName
     }
     val isSmart = state.listType == ListType.SMART
+    // An Error deck with no list name (a malformed id, or the list itself
+    // could not be read) leaves the app bar untitled, so nothing in the tree
+    // names the pane and TalkBack announces no screen at all (rubric D8). The
+    // root carries the message's own heading then, as Contact detail's root
+    // does for a person who could not be read. Not through appBarTitle: that
+    // also names the overflow ("More actions for Something's off here.").
+    val errorPaneTitle = if (state is CardViewUiState.Error && listName.isBlank()) {
+        stringResource(R.string.card_error_heading)
+    } else {
+        null
+    }
 
     // One snackbar at a time, newest wins (CARD-02, gate G1): collectLatest
     // cancels the older showSnackbar, which dismisses it, so the Undo on
@@ -316,7 +329,9 @@ internal fun CardViewContent(
         }
     }
 
-    OrbitScreen {
+    OrbitScreen(
+        modifier = Modifier.semantics { if (errorPaneTitle != null) paneTitle = errorPaneTitle }
+    ) {
         OrbitAppBar(
             title = appBarTitle,
             leading = {
@@ -366,7 +381,11 @@ internal fun CardViewContent(
                     onBrowse = { onBrowse(listId) },
                     onGoHome = onBack
                 )
-                is CardViewUiState.Error -> ErrorShell(onRetry = onRetry, onGoHome = onBack)
+                is CardViewUiState.Error -> ErrorShell(
+                    canRetry = state.canRetry,
+                    onRetry = onRetry,
+                    onGoHome = onBack
+                )
                 is CardViewUiState.Ready -> ReadyCard(
                     state = state,
                     onTapToCall = onTapToCall,
@@ -469,23 +488,37 @@ private fun NothingEligibleShell(
 }
 
 /**
- * CARD-07: a failed read, or a malformed list id, says so and offers Try
- * again (the accent) with Go home beneath. The body is the shared one
- * ("Nothing is lost. Try again in a moment."); the old body told the user to
- * try again while the screen offered no way to.
+ * CARD-07: a failed read says so and offers Try again (the accent) with Go
+ * home beneath. The body is the shared one ("Nothing is lost. Try again in a
+ * moment."); the old body told the user to try again while the screen
+ * offered no way to. When nothing can be retried ([canRetry] false: the list
+ * id never parsed, so there is no feed to re-subscribe) Go home is the one
+ * action and takes the accent; a Try again that did nothing was the screen's
+ * accent until 2026-10-06 (rules.md Code 3).
  */
 @Composable
-private fun ErrorShell(onRetry: () -> Unit, onGoHome: () -> Unit) {
-    OrbitScreenMessage(
-        icon = "warning-circle",
-        title = stringResource(R.string.card_error_heading),
-        body = stringResource(R.string.components_error_body),
-        actionLabel = stringResource(R.string.components_error_retry),
-        onAction = onRetry,
-        actionVariant = OrbitButtonVariant.Primary,
-        secondaryLabel = stringResource(R.string.card_go_home),
-        onSecondary = onGoHome
-    )
+private fun ErrorShell(canRetry: Boolean, onRetry: () -> Unit, onGoHome: () -> Unit) {
+    if (canRetry) {
+        OrbitScreenMessage(
+            icon = "warning-circle",
+            title = stringResource(R.string.card_error_heading),
+            body = stringResource(R.string.components_error_body),
+            actionLabel = stringResource(R.string.components_error_retry),
+            onAction = onRetry,
+            actionVariant = OrbitButtonVariant.Primary,
+            secondaryLabel = stringResource(R.string.card_go_home),
+            onSecondary = onGoHome
+        )
+    } else {
+        OrbitScreenMessage(
+            icon = "warning-circle",
+            title = stringResource(R.string.card_error_heading),
+            body = stringResource(R.string.components_error_body),
+            actionLabel = stringResource(R.string.card_go_home),
+            onAction = onGoHome,
+            actionVariant = OrbitButtonVariant.Primary
+        )
+    }
 }
 
 @Composable
@@ -811,7 +844,7 @@ internal fun ContactCardFace(
                     textAlign = TextAlign.Center
                 )
                 // 2026-06-09 — why-now line from the last connected call
-                // ("It's been 3 weeks."). Hidden when there's no history.
+                // ("You spoke 3 weeks ago."). Hidden when there's no history.
                 if (whyNowLine != null) {
                     Spacer(Modifier.height(OrbitTheme.spacing.x1))
                     Text(
@@ -1088,7 +1121,7 @@ private val previewState: CardViewUiState = CardViewUiState.Ready(
     nowHour = 19,
     whyNowLine = UiText.res(
         R.string.card_why_two_lines,
-        UiText.res(R.string.card_why_span, formatSpan(11)),
+        UiText.res(R.string.card_why_ago, formatAgo(11)),
         UiText.plural(R.plurals.card_rhythm_weeks, 2, 2),
     )
 )
@@ -1236,6 +1269,16 @@ private fun CardViewContentLoadingPreview() {
 private fun CardViewContentErrorPreview() {
     OrbitTheme {
         PreviewContent(state = CardViewUiState.Error(listName = "Inner orbit"))
+    }
+}
+
+// A list id that never parsed (a bad deep link): no list name, no Try again,
+// Go home as the one action.
+@PreviewLightDark
+@Composable
+private fun CardViewContentBadLinkPreview() {
+    OrbitTheme {
+        PreviewContent(state = CardViewUiState.Error(canRetry = false))
     }
 }
 

@@ -1,8 +1,12 @@
 package app.orbit.ui.screens.card
 
 import android.app.Application
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -22,9 +26,11 @@ import org.robolectric.annotation.Config
 /**
  * What the rendered Card view owes the user, checked on the JVM against the
  * semantics tree (the ContactDetailCurtainTest / PreviewGalleryTest
- * convention): the face opens details and never dials (CARD-01), and in
+ * convention): the face opens details and never dials (CARD-01), in
  * landscape on a phone the Call button is on screen without scrolling
- * (CARD-06). Drives the stateless [CardViewContent]; [CardViewScreen] takes a
+ * (CARD-06), the Error deck offers Try again only when a retry can re-read
+ * something (CARD-07), and every Error deck has a pane title for TalkBack to
+ * announce. Drives the stateless [CardViewContent]; [CardViewScreen] takes a
  * Hilt ViewModel and cannot be composed here.
  */
 @RunWith(AndroidJUnit4::class)
@@ -58,11 +64,25 @@ class CardViewScreenTest {
         nowHour = 19,
     )
 
-    private fun setReady(onTapToCall: (Long, String) -> Unit = { _, _ -> }, onOpenContact: (Long) -> Unit = {}) {
+    private val paneTitle = SemanticsMatcher.keyIsDefined(SemanticsProperties.PaneTitle)
+
+    private fun titled(title: String) =
+        SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, title)
+
+    private fun setReady(
+        onTapToCall: (Long, String) -> Unit = { _, _ -> },
+        onOpenContact: (Long) -> Unit = {},
+    ) = setState(ready, onTapToCall = onTapToCall, onOpenContact = onOpenContact)
+
+    private fun setState(
+        state: CardViewUiState,
+        onTapToCall: (Long, String) -> Unit = { _, _ -> },
+        onOpenContact: (Long) -> Unit = {},
+    ) {
         compose.setContent {
             OrbitTheme {
                 CardViewContent(
-                    state = ready,
+                    state = state,
                     listId = "1",
                     callLogDenied = false,
                     messages = MutableSharedFlow<CardMessage>().asSharedFlow(),
@@ -114,5 +134,44 @@ class CardViewScreenTest {
 
         compose.onNodeWithText("Avery Quinn").assertIsDisplayed()
         compose.onNodeWithText("Call Avery").assertIsDisplayed()
+    }
+
+    // CARD-07: a failed read offers Try again (the accent) and Go home.
+    @Test
+    fun `CARD-07 - a failed read offers Try again and Go home`() {
+        setState(CardViewUiState.Error(listName = "Inner orbit"))
+
+        compose.onNodeWithText("Try again").assertIsDisplayed()
+        compose.onNodeWithText("Go home").assertIsDisplayed()
+    }
+
+    // CARD-07: a list id that never parsed has nothing to re-read, so the deck
+    // offers Go home alone. Until 2026-10-06 Try again was the accent here and
+    // the tap did nothing (rules.md Code 3).
+    @Test
+    fun `CARD-07 - a list id that never parsed offers Go home and no Try again`() {
+        setState(CardViewUiState.Error(canRetry = false))
+
+        compose.onNodeWithText("Try again").assertDoesNotExist()
+        compose.onAllNodesWithText("Go home").assertCountEquals(1)
+    }
+
+    // The app bar names the pane while the list's name is known; with no name
+    // (a malformed id, or the list itself could not be read) the Error deck is
+    // announced by its own heading instead of not at all.
+    @Test
+    fun `an Error deck that knows its list is titled with the list's name`() {
+        setState(CardViewUiState.Error(listName = "Inner orbit"))
+
+        compose.onNode(titled("Inner orbit"), useUnmergedTree = true).assertExists()
+        compose.onAllNodes(paneTitle, useUnmergedTree = true).assertCountEquals(1)
+    }
+
+    @Test
+    fun `an Error deck with no list name is announced by its heading`() {
+        setState(CardViewUiState.Error())
+
+        compose.onNode(titled("Something's off here."), useUnmergedTree = true).assertExists()
+        compose.onAllNodes(paneTitle, useUnmergedTree = true).assertCountEquals(1)
     }
 }

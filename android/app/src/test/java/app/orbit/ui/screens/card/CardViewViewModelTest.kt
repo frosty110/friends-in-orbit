@@ -25,6 +25,7 @@ import app.orbit.domain.usecase.SurfaceNextUseCase
 import app.orbit.domain.usecase.SurfaceQueueUseCase
 import app.orbit.testutil.MainDispatcherRule
 import app.orbit.ui.util.UiText
+import app.orbit.ui.util.formatAgo
 import app.orbit.ui.util.formatSpan
 import java.time.DayOfWeek
 import java.time.Duration
@@ -258,14 +259,20 @@ class CardViewViewModelTest {
     // Test 3: CARD-07: a non-numeric listId (a bad deep link) is the Error
     // deck, not a quiet one. It used to route to EmptyNothingEligible and read
     // "All quiet for now." with a Browse button into a list that does not exist
-    // (rules.md Code 3: a path that cannot happen gets a loud guard).
+    // (rules.md Code 3: a path that cannot happen gets a loud guard). That deck
+    // has no feed behind it, so it says so (`canRetry = false`) and Try again
+    // leaves it exactly as it was; until 2026-10-06 the screen offered Try
+    // again as its accent and the tap changed nothing.
     // ============================================================================
 
     @Test
-    fun `CARD-07 - non-numeric listId String routes to Error`() = runTest {
+    fun `CARD-07 - non-numeric listId String routes to Error that cannot retry`() = runTest {
         val (vm, _, _, _) = fixture(savedStateListId = "inner")
         vm.uiState.test(timeout = 2.seconds) {
-            assertEquals(CardViewUiState.Error(), awaitItem())
+            assertEquals(CardViewUiState.Error(canRetry = false), awaitItem())
+            vm.onRetry()
+            expectNoEvents()
+            assertEquals(CardViewUiState.Error(canRetry = false), vm.uiState.value)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -371,7 +378,7 @@ class CardViewViewModelTest {
         mainDispatcherRule.withMainDispatcher(StandardTestDispatcher()) {
             val setup = fixture(savedStateListId = "inner")
             assertEquals(
-                CardViewUiState.Error(),
+                CardViewUiState.Error(canRetry = false),
                 setup.vm.uiState.value,
                 "listId == null branch uses initialValue = Error, not Loading",
             )
@@ -522,16 +529,18 @@ class CardViewViewModelTest {
     }
 
     @Test
-    fun `CARD-04 - four calls two weeks apart read as a two-week rhythm under the since line`() = runTest {
+    fun `CARD-04 - four calls two weeks apart read as a two-week rhythm`() = runTest {
         val setup = fixture(savedStateListId = "1")
         setup.seedSarahDueNowWithCalls(daysAgo = listOf(3L, 17L, 31L, 45L))
         setup.vm.uiState.test(timeout = 2.seconds) {
             val state = awaitLoaded()
             assertTrue(state is CardViewUiState.Ready, "expected Ready, got $state")
+            // "You spoke 3 days ago." over the rhythm; WhyLineVoiceTest holds
+            // the rendered words to voice.md.
             assertEquals(
                 UiText.res(
                     R.string.card_why_two_lines,
-                    UiText.res(R.string.card_why_span, formatSpan(3)),
+                    UiText.res(R.string.card_why_ago, formatAgo(3)),
                     UiText.plural(R.plurals.card_rhythm_weeks, 2, 2),
                 ),
                 state.whyNowLine,
@@ -541,13 +550,13 @@ class CardViewViewModelTest {
     }
 
     @Test
-    fun `CARD-04 - three calls give the since line and no rhythm`() = runTest {
+    fun `CARD-04 - three calls give the spoke line and no rhythm`() = runTest {
         val setup = fixture(savedStateListId = "1")
         setup.seedSarahDueNowWithCalls(daysAgo = listOf(3L, 17L, 31L))
         setup.vm.uiState.test(timeout = 2.seconds) {
             val state = awaitLoaded()
             assertTrue(state is CardViewUiState.Ready, "expected Ready, got $state")
-            assertEquals(UiText.res(R.string.card_why_span, formatSpan(3)), state.whyNowLine)
+            assertEquals(UiText.res(R.string.card_why_ago, formatAgo(3)), state.whyNowLine)
             cancelAndIgnoreRemainingEvents()
         }
     }

@@ -24,6 +24,7 @@ import app.orbit.domain.usecase.SurfaceResult
 import app.orbit.domain.usecase.SurfaceSoonerUseCase
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatAbsolute
+import app.orbit.ui.util.formatAgo
 import app.orbit.ui.util.formatRelative
 import app.orbit.ui.util.formatSpan
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -85,10 +86,11 @@ import javax.inject.Inject
  * Card-view audit (2026-10-06):
  *   - **Error with Try again (CARD-07).** A failed read arrives from CardFeed
  *     as a snapshot with `error` set (the feed catches before its `stateIn`,
- *     see its KDoc) and a malformed list id is the same deck; [onRetry]
- *     re-subscribes through `retryCount.flatMapLatest` (HOME-10 precedent).
- *     The malformed id used to render "All quiet for now." over a list that
- *     does not exist.
+ *     see its KDoc); [onRetry] re-subscribes through
+ *     `retryCount.flatMapLatest` (HOME-10 precedent). A malformed list id is
+ *     the same deck with `canRetry = false`: there is no feed to re-subscribe,
+ *     so it offers Go home alone. The malformed id used to render "All quiet
+ *     for now." over a list that does not exist.
  *   - **Loading until the feed has answered.** The feed's placeholder is
  *     `loaded = false` and maps to Loading, so a cold first open never
  *     flashes an empty deck (F-8 in full; before, the placeholder looked
@@ -114,7 +116,9 @@ class CardViewViewModel @Inject constructor(
     // link) has no list to bind, so it is the Error deck (CARD-07, rules.md
     // Code 3: a path that cannot happen gets a loud guard, not a shrug). It
     // used to render "All quiet for now." with a Browse button into a list
-    // that does not exist.
+    // that does not exist. The deck is a constant, so a retry could change
+    // nothing: `canRetry = false` and the screen withholds Try again (until
+    // 2026-10-06 it was the Primary action there, and did nothing).
     private val listId: Long? = savedStateHandle.get<String>("listId")?.toLongOrNull()
 
     // CARD-07: bumped by [onRetry] to re-subscribe after a failed read (the
@@ -131,11 +135,11 @@ class CardViewViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<CardViewUiState> =
         if (listId == null) {
-            flowOf<CardViewUiState>(CardViewUiState.Error())
+            flowOf<CardViewUiState>(CardViewUiState.Error(canRetry = false))
                 .stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5_000L),
-                    initialValue = CardViewUiState.Error(),
+                    initialValue = CardViewUiState.Error(canRetry = false),
                 )
         } else {
             // F-8 — initial value is Loading (rendered as a transparent
@@ -451,23 +455,17 @@ class CardViewViewModel @Inject constructor(
 
     /**
      * Honest one-line framing from the most recent connected call (manual
-     * marks count, the user told us they talked): "3 weeks since you last
-     * spoke." (Home's words for the same gap, so one idea has one wording).
-     * Null when there is no history at all; the face then shows only the
-     * neutral "Not enough calls yet to see a pattern" panel. formatSpan's
-     * [UiText] ("3 weeks") nests as the sentence's argument.
+     * marks count, the user told us they talked): "You spoke 3 weeks ago."
+     * ([cardWhySince]; Home's words for the same gap, so one idea has one
+     * wording). Null when there is no history at all; the face then shows
+     * only the neutral "Not enough calls yet to see a pattern" panel.
      */
     private fun whyNowLine(recentCalls: List<CallEventEntity>, now: Instant): UiText? {
         val lastCallAt = recentCalls
             .maxByOrNull { it.occurredAt }
             ?.occurredAt
             ?: return null
-        val days = Duration.between(lastCallAt, now).toDays().coerceAtLeast(0L)
-        val since = when (days) {
-            0L -> UiText.res(R.string.card_why_today)
-            1L -> UiText.res(R.string.card_why_yesterday)
-            else -> UiText.res(R.string.card_why_span, formatSpan(days))
-        }
+        val since = cardWhySince(Duration.between(lastCallAt, now).toDays())
         // Two short lines read better than one that wraps mid-phrase.
         val rhythm = rhythmSentence(recentCalls) ?: return since
         return UiText.res(R.string.card_why_two_lines, since, rhythm)
@@ -530,3 +528,21 @@ class CardViewViewModel @Inject constructor(
 
 /** How long to wait for the call log to confirm a call before saying nothing. */
 private const val CALL_ACK_WAIT_MS = 15_000L
+
+/**
+ * The card's "when you last spoke" line for a gap of [days] whole days: "You
+ * spoke today.", "You spoke yesterday.", then "You spoke 3 days ago." / "You
+ * spoke 3 weeks ago." with [formatAgo]'s one wording as the argument. Active
+ * voice, the form voice.md gives ("You spoke yesterday"). Until 2026-10-06 the
+ * span filled "%1$s since you last spoke.", which for the most common gaps
+ * read "3 days since you last spoke.", the shame framing voice.md never says
+ * and `VoiceRules` forbids ("days since"); the string audit reads resource
+ * text, where the span is a placeholder, so it never saw the rendered line.
+ * Top-level (not VM-private), like `resolvePickerPhase`, so
+ * `WhyLineVoiceTest` can render it for every bucket without the feed.
+ */
+internal fun cardWhySince(days: Long): UiText = when (days.coerceAtLeast(0L)) {
+    0L -> UiText.res(R.string.card_why_today)
+    1L -> UiText.res(R.string.card_why_yesterday)
+    else -> UiText.res(R.string.card_why_ago, formatAgo(days))
+}

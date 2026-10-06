@@ -641,8 +641,8 @@ class CardViewViewModelInteractionTest {
     @Test
     fun `whyNowLine reflects last call recency on a Ready card`() = runTest {
         // A contact called 3 days ago, due now (nextDueAt in the past) → Ready
-        // with the "3 days since you last spoke." framing line derived from
-        // the latest connected call event.
+        // with the "You spoke 3 days ago." framing line derived from the
+        // latest connected call event.
         val setup = fixture()
         setup.contactRepo.seed(listOf(contactFixture(id = 1L, displayName = "Sarah Connor")))
         setup.listRepo.seed(listOf(listFixture(id = 1L, ruleTemplateId = 1L)))
@@ -655,12 +655,12 @@ class CardViewViewModelInteractionTest {
         setup.vm.uiState.test(timeout = 2.seconds) {
             val state = awaitItem()
             assertTrue(state is CardViewUiState.Ready, "expected Ready, got $state")
-            // "{3 days} since you last spoke." from strings_card.xml; the span is
-            // formatSpan's UiText ("3 days", strings_time.xml), nested as the argument.
+            // "You spoke {3 days ago}." from strings_card.xml; the argument is
+            // formatAgo's UiText ("3 days ago", strings_time.xml), nested.
             assertEquals(
                 app.orbit.ui.util.UiText.res(
-                    app.orbit.R.string.card_why_span,
-                    app.orbit.ui.util.UiText.plural(app.orbit.R.plurals.time_span_days, 3, 3),
+                    app.orbit.R.string.card_why_ago,
+                    app.orbit.ui.util.UiText.plural(app.orbit.R.plurals.time_ago_days, 3, 3),
                 ),
                 state.whyNowLine,
             )
