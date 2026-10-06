@@ -71,8 +71,9 @@ import kotlinx.coroutines.launch
  * which writes the event (durationSeconds = 0) through MarkCalledUseCase — the
  * same atomic nextDueAt-recompute path as the call-log reconciler.
  *
- * Pitfall 1 dismissal pattern (PauseSheet convention): hide animates first,
- * then the parent visibility flag flips via [onDismiss].
+ * Pitfall 1 dismissal pattern (the PauseDurationSheet convention, in
+ * ui/components): hide animates first, then the parent visibility flag flips
+ * via [onDismiss].
  *
  * Time hygiene: this composable never reads "now" for display — the VM
  * resolves Today/Yesterday against its injected Clock. The single
@@ -376,7 +377,7 @@ private fun formatPickedDate(utcMidnightMillis: Long): String =
     DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault())
         .format(Instant.ofEpochMilli(utcMidnightMillis).atZone(ZoneOffset.UTC).toLocalDate())
 
-// region Previews — sheet content rendered directly (PauseSheet convention).
+// region Previews: sheet content rendered directly (the PauseDurationSheet convention).
 
 @Preview(name = "LogConnectionSheet — light", showBackground = true)
 @Composable
