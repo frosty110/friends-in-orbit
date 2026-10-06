@@ -5,15 +5,17 @@ import app.orbit.data.dao.RecordingContactDao
 import app.orbit.data.db.TransactionRunner
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.model.PauseDuration
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlinx.coroutines.runBlocking
 
 /**
- * Label pluralization for [BulkPauseUseCase]. The inverse / snapshot
- * mechanics mirror [BulkIgnoreUseCaseTest]'s shape and are covered there for
- * the shared groupBy idiom; these tests pin the snackbar copy, which the
- * multi-select flow can emit for a single-row batch.
+ * [BulkPauseUseCase]: the count the caller's plural reads, and the inverse,
+ * which restores each person's prior `pausedUntil` exactly (someone already
+ * paused with another length must not be blanket-cleared by Undo). Until
+ * 2026-10-06 the inverse had no test anywhere (browse-10); it was assumed to
+ * mirror [BulkIgnoreUseCaseTest]'s groupBy idiom.
  */
 class BulkPauseUseCaseTest {
 
@@ -68,5 +70,34 @@ class BulkPauseUseCaseTest {
         val result = useCase(listOf(1L, 2L, 3L), PauseDuration.Indefinite)
 
         assertEquals(3, result.count)
+    }
+
+    @Test
+    fun inverse_restores_each_prior_pause_grouped_by_value() = runBlocking {
+        // 1 was not paused, 2 was already paused until another date, 3 was
+        // not paused. Undo must put each back as it was, not clear all three.
+        val priorOfTwo = Instant.parse("2026-03-01T00:00:00Z")
+        val dao = RecordingContactDao(
+            pausedSnapshots = listOf(
+                PausedUntilSnapshot(1L, null),
+                PausedUntilSnapshot(2L, priorOfTwo),
+                PausedUntilSnapshot(3L, null)
+            )
+        )
+        val clock = TestClock()
+        val useCase = BulkPauseUseCase(passThruTx, dao, clock)
+
+        val result = useCase(listOf(1L, 2L, 3L), PauseDuration.OneWeek)
+        val forward = dao.setPausedUntilCalls.single()
+        assertEquals(listOf(1L, 2L, 3L), forward.ids)
+        assertEquals(clock.now().plus(PauseDuration.OneWeek.duration), forward.until)
+
+        dao.setPausedUntilCalls.clear()
+        result.inverse()
+
+        // One batch per distinct prior value (the M8 shape), each restoring
+        // exactly that value.
+        val restored = dao.setPausedUntilCalls.associate { it.until to it.ids.toSet() }
+        assertEquals(mapOf(null to setOf(1L, 3L), priorOfTwo to setOf(2L)), restored)
     }
 }
