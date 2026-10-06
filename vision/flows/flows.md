@@ -8,7 +8,9 @@
 
 **Bugs found while building it:** [findings.md](findings.md) lists 14, from smart lists that never surface anyone to an indefinite pause that cannot be undone. All 14 were fixed on 2026-10-05 (B14 in part), and the prototype now shows the fixed behaviour. Each bug still shows on its screen in the prototype's side panel, marked fixed, with what changed.
 
-**Built from:** the Compose source at commit `15b6bfb` (2026-10-04), read screen by screen. Copy is verbatim from the code, with one exception: the app uses em dashes in about a dozen strings, and the prototype shows those as a spaced hyphen. Data is the synthetic cast from `android/scripts/seed-avd.py` plus a few invented address-book names. Nothing here is a real contact.
+**Built from:** the string resources (`android/app/src/main/res/values/strings_*.xml`) and the Compose source at commit `6f6ae8e` (2026-10-05), screen by screen; first built from `15b6bfb` (2026-10-04) and re-derived on 2026-10-05. Copy is verbatim from the strings, and includes the wording this round's code packages land in the same merge: Browse's "Next up" heading, "Recently called" chip and Select button; the card's "Up now" / "Coming up" eyebrow, "Open details" row and "{Name} comes up {when}." snackbar; "Add to lists" in Search; one pause sheet with "Until you unpause" and "Paused {name} until you unpause"; "Unignore"; "More actions" and "Quick actions" as the two menu names; Settings' privacy line; a rhythm line on each Lists row. The app has had no em dashes since 2026-10-05, so the prototype shows none.
+
+*What the prototype does not yet show (as of 2026-10-05):* Contact detail's "Ignored" status line, the picker's "Select all" cap at 200, Settings' "Last synced 5 minutes ago" in minutes and hours, the Wallpaper swatch's real wallpaper hue, the gallery's exact spacing and type sizes, and any skeleton while a screen loads. It is a review surface for flows, not a pixel reference: the gallery renders in `vision/*/actual-*.png` are. Data is the synthetic cast from `android/scripts/seed-avd.py` plus a few invented address-book names. Nothing here is a real contact.
 
 ---
 
@@ -45,7 +47,7 @@ IDs are stable handles for feedback. They are local to this document and the pro
 | S01 | Welcome | `onboard/welcome` | [page view](../../features/page-views/onboarding-welcome.md) |
 | S02 | Contacts permission | `onboard/permissions/contacts` | [page view](../../features/page-views/onboarding-permissions.md) |
 | S03 | Call log permission | `onboard/permissions/call-log` | [page view](../../features/page-views/onboarding-permissions.md) |
-| S04 | Notifications permission | `onboard/permissions/notifications` | [page view](../../features/page-views/onboarding-permissions.md) |
+| S04 | Notifications permission (legacy: out of the flow since ONB-30; kept only so a saved resume step lands) | `onboard/permissions/notifications` | [onboarding](../../features/onboarding/README.md) |
 | S05 | Reading your call history | `onboard/sync` | [page view](../../features/page-views/onboarding-sync.md) |
 | S06 | Preview your first list | `onboard/preview` | [page view](../../features/page-views/onboarding-preview.md) |
 | S07 | Make your first list | `onboard/first-list/{listId}` | [page view](../../features/page-views/onboarding-first-list.md) |
@@ -73,7 +75,7 @@ IDs are stable handles for feedback. They are local to this document and the pro
 |---|---|---|---|
 | S30 | Lists | `lists` | [page view](../../features/page-views/lists-manager.md) |
 | S31 | List settings | `lists/{listId}/config` | [page view](../../features/page-views/list-config.md) |
-| S32 | Add contacts (contact picker) | `pick/contacts` | [page view](../../features/page-views/picker-contacts.md) |
+| S32 | Add people (contact picker) | `pick/contacts` | [page view](../../features/page-views/picker-contacts.md) |
 
 ### Settings and records
 
@@ -92,7 +94,7 @@ IDs are stable handles for feedback. They are local to this document and the pro
 | S52 | App switcher (privacy curtain) | recent apps | [privacy](../../features/privacy-and-lock/README.md) |
 | S53 | Phone app | system dialer | [card view](../../features/card-view/README.md) |
 
-Each screen's states (sheets, dialogs, menus, empty and error states) are listed in the prototype's right panel and can be opened directly. There are 109 in total.
+Each screen's states (sheets, dialogs, menus, empty and error states) are listed in the prototype's right panel and can be opened directly. There are 118 in total.
 
 ---
 
@@ -104,16 +106,16 @@ Each screen's states (sheets, dialogs, menus, empty and error states) are listed
 flowchart LR
   S01[S01 Welcome] -->|Let's go| S02[S02 Contacts]
   S02 -->|Continue or skip| S03[S03 Call log]
-  S03 -->|Continue or skip| S04[S04 Notifications]
-  S04 -->|Continue or skip| S05[S05 Reading history]
+  S03 -->|Continue or skip| S05[S05 Reading history]
   S05 -->|Continue, once finished| S06[S06 Preview]
   S06 -->|Make this my first list| S07[S07 First list]
   S06 -->|Start blank| S07
   S05 -.->|fewer than 3 candidates| S07
-  S07 -->|Add contacts| S32[S32 Add contacts]
+  S07 -->|Add people| S32[S32 Add people]
   S32 -->|Add N| S07
   S07 -->|Add another list| S07
   S07 -->|Done| S08[S08 Done]
+  S08 -->|Allow nudges, or not| S08
   S08 -->|Open Orbit, stack cleared| S10[S10 Home]
 ```
 
@@ -122,27 +124,29 @@ flowchart LR
 ```mermaid
 flowchart TD
   S10[S10 Home] -->|tap a list| S11[S11 Card view]
+  S10 -->|Call on Next up| S53[S53 Phone app]
   S10 -->|search icon| S22[S22 Search]
   S10 -->|lists icon, New list| S30[S30 Lists]
   S10 -->|settings icon| S40[S40 Settings]
   S10 -->|banner: Add a note| S20[S20 Contact detail]
-  S10 -->|long-press: Add people| S32[S32 Add contacts]
+  S10 -->|long-press: Add people| S32[S32 Add people]
   S10 -->|long-press: List settings| S31[S31 List settings]
-  S11 -->|Call| S53[S53 Phone app]
+  S11 -->|Call| S53
   S53 -->|end call, deck moves on| S11
-  S11 -->|View details| S20
+  S11 -->|Open details, or tap the card| S20
   S11 -->|menu: Browse people| S13[S13 Browse people]
-  S11 -->|menu: Add contacts| S32
-  S11 -->|menu: Edit list| S31
+  S11 -->|menu: Add people| S32
+  S11 -->|menu: List settings| S31
   S13 -->|tap a person| S20
-  S13 -->|+| S32
+  S13 -->|+ Add people| S32
   S22 -->|tap a result| S20
-  S22 -->|Add to list| S21[S21 Add to lists]
+  S22 -->|Add to lists| S21[S21 Add to lists]
   S20 -->|Add to lists| S21
   S20 -->|More: View all calls| S42[S42 Call history]
-  S30 -->|tap a list, or Create| S31
+  S30 -->|tap a list| S11
+  S30 -->|Create, menu: List settings| S31
   S30 -->|+ on a list| S32
-  S31 -->|Add contacts| S32
+  S31 -->|Add people| S32
   S40 -->|Ignored| S41[S41 Ignored]
   S40 -->|Call history| S42
   S42 -->|tap a call| S20
@@ -153,8 +157,10 @@ flowchart TD
 ```mermaid
 flowchart LR
   S50[S50 Notification] -->|tap| S11[S11 Card view]
-  S51[S51 Widget] -->|tap a person| S53[S53 Phone app]
-  S51 -->|No one due| S10[S10 Home]
+  S50 -->|Call action| S53[S53 Phone app]
+  S51[S51 Widget] -->|Call| S53
+  S51 -->|tap a person| S11
+  S51 -->|All quiet for now| S10[S10 Home]
   S52[S52 App switcher] -->|tap Orbit| S10
 ```
 
@@ -164,15 +170,14 @@ flowchart LR
 
 Each journey is playable in the Flows view. Order matters within a journey, so the steps are numbered.
 
-**F1. First run, from install to Home.** Three permissions, a blocking sync, a suggested list, and a required first list before Home.
-1. S01 Welcome, Let's go.
-2. S02 Contacts: the reason shows before Android's own dialog. Allow, or continue without it (a "Skip for now?" dialog confirms).
-3. S03 Call log, same pattern.
-4. S04 Notifications, same pattern (skipped entirely on Android 12 and older).
-5. S05 Reading your call history: Continue stays disabled until the read finishes.
-6. S06 Preview: up to 10 people you already call, all ticked.
-7. S07 Make your first list: Done needs a name and at least 3 people.
-8. S08 Done, then Home with the onboarding back stack cleared.
+**F1. First run, from install to Home.** Two permissions, a blocking sync, a suggested list, a required first list, then the nudge question on Done (ONB-30). The counter reads "1 of 4" to "4 of 4".
+1. S01 Welcome: the Orbit mark settles into place (ONB-31), then Let's go.
+2. S02 Contacts (1 of 4): the reason shows before Android's own dialog. Allow, or continue without it (a "Skip for now?" dialog confirms).
+3. S03 Call log (2 of 4), same pattern. Notifications are not asked here any more.
+4. S05 Reading your call history (3 of 4): Continue stays disabled until the read finishes.
+5. S06 Preview (4 of 4): up to 10 people you already call, all ticked.
+6. S07 Make your first list (4 of 4): Done needs a name and at least 3 people.
+7. S08 Done: the swipe hint, then "Want a gentle nudge when someone is worth a call?" with Allow nudges, asked once there is a list to nudge about; answered, it becomes a plain line. Open Orbit, then Home with the onboarding back stack cleared.
 
 **F2. Call someone from a list.** The core loop.
 1. S10 Home, tap a list card.
@@ -182,19 +187,19 @@ Each journey is playable in the Flows view. Order matters within a journey, so t
 5. Back to S10: within 10 minutes of the call, a banner offers "Add a note".
 6. S20 Contact detail opens with the note field focused.
 
-**F3. Decide on the card: later, sooner, browse.** Swipe left, the left arrow, and Skip all mean Later; swipe right or the right arrow mean Sooner. Each shows a snackbar with Undo. The list menu leads to S13, where the numbered queue lives. If no one is eligible, S11 says so and offers Browse.
+**F3. Decide on the card: later, sooner, browse.** Swipe left or tap Later; swipe right or tap Sooner. Both buttons are named, there is no Skip, and each move shows a snackbar that names the person and says when they come back ("Kai will come up again on Thursday."), with its own Undo. Only the Call button dials; tapping the card opens details. The three-dots menu leads to S13, where the numbered queue lives under "Next up". If no one is eligible, S11 says "All quiet for now." and offers Browse.
 
-**F4. Start a new list.** S10 New list, S30 template sheet, Create, S31 List settings (saves as you go), S32 Add contacts, back to S31 with "Added 3 to Family", Done to S30.
+**F4. Start a new list.** S10 New list, S30 template sheet (each template names the rhythm it sets), Create, S31 List settings (saves as you go), S32 Add people, back to S31 with "Added 3 to Family", Done to S30. On S30 a row tap opens that list's cards (LIST-23); List settings is in the row menu.
 
 **F5. Tidy a list in bulk.** S13, long-press a row, Select, tap more rows, Move to which list, snackbar with Undo.
 
 **F6. Find someone and file them.** S10 search icon, S22 type a name, Add to list, S21 tick lists, back to S22 with "Added to 1 list".
 
-**F7. Take a break from someone.** S20 More, Pause, pick a length (snackbar with Undo). When a timed pause ends, S20 shows an unpause banner. Ignored people are restored from S41 under Settings.
+**F7. Take a break from someone.** S20 More actions, Pause, pick a length (1 week, 1 month, Until you unpause; the same sheet Browse uses) with a snackbar and Undo. While paused, a line under the number says so and the menu offers Unpause. When a timed pause ends, S20 shows an unpause banner. Ignored people get back in from S41 under Settings with Unignore and Undo.
 
 **F8. Look back at a call.** S10 Settings, S40 Call history, S42 tap a call, S20 opens with a note box under that call.
 
-**F9. Nudged from outside the app.** S50 notification taps through to S11. S51 widgets tap straight through to S53, skipping Orbit. S52 shows "List" and "Someone" in the app switcher.
+**F9. Nudged from outside the app.** S50 names the list's next person with their face and a Call action (NOTIF-14) and taps through to S11; on a locked phone that hides sensitive content it says only "Someone is ready when you are." (NOTIF-13). S51 widgets show the next person with a labelled Call: only Call opens S53, and a tap on the person opens their list's deck in Orbit (WIDGET-08). S52 shows "List" and "Someone" in the app switcher.
 
 **F10. Back up, restore, or start over.** S40 Export (password twice), Import (password, then a final confirmation), Reset Orbit (restarts at S01).
 
@@ -202,24 +207,13 @@ Each journey is playable in the Flows view. Order matters within a journey, so t
 
 ## Docs vs code
 
-Reading the code against `features/PAGE_VIEWS.md` and the feature specs turned up these gaps. The prototype follows the code in every case. The 2026-10-05 bug fixes closed some rows; those say so. The docs for the other rows were not changed.
+Reading the code against `features/PAGE_VIEWS.md` and the feature specs turned up fourteen gaps on 2026-10-04. Eleven were closed on 2026-10-05, by fixing the code (B2, B3, B7, B9, B11), by rewriting the page views to the shipped screens (Home, Welcome, List settings, Settings, widgets, notifications, copy without em dashes) or by deleting the page view for a screen that does not exist (the "Up next / Queue" page; its queue is part of S13 Browse, `features/browse/README.md` BROWSE-01). Closed rows are deleted, as the rule below says. What remains:
 
 | Where | The docs say | The code does |
 |---|---|---|
-| S10 Home | "N people ready" header, due-count pills on tiles, a "Surprise me" button, "All caught up" | None of these. Surprise me was removed ([ADR 0007](../../features/_foundations/ADRs/0007-surprise-me-cross-list.md) superseded). Cards show "Next up" plus a 7-day rhythm strip. Home never shows a caught-up state. The screenshot in `00-home/` predates this. |
-| Up next / Queue | Its own screen, `queue/{listId}` ([page view](../../features/page-views/queue.md)) | No such route. The numbered queue is part of S13 Browse. |
-| S11 Card view | A "Pickup" stat | Last called, Avg length, Calls. Tapping anywhere on the card face also dials. |
-| S20 Contact detail | Usual answer time among the stats | Fixed 2026-10-05: "Usually" shows the same answer as S11 ([B9](findings.md#low)), and a paused person shows "Paused until ..." with Unpause ([B3](findings.md#high)). Ignored people still look no different here. |
-| S01 Welcome | "Who made it" and in-screen feedback email | Neither. Feedback lives in Settings, About. |
-| S13 Browse | Row tap opens the person; long-press opens quick actions | Fixed 2026-10-05. The row's own inert tap handler swallowed both; a test against the old code confirmed it. See [B7](findings.md#medium). |
-| S31 List settings | No mention | A Nudges section (days and times) and a Done exit both ship. |
-| S32 Add contacts | Add, Move, Copy modes; "Skip for now" during onboarding | Only Add is reachable, plus a Re-link mode from S20 since the [B2](findings.md#high) fix. Skip for now never shows. |
-| S42 Call history | A plain chronological list | Adds All, Incoming, Outgoing filters, sticky day headers, and a long-press menu. |
-| S40 Settings | No mention | Appearance (five themes, light and dark, an accent dial) and Import backup ship. |
-| S50 Notifications | Daily digest, time-of-day prompts, incoming follow-up | Only one notification exists: the per-list nudge. |
-| S51 Widgets | Listed as a stub in `features/INDEX.md` | Both widgets ship. They always show real names. |
-| S52 Privacy curtain | Names hidden when the app loses focus | Mostly. The card face name is masked since the [B11](findings.md#low) fix. Reported but not confirmed: the phone number on S20 and "from {list}" in S42 stay visible, and notifications and widgets ignore it. |
-| Copy | [voice.md](../../features/_foundations/voice.md) | About a dozen strings join two clauses with an em dash, for example the defer snackbar and the call-log notice on S11. The prototype shows a spaced hyphen there. |
+| S20 Contact detail | Ignored people look no different from anyone else here | True at `783a964`. This round's contact-detail package adds an "Ignored" (or "Archived") status line under the number; delete this row once it has merged. |
+| S32 Add people | Add, Move, Copy modes; "Skip for now" during onboarding | Only Add is reachable, plus a Re-link mode from S20 since the [B2](findings.md#high) fix (Browse moves and copies people with its own sheet). Skip for now never shows: its only caller passes no skip action, and this round's picker package keeps the parameter as a deprecated no-op. The page view ([picker-contacts](../../features/page-views/picker-contacts.md)) still lists all three modes and the skip. |
+| S42 Call history | Filters, one person's log, the honest states | The page view ([call-history](../../features/page-views/call-history.md)) has these, but not yet the long-press and three-dots menu (Call again, Open details) or the sticky day headings; this round's page-views package adds them. |
 
 ---
 
@@ -228,9 +222,9 @@ Reading the code against `features/PAGE_VIEWS.md` and the feature specs turned u
 When writing feedback outside the prototype, lead with the ID and state so it can be acted on without a screenshot:
 
 ```
-S11, Ready: Skip and the left arrow do the same thing. Keep one.
+S11, Ready: the Later snackbar could name the weekday as well as "in 2 weeks".
 F2, step 5: I expected a "Did you talk?" prompt before the deck moves on.
-S30: Two "new list" buttons on one screen. Drop the app bar +.
+S30: the rhythm line under each list could show the nudge time too.
 ```
 
 ---
