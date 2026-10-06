@@ -27,11 +27,19 @@ import app.orbit.domain.contactFixture
 import app.orbit.domain.membershipFixture
 import app.orbit.domain.ruleTemplateFixture
 import app.orbit.domain.usecase.SurfaceNextUseCase
+import app.orbit.testutil.newPrefs
 import java.time.Instant
 import java.time.LocalTime
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
@@ -60,13 +68,19 @@ import kotlin.test.assertTrue
  *   the all-gates-pass branch; revoked by default for the NOTIF-01 gate test.
  * - The nudge's person comes from a real [SurfaceNextUseCase] over the same
  *   fakes, so "the person the nudge names" is "the person Card view shows
- *   first" by construction, and [AppPrefs] is the real DataStore (NOTIF-15).
+ *   first" by construction, and [AppPrefs] is a real DataStore (NOTIF-15),
+ *   one per test method on a scope the test cancels (testutil/TestDataStore.kt).
  *
  * NOTIF-13 / NOTIF-14 / NOTIF-15 are pinned at the bottom of the class.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = Application::class)
 class ListPromptWorkerTest {
+
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    private val storeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private lateinit var context: Application
     private lateinit var fakeLists: FakeListRepository
@@ -90,8 +104,13 @@ class ListPromptWorkerTest {
             clock = TestClock(t0),
             json = JsonProvider.json,
         )
-        appPrefs = AppPrefs(context)
+        appPrefs = tmp.newPrefs(storeScope)
         recordingScheduler = RecordingNudgeScheduler(context, fakeLists)
+    }
+
+    @After
+    fun tearDown() {
+        storeScope.cancel()
     }
 
     // ─── Helper: build a worker at a fixed LocalTime ──────────────────────────
@@ -319,6 +338,35 @@ class ListPromptWorkerTest {
             1, recordingScheduler.scheduleFromEntityCalls.size,
             "re-enqueue MUST still fire when outside active-hours window (finally block invariant)",
         )
+    }
+
+    // ─── Gate 0: archived list (NOTIF-11) ─────────────────────────────────────
+
+    /**
+     * Archiving cancels the chain, but a slot already running (or one enqueued
+     * before the archiving surface learned to cancel) still fires, and
+     * `getById` returns archived rows. The worker must neither post for a
+     * list the user put away nor keep the chain alive: unarchiving schedules a
+     * fresh one.
+     */
+    @Test
+    fun worker_skipsAndEndsChain_whenListArchived() = runBlocking {
+        val listId = 8L
+        fakeLists.seedList(
+            ListEntity(
+                id = listId, name = "Put away", sortOrder = 0,
+                isArchived = true,
+                notificationsEnabled = true,
+                nudgeScheduleJson = NudgeSchedule.DEFAULT_JSON,
+            )
+        )
+        fakeLists.stubbedDueCount = 2
+
+        val result = buildWorker(listId).doWork()
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertEquals(0, activeNotificationCount(), "no notification for an archived list")
+        assertEquals(0, recordingScheduler.scheduleFromEntityCalls.size, "an archived list's chain ends instead of re-enqueueing")
     }
 
     // ─── Gate: list not found (deleted between schedule and fire) ─────────────

@@ -31,7 +31,8 @@ import timber.log.Timber
 /**
  * NOTIF-12 — self-re-enqueueing nudge worker for per-list prompts.
  *
- * ### 5-Gate doWork
+ * ### 6-Gate doWork
+ * 0. [ListEntity.isArchived]: an archived list never posts (NOTIF-11)
  * 1. [ListEntity.notificationsEnabled] — list-level mute flag
  * 2. [Context.areNotificationsEnabled] — POST_NOTIFICATIONS system gate (NOTIF-01 residual)
  * 3. [Context.isDndBlocking] — DND gate (NOTIF-06)
@@ -40,8 +41,10 @@ import timber.log.Timber
  *
  * Any gate failure returns [Result.success] (never [Result.failure] — failure triggers
  * backoff retries, which is wrong for a fire-time gate miss). The gate result does NOT
- * affect the re-enqueue: the finally block re-enqueues the next slot unconditionally
- * — the re-enqueue must never live inside a gate branch.
+ * affect the re-enqueue: the finally block re-enqueues the next slot unconditionally;
+ * the re-enqueue must never live inside a gate branch. The two exceptions are a
+ * list that is gone and a list that is archived: those chains are meant to end
+ * (NOTIF-11), and [reEnqueue] lets them.
  *
  * ### Thread safety
  * The `try { ... } finally { reEnqueue(listId) }` structure guarantees re-enqueue even
@@ -97,11 +100,21 @@ open class ListPromptWorker @AssistedInject constructor(
     // ─── Gate evaluation ──────────────────────────────────────────────────────
 
     private suspend fun evaluateGatesAndPost(listId: Long): Result {
-        // Gate 1 — list-level notificationsEnabled flag
         val list = listRepo.getById(listId) ?: run {
             Timber.tag(TAG).d("list_gone list=%d", listId)
             return Result.success()
         }
+        // Gate 0: archived (NOTIF-11). Archive cancels the chain, but a slot
+        // already running, or one enqueued before the surface that archived
+        // the list learned to cancel (Home until 2026-10-06), still fires.
+        // `getById` returns archived rows, so without this gate the nudge
+        // posted for a list the user had put away.
+        if (list.isArchived) {
+            Timber.tag(TAG).d("gate_list_archived list=%d", listId)
+            return Result.success()
+        }
+
+        // Gate 1: list-level notificationsEnabled flag
         if (!list.notificationsEnabled) {
             Timber.tag(TAG).d("gate_list_muted list=%d", listId)
             return Result.success()
@@ -241,10 +254,21 @@ open class ListPromptWorker @AssistedInject constructor(
     /**
      * Re-enqueues the next slot for [listId]. Called unconditionally from the
      * `finally` block in [doWork] so no gate skip or exception can kill the chain.
+     *
+     * The chain ends here only when the list itself has: it is gone, or it is
+     * archived (NOTIF-11). An archived list's stale chain used to re-enqueue
+     * itself forever; with Gate 0 it would never post, but it would still
+     * wake the process on every slot. Unarchiving schedules a fresh chain
+     * (`NudgeScheduler.scheduleFromEntity` from the surface that unarchives),
+     * so nothing is lost by letting this one stop.
      */
     private suspend fun reEnqueue(listId: Long) {
         val list = listRepo.getById(listId) ?: run {
             Timber.tag(TAG).d("re_enqueue_skipped_list_gone list=%d", listId)
+            return
+        }
+        if (list.isArchived) {
+            Timber.tag(TAG).d("re_enqueue_skipped_list_archived list=%d", listId)
             return
         }
         nudgeScheduler.scheduleFromEntity(list)
