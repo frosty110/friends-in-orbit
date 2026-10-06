@@ -3,6 +3,7 @@ package app.orbit.domain.usecase
 import app.orbit.data.dao.ContactDao
 import app.orbit.data.dao.PausedUntilSnapshot
 import app.orbit.data.db.TransactionRunner
+import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.model.PauseDuration
 import java.time.Instant
@@ -23,7 +24,8 @@ import javax.inject.Inject
 class BulkPauseUseCase @Inject constructor(
     private val txRunner: TransactionRunner,
     private val contactDao: ContactDao,
-    private val clock: Clock
+    private val clock: Clock,
+    private val widgetRefreshTrigger: WidgetRefreshTrigger = WidgetRefreshTrigger { },
 ) {
     /**
      * @property inverse Suspending closure that restores each contact's prior
@@ -50,6 +52,9 @@ class BulkPauseUseCase @Inject constructor(
             contactDao.setPausedUntilBatch(contactIds, pausedUntil)
             before
         }
+        // WIDGET-06: the batch drops these people out of who-is-due; the widgets
+        // follow within the debounce, as IgnoreContactUseCase's forward path does.
+        widgetRefreshTrigger.scheduleRefresh()
         return Result(
             inverse = {
                 txRunner.withTransaction {
@@ -60,6 +65,10 @@ class BulkPauseUseCase @Inject constructor(
                         contactDao.setPausedUntilBatch(rows.map { it.id }, prior)
                     }
                 }
+                // WIDGET-06: undo brings them back into who-is-due, so the widget
+                // must show the restored state, not the paused one. The 30s KEEP
+                // debounce coalesces the forward and undo pair.
+                widgetRefreshTrigger.scheduleRefresh()
             },
             count = contactIds.size
         )

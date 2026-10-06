@@ -1,5 +1,7 @@
 package app.orbit.widget
 
+import app.orbit.data.dao.PausedUntilSnapshot
+import app.orbit.data.dao.RecordingContactDao
 import app.orbit.data.dao.RecordingListMembershipDao
 import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.CallDirection
@@ -16,12 +18,15 @@ import app.orbit.domain.clock.TestClock
 import app.orbit.domain.contactFixture
 import app.orbit.domain.listFixture
 import app.orbit.domain.membershipFixture
+import app.orbit.domain.model.PauseDuration
 import app.orbit.domain.ruleTemplateFixture
-import app.orbit.domain.usecase.BulkRemoveFromListUseCase
+import app.orbit.domain.usecase.BulkPauseUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.MoveContactsUseCase
+import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.domain.usecase.SkipContactUseCase
+import app.orbit.domain.usecase.SurfaceSoonerUseCase
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlinx.coroutines.test.runTest
@@ -38,9 +43,11 @@ import org.junit.Test
  * [WidgetUpdateSchedulerTest] (Robolectric + work-testing). These tests only prove
  * the use-case→trigger wiring.
  *
- * Covers WIDGET-06: update triggers wired at the use-case layer — MarkCalledUseCase,
- * SkipContactUseCase, MoveContactsUseCase, IgnoreContactUseCase each call
- * the injected WidgetRefreshTrigger seam.
+ * Covers WIDGET-06: update triggers wired at the use-case layer. MarkCalledUseCase,
+ * SkipContactUseCase (Later), SurfaceSoonerUseCase (Sooner), MoveContactsUseCase,
+ * IgnoreContactUseCase, PauseContactUseCase and BulkPauseUseCase each call the
+ * injected WidgetRefreshTrigger seam, and the inverses of Ignore, Move and
+ * BulkPause call it again on Undo.
  */
 class UpdateTriggersTest {
 
@@ -111,6 +118,73 @@ class UpdateTriggersTest {
         useCase(contactId = 1L, listId = null)
 
         assertEquals(1, trigger.scheduleCalls.size, "SkipContactUseCase must call scheduleRefresh() once")
+    }
+
+    /**
+     * A Sooner moves the person forward and can change who leads the cross-list
+     * deck the widgets show, so it refreshes like Later does (WIDGET-06). Until
+     * 2026-10-06 it did not, and the placed widgets kept the old lead until an
+     * unrelated write or the hourly sweep.
+     */
+    @Test
+    fun sooner_schedulesWidgetRefresh() = runTest {
+        val trigger = RecordingWidgetRefreshTrigger()
+        val contactRepo = FakeContactRepository(listOf(contactFixture(id = 1L)))
+        val listRepo = FakeListRepository(listOf(listFixture(id = 10L, ruleTemplateId = 1L)))
+        listRepo.seedMemberships(listOf(membershipFixture(contactId = 1L, listId = 10L)))
+        val templateRepo = FakeRuleTemplateRepository(listOf(ruleTemplateFixture(id = 1L)))
+        val useCase = SurfaceSoonerUseCase(
+            txRunner = passThruTx,
+            contactRepo = contactRepo,
+            listRepo = listRepo,
+            ruleTemplateRepo = templateRepo,
+            clock = TestClock(T0),
+            json = JsonProvider.json,
+            widgetRefreshTrigger = trigger,
+        )
+
+        useCase(contactId = 1L, listId = null)
+
+        assertEquals(1, trigger.scheduleCalls.size, "SurfaceSoonerUseCase must call scheduleRefresh() once")
+    }
+
+    /**
+     * A paused person drops out of the cross-list surface; the widget must stop
+     * offering them, with a live Call button, within the debounce rather than at
+     * the hourly sweep (WIDGET-06).
+     */
+    @Test
+    fun pauseContact_schedulesWidgetRefresh() = runTest {
+        val trigger = RecordingWidgetRefreshTrigger()
+        val contactRepo = FakeContactRepository(listOf(contactFixture(id = 1L)))
+        val useCase = PauseContactUseCase(
+            contactRepo = contactRepo,
+            clock = TestClock(T0),
+            widgetRefreshTrigger = trigger,
+        )
+
+        useCase(contactId = 1L, duration = PauseDuration.OneWeek)
+
+        assertEquals(1, trigger.scheduleCalls.size, "PauseContactUseCase must call scheduleRefresh() once")
+    }
+
+    /** The multi-select pause is the same change for several people at once (WIDGET-06). */
+    @Test
+    fun bulkPause_schedulesWidgetRefresh() = runTest {
+        val trigger = RecordingWidgetRefreshTrigger()
+        val dao = RecordingContactDao(
+            pausedSnapshots = listOf(PausedUntilSnapshot(1L, null), PausedUntilSnapshot(2L, null)),
+        )
+        val useCase = BulkPauseUseCase(
+            txRunner = passThruTx,
+            contactDao = dao,
+            clock = TestClock(T0),
+            widgetRefreshTrigger = trigger,
+        )
+
+        useCase(contactIds = listOf(1L, 2L), duration = PauseDuration.OneMonth)
+
+        assertEquals(1, trigger.scheduleCalls.size, "BulkPauseUseCase must call scheduleRefresh() once")
     }
 
     /** MoveContactsUseCase calls the injected WidgetRefreshTrigger.scheduleRefresh() seam. */
@@ -196,6 +270,33 @@ class UpdateTriggersTest {
         assertEquals(
             2, trigger.scheduleCalls.size,
             "IgnoreContactUseCase inverse must call scheduleRefresh() (forward + undo = 2)",
+        )
+    }
+
+    /**
+     * The bulk-pause inverse (snackbar Undo) brings the people back into
+     * who-is-due, so the widget must show the restored state, not the paused
+     * one; the forward and undo pair coalesce under the 30s KEEP debounce.
+     */
+    @Test
+    fun bulkPauseUndo_schedulesWidgetRefresh() = runTest {
+        val trigger = RecordingWidgetRefreshTrigger()
+        val dao = RecordingContactDao(
+            pausedSnapshots = listOf(PausedUntilSnapshot(1L, null), PausedUntilSnapshot(2L, null)),
+        )
+        val useCase = BulkPauseUseCase(
+            txRunner = passThruTx,
+            contactDao = dao,
+            clock = TestClock(T0),
+            widgetRefreshTrigger = trigger,
+        )
+
+        val result = useCase(contactIds = listOf(1L, 2L), duration = PauseDuration.OneWeek)
+        result.inverse()
+
+        assertEquals(
+            2, trigger.scheduleCalls.size,
+            "BulkPauseUseCase inverse must call scheduleRefresh() (forward + undo = 2)",
         )
     }
 

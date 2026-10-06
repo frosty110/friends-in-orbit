@@ -4,6 +4,7 @@ import app.orbit.data.db.TransactionRunner
 import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ListRepository
 import app.orbit.data.repository.RuleTemplateRepository
+import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.rule.resolveParamsFor
@@ -40,6 +41,7 @@ class SurfaceSoonerUseCase @Inject constructor(
     private val ruleTemplateRepo: RuleTemplateRepository,
     private val clock: Clock,
     private val json: Json,
+    private val widgetRefreshTrigger: WidgetRefreshTrigger = WidgetRefreshTrigger { },
 ) {
 
     /**
@@ -116,6 +118,13 @@ class SurfaceSoonerUseCase @Inject constructor(
                 r
             }
             if (result is MutationResult.MembershipMissing) aggregate = result
+        }
+        // WIDGET-06: a Sooner moves the person forward and can change who leads
+        // the cross-list deck the widgets show; refresh on the success path,
+        // as Later does (SkipContactUseCase). Without this the placed widgets
+        // kept the old lead until an unrelated write or the hourly sweep.
+        if (aggregate == MutationResult.Success) {
+            widgetRefreshTrigger.scheduleRefresh()
         }
         return aggregate
     }
