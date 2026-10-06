@@ -1,7 +1,6 @@
 package app.orbit.ui.screens.lists
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +11,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -31,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -54,14 +56,18 @@ import app.orbit.ui.theme.OrbitTheme
  * marks, per the project's voice guidelines.)
  *
  * UX contract for the Create List bottom sheet:
- *   - Eyebrow "Choose a template" + 2-column grid of [TemplateChoice.Catalog]
- *   - Selected tile shows accentTint background + accentPress icon
+ *   - Eyebrow "Choose a template" + 2-column grid of [TemplateChoice.Catalog],
+ *     one radio group: each tile announces as a radio button with its
+ *     selected state, so TalkBack can say which template is picked
+ *   - Selected tile shows accentTint background + an ink icon (cluster tier,
+ *     rules.md §Design 5: Create is the sheet's one accent)
  *   - Name field auto-fills from the selected template's [defaultName]; user
  *     can override
- *   - Inline validation "Give your list a name" appears in colors.danger when
- *     submission is attempted with an empty name
  *   - Cancel (Ghost) + Create (Primary) actions; Create is disabled until a
- *     template is picked AND name is non-blank
+ *     template is picked AND name is non-blank. The "Name your list" heading
+ *     is the prompt; there is no error line (the acceptance criterion asks
+ *     for a soft prompt, not an error-coloured one, and a disabled Create
+ *     can never be "attempted")
  *
  * Note: the parent screen wires sheet dismissal via
  *   `scope.launch { sheetState.hide() }.invokeOnCompletion { showSheet = false }`
@@ -87,15 +93,15 @@ fun CreateListBottomSheet(
     }
 }
 
+// Internal, not private, so a semantics test can check the template grid's
+// radio roles and selected state without a ModalBottomSheet host.
 @Composable
-private fun CreateListContent(
+internal fun CreateListContent(
     onCreate: (TemplateChoice, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var selected by remember { mutableStateOf<TemplateChoice?>(null) }
     var name by rememberSaveable { mutableStateOf("") }
-    var attemptedSubmit by rememberSaveable { mutableStateOf(false) }
-    val nameError = attemptedSubmit && name.trim().isEmpty()
 
     Column(
         modifier = Modifier
@@ -120,31 +126,35 @@ private fun CreateListContent(
             modifier = Modifier.padding(top = OrbitTheme.spacing.x1, bottom = OrbitTheme.spacing.x3),
         )
 
-        // 2-column grid over the locked Catalog order.
+        // 2-column grid over the locked Catalog order. One selectableGroup
+        // across the rows: the tiles are one choice, and TalkBack counts
+        // radio buttons per group ("2 of 6").
         val rows = TemplateChoice.Catalog.chunked(2)
-        rows.forEachIndexed { idx, rowItems ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
-            ) {
-                rowItems.forEach { template ->
-                    val defaultName = template.defaultNameRes?.let { stringResource(it) }.orEmpty()
-                    TemplateTile(
-                        template = template,
-                        selected = selected?.id == template.id,
-                        onSelect = {
-                            selected = template
-                            // Pre-fill name on first selection or when user
-                            // hasn't typed anything custom yet.
-                            if (name.isBlank()) name = defaultName
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
+        Column(modifier = Modifier.selectableGroup()) {
+            rows.forEachIndexed { idx, rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
+                ) {
+                    rowItems.forEach { template ->
+                        val defaultName = template.defaultNameRes?.let { stringResource(it) }.orEmpty()
+                        TemplateTile(
+                            template = template,
+                            selected = selected?.id == template.id,
+                            onSelect = {
+                                selected = template
+                                // Pre-fill name on first selection or when user
+                                // hasn't typed anything custom yet.
+                                if (name.isBlank()) name = defaultName
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    // Pad short trailing rows (defensive; Catalog is currently 6).
+                    if (rowItems.size == 1) Spacer(Modifier.weight(1f))
                 }
-                // Pad short trailing rows (defensive — Catalog is currently 6).
-                if (rowItems.size == 1) Spacer(Modifier.weight(1f))
+                if (idx != rows.lastIndex) Spacer(Modifier.height(OrbitTheme.spacing.x3))
             }
-            if (idx != rows.lastIndex) Spacer(Modifier.height(OrbitTheme.spacing.x3))
         }
 
         Spacer(Modifier.height(OrbitTheme.spacing.x6))
@@ -158,10 +168,7 @@ private fun CreateListContent(
 
         TextField(
             value = name,
-            onValueChange = {
-                name = it
-                attemptedSubmit = false
-            },
+            onValueChange = { name = it },
             placeholder = {
                 Text(
                     text = stringResource(selected?.displayNameRes ?: R.string.lists_create_name_placeholder),
@@ -169,7 +176,6 @@ private fun CreateListContent(
                     color = OrbitTheme.colors.fgSubtle,
                 )
             },
-            isError = nameError,
             singleLine = true,
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
@@ -188,17 +194,6 @@ private fun CreateListContent(
                 .clip(OrbitTheme.shapes.md)
                 .background(OrbitTheme.colors.bgSubtle),
         )
-        if (nameError) {
-            Text(
-                text = stringResource(R.string.lists_create_name_error),
-                style = OrbitTheme.type.meta,
-                color = OrbitTheme.colors.danger,
-                modifier = Modifier.padding(
-                    top = OrbitTheme.spacing.x1,
-                    start = OrbitTheme.spacing.x1,
-                ),
-            )
-        }
 
         Spacer(Modifier.height(OrbitTheme.spacing.x6))
 
@@ -215,7 +210,9 @@ private fun CreateListContent(
             OrbitButton(
                 text = stringResource(R.string.lists_create_cta),
                 onClick = {
-                    attemptedSubmit = true
+                    // Both guards hold while the button is enabled; kept so a
+                    // stale tap during recomposition can never create a list
+                    // without a template or a name.
                     val tpl = selected ?: return@OrbitButton
                     if (name.trim().isNotEmpty()) {
                         onCreate(tpl, name.trim())
@@ -228,6 +225,12 @@ private fun CreateListContent(
     }
 }
 
+// Room for an icon, a name and a two-line subtitle at the default scale, so the
+// six tiles line up as a grid instead of ragging by subtitle length. Layout-
+// local: not a spacing token, because nothing else is this shape. A minimum,
+// so the tile grows with its text at 200% (rules.md §Design 2).
+private val TEMPLATE_TILE_MIN_HEIGHT = 96.dp
+
 @Composable
 private fun TemplateTile(
     template: TemplateChoice,
@@ -236,18 +239,22 @@ private fun TemplateTile(
     modifier: Modifier = Modifier,
 ) {
     val tileBg = if (selected) OrbitTheme.colors.accentTint else OrbitTheme.colors.bgSubtle
-    val iconTint = if (selected) OrbitTheme.colors.accentPress else OrbitTheme.colors.fgMuted
+    // Ink when selected, not the accent's pressed shade: the selected tile is
+    // cluster tier (rules.md §Design 5), and Create is the sheet's one accent.
+    val iconTint = if (selected) OrbitTheme.colors.fg else OrbitTheme.colors.fgMuted
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .clip(OrbitTheme.shapes.md)
             .background(tileBg)
-            .clickable(onClick = onSelect)
+            // A radio button to TalkBack, with its selected state (WCAG 4.1.2):
+            // the tint alone said nothing to a screen reader.
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
             .padding(
                 vertical = OrbitTheme.spacing.x4,
                 horizontal = OrbitTheme.spacing.x3,
             )
-            .defaultMinSize(minHeight = 96.dp),
+            .defaultMinSize(minHeight = TEMPLATE_TILE_MIN_HEIGHT),
     ) {
         PhIcon(
             name = template.iconName,

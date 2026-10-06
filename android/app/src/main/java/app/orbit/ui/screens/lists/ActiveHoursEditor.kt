@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -40,7 +41,6 @@ import app.orbit.ui.components.OrbitSwitch
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.TimeStyle
-import app.orbit.ui.util.UiText
 import app.orbit.ui.util.axisTickLabels
 import app.orbit.ui.util.formatClockTime
 import java.time.LocalTime
@@ -53,8 +53,10 @@ import java.time.LocalTime
  * [ActiveHoursRangeBar] that draws TWO segments when `end < start` (overnight
  * list). Replaces an earlier buggy negative-width single-segment bar.
  *
- * Pure formatter helpers ([activeHoursReadout], [spansMidnight]) are tested by
- * `ActiveHoursFormatterTest`. Token-clean — no inline color hex literals, no
+ * The pure helper [spansMidnight] is tested by `ActiveHoursFormatterTest`.
+ * (An `activeHoursReadout` formatter and its three strings lived here until
+ * 2026-10-06 with no composable caller; the editor itself says "9am to 5pm"
+ * with `lists_hours_to`.) Token-clean: no inline color hex literals, no
  * RoundedCornerShape, no fontSize literals.
  *
  * Consumed by the `ListConfigScreen` rewrite.
@@ -153,8 +155,14 @@ fun ActiveHoursEditor(
 private enum class TimeEditTarget { Start, End }
 
 /**
- * When `end < start`, draws TWO terracotta segments
- * (start→right edge AND left edge→end) separated by the inactive midnight gap.
+ * The active window on a 24-hour track. When `end < start`, draws TWO
+ * segments (start→right edge AND left edge→end) separated by the inactive
+ * midnight gap.
+ *
+ * The fill is ink (`colors.fg`) on a `bgSubtle` track, like OrbitSlider's
+ * track: a setting's display is cluster tier and spends no accent (rules.md
+ * §Design 5, LIST-21). Until 2026-10-06 the segments were terracotta, which
+ * put a third accent element on List settings beside the two Dones.
  *
  * An earlier `ActiveRangeBar` computed
  * `trackWidth * ((end - start) / 24f)` which produces a NEGATIVE width for
@@ -172,10 +180,10 @@ fun ActiveHoursRangeBar(
             .fillMaxWidth()
             .height(6.dp)
             .clip(OrbitTheme.shapes.full)
-            .background(OrbitTheme.colors.lineSoft),
+            .background(OrbitTheme.colors.bgSubtle),
     ) {
         val trackWidth = maxWidth
-        val accent = OrbitTheme.colors.accent
+        val ink = OrbitTheme.colors.fg
         val shapeFull = OrbitTheme.shapes.full
 
         if (alwaysActive) {
@@ -183,7 +191,7 @@ fun ActiveHoursRangeBar(
                 modifier = Modifier
                     .size(width = trackWidth, height = 6.dp)
                     .clip(shapeFull)
-                    .background(accent),
+                    .background(ink),
             )
             return@BoxWithConstraints
         }
@@ -192,7 +200,7 @@ fun ActiveHoursRangeBar(
         val endFraction = hourFraction(end)
 
         if (start == end) {
-            // Zero-range — no fill, entire track stays lineSoft.
+            // Zero-range: no fill; the entire track stays the muted track colour.
             return@BoxWithConstraints
         }
 
@@ -205,7 +213,7 @@ fun ActiveHoursRangeBar(
                     .offset(x = segAOffset)
                     .size(width = segAWidth, height = 6.dp)
                     .clip(shapeFull)
-                    .background(accent),
+                    .background(ink),
             )
             // Segment B: 0.0 (left edge) → end
             val segBWidth = trackWidth * endFraction
@@ -213,7 +221,7 @@ fun ActiveHoursRangeBar(
                 modifier = Modifier
                     .size(width = segBWidth, height = 6.dp)
                     .clip(shapeFull)
-                    .background(accent),
+                    .background(ink),
             )
         } else {
             val leftOffset = trackWidth * startFraction
@@ -223,7 +231,7 @@ fun ActiveHoursRangeBar(
                     .offset(x = leftOffset)
                     .size(width = fillWidth, height = 6.dp)
                     .clip(shapeFull)
-                    .background(accent),
+                    .background(ink),
             )
         }
     }
@@ -305,7 +313,9 @@ private fun TimeChip(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
         modifier = modifier
-            .height(48.dp)
+            // The tap floor from the token (rules.md §Design 3), as a minimum
+            // so the chip grows with a two-line time at 200% (§Design 2).
+            .heightIn(min = OrbitTheme.spacing.tapMin)
             .clip(OrbitTheme.shapes.md)
             .background(OrbitTheme.colors.bgSubtle)
             .clickable(onClick = onClick)
@@ -333,20 +343,9 @@ private fun HairlineDivider() {
     )
 }
 
-// region Pure formatter helpers — tested by ActiveHoursFormatterTest
+// region Pure helpers, tested by ActiveHoursFormatterTest
 
 internal fun spansMidnight(start: LocalTime, end: LocalTime): Boolean = end < start
-
-internal fun activeHoursReadout(start: LocalTime?, end: LocalTime?): UiText {
-    if (start == null || end == null) return UiText.res(R.string.lists_hours_readout_always)
-    val s = formatHour12(start)
-    val e = formatHour12(end)
-    return if (spansMidnight(start, end)) {
-        UiText.res(R.string.lists_hours_readout_overnight, s, e)
-    } else {
-        UiText.res(R.string.lists_hours_readout_range, s, e)
-    }
-}
 
 /**
  * A time of day in the phone's 12/24-hour style. Delegates to the app's one

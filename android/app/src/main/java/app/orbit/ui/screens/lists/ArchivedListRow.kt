@@ -33,8 +33,14 @@ import app.orbit.ui.util.asString
  * order is fixed (sortOrder DESC = most-recently-archived first).
  *
  * Layout: name (fg) + ruleSummary? (fgMuted) on the left, "Restore" ghost
- * button + "List settings" icon button on the right. 48dp tap targets enforced
- * via OrbitTheme.spacing.tapMin.
+ * button, a delete control and a "List settings for {list}" control on the
+ * right. 48dp tap targets enforced via OrbitTheme.spacing.tapMin.
+ *
+ * [onConfigure] opens List settings for the archived list (the screen wires
+ * it to its `onOpenListSettings`, not to the row-tap `onOpenList` that opens
+ * a deck); an archived list has no deck to open, only settings to review
+ * before restoring it. [onRestore] flips it back; the ViewModel confirms with
+ * "List restored." once the write is in.
  */
 @Composable
 fun ArchivedListRow(

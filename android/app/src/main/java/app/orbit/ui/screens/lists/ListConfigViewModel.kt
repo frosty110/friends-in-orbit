@@ -90,7 +90,10 @@ class ListConfigViewModel @Inject constructor(
 
     // H4 fix — VM-owned snackbar surface so [runMutation] can emit a failure
     // toast when a setter throws. The screen subscribes via [snackbarEvents].
-    private val _snackbarEvents = MutableSharedFlow<SnackbarEvent>(extraBufferCapacity = 1)
+    // More than one slot so a second event in the same turn is kept, not
+    // dropped by tryEmit (ListsManagerViewModel explains why one slot hid the
+    // ungated convert confirmation).
+    private val _snackbarEvents = MutableSharedFlow<SnackbarEvent>(extraBufferCapacity = SNACKBAR_EVENT_BUFFER)
     val snackbarEvents: SharedFlow<SnackbarEvent> = _snackbarEvents.asSharedFlow()
 
     // LIST-22: bumped by [onRetry] to re-subscribe after a failure.
@@ -265,8 +268,8 @@ class ListConfigViewModel @Inject constructor(
      * mirrored the seed-insert order) and an unknown id silently returned.
      * Resolving through [RuleTemplateRepository.getByKind] makes an unknown id
      * structurally impossible; the only remaining failure (seed never ran) is
-     * thrown and surfaces as the [runMutation] "Couldn't update list" snackbar
-     * — never a silent return.
+     * thrown and surfaces as the [runMutation] "Couldn't save your change"
+     * snackbar, never a silent return.
      *
      * Rule-correctness fix — switching to a *different* template also clears
      * `ruleParamsOverrideJson`. The override is interval tuning for the
@@ -390,11 +393,16 @@ class ListConfigViewModel @Inject constructor(
      * A converted list keeps a cadence. Smart lists used to have none, so a
      * converted one landed with Cadence unselected and surfaced no one until
      * the user noticed; it now inherits Keep in touch when it has no rhythm.
+     *
+     * "This is now a regular list." is emitted here, only once the write is
+     * in. The body used to show it the moment the dialog was confirmed, so a
+     * failed convert said "Couldn't save your change" and then that the list
+     * was regular (rules.md Code 3).
      */
     fun confirmConvert() {
         val id = listId ?: return
         viewModelScope.launch {
-            runMutation {
+            val saved = runMutation {
                 listRepo.convertSmartToStatic(id)
                 if (listRepo.getById(id)?.ruleTemplateId == null) {
                     val keepInTouch = ruleTemplateRepo.getByKind(RuleKind.KEEP_IN_TOUCH)
@@ -402,18 +410,20 @@ class ListConfigViewModel @Inject constructor(
                     listRepo.updateRuleTemplate(id, keepInTouch.id)
                 }
             }
+            if (saved) _snackbarEvents.tryEmit(SnackbarEvent(UiText.res(R.string.lists_converted_snackbar)))
         }
     }
 
     /**
      * ONB-11 / ONB-24 — atomic single-column write of the list name.
      * Mirrors the H3-fix setter family ([setRuleTemplate], [setActiveHours],
-     * [setNotificationsEnabled]). Used by the onboarding first-list wrapper's
-     * name TextField so the onboarding flow can satisfy ONB-11 (no empty/
-     * unnamed lists can leave onboarding) without a getById → copy → update
-     * round trip. Production callers don't invoke this directly — production
-     * list names are set inline by `CreateListBottomSheet.commit` before
-     * navigation to ListConfig.
+     * [setNotificationsEnabled]). Two callers: the onboarding first-list
+     * wrapper's name TextField, so the onboarding flow can satisfy ONB-11 (no
+     * empty/unnamed lists can leave onboarding) without a getById → copy →
+     * update round trip; and List settings' inline rename row (F-12,
+     * `ListNameRenameRow`), which commits on IME Done, focus loss or the check.
+     * The create sheet also names a list, but through `createList`, before
+     * this screen opens.
      */
     fun setName(name: String) {
         val id = listId ?: return
@@ -467,16 +477,29 @@ class ListConfigViewModel @Inject constructor(
      * a no-op for non-Throwable types) and the UI shows stale optimistic state.
      * `CancellationException` is rethrown so structured concurrency cancellation
      * still propagates correctly when the screen leaves the back stack.
+     *
+     * The failure copy is the shared "Couldn't save your change"
+     * (strings_components.xml), the same words Home and Lists use for the same
+     * kind of failure; this screen had its own "Couldn't update list" until
+     * 2026-10-06. Returns true when [block] completed, false when it threw, so
+     * a caller announces success only when there was one (rules.md Code 3).
      */
     private suspend fun runMutation(
-        failureLabel: UiText = UiText.res(R.string.lists_snackbar_update_failed),
+        failureLabel: UiText = UiText.res(R.string.components_snackbar_save_failed),
         block: suspend () -> Unit
-    ) {
-        try {
+    ): Boolean {
+        return try {
             block()
+            true
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
             _snackbarEvents.tryEmit(SnackbarEvent(failureLabel))
+            false
         }
+    }
+
+    private companion object {
+        /** Snackbar events a turn can queue before tryEmit drops one; see [_snackbarEvents]. */
+        const val SNACKBAR_EVENT_BUFFER = 8
     }
 }

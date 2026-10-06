@@ -5,12 +5,16 @@ import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListType
+import app.orbit.data.entity.RuleKind
+import app.orbit.data.repository.ListRepository
 import app.orbit.domain.FakeListRepository
 import app.orbit.domain.FakeRuleTemplateRepository
 import app.orbit.domain.JsonProvider
 import app.orbit.domain.ReorderArgs
+import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.listFixture
 import app.orbit.domain.rule.RuleParams
+import app.orbit.domain.ruleTemplateFixture
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeScheduler
 import app.orbit.testutil.MainDispatcherRule
@@ -51,6 +55,47 @@ private class ListsManagerFakeNudgeScheduler : NudgeScheduler(
 
     override suspend fun scheduleFromEntity(list: ListEntity) {
         scheduleFromEntityCalls += list
+    }
+}
+
+/**
+ * A [ListRepository] whose writes can be made to throw, the way a full disk
+ * or a closed database would, so the failure paths are reachable: the VM
+ * must say "Couldn't save your change" and nothing else. Delegates every
+ * other call to the real fake, whose capture lists the assertions still read.
+ * Local to this file (ListConfigViewModelTest has its own, differently named,
+ * since private top-level classes in one package may not share a name).
+ */
+private class ListsManagerThrowingListRepository(
+    val delegate: FakeListRepository
+) : ListRepository by delegate {
+    var failWrites: Boolean = false
+
+    private fun failIfAsked() {
+        if (failWrites) throw IllegalStateException("database write failed")
+    }
+
+    override suspend fun setArchived(listId: Long, archived: Boolean) {
+        failIfAsked()
+        delegate.setArchived(listId, archived)
+    }
+
+    override suspend fun updateNotificationsEnabled(listId: Long, enabled: Boolean) {
+        failIfAsked()
+        delegate.updateNotificationsEnabled(listId, enabled)
+    }
+
+    override suspend fun delete(listId: Long) {
+        failIfAsked()
+        delegate.delete(listId)
+    }
+}
+
+/** Counts widget refresh requests (WIDGET-06) without WorkManager. */
+private class ListsManagerRecordingWidgetTrigger : WidgetRefreshTrigger {
+    var refreshes = 0
+    override fun scheduleRefresh() {
+        refreshes += 1
     }
 }
 
@@ -228,33 +273,69 @@ class ListsManagerViewModelTest {
     }
 
     // ============================================================================
-    // Test 5 — static list (smartRuleJson = null) has no rule summary.
+    // Test 5: a regular list's row carries its rhythm (the README promises
+    // every row a rhythm summary; regular lists had none until 2026-10-06).
+    // The per-list override wins; otherwise the template's defaults; a list
+    // with neither has no subtitle.
     // ============================================================================
 
-    @Test
-    fun static_list_has_null_ruleSummary() = runTest {
-        val staticList = listFixture(
-            id = 11L,
-            type = ListType.STATIC,
-            smartRuleJson = null
+    private val seededTemplates = FakeRuleTemplateRepository().apply {
+        seed(
+            listOf(
+                ruleTemplateFixture(id = 1L, kind = RuleKind.KEEP_IN_TOUCH, params = RuleParams.KeepInTouch()),
+                ruleTemplateFixture(id = 2L, kind = RuleKind.LATE_NIGHT, params = RuleParams.LateNight()),
+                ruleTemplateFixture(id = 3L, kind = RuleKind.ENERGIZE, params = RuleParams.Energize())
+            )
         )
-        val repo = FakeListRepository(initialLists = listOf(staticList))
+    }
+
+    private suspend fun singleTileSubtitle(list: ListEntity, templates: FakeRuleTemplateRepository): String? {
         val vm =
             ListsManagerViewModel(
-                listRepo = repo,
-                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                listRepo = FakeListRepository(initialLists = listOf(list)),
+                ruleTemplateRepo = templates,
                 nudgeScheduler = ListsManagerFakeNudgeScheduler()
             )
-
+        var subtitle: String? = null
         vm.uiState.test(timeout = 2.seconds) {
             var first = awaitItem()
             if (first is ListsManagerUiState.Loading) first = awaitItem()
-            val ready = first as ListsManagerUiState.Ready
-            val tile = ready.active.single()
-            assertNull(tile.ruleSummary)
+            val tile = (first as ListsManagerUiState.Ready).active.single()
             assertEquals(ListType.STATIC, tile.type)
+            subtitle = tile.ruleSummary?.asString(context)
             cancelAndIgnoreRemainingEvents()
         }
+        return subtitle
+    }
+
+    @Test
+    fun regular_list_carries_its_override_rhythm() = runTest {
+        val fortnightly = JsonProvider.json.encodeToString(
+            RuleParams.serializer(),
+            RuleParams.KeepInTouch().withIntervalHours(14 * 24)
+        )
+        val list = listFixture(id = 11L, ruleTemplateId = 1L, ruleParamsOverrideJson = fortnightly)
+        assertEquals("Every 14 days", singleTileSubtitle(list, seededTemplates))
+    }
+
+    @Test
+    fun regular_list_without_override_reads_its_templates_rhythm() = runTest {
+        // "Start from blank" writes no override, so its rhythm lives only in
+        // the seeded template (the Keep in touch default is 48 hours).
+        val blank = listFixture(id = 12L, ruleTemplateId = 1L, ruleParamsOverrideJson = null)
+        assertEquals("Every 2 days", singleTileSubtitle(blank, seededTemplates))
+
+        val lateNight = listFixture(id = 13L, ruleTemplateId = 2L, ruleParamsOverrideJson = null)
+        assertEquals("Late night rhythm", singleTileSubtitle(lateNight, seededTemplates))
+
+        val energize = listFixture(id = 14L, ruleTemplateId = 3L, ruleParamsOverrideJson = null)
+        assertEquals("Energize rhythm", singleTileSubtitle(energize, seededTemplates))
+    }
+
+    @Test
+    fun regular_list_with_no_template_and_no_override_has_no_subtitle() = runTest {
+        val partial = listFixture(id = 15L, ruleTemplateId = null, ruleParamsOverrideJson = null)
+        assertNull(singleTileSubtitle(partial, FakeRuleTemplateRepository()))
     }
 
     // ============================================================================
@@ -537,6 +618,169 @@ class ListsManagerViewModelTest {
         // NOTIF-11: nudge chain was re-enqueued via scheduleFromEntity.
         assertEquals(1, nudge.scheduleFromEntityCalls.size)
         assertEquals(3L, nudge.scheduleFromEntityCalls.single().id)
+    }
+
+    // ============================================================================
+    // Success snackbars are gated on the write (rules.md Code 3). Before
+    // 2026-10-06 archive emitted "List archived." with Undo whether or not
+    // setArchived threw, and the screen showed "List restored." itself before
+    // the write resolved.
+    //
+    // The VM's event flow has more than one slot, so a wrongly emitted second
+    // event reaches the Turbine collector and expectNoEvents() catches it.
+    // With the old one-slot buffer the collector never ran between two
+    // synchronous tryEmits (the launch runs inside an unconfined event loop)
+    // and the duplicate was dropped: the ungated code passed these tests by
+    // the same accident that hid the bug in production. Seen failing with
+    // the gate removed once the buffer grew.
+    // ============================================================================
+
+    private fun throwingFixture(vararg lists: ListEntity): Triple<ListsManagerViewModel, ListsManagerThrowingListRepository, ListsManagerRecordingWidgetTrigger> {
+        val repo = ListsManagerThrowingListRepository(FakeListRepository(initialLists = lists.toList()))
+        val widget = ListsManagerRecordingWidgetTrigger()
+        val vm = ListsManagerViewModel(
+            listRepo = repo,
+            ruleTemplateRepo = FakeRuleTemplateRepository(),
+            nudgeScheduler = ListsManagerFakeNudgeScheduler(),
+            widgetRefreshTrigger = widget
+        )
+        return Triple(vm, repo, widget)
+    }
+
+    @Test
+    fun archiveList_failure_emits_only_the_failure_snackbar() = runTest {
+        val (vm, repo, widget) = throwingFixture(listFixture(id = 5L, sortOrder = 0))
+        repo.failWrites = true
+
+        vm.snackbarEvents.test(timeout = 2.seconds) {
+            vm.archiveList(5L)
+            val event = awaitItem()
+            assertEquals("Couldn't save your change", event.message.asString(context))
+            assertNull(event.actionLabel, "a failure offers no Undo")
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(0, widget.refreshes, "nothing changed, so the widget is not asked to refresh")
+    }
+
+    @Test
+    fun archiveList_success_announces_with_undo_and_refreshes_the_widget() = runTest {
+        val (vm, _, widget) = throwingFixture(listFixture(id = 5L, sortOrder = 0))
+
+        vm.snackbarEvents.test(timeout = 2.seconds) {
+            vm.archiveList(5L)
+            val event = awaitItem()
+            assertEquals("List archived.", event.message.asString(context))
+            assertEquals(HomeSnackbarEvent.Kind.ARCHIVE_UNDO, event.kind)
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(1, widget.refreshes)
+    }
+
+    @Test
+    fun unarchiveList_announces_restored_only_once_the_write_is_in() = runTest {
+        val (vm, repo, widget) = throwingFixture(listFixture(id = 3L, sortOrder = 0, isArchived = true))
+
+        vm.snackbarEvents.test(timeout = 2.seconds) {
+            vm.unarchiveList(3L)
+            val event = awaitItem()
+            assertEquals("List restored.", event.message.asString(context))
+            assertEquals(HomeSnackbarEvent.Kind.PLAIN, event.kind)
+            expectNoEvents()
+
+            repo.failWrites = true
+            vm.unarchiveList(3L)
+            assertEquals("Couldn't save your change", awaitItem().message.asString(context))
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(1, widget.refreshes, "only the successful restore refreshes the widget")
+    }
+
+    @Test
+    fun onUndoArchive_restores_quietly() = runTest {
+        // Undo of "List archived." puts the row back without a second
+        // snackbar, as Home's undo does.
+        val (vm, repo, widget) = throwingFixture(listFixture(id = 3L, sortOrder = 0, isArchived = true))
+
+        vm.snackbarEvents.test(timeout = 2.seconds) {
+            vm.onUndoArchive(3L)
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(listOf(3L to false), repo.delegate.setArchivedCalls.toList(), "the row is back")
+        assertEquals(1, widget.refreshes)
+    }
+
+    @Test
+    fun commitDelete_refreshes_the_widget_only_when_the_purge_succeeds() = runTest {
+        val (vm, repo, widget) = throwingFixture(listFixture(id = 9L, sortOrder = 0, isArchived = true))
+
+        vm.deleteList(9L)
+        repo.failWrites = true
+        vm.commitDelete(9L)
+        assertEquals(0, widget.refreshes)
+
+        repo.failWrites = false
+        vm.deleteList(9L)
+        vm.commitDelete(9L)
+        assertEquals(1, widget.refreshes)
+    }
+
+    // ============================================================================
+    // LIST-23: the row menu offers Pause nudges / Resume nudges, as Home's
+    // long-press menu does, with Home's confirming words.
+    // ============================================================================
+
+    @Test
+    fun toggleNudges_flips_the_flag_and_confirms_with_homes_words() = runTest {
+        val repo = FakeListRepository(initialLists = listOf(listFixture(id = 4L, sortOrder = 0, notificationsEnabled = true)))
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
+
+        vm.snackbarEvents.test(timeout = 2.seconds) {
+            vm.toggleNudges(4L)
+            assertEquals("Nudges paused.", awaitItem().message.asString(context))
+            vm.toggleNudges(4L)
+            assertEquals("Nudges on.", awaitItem().message.asString(context))
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(listOf(4L to false, 4L to true), repo.updateNotificationsEnabledCalls.toList())
+    }
+
+    @Test
+    fun toggleNudges_failure_emits_only_the_failure_snackbar() = runTest {
+        val (vm, repo, _) = throwingFixture(listFixture(id = 4L, sortOrder = 0))
+        repo.failWrites = true
+
+        vm.snackbarEvents.test(timeout = 2.seconds) {
+            vm.toggleNudges(4L)
+            assertEquals("Couldn't save your change", awaitItem().message.asString(context))
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun tile_carries_the_notifications_flag_for_the_menu_label() = runTest {
+        val repo = FakeListRepository(initialLists = listOf(listFixture(id = 4L, sortOrder = 0, notificationsEnabled = false)))
+        val vm =
+            ListsManagerViewModel(
+                listRepo = repo,
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
+        vm.uiState.test(timeout = 2.seconds) {
+            var first = awaitItem()
+            if (first is ListsManagerUiState.Loading) first = awaitItem()
+            assertEquals(false, (first as ListsManagerUiState.Ready).active.single().notificationsEnabled)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     // LIST-22: a failing source shows Error instead of killing the stream,

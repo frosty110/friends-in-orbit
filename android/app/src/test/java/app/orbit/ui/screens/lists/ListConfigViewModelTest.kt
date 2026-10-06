@@ -9,8 +9,10 @@ import app.cash.turbine.test
 import app.orbit.R
 import app.orbit.data.dao.RecordingListMembershipDao
 import app.orbit.data.db.TransactionRunner
+import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListType
 import app.orbit.data.entity.RuleKind
+import app.orbit.data.repository.ListRepository
 import app.orbit.domain.FakeCallEventRepository
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
@@ -39,6 +41,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -72,6 +76,32 @@ private class RecordingNudgeScheduler : NudgeScheduler(
         activeHoursEnd: LocalTime?
     ) {
         scheduleCalls += ScheduleCall(listId, schedule, activeHoursStart, activeHoursEnd)
+    }
+}
+
+/**
+ * A [ListRepository] that can fail on demand: [failReads] makes the list's
+ * own stream throw on subscription, the way a database read error would
+ * (LIST-22); [failWrites] makes the convert write throw (rules.md Code 3).
+ * Every other call goes to the real fake, whose capture lists the tests
+ * still assert on.
+ */
+private class ConfigThrowingListRepository(
+    private val delegate: FakeListRepository
+) : ListRepository by delegate {
+    var failReads: Boolean = false
+    var failWrites: Boolean = false
+
+    override fun observeById(id: Long): Flow<ListEntity?> =
+        if (failReads) {
+            flow { throw IllegalStateException("database read failed") }
+        } else {
+            delegate.observeById(id)
+        }
+
+    override suspend fun convertSmartToStatic(listId: Long) {
+        if (failWrites) throw IllegalStateException("database write failed")
+        delegate.convertSmartToStatic(listId)
     }
 }
 
@@ -127,7 +157,10 @@ class ListConfigViewModelTest {
                 kind = RuleKind.LATE_NIGHT,
                 params = RuleParams.LateNight()
             )
-        )
+        ),
+        // Lets a test put a failing wrapper between the VM and the fake; the
+        // default hands the fake over as is.
+        wrapListRepo: (FakeListRepository) -> ListRepository = { it }
     ): Setup {
         val listRepo = FakeListRepository().apply { seed(listOf(list)) }
         val templateRepo = FakeRuleTemplateRepository().apply { seed(templates) }
@@ -142,7 +175,7 @@ class ListConfigViewModelTest {
         val undoStack = UndoStack()
         val nudgeScheduler = RecordingNudgeScheduler()
         val vm = ListConfigViewModel(
-            listRepo = listRepo,
+            listRepo = wrapListRepo(listRepo),
             ruleTemplateRepo = templateRepo,
             contactRepo = contactRepo,
             smartListEngine = engine,
@@ -199,7 +232,9 @@ class ListConfigViewModelTest {
         s.vm.snackbarEvents.test(timeout = 2.seconds) {
             s.vm.setRuleTemplate(RuleKind.ENERGIZE)
             val event = awaitItem()
-            assertEquals(SnackbarEvent(UiText.res(R.string.lists_snackbar_update_failed)), event)
+            // The shared words every screen uses for a failed write; this
+            // screen said "Couldn't update list" until 2026-10-06.
+            assertEquals(SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)), event)
             cancel()
         }
         assertTrue(
@@ -460,6 +495,105 @@ class ListConfigViewModelTest {
             listRepo.convertSmartToStaticCalls.isEmpty(),
             "no convert dispatch when listId is null"
         )
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // "This is now a regular list." is the VM's to say, and only after the
+    // write. The body used to show it on confirm, so a failed convert said
+    // "Couldn't save your change" and then that the list was regular. The
+    // VM's event flow has more than one slot, so a second event is received
+    // rather than dropped (see the note in ListsManagerViewModelTest); without
+    // the Boolean runMutation the failure case sees two events and fails.
+    // ────────────────────────────────────────────────────────────────────────
+
+    private val smartFixtureList = listFixture(
+        id = 1L,
+        name = "Recently added, not called",
+        type = ListType.SMART,
+        ruleTemplateId = null,
+        smartRuleJson = json.encodeToString(
+            SmartListRule.serializer(),
+            SmartListRule.RecentlyAddedNotCalled(daysWindow = 30)
+        )
+    )
+
+    @Test
+    fun `confirmConvert announces the regular list once the write is in`() = runTest {
+        val s = fixture(list = smartFixtureList)
+        s.vm.snackbarEvents.test(timeout = 2.seconds) {
+            s.vm.confirmConvert()
+            val event = awaitItem()
+            assertEquals(SnackbarEvent(UiText.res(R.string.lists_converted_snackbar)), event)
+            assertEquals(
+                "This is now a regular list.",
+                event.message.asString(ApplicationProvider.getApplicationContext<Context>())
+            )
+            expectNoEvents()
+            cancel()
+        }
+    }
+
+    @Test
+    fun `confirmConvert failure emits only the failure snackbar`() = runTest {
+        lateinit var throwing: ConfigThrowingListRepository
+        val s = fixture(
+            list = smartFixtureList,
+            wrapListRepo = { ConfigThrowingListRepository(it).also { w -> throwing = w } }
+        )
+        throwing.failWrites = true
+        s.vm.snackbarEvents.test(timeout = 2.seconds) {
+            s.vm.confirmConvert()
+            assertEquals(SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)), awaitItem())
+            expectNoEvents()
+            cancel()
+        }
+        assertTrue(s.listRepo.convertSmartToStaticCalls.isEmpty(), "the write threw before the fake saw it")
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // LIST-22: a failing source shows Error instead of killing the stream,
+    // and Try again re-subscribes and recovers. A list that does not exist
+    // is NotFound, not an error and not a crash.
+    // ────────────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `failing source shows error and retry recovers`() = runTest {
+        lateinit var throwing: ConfigThrowingListRepository
+        val s = fixture(wrapListRepo = { ConfigThrowingListRepository(it).also { w -> throwing = w } })
+        throwing.failReads = true
+        s.vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state is ListConfigUiState.Loading) state = awaitItem()
+            assertEquals(ListConfigUiState.Error, state)
+
+            throwing.failReads = false
+            s.vm.onRetry()
+            state = awaitItem()
+            while (state is ListConfigUiState.Loading || state is ListConfigUiState.Error) state = awaitItem()
+            assertTrue(state is ListConfigUiState.Ready, "Try again recovers to Ready, got $state")
+            assertEquals("Inner orbit", state.name)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `missing list is NotFound`() = runTest {
+        // The id parses but no row carries it (deleted elsewhere, a stale link).
+        val gone = fixture(savedStateListId = "404")
+        gone.vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state is ListConfigUiState.Loading) state = awaitItem()
+            assertEquals(ListConfigUiState.NotFound, state)
+            cancelAndIgnoreRemainingEvents()
+        }
+        // An id that does not parse at all (the old "new" sentinel) is NotFound too.
+        val garbage = fixture(savedStateListId = "not-a-number")
+        garbage.vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state is ListConfigUiState.Loading) state = awaitItem()
+            assertEquals(ListConfigUiState.NotFound, state)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
