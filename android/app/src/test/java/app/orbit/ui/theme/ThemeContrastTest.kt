@@ -12,6 +12,12 @@
 //     and a snackbar's action on its inverse bar.
 //   - UI parts that are not text (accent vs surface, the outline that marks an
 //     unchecked control): >= 3.0:1.
+//   - Text on the Home card's tinted surfaces (OrbitTones.ListTone: the band
+//     and the wash): the list name (nameFg), fg, fgMuted and fgSubtle on the
+//     band, fg and fgSubtle on the wash, >= 4.5:1, for every curated theme,
+//     every Wallpaper hue and every accent-dial hue (home-5). Until 2026-10-06
+//     only the neutral surfaces were checked and a 72% alpha member count on
+//     the tinted band fell under 4.5:1 unnoticed until someone looked.
 // Until 2026-10-05 button labels were held only to 3.0, which let Warm's
 // white-on-terracotta ship at 3.88:1, and fgSubtle was never checked.
 package app.orbit.ui.theme
@@ -40,8 +46,10 @@ class ThemeContrastTest {
     }
 
     private fun checkPalette(name: String, c: OrbitColors) {
-        // Text tokens on every neutral surface they appear on.
-        val surfaces = listOf("bg" to c.bg, "surface" to c.surface, "bgSubtle" to c.bgSubtle)
+        // Text tokens on every neutral surface they appear on. surfaceAlt is
+        // the lightest dark surface (GraphiteDeep) and the one accentListTone
+        // holds the Home card's band to, so it is certified here on purpose.
+        val surfaces = listOf("bg" to c.bg, "surface" to c.surface, "bgSubtle" to c.bgSubtle, "surfaceAlt" to c.surfaceAlt)
         for ((surfaceName, surface) in surfaces) {
             assertContrast("$name fg/$surfaceName", c.fg, surface, bodyAA)
             assertContrast("$name fgMuted/$surfaceName", c.fgMuted, surface, bodyAA)
@@ -54,7 +62,8 @@ class ThemeContrastTest {
         // Button labels are text: 4.5, at rest and pressed.
         assertContrast("$name accentFg/accent", c.accentFg, c.accent, bodyAA)
         assertContrast("$name accentFg/accentPress", c.accentFg, c.accentPress, bodyAA)
-        // Accent used as a text link ("Match theme", list names on Home).
+        // Accent used as text ("Match theme", a snackbar's action). Home's
+        // list names are nameFg on the card's band, checked in checkTones.
         assertContrast("$name accent/bg", c.accent, c.bg, bodyAA)
         assertContrast("$name accent/surface", c.accent, c.surface, bodyAA)
         // Green status text and its chip.
@@ -64,6 +73,30 @@ class ThemeContrastTest {
         assertContrast("$name danger/surface", c.danger, c.surface, bodyAA)
         // The outline that marks text fields, checkboxes and unchecked switches.
         assertContrast("$name fgSubtle(outline)/surface", c.fgSubtle, c.surface, uiAA)
+    }
+
+    /**
+     * The Home list card's two surfaces (OrbitTones.ListTone): the accent
+     * tinted band that carries the list name, the eyebrow, the why line and
+     * the member count, and the wash under the rhythm strip's legend and the
+     * today letter. The band of card A is the theme's accentTint, which the
+     * Wallpaper theme and the accent dial generate from any hue, so these are
+     * checked on the resolved theme for every hue, not on the authored
+     * palettes alone. Card B's band and wash are neutral surfaces and pass
+     * trivially; checking them costs nothing and catches a future tinted B.
+     */
+    private fun checkTones(name: String, resolved: ResolvedTheme) {
+        val c = resolved.colors
+        resolved.tones.listTones.forEachIndexed { index, tone ->
+            val card = "$name card${'A' + index}"
+            assertContrast("$card nameFg/band", tone.nameFg, tone.band, bodyAA)
+            assertContrast("$card fg/band", c.fg, tone.band, bodyAA)
+            assertContrast("$card fgMuted/band", c.fgMuted, tone.band, bodyAA)
+            assertContrast("$card fgSubtle/band", c.fgSubtle, tone.band, bodyAA)
+            assertContrast("$card fg/wash", c.fg, tone.wash, bodyAA)
+            assertContrast("$card fgMuted/wash", c.fgMuted, tone.wash, bodyAA)
+            assertContrast("$card fgSubtle/wash", c.fgSubtle, tone.wash, bodyAA)
+        }
     }
 
     /** A snackbar is the other mode's background with the other mode's accent action. */
@@ -81,6 +114,8 @@ class ThemeContrastTest {
         for (def in OrbitThemes.all) {
             checkPalette("${def.id.name} light", def.light)
             checkPalette("${def.id.name} dark", def.dark)
+            checkTones("${def.id.name} light", OrbitThemes.resolve(ThemeSettings(themeId = def.id), isDark = false))
+            checkTones("${def.id.name} dark", OrbitThemes.resolve(ThemeSettings(themeId = def.id), isDark = true))
         }
         assertNoFailures()
     }
@@ -99,6 +134,9 @@ class ThemeContrastTest {
             checkPalette("Wallpaper hue=$hue light", def.light)
             checkPalette("Wallpaper hue=$hue dark", def.dark)
             checkInverse("Wallpaper hue=$hue", ThemeSettings(themeId = OrbitThemeId.DEVICE), hue.toFloat())
+            val wallpaper = ThemeSettings(themeId = OrbitThemeId.DEVICE)
+            checkTones("Wallpaper hue=$hue light", OrbitThemes.resolve(wallpaper, isDark = false, deviceHue = hue.toFloat()))
+            checkTones("Wallpaper hue=$hue dark", OrbitThemes.resolve(wallpaper, isDark = true, deviceHue = hue.toFloat()))
             hue += 15
         }
         // A grey wallpaper has no hue: the theme falls back to Warm's.
@@ -143,6 +181,24 @@ class ThemeContrastTest {
             // The accent must also be distinguishable from the dark surface.
             assertContrast("dial dark hue=$hue accent/surface", a.accent, DarkColors.surface, uiAA)
             hue += 15
+        }
+        assertNoFailures()
+    }
+
+    // The dial path rebuilds card A inside OrbitThemes.resolve (not in
+    // deriveOrbitTones), so the dial tests on accentForHue alone would miss a
+    // band the generated tint cannot carry text on. Every curated theme, every
+    // hue, both modes.
+    @Test
+    fun `the accent dial keeps the Home card's text legible for every theme and hue`() {
+        for (def in OrbitThemes.all) {
+            var hue = 0
+            while (hue < 360) {
+                val settings = ThemeSettings(themeId = def.id, accentHue = hue)
+                checkTones("${def.id.name} dial hue=$hue light", OrbitThemes.resolve(settings, isDark = false))
+                checkTones("${def.id.name} dial hue=$hue dark", OrbitThemes.resolve(settings, isDark = true))
+                hue += 15
+            }
         }
         assertNoFailures()
     }

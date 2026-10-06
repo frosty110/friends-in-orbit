@@ -98,10 +98,10 @@ data class OrbitTones(
  * and the rhythm bars / avatar palettes / list tones / heat ramp all derive.
  *
  * @param toneTriples the five personality slots (terracotta/sage/amber/brick/stone order)
- * @param accentTint  selected-state wash, used as Home card A band
- * @param accentDeep  the accent's pressed/deep value, used as Home card A name color + heat-ramp top
+ * @param accentTint  selected-state wash; the start point of Home card A's band (see [accentListTone])
+ * @param accentDeep  the accent's pressed/deep value, the start point of Home card A's name color + heat-ramp top
  * @param heatLow     low-density end of the heat ramp (a quiet near-background tone)
- * @param neutralBand Home card B band (a subtle surface zone)
+ * @param neutralBand Home card B band (a subtle surface zone), and the surface card A's band is held to
  * @param neutralWash Home card B wash (the base surface)
  * @param neutralName Home card B name color (primary fg)
  */
@@ -128,13 +128,15 @@ internal fun deriveOrbitTones(
         rhythmBars = toneTriples.map { it.dot },
         heatRamp = ease.map { t -> lerp(heatLow, accentDeep, t) },
         listTones = listOf(
-            // A — accent-tinted
-            OrbitTones.ListTone(
-                band = accentTint,
-                wash = lerp(accentTint, neutralWash, 0.55f),
-                nameFg = accentDeep,
+            // A, accent-tinted. Derived, not the raw tint: see accentListTone.
+            accentListTone(
+                accentTint = accentTint,
+                accentDeep = accentDeep,
+                neutralBand = neutralBand,
+                neutralWash = neutralWash,
+                neutralName = neutralName,
             ),
-            // B — neutral
+            // B, neutral
             OrbitTones.ListTone(
                 band = neutralBand,
                 wash = neutralWash,
@@ -143,5 +145,77 @@ internal fun deriveOrbitTones(
         ),
     )
 }
+
+/**
+ * Home card A: the accent-tinted band that carries the list name, the eyebrow,
+ * the why line and the member count, and the wash under the rhythm strip's
+ * legend. Apart from the name, the text on it is the theme's ordinary fg,
+ * fgMuted and fgSubtle, which the card reads from OrbitTheme.colors, so the
+ * band has to be a surface those tokens are legible on (rules.md §Design 4),
+ * for every hue the Wallpaper theme and the accent dial can produce.
+ *
+ * The raw accentTint is tuned as a selection wash under fg, not as a surface
+ * for subtle text: across the hue wheel fgSubtle read between 3.0:1 and
+ * 4.4:1 on it and fgMuted as low as 4.0:1, and in dark mode the accent used
+ * as the list name read 3.9:1 on the dark tint. A 72% alpha member count on
+ * the band was the one miss found by eye before ThemeContrastTest checked
+ * these pairs (home-5). The derivation:
+ *
+ *  - The band is the tint stepped toward [neutralWash] (the surface) until it
+ *    is no darker (light mode) or no lighter (dark mode) than [neutralBand],
+ *    the neutral surface ThemeContrastTest certifies every text token on
+ *    (bgSubtle in light, surfaceAlt in dark). Contrast depends on luminance
+ *    alone, so a band on that side of a certified surface clears the same
+ *    ratios, whatever its hue. Warm's light band moves from EDD6CE to about
+ *    F6EAE6, still visibly warmer than card B's F2ECE2.
+ *  - The name is [accentDeep] stepped toward [neutralName] (ink in light,
+ *    cream in dark) until it clears 4.5:1 on that band. Light accents need no
+ *    step; the lifted dark accents need a small one.
+ *
+ * Both loops end on the neutral itself at worst, so they always terminate,
+ * and [ThemeRegistry]'s accent-dial path builds card A through this function
+ * too, so a dial hue cannot bypass it.
+ */
+internal fun accentListTone(
+    accentTint: Color,
+    accentDeep: Color,
+    neutralBand: Color,
+    neutralWash: Color,
+    neutralName: Color,
+): OrbitTones.ListTone {
+    val certifiedLum = neutralBand.relativeLuminance()
+    // Light mode is ink on cream, so the safe side is lighter than the
+    // certified surface; dark mode is cream on charcoal, so darker.
+    val textIsDark = neutralName.relativeLuminance() < certifiedLum
+    fun carriesText(surface: Color): Boolean {
+        val lum = surface.relativeLuminance()
+        return if (textIsDark) lum >= certifiedLum else lum <= certifiedLum
+    }
+    var t = 0f
+    var band = accentTint
+    while (!carriesText(band) && t < 1f) {
+        t = (t + TONE_STEP).coerceAtMost(1f)
+        band = lerp(accentTint, neutralWash, t)
+    }
+    var u = 0f
+    var nameFg = accentDeep
+    while (contrastRatio(nameFg, band) < TEXT_AA && u < 1f) {
+        u = (u + TONE_STEP).coerceAtMost(1f)
+        nameFg = lerp(accentDeep, neutralName, u)
+    }
+    return OrbitTones.ListTone(
+        band = band,
+        // Lighter (or in dark mode darker) than the band it sits under, as
+        // before; based on the derived band so the two keep their relation.
+        wash = lerp(band, neutralWash, 0.55f),
+        nameFg = nameFg,
+    )
+}
+
+/** How far each step of [accentListTone] moves toward the neutral; 20 steps span the whole way. */
+private const val TONE_STEP = 0.05f
+
+/** WCAG AA for normal-size text, the floor rules.md §Design 4 holds every text token to. */
+private const val TEXT_AA = 4.5f
 
 internal val LocalOrbitTones = staticCompositionLocalOf { WarmTones }

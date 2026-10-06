@@ -300,10 +300,14 @@ object OrbitThemes {
             tones = tones.copy(
                 heatRamp = heatEase.map { t -> lerp(heatLow, accentDeep, t) },
                 listTones = listOf(
-                    OrbitTones.ListTone(
-                        band = a.accentTint,
-                        wash = lerp(a.accentTint, colors.surface, 0.55f),
-                        nameFg = accentDeep,
+                    // Through the same derivation as the curated themes, so
+                    // the band carries text for every dial hue (home-5).
+                    accentListTone(
+                        accentTint = a.accentTint,
+                        accentDeep = accentDeep,
+                        neutralBand = tones.listTones[1].band,
+                        neutralWash = colors.surface,
+                        neutralName = colors.fg,
                     ),
                     tones.listTones[1],
                 ),
