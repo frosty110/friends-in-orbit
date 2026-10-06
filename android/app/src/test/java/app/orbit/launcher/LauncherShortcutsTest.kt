@@ -1,11 +1,13 @@
 package app.orbit.launcher
 
 import android.app.Application
+import android.content.Intent
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.test.core.app.ApplicationProvider
 import app.orbit.MainActivity
 import app.orbit.nav.AppLinks
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -43,6 +45,11 @@ class LauncherShortcutsTest {
         shortcuts.forEach { shortcut ->
             assertEquals(MainActivity::class.java.name, shortcut.intent.component?.className)
             assertEquals(null, shortcut.intent.getStringExtra(AppLinks.EXTRA_NAVIGATE_TO))
+            // The flags every outside surface shares (AppLinks.launch): a tap
+            // while Orbit is open reaches onNewIntent instead of stacking a
+            // second Activity. Until 2026-10-06 the shortcut intents had none.
+            assertTrue(shortcut.intent.flags and Intent.FLAG_ACTIVITY_SINGLE_TOP != 0, "SINGLE_TOP on ${shortcut.id}")
+            assertTrue(shortcut.intent.flags and Intent.FLAG_ACTIVITY_CLEAR_TOP != 0, "CLEAR_TOP on ${shortcut.id}")
         }
     }
 

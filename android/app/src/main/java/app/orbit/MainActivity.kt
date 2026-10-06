@@ -137,25 +137,27 @@ class MainActivity : ComponentActivity() {
     /**
      * Turns a launch Intent into a route for [navigateTo]. A notification or a
      * widget names its route in [AppLinks.EXTRA_NAVIGATE_TO]; a launcher
-     * shortcut names an action, resolved here (LAUNCH-01).
+     * shortcut names an action, resolved here (LAUNCH-01). The decision itself
+     * is [AppLinks.landingFor], a pure function with its own tests; this
+     * method only pays for the reads a landing needs.
      *
      * Shortcuts exist from install, so their routes wait for onboarding to be
-     * done: before that there is no list to open, and a search screen over
-     * the welcome flow would strand the user. The app simply opens.
+     * done. The onboarding flag is a suspending DataStore read, so the landing
+     * is decided twice: once assuming onboarding is done, which settles a
+     * route or an unrelated launch at once (a cold nudge tap never waits on
+     * DataStore), and, for a shortcut only, again with the real flag.
      */
     private fun routeFrom(intent: Intent?) {
-        intent ?: return
-        intent.getStringExtra(AppLinks.EXTRA_NAVIGATE_TO)?.let { route ->
-            navigateTo = route
-            return
-        }
-        val action = intent.action
-        if (action != AppLinks.ACTION_CALL_NEXT && action != AppLinks.ACTION_SEARCH) return
-        lifecycleScope.launch {
-            if (!appPrefs.isOnboardingComplete.first()) return@launch
-            navigateTo = when (action) {
-                AppLinks.ACTION_CALL_NEXT -> AppLinks.callNextRoute(nextPeople())
-                else -> Routes.GlobalSearch
+        when (val landing = AppLinks.landingFor(intent, onboardingComplete = true)) {
+            is AppLinks.Landing.Open -> navigateTo = landing.route
+            AppLinks.Landing.Nothing -> Unit
+            AppLinks.Landing.CallNext, AppLinks.Landing.Search -> lifecycleScope.launch {
+                navigateTo = when (AppLinks.landingFor(intent, appPrefs.isOnboardingComplete.first())) {
+                    AppLinks.Landing.CallNext -> AppLinks.callNextRoute(nextPeople())
+                    AppLinks.Landing.Search -> Routes.GlobalSearch
+                    // Before onboarding the app simply opens.
+                    else -> return@launch
+                }
             }
         }
     }

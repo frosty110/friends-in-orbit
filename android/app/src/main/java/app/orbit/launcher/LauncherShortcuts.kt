@@ -1,12 +1,10 @@
 package app.orbit.launcher
 
 import android.content.Context
-import android.content.Intent
 import android.os.PersistableBundle
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
-import app.orbit.MainActivity
 import app.orbit.R
 import app.orbit.nav.AppLinks
 import timber.log.Timber
@@ -89,7 +87,11 @@ object LauncherShortcuts {
             .setShortLabel(context.getString(shortLabel))
             .setLongLabel(context.getString(longLabel))
             .setIcon(IconCompat.createWithResource(context, icon))
-            .setIntent(Intent(context, MainActivity::class.java).setAction(action))
+            // AppLinks.launch carries the SINGLE_TOP | CLEAR_TOP flags every
+            // outside surface shares, so a tap while Orbit is open reaches
+            // MainActivity.onNewIntent instead of stacking a second Activity
+            // or being dropped by the launcher.
+            .setIntent(AppLinks.launch(context).setAction(action))
             .setRank(rank)
             .setExtras(PersistableBundle().apply { putInt(KEY_VERSION, VERSION) })
             .build()
@@ -102,6 +104,8 @@ object LauncherShortcuts {
     )
 
     private const val KEY_VERSION = "orbit_shortcut_version"
-    private const val VERSION = 1
+
+    // 2: the intents gained the shared launch flags (2026-10-06).
+    private const val VERSION = 2
     private const val TAG = "shortcuts"
 }
