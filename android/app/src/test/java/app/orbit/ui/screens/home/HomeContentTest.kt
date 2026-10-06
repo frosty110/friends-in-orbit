@@ -12,6 +12,8 @@ import androidx.compose.ui.test.hasNoClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
@@ -145,6 +147,24 @@ class HomeContentTest {
             .assertHasClickAction()
         compose.onAllNodesWithContentDescription(context.getString(R.string.home_next_up_call, "Kai"))
             .assertCountEquals(0)
+    }
+
+    // PRIV-03: the open menu's Archive line is text like any other, so the
+    // screen hands the builder the masked name (HomeScreen's displayName),
+    // not tile.name. Both cards read "List" under the curtain and each card's
+    // texts merge into one node, so the first is long-pressed by position.
+    @Test
+    fun under_the_curtain_the_menu_names_the_list_as_List() {
+        setHome(curtain = true)
+        compose.onAllNodesWithText("List").onFirst().performTouchInput {
+            longClick(Offset(width * 0.2f, height * 0.08f))
+        }
+        compose.waitForIdle()
+
+        val masked = context.getString(R.string.components_curtain_list)
+        compose.onNodeWithText(context.getString(R.string.components_menu_archive_supporting, masked))
+            .assertExists()
+        compose.onAllNodesWithText("Inner orbit", substring = true).assertCountEquals(0)
     }
 
     // HOME-8 acceptance: one node per day, named by the day, not the letter.
