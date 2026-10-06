@@ -1,10 +1,10 @@
 # call-history
 
 **Status:** in-progress
-**Last reviewed:** 2026-10-05 (people-screens pass)
+**Last reviewed:** 2026-10-06 (audit round: attempts in the spec, LOG-03)
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/ui/screens/calllog/` (`CallLogScreen.kt`, `CallLogViewModel.kt`, `CallLogUiState.kt`); route `Routes.CallLogPattern` (`call-log?contactId={contactId}`), reachable from Settings (everyone's calls, `Routes.CallLog`) and from Contact detail's "View all calls" (that person's calls, `Routes.callLogFor(id)`)
-- Tests: `android/app/src/test/java/app/orbit/ui/screens/calllog/CallLogViewModelTest.kt`, `android/app/src/test/java/app/orbit/data/dao/CallEventDaoLogTest.kt`
+- Tests: `android/app/src/test/java/app/orbit/ui/screens/calllog/CallLogViewModelTest.kt` (the join, the kinds, the filters, paging, the LOG-04 and LOG-05 states), `android/app/src/test/java/app/orbit/data/dao/CallEventDaoLogTest.kt`
 
 ---
 
@@ -25,8 +25,9 @@ As a user, I open the in-app call log to see what I've reached out about recentl
 - Each row: contact name, list-context subtitle ("from {ListName}"), duration, direction icon, wall-clock time ("4:30pm" — the day is carried by the section header, so rows don't repeat a relative date).
 - **One person (LOG-04).** Opened from Contact detail, the log shows only that person's calls under "Calls with {name}", and back returns to them. Rows lead with what happened ("You called", "Sam called", "You logged a connection", "You tried to reach them") with the duration beneath, instead of repeating the same name and face on every row.
 - Manually logged connections (source = MANUAL) render as "Logged" rows with a check-circle icon and no duration.
-- Filter: direction chips: All / Incoming / Outgoing, one always chosen (radio semantics), in a row that scrolls sideways rather than breaking a label at large font sizes. MANUAL "Logged" rows count as reaching out: visible under All and Outgoing, hidden under Incoming. A narrowing filter that matches nothing keeps the chip row and shows a quiet one-liner.
-- Tap a row → contact-detail scrolled to that call's row, with the inline "Add note to this call" affordance below it (the retroactive-note path).
+- **Attempted.** A reach-out that did not connect (source = ATTEMPT) renders as an "Attempted" row with a phone-slash icon and no duration. Two things write one: the reconciler ingests every unanswered outgoing call in the phone's call log as an attempt (`features/call-detection/README.md` §Filter), and "Couldn't reach them" in Contact detail's "Log a connection" sheet logs one by hand (CONTACT-09). An attempt counts as reaching out, so it shows under All and Outgoing and never under Incoming; in one person's log the row reads "You tried to reach them". The glossary's word is "Attempt" (`voice.md`): it stays out of Last call, Total calls and Average length, because nobody talked.
+- Filter: direction chips: All / Incoming / Outgoing, one always chosen (radio semantics), in a row that scrolls sideways rather than breaking a label at large font sizes. "Logged" and "Attempted" rows count as reaching out: visible under All and Outgoing, hidden under Incoming (both carry direction OUTGOING from their writers; `CallLogViewModelTest` pins it). Re-choosing the active chip changes nothing, including the pages already shown. A narrowing filter that matches nothing keeps the chip row and shows one line beneath it ("No incoming calls yet.") in the shared state layout (`OrbitScreenMessage`), with no action of its own because the chips above are the way back. Under All an empty filtered set cannot happen (no calls at all is the Empty state), and the screen guards that branch loudly rather than carrying a string nobody sees (rules.md Code 3).
+- Tap a row → contact-detail scrolled to that call's row, with the inline "Add note to this call" affordance below it (the retroactive-note path, LOG-03).
 - Long-press a row → quick actions: "Call again" (`ACTION_DIAL`) and "Open details" (the row's tap reads the same to TalkBack; both said "Open contact" until 2026-10-05). "Add note" is intentionally absent: tap already lands on the focused call with the note affordance.
 - Honest pagination: the log renders in 200-row increments with a "Show n more" footer where n is the real next increment (`min(remaining, 200)`); the footer disappears exactly when everything is shown.
 - Ignored contacts stay visible but greyed (50% avatar opacity, subtle name + " (ignored)" suffix); rows remain tappable.
@@ -36,6 +37,7 @@ As a user, I open the in-app call log to see what I've reached out about recentl
 ### Requirements
 
 - **LOG-01: The in-app call log.** A chronological log of calls with tracked contacts (`CallEventDao.observeForLog` filters `contactId IS NOT NULL`, newest first), reached from Settings. It is a destination of its own (`Routes.CallLog`), not a section of another screen.
+- **LOG-03: Add a note to a call from the log.** Tapping a row opens Contact detail scrolled to that call (`scrollToCallEventId` on the route), with an inline "Add note to this call" under it that back-dates the note to the call's time. The log itself never hosts a note editor, and its row menu offers no "Add note": the tap is that path. Cited by `ContactDetailScreen`, `ContactDetailViewModel`, `ContactDetailUiState` and `OrbitNavHost`; defined here on 2026-10-06, having been cited since the retroactive-note work with no entry to resolve to.
 - **LOG-04: "View all calls" means this person.** Contact detail's "View all calls" opens the log narrowed to that contact (`call-log?contactId={id}`; the VM reads it with `observeForContact`), titled "Calls with {name}", and back returns to the contact. Without the argument the log is everyone's. Until 2026-10-05 the route had no argument, so the action opened everyone's calls (UX rubric D2).
 - **LOG-05: Honest states.** The log never says something false while it waits or when it cannot see. It stays in Loading until both the data and the call-log permission are known (the screen reports the permission on every resume; ARCH-04). No events plus no access is a permission-denied state that explains and offers Settings, not "No calls yet" (rubric "What is unprofessional today" 15). A failed data stream is an error state with Retry, not an uncaught exception (rubric plan 3.5).
 
@@ -73,7 +75,7 @@ As a user, I open the in-app call log to see what I've reached out about recentl
 
 ### Data model
 
-Reads: `CallEventEntity` (via `CallEventDao.observeForLog`, which filters `contactId IS NOT NULL` and orders DESC, or `observeForContact`) joined in the VM with `ContactEntity` (name, photo, `isIgnored`) and `ListMembershipEntity` + `ListEntity` (list-context subtitle).
+Reads: `CallEventEntity` (via `CallEventDao.observeForLog`, which filters `contactId IS NOT NULL` and orders DESC, or `observeForContact`; `source` is `CALL_LOG`, `MANUAL` or `ATTEMPT`, which decides the row's kind) joined in the VM with `ContactEntity` (name, photo, `isIgnored`) and `ListMembershipEntity` + `ListEntity` (list-context subtitle). Both DAO reads keep a `limit` parameter; the log passes `Int.MAX_VALUE` and pages in memory, and the parameter stays for Contact detail's bounded read of 50 and any future bounded caller.
 
 ### Permissions / integrations
 
