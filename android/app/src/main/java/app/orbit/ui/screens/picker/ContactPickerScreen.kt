@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.picker
 
+import android.content.res.Configuration
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -880,7 +881,7 @@ private fun ContactPickerReadyPreviewLight() {
     }
 }
 
-@Preview(name = "ContactPicker — Ready dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "ContactPicker — Ready dark", showBackground = true)
 @Composable
 private fun ContactPickerReadyPreviewDark() {
     OrbitTheme(darkTheme = true) {

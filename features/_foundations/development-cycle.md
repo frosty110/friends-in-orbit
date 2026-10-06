@@ -101,6 +101,15 @@ any preview person or list name that still reaches text, a field or a label.
 Use it for any UI change: look at the screens you touched at 200% and 360dp,
 and keep both reports at "None."
 
+Two rules keep the renders honest. The host paints the theme's background
+behind every preview (a component draws no surface of its own; its screen
+does), so a dark preview must declare `uiMode = Configuration.UI_MODE_NIGHT_YES`
+in its `@Preview` for the host to follow it: forcing `OrbitTheme(darkTheme =
+true)` alone puts light text on a light window and names the file `-light`.
+And a section that lives in a scrolling column on its screen scrolls in its
+preview too (`Modifier.verticalScroll`), or a short landscape window squeezes
+its last row under 48dp and the audit reports a target the app never shows.
+
 **New behaviour ships with a test.** A bug fix ships with a test that fails
 without the fix — for a regression that has now happened twice, that test is the
 only thing that stops a third.

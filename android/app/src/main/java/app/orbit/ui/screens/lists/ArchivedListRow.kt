@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.lists
 
+import android.content.res.Configuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -134,7 +135,7 @@ private fun ArchivedListRowPreviewLight() {
     }
 }
 
-@Preview(name = "ArchivedListRow — dark")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "ArchivedListRow — dark")
 @Composable
 private fun ArchivedListRowPreviewDark() {
     app.orbit.ui.theme.OrbitTheme(darkTheme = true) {

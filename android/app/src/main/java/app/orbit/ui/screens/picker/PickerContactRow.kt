@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.picker
 
+import android.content.res.Configuration
 import android.content.res.Resources
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -397,7 +398,7 @@ private fun PickerContactRowPreviewLight() {
     }
 }
 
-@Preview(name = "PickerContactRow — dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "PickerContactRow — dark", showBackground = true)
 @Composable
 private fun PickerContactRowPreviewDark() {
     OrbitTheme(darkTheme = true) {

@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.picker
 
+import android.content.res.Configuration
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -70,7 +71,7 @@ private fun PermissionDeniedEmptyPreviewLight() {
     }
 }
 
-@Preview(name = "PermissionDeniedEmpty — dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "PermissionDeniedEmpty — dark", showBackground = true)
 @Composable
 private fun PermissionDeniedEmptyPreviewDark() {
     OrbitTheme(darkTheme = true) {

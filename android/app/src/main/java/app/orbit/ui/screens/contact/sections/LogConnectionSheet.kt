@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.contact.sections
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -399,7 +400,7 @@ private fun LogConnectionSheetLightPreview() {
     }
 }
 
-@Preview(name = "LogConnectionSheet — attempt, dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "LogConnectionSheet — attempt, dark", showBackground = true)
 @Composable
 private fun LogConnectionSheetDarkPreview() {
     OrbitTheme(darkTheme = true) {

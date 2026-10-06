@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.picker
 
+import android.content.res.Configuration
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -41,7 +42,7 @@ private fun EmptyDeviceContactsPreviewLight() {
     }
 }
 
-@Preview(name = "EmptyDeviceContacts — dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "EmptyDeviceContacts — dark", showBackground = true)
 @Composable
 private fun EmptyDeviceContactsPreviewDark() {
     OrbitTheme(darkTheme = true) {

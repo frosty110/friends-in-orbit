@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.contact.sections
 
+import android.content.res.Configuration
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -311,7 +312,7 @@ private fun PreviewNoOverrideLight() {
     }
 }
 
-@Preview(name = "RuleOverrideSection — override, dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "RuleOverrideSection — override, dark", showBackground = true)
 @Composable
 private fun PreviewWithOverrideDark() {
     OrbitTheme(darkTheme = true) {

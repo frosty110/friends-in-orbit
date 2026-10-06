@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.lists
 
+import android.content.res.Configuration
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -174,7 +175,7 @@ private fun RuleTemplatePickerLightPreview() {
     }
 }
 
-@Preview(name = "RuleTemplatePicker — dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "RuleTemplatePicker — dark", showBackground = true)
 @Composable
 private fun RuleTemplatePickerDarkPreview() {
     OrbitTheme(darkTheme = true) {

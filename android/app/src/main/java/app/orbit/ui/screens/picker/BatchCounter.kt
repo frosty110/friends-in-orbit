@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.picker
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -156,7 +157,7 @@ private fun BatchCounterAddPreviewLight() {
     }
 }
 
-@Preview(name = "BatchCounter — Move dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "BatchCounter — Move dark", showBackground = true)
 @Composable
 private fun BatchCounterMovePreviewDark() {
     OrbitTheme(darkTheme = true) {

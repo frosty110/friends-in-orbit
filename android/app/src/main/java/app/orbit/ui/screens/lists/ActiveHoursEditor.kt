@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.lists
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -376,7 +377,7 @@ private fun ActiveHoursEditorLightNormalPreview() {
     }
 }
 
-@Preview(name = "ActiveHoursEditor — dark, overnight", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "ActiveHoursEditor — dark, overnight", showBackground = true)
 @Composable
 private fun ActiveHoursEditorDarkOvernightPreview() {
     OrbitTheme(darkTheme = true) {

@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.settings.export
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -174,7 +175,7 @@ private fun ImportPassphraseSheetLightPreview() {
     }
 }
 
-@Preview(name = "ImportPassphraseSheet · dark", showBackground = true, backgroundColor = 0xFF0E0F12)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "ImportPassphraseSheet · dark", showBackground = true, backgroundColor = 0xFF0E0F12)
 @Composable
 private fun ImportPassphraseSheetDarkPreview() {
     OrbitTheme(darkTheme = true) {

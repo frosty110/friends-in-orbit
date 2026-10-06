@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.lists
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -490,7 +491,7 @@ private fun NudgeScheduleSectionLightPreview() {
     }
 }
 
-@Preview(name = "NudgeScheduleSection — dark, muted badge, two times", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "NudgeScheduleSection — dark, muted badge, two times", showBackground = true)
 @Composable
 private fun NudgeScheduleSectionDarkMutedPreview() {
     OrbitTheme(darkTheme = true) {
@@ -525,7 +526,7 @@ private fun OnboardingNudgeSummaryLightPreview() {
     }
 }
 
-@Preview(name = "OnboardingNudgeSummary — dark, custom schedule", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "OnboardingNudgeSummary — dark, custom schedule", showBackground = true)
 @Composable
 private fun OnboardingNudgeSummaryDarkPreview() {
     OrbitTheme(darkTheme = true) {

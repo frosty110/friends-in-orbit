@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.lists
 
+import android.content.res.Configuration
 import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
@@ -317,7 +318,7 @@ private fun SmartRuleEditorLongGapLightPreview() {
     }
 }
 
-@Preview(name = "SmartRuleEditor: CommonlyCalled, dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "SmartRuleEditor: CommonlyCalled, dark", showBackground = true)
 @Composable
 private fun SmartRuleEditorCommonlyCalledDarkPreview() {
     OrbitTheme(darkTheme = true) {
@@ -332,7 +333,7 @@ private fun SmartRuleEditorCommonlyCalledDarkPreview() {
     }
 }
 
-@Preview(name = "SmartRuleEditor — NeverCalled, dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "SmartRuleEditor — NeverCalled, dark", showBackground = true)
 @Composable
 private fun SmartRuleEditorNeverCalledDarkPreview() {
     OrbitTheme(darkTheme = true) {

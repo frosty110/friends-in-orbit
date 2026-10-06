@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.picker
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -43,7 +44,7 @@ private fun SelectAllMatchingChipPreviewLight() {
     }
 }
 
-@Preview(name = "SelectAllMatchingChip — dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "SelectAllMatchingChip — dark", showBackground = true)
 @Composable
 private fun SelectAllMatchingChipPreviewDark() {
     OrbitTheme(darkTheme = true) {

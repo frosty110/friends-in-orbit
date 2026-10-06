@@ -2,7 +2,11 @@ package app.orbit.ui.screenshots
 
 import android.app.Application
 import android.content.res.Configuration
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
@@ -13,6 +17,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.theme.OrbitTheme
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import org.junit.AfterClass
 import org.junit.Rule
@@ -75,7 +80,19 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
                 LocalDensity provides Density(density.density, fontScale),
                 LocalPrivacyCurtain provides (curtainMode || LocalPrivacyCurtain.current),
             ) {
-                preview()
+                // A component preview draws no surface of its own (in the app
+                // its screen does), so the host paints the theme's background
+                // first; otherwise a dark preview puts light text on the
+                // window's white and cannot be judged. The host follows the
+                // preview's configured night mode, which is why a dark preview
+                // declares `uiMode = UI_MODE_NIGHT_YES` rather than only
+                // forcing `OrbitTheme(darkTheme = true)` (28 of 143 dark
+                // renders were unreadable before 2026-10-06).
+                OrbitTheme {
+                    Box(Modifier.fillMaxSize().background(OrbitTheme.colors.bg)) {
+                        preview()
+                    }
+                }
             }
         }
         compose.mainClock.advanceTimeBy(SETTLE_MS)

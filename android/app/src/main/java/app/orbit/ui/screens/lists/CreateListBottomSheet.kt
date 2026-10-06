@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.lists
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -297,7 +298,7 @@ private fun CreateListBottomSheetLightPreview() {
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Preview(name = "Create List · dark", showBackground = true, backgroundColor = 0xFF0E0F12)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "Create List · dark", showBackground = true, backgroundColor = 0xFF0E0F12)
 @Composable
 private fun CreateListBottomSheetDarkPreview() {
     OrbitTheme(darkTheme = true) {

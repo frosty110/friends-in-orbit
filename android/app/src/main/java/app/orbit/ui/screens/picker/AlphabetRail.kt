@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.picker
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -120,7 +121,7 @@ private fun AlphabetRailPreviewLight() {
     }
 }
 
-@Preview(name = "AlphabetRail — dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "AlphabetRail — dark", showBackground = true)
 @Composable
 private fun AlphabetRailPreviewDark() {
     OrbitTheme(darkTheme = true) {

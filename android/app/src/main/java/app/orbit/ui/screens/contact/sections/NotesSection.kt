@@ -7,6 +7,7 @@ package app.orbit.ui.screens.contact.sections
 // display. (Strings spelled out by hyphenation in this comment so the
 // no-Instant-now grep gate stays clean.)
 
+import android.content.res.Configuration
 import android.content.res.Resources
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -23,7 +24,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -466,7 +469,9 @@ private fun NotesSectionPreviewEmptyLight() {
 @Composable
 private fun NotesSectionPreviewPopulatedLight() {
     OrbitTheme(darkTheme = false) {
-        Column(Modifier.padding(OrbitTheme.spacing.x4)) {
+        // Scrolls like the contact page's column, so a short landscape window
+        // does not squeeze the last note's controls under 48dp.
+        Column(Modifier.padding(OrbitTheme.spacing.x4).verticalScroll(rememberScrollState())) {
             NotesSection(
                 notes = listOf(
                     previewNote(
@@ -492,11 +497,11 @@ private fun NotesSectionPreviewPopulatedLight() {
     }
 }
 
-@Preview(name = "NotesSection — populated, dark")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "NotesSection — populated, dark")
 @Composable
 private fun NotesSectionPreviewPopulatedDark() {
     OrbitTheme(darkTheme = true) {
-        Column(Modifier.padding(OrbitTheme.spacing.x4)) {
+        Column(Modifier.padding(OrbitTheme.spacing.x4).verticalScroll(rememberScrollState())) {
             NotesSection(
                 notes = listOf(
                     previewNote(

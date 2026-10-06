@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.lists
 
+import android.content.res.Configuration
 import android.content.res.Resources
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -263,7 +264,7 @@ private fun ListRowPreviewLightStatic() {
     }
 }
 
-@Preview(name = "ListRow — dark, smart")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "ListRow — dark, smart")
 @Composable
 private fun ListRowPreviewDarkSmart() {
     app.orbit.ui.theme.OrbitTheme(darkTheme = true) {

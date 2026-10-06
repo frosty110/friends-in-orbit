@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -133,10 +135,15 @@ private fun AboutRow(
     }
 }
 
+// Scrolls because the section sits in Settings' scrolling column: a
+// 360dp-high landscape window would otherwise squeeze the last row under
+// 48dp and the gallery's audit would report a target the app never shows.
 @PreviewLightDark
 @Composable
 private fun AboutSectionPreview() {
     OrbitTheme {
-        AboutSection(onSourceCode = {})
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            AboutSection(onSourceCode = {})
+        }
     }
 }

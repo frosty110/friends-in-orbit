@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.lists
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -251,7 +252,7 @@ private fun MembersPreviewSmartEmptyLightPreview() {
     }
 }
 
-@Preview(name = "MembersPreview — static, empty, dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "MembersPreview — static, empty, dark", showBackground = true)
 @Composable
 private fun MembersPreviewStaticEmptyDarkPreview() {
     OrbitTheme(darkTheme = true) {
