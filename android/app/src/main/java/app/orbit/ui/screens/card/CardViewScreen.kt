@@ -184,7 +184,7 @@ fun CardViewScreen(
 @Composable
 private fun ListActionsMenu(
     listName: String,
-    isSmart: Boolean,
+    listType: ListType?,
     onBrowse: () -> Unit,
     onEditList: () -> Unit,
     onAddContacts: () -> Unit
@@ -205,7 +205,7 @@ private fun ListActionsMenu(
             onDismissRequest = { expanded = false },
             actions = cardListMenuActions(
                 LocalContext.current.resources,
-                isSmart = isSmart,
+                listType = listType,
                 onBrowse = onBrowse,
                 onAddContacts = onAddContacts,
                 onEditList = onEditList
@@ -217,25 +217,30 @@ private fun ListActionsMenu(
 /**
  * The Card view's list menu, in order: Browse people, Add people, List
  * settings. Nothing here is destructive, so the whole menu stays in fg. "Add
- * people" is withheld on a smart list: its members are what its rule matches
+ * people" is offered only once the list is known to be a regular one
+ * ([ListType.STATIC]). On a smart list its members are what its rule matches
  * (`SmartListMembershipSync`), so anyone added by hand was removed again on
  * the next sync with no word (rules.md Code 3), the same reason Lists
- * manager's row hides its "+". `internal` so the order and the omission are
- * unit-tested (CardListMenuTest); takes [Resources] because [OrbitMenuAction]
- * carries resolved text (the `listRowMenuActions` precedent).
+ * manager's row hides its "+". While the type is unknown (null: the Loading
+ * and Error decks, see [CardViewUiState.listType]) it is withheld too; the
+ * menu used to ask "is it smart?", which read an unknown type as "not smart"
+ * and offered Add people on a failed smart list. `internal` so the order and
+ * the omissions are unit-tested (CardListMenuTest); takes [Resources] because
+ * [OrbitMenuAction] carries resolved text (the `listRowMenuActions`
+ * precedent).
  */
 internal fun cardListMenuActions(
     resources: Resources,
-    isSmart: Boolean,
+    listType: ListType?,
     onBrowse: () -> Unit,
     onAddContacts: () -> Unit,
     onEditList: () -> Unit
 ): List<OrbitMenuAction> = listOfNotNull(
     OrbitMenuAction(label = resources.getString(R.string.card_menu_browse), onClick = onBrowse, icon = "list-bullets"),
-    if (isSmart) {
-        null
-    } else {
+    if (listType == ListType.STATIC) {
         OrbitMenuAction(label = resources.getString(R.string.card_menu_add_people), onClick = onAddContacts, icon = "plus")
+    } else {
+        null
     },
     OrbitMenuAction(label = resources.getString(R.string.card_menu_list_settings), onClick = onEditList, icon = "pencil-simple")
 )
@@ -320,7 +325,7 @@ internal fun CardViewContent(
             trailing = {
                 ListActionsMenu(
                     listName = appBarTitle,
-                    isSmart = isSmart,
+                    listType = state.listType,
                     onBrowse = { onBrowse(listId) },
                     onEditList = { onEditList(listId) },
                     onAddContacts = { onAddContacts(listId) }

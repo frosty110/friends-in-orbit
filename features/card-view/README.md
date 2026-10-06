@@ -4,7 +4,7 @@
 **Last reviewed:** 2026-10-06 (card-view audit)
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/ui/screens/card/` (`CardViewScreen`, `CardViewViewModel`, `CardViewUiState`, `CardSwipeFrame`), `android/app/src/main/java/app/orbit/data/feed/CardFeed.kt`
-- Tests (JVM, `android/app/src/test/java/app/orbit/ui/screens/card/`): `CardViewViewModelTest.kt` (the state contract: Loading, Ready, the empty decks, Error and Try again, the pause hint, a malformed id, the rhythm sentence), `CardViewViewModelInteractionTest.kt` (Later and Sooner with their undo, the failure snackbar, the "Called {name}" acknowledgement and what cancels it), `CardListMenuTest.kt` (the list menu's order; Add people absent on a smart list), `CardViewScreenTest.kt` (Robolectric: the face opens details and never dials; Call on screen in landscape)
+- Tests (JVM, `android/app/src/test/java/app/orbit/ui/screens/card/`): `CardViewViewModelTest.kt` (the state contract: Loading, Ready, the empty decks, Error and Try again, the pause hint, a malformed id, the rhythm sentence), `CardViewViewModelInteractionTest.kt` (Later and Sooner with their undo, the failure snackbar, the "Called {name}" acknowledgement and what cancels it), `CardListMenuTest.kt` (the list menu's order; Add people absent on a smart list and while the type is unknown), `CardViewScreenTest.kt` (Robolectric: the face opens details and never dials; Call on screen in landscape)
 - Instrumented: `android/app/src/androidTest/java/app/orbit/ui/screens/card/CardFaceCurtainTest.kt`
 
 ---
@@ -36,7 +36,7 @@ As a user, I see one person at a time with just enough context to decide whether
 - **Swipe left, or Later** → defer (longer cooldown on this list).
 - **Undo** → each Later or Sooner shows a snackbar naming the person and when they come back, with Undo that restores the prior membership schedule (`nextDueAt` + `skipCount`).
 - **After a call** → the deck moves on by itself once the call log shows the call (CORE-04), and the screen says "Called {name}" with "Add a note", which opens the person with the note field focused (CARD-03, NOTE-02 in `features/contact-detail/README.md`).
-- **The list menu** ("More actions for {list}") → "Browse people", "Add people", "List settings", in that order. "Add people" is not offered on a smart list, in the menu or on its empty deck: a smart list's members are its rule's matches (`features/orbit-lists/README.md`), and anyone added by hand was removed by the next sync with no word. The smart list's empty deck reads "No one matches this rule right now." with "List settings" instead.
+- **The list menu** ("More actions for {list}") → "Browse people", "Add people", "List settings", in that order. "Add people" is not offered on a smart list, in the menu or on its empty deck: a smart list's members are its rule's matches (`features/orbit-lists/README.md`), and anyone added by hand was removed by the next sync with no word. The smart list's empty deck reads "No one matches this rule right now." with "List settings" instead. Nor is it offered while the list's type is not yet known, on the Loading and Error decks (`CardViewUiState.listType` is null there): until 2026-10-06 the menu asked "is it smart?", so a failed smart list offered Add people.
 
 **Requirements** (2026-10-05, from [`vision/ux-rubric.md`](../../vision/ux-rubric.md)):
 
@@ -52,7 +52,7 @@ As a user, I see one person at a time with just enough context to decide whether
 
 **Cross-list propagation.** Calling from this screen updates last-call state on every list this contact belongs to — immediately, via Flow.
 
-**Empty states.** Teaching empty states as built, each the shared `OrbitScreenMessage` with the next step as its one action and "Go home" beneath: `EmptyNoMembers` (the list has no members: "Add people", or "List settings" on a smart list) and `EmptyNothingEligible` ("All quiet for now.", CARD-05, naming who comes back soonest and when; a paused person for when the pause lifts, and nobody for a pause until you unpause). `Error` is CARD-07. The app bar carries the list's name in every state ("List" under the curtain), so TalkBack announces the pane and "this list" is named on screen. The loop stays continuous: there is no terminal state, only a kind word while nobody is due. Voice per `features/_foundations/voice.md`.
+**Empty states.** Teaching empty states as built, each the shared `OrbitScreenMessage` with the next step as its one action and "Go home" beneath: `EmptyNoMembers` (the list has no members: "Add people", or "List settings" on a smart list) and `EmptyNothingEligible` ("All quiet for now.", CARD-05, naming who comes back soonest and when; a paused person for when the pause lifts, and nobody for a pause until you unpause). `Error` is CARD-07. The app bar carries the list's name in every state that knows it ("List" under the curtain; blank while loading and when the list itself could not be read), so TalkBack announces the pane and "this list" is named on screen. The loop stays continuous: there is no terminal state, only a kind word while nobody is due. Voice per `features/_foundations/voice.md`.
 
 ### Acceptance criteria
 

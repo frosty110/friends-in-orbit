@@ -384,7 +384,7 @@ private fun ContactDetailContent(
                     icon = "user",
                     title = stringResource(R.string.contact_not_found_title),
                     body = stringResource(R.string.contact_not_found_body),
-                    actionLabel = stringResource(R.string.contact_go_back),
+                    actionLabel = stringResource(R.string.components_action_go_back),
                     onAction = onBack,
                     actionVariant = OrbitButtonVariant.Primary
                 )

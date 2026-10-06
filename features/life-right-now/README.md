@@ -1,11 +1,11 @@
 # life-right-now
 
 **Status:** stub
-**Last reviewed:** 2026-07-03
+**Last reviewed:** 2026-10-06 (the pause sheet moved to `ui/components/PauseDurationSheet.kt`)
 **Ground truth:**
 - Code: not yet implemented
 - Tests: none yet
-- Related primitive: per-contact pause (`ContactEntity.pausedUntil`, `domain/usecase/PauseContactUseCase`, `domain/model/PauseDuration.kt`, `ui/screens/contact/sections/PauseSheet.kt`) — the existing "step a person back" mechanism this feature generalizes to the whole app.
+- Related primitive: per-contact pause (`ContactEntity.pausedUntil`, `domain/usecase/PauseContactUseCase`, `domain/model/PauseDuration.kt`, `ui/components/PauseDurationSheet.kt`): the existing "step a person back" mechanism this feature generalizes to the whole app.
 - Mission tie: `features/_foundations/mission.md` principle 7 ("Bend with the user's life") and the "What Orbit adapts to" section.
 
 ---

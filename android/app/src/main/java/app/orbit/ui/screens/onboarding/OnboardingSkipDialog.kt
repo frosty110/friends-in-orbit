@@ -59,7 +59,7 @@ fun OnboardingSkipDialog(
         },
         dismissButton = {
             OrbitButton(
-                text = stringResource(R.string.onb_skip_go_back),
+                text = stringResource(R.string.components_action_go_back),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
             )

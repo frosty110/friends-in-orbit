@@ -6,6 +6,7 @@ import app.orbit.R
 import app.orbit.data.feed.HomeFeed
 import app.orbit.data.feed.ListEnrichment
 import app.orbit.data.repository.ListRepository
+import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
 import app.orbit.notify.NudgeScheduler
 import app.orbit.ui.util.UiText
@@ -89,14 +90,23 @@ private const val SNACKBAR_EVENT_BUFFER = 4
  * the two surfaces must stay consistent (features/orbit-lists). Delete is
  * deferred: [requestDelete] hides the tile optimistically via [pendingDeletes]
  * and the actual purge runs in [commitDelete] once the Undo window closes, so
- * the snackbar's Undo can cancel it before any row is destroyed.
+ * the snackbar's Undo can cancel it before any row is destroyed. Archive, its
+ * Undo and a committed delete each ask the widget to refresh once the write
+ * landed (WIDGET-06, as `ListsManagerViewModel` does): the widget reads the
+ * active lists and would otherwise keep offering an archived list's lead,
+ * with a live Call button, until its hourly sweep. Undo of a delete changes
+ * nothing in the database, so it asks for nothing.
  */
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val homeFeed: HomeFeed,
     private val listRepo: ListRepository,
     private val nudgeScheduler: NudgeScheduler,
-    private val clock: Clock
+    private val clock: Clock,
+    // Trailing, with the no-op default the use cases use, so callers and tests
+    // that build the VM without it keep compiling; Hilt binds the real one
+    // (WidgetModule). The ListsManagerViewModel precedent.
+    private val widgetRefreshTrigger: WidgetRefreshTrigger = WidgetRefreshTrigger { }
 ) : ViewModel() {
 
     // Long-press menu snackbar surface (archive/delete Undo + nudge
@@ -275,6 +285,7 @@ class HomeViewModel @Inject constructor(
                 nudgeScheduler.cancel(listId)
             }
             if (saved) {
+                widgetRefreshTrigger.scheduleRefresh()
                 _snackbarEvents.tryEmit(
                     HomeSnackbarEvent(
                         message = UiText.res(R.string.lists_snackbar_archived),
@@ -287,16 +298,17 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /** Undo of [archiveList]: re-surfaces the list on home. */
+    /** Undo of [archiveList]: re-surfaces the list on home, and on the widget. */
     fun undoArchive(listId: Long) {
         viewModelScope.launch {
-            runMutation {
+            val saved = runMutation {
                 listRepo.setArchived(listId, archived = false)
                 // NOTIF-11: the chain [archiveList] cancelled comes back with
                 // the list. scheduleFromEntity reads the entity's own schedule
                 // and active hours, so the re-enqueued slot is authoritative.
                 listRepo.getById(listId)?.let { nudgeScheduler.scheduleFromEntity(it) }
             }
+            if (saved) widgetRefreshTrigger.scheduleRefresh()
         }
     }
 
@@ -332,12 +344,13 @@ class HomeViewModel @Inject constructor(
     fun commitDelete(listId: Long) {
         if (listId !in pendingDeletes.value) return
         viewModelScope.launch {
-            runMutation {
+            val saved = runMutation {
                 listRepo.delete(listId)
                 // NOTIF-11: a deleted list's chain dies with it; otherwise the
                 // worker fires once more and finds the row gone.
                 nudgeScheduler.cancel(listId)
             }
+            if (saved) widgetRefreshTrigger.scheduleRefresh()
             pendingDeletes.update { it - listId }
         }
     }

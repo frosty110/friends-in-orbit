@@ -115,7 +115,6 @@
     <!-- The list no longer exists (deleted elsewhere, or a stale link). -->
     <string name="lists_config_not_found">List not found</string>
     <string name="lists_config_not_found_body">It may have been deleted.</string>
-    <string name="lists_config_go_back">Go back</string>
 
     <!-- Section titles. -->
     <string name="lists_section_name">Name</string>
@@ -200,7 +199,6 @@
     </plurals>
     <!-- %1$d: a percentage. -->
     <string name="lists_smart_percent">%1$d%%</string>
-    <string name="lists_smart_percent_of_called">%1$d%% of contacts with call history</string>
     <!-- Screen-reader value of the percentage slider. -->
     <string name="lists_smart_percent_a11y">%1$d percent of contacts with call history</string>
     <string name="lists_smart_no_params">Nothing to set. This list shows everyone you have never called.</string>

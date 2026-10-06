@@ -18,7 +18,7 @@
 
 ## What the user sees
 
-- App bar: Back, the list's name as the title in every state ("List" under the curtain), and "More actions for {list}"
+- App bar: Back, the list's name as the title once the list is known ("List" under the curtain; untitled while it loads or when it could not be read), and "More actions for {list}"
 - When call log access is off, a quiet notice above the card: "Orbit can't see your calls, so cards won't move on by themselves." with "Open settings"
 - One person at a time: a small label "Up now" or "Coming up" (a fact about the rhythm, never a deadline), their photo or initials, their name, and why now in human terms (CARD-04): how long it has been ("You spoke today.", "3 weeks since you last spoke."), the pair's usual rhythm once there are four calls ("You usually talk about every 2 weeks."), and the last note you wrote about them in quotation marks with "Your note, 12 days ago"
 - "Usually answers": when they tend to pick up, from past calls, with an info tip ("Based on when you usually answer or call this person."); "Not enough calls yet to see a pattern" until there is one
@@ -34,19 +34,19 @@
 - "Later" (or a left swipe): moves them further out on this list; "{Name} will come up again {tomorrow / on Tuesday / in 2 weeks}." with Undo. "Sooner" (or a right swipe): brings them forward; "{Name} comes up {when}." with Undo. Each undo is its own, and a swipe that commits gives a haptic (CARD-02)
 - A move that could not be saved says so: "Couldn't move {name} to later. Try again.", "Couldn't move {name} sooner. Try again.", "Couldn't undo that. Try again."
 - After a call placed from the card, once the call log confirms it and the deck moves on by itself (CORE-04): "Called {first name}" with "Add a note", which opens the person with the note field focused (CARD-03, NOTE-02)
-- "More actions for {list}", in order: "Browse people" (opens Browse for this list), "Add people" (opens the Add people picker; not offered on smart lists), "List settings"
+- "More actions for {list}", in order: "Browse people" (opens Browse for this list), "Add people" (opens the Add people picker; not offered on smart lists, nor on the Loading and Error decks, where the list's type is not yet known), "List settings"
 - "Open settings" on the notice: opens Orbit's Settings, where the Call log row hosts the grant
 - "Go home" on the empty, quiet and error decks: leaves the deck the same way Back does, to the screen that opened it
 
 ## States
 
-- Loading: quiet chrome (the app bar with the list's name) until the list and its people are known; never a false empty deck
+- Loading: quiet chrome (the app bar, untitled until the list loads) until the list and its people are known; never a false empty deck
 - No one on the list: "No one is in this list yet." / "Add a few people to start surfacing names." with "Add people" and "Go home". On a smart list: "No one matches this rule right now." with "List settings" and "Go home"
 - All quiet (CARD-05): "All quiet for now." and who comes up next and when ("Sam comes up in 2 weeks.", or "No one needs a call right now."), with "Browse this list" and "Go home"; never "caught up"
 - Error (CARD-07): "Something's off here." / "Nothing is lost. Try again in a moment." with Try again (the accent) and "Go home"; a malformed list id is this error, never an empty deck
 - Call log access off: the notice above the card; the deck still works, but only Later, Sooner and your own undo move it on
 - A paused person is skipped, and "All quiet for now" names when they come back; a pause until you unpause is not named
-- Privacy curtain: the name reads "Contact" and the initials come from that word, the note reads "Note hidden", the title reads "List" (PRIV-03)
+- Privacy curtain: the name reads "Contact" and the initials come from that word, the last note is not shown at all, the title reads "List" (PRIV-03)
 
 ## Leads to
 
@@ -62,7 +62,7 @@
 
 - `CardViewViewModelTest` (Ready before any empty state, Error on a failed read and recovery after Try again, the smart list's empty state, the pause hint, a malformed id)
 - `CardViewViewModelInteractionTest` (Later and Sooner with their undo, failure snackbars, the Called acknowledgement and what cancels it, the rhythm sentence)
-- `CardListMenuTest` (added this round: menu order, Add people absent on smart lists)
+- `CardListMenuTest` (added this round: menu order, Add people absent on smart lists and while the list's type is unknown)
 - `CardViewScreenTest` (added this round: the face opens details and never dials; Call is on screen in landscape)
 - `OrbitNavHostTest` (added this round: "Add a note" opens the person with the note field focused, NOTE-02; a nudge for the deck already open does not stack a second deck, while another list gets its own)
 - Gallery previews: `CardViewContentPreview`, `CardViewContentAheadOfTodayPreview`, `CardViewContentLongNamesPreview`, `CardViewContentNoMembersPreview`, `CardViewContentNothingEligiblePreview`, `CardViewContentCallLogDeniedPreview`, and the Loading and Error previews added this round, with the curtain pass

@@ -8,6 +8,10 @@
 
     <!-- Shared actions: buttons, app-bar back arrow, snackbar actions. -->
     <string name="components_action_back">Back</string>
+    <!-- The one action on a screen with nothing else to do: a person or list that is gone,
+         nothing left to add, or the "Skip for now?" dialog's way out. Leaves the screen the
+         way Back does. -->
+    <string name="components_action_go_back">Go back</string>
     <string name="components_action_cancel">Cancel</string>
     <string name="components_action_save">Save</string>
     <string name="components_action_done">Done</string>

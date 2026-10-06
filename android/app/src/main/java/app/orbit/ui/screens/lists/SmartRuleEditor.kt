@@ -181,11 +181,6 @@ private fun PercentSlider(
                 style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
             )
         }
-        Spacer(Modifier.height(OrbitTheme.spacing.x1))
-        Text(
-            text = stringResource(R.string.lists_smart_percent_of_called, percent),
-            style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-        )
     }
 }
 

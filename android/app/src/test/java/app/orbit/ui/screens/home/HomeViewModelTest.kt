@@ -17,6 +17,7 @@ import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
 import app.orbit.domain.FakeRuleTemplateRepository
 import app.orbit.domain.JsonProvider
+import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.listFixture
 import app.orbit.domain.usecase.SurfaceNextUseCase
@@ -188,11 +189,20 @@ class HomeViewModelTest {
             if (failActive) flow { throw IllegalStateException("database read failed") } else delegate.observeActive()
     }
 
+    /** Counts widget refresh requests (WIDGET-06) without WorkManager. */
+    private class HomeRecordingWidgetTrigger : WidgetRefreshTrigger {
+        var refreshes = 0
+        override fun scheduleRefresh() {
+            refreshes += 1
+        }
+    }
+
     private class Setup(
         val vm: HomeViewModel,
         val homeFeed: FakeHomeFeed,
         val scheduler: HomeFakeNudgeScheduler,
         val clock: TestClock,
+        val widget: HomeRecordingWidgetTrigger,
     )
 
     private fun fixture(
@@ -210,13 +220,15 @@ class HomeViewModelTest {
         homeFeed.failTiles.value = feedFailed
         val clock = TestClock()
         val scheduler = HomeFakeNudgeScheduler()
+        val widget = HomeRecordingWidgetTrigger()
         val vm = HomeViewModel(
             homeFeed = homeFeed,
             listRepo = listRepo,
             nudgeScheduler = scheduler,
             clock = clock,
+            widgetRefreshTrigger = widget,
         )
-        return Setup(vm, homeFeed, scheduler, clock)
+        return Setup(vm, homeFeed, scheduler, clock, widget)
     }
 
     /** The production feed over [listRepo], on a scope that runs eagerly. */
@@ -526,6 +538,7 @@ class HomeViewModelTest {
             setup.vm.commitDelete(9L)
             assertTrue(listRepo.deleteCalls.isEmpty(), "commitDelete on a non-pending id must not delete")
             assertTrue(setup.scheduler.cancelCalls.isEmpty())
+            assertEquals(0, setup.widget.refreshes, "nothing changed, so the widget is not asked to refresh")
 
             setup.vm.requestDelete(9L)
             val event = awaitItem()
@@ -546,6 +559,9 @@ class HomeViewModelTest {
             setup.vm.commitDelete(9L)
             assertEquals(listOf(9L), listRepo.deleteCalls)
             assertEquals(listOf(9L), setup.scheduler.cancelCalls)
+            // WIDGET-06: the deleted list's lead leaves the widget with the
+            // row. Staging asked for nothing (the database was untouched).
+            assertEquals(1, setup.widget.refreshes)
             expectNoEvents()
         }
     }
@@ -584,6 +600,11 @@ class HomeViewModelTest {
             // used to flip the flag only, and the chain kept nudging for a
             // list the user had put away.
             assertEquals(listOf(5L), setup.scheduler.cancelCalls)
+            // WIDGET-06: the widget reads the active lists, so it is asked to
+            // refresh with the archive. Home did not ask until 2026-10-06
+            // (only Lists did), and a widget kept offering the archived
+            // list's lead, with a live Call button, until the hourly sweep.
+            assertEquals(1, setup.widget.refreshes)
             val event = awaitItem()
             assertEquals(
                 HomeSnackbarEvent(
@@ -600,6 +621,8 @@ class HomeViewModelTest {
             assertEquals(listOf(5L to true, 5L to false), listRepo.setArchivedCalls)
             // The chain comes back with the list, from the entity's own schedule.
             assertEquals(listOf(5L), setup.scheduler.scheduleFromEntityCalls.map { it.id })
+            // And so does the list's lead on the widget.
+            assertEquals(2, setup.widget.refreshes)
             expectNoEvents()
         }
     }
@@ -619,8 +642,10 @@ class HomeViewModelTest {
             assertEquals("Couldn't save your change", event.message.asString(context))
             assertNull(event.actionLabel, "no Undo for a write that never landed")
             // The cancel sits after the write inside runMutation, so a failed
-            // write leaves the chain exactly as it was.
+            // write leaves the chain exactly as it was, and nothing changed
+            // for the widget to show.
             assertTrue(setup.scheduler.cancelCalls.isEmpty())
+            assertEquals(0, setup.widget.refreshes)
             expectNoEvents()
         }
     }

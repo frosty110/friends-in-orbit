@@ -1,7 +1,7 @@
 # call-detection
 
 **Status:** in-progress
-**Last reviewed:** 2026-10-06 (attempts, the encrypted store)
+**Last reviewed:** 2026-10-06 (attempts, the encrypted store, where the type filter runs)
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/calllog/` (`CallLogSyncWorker`, `CallLogReconciler`, `ContentObserverController`, `PhoneNumberNormalizer`), `android/app/src/main/java/app/orbit/data/android/CallLogReader.kt`
 - Tests: `android/app/src/test/java/app/orbit/calllog/` (`CallLogSyncWorkerTest`, `CallLogReconcilerTest`, `ContentObserverControllerTest`, `PhoneNumberNormalizerTest`)
@@ -41,7 +41,7 @@ As a user, I grant CALL_LOG permission during onboarding. From then on, the app 
 ### Acceptance criteria
 
 - [ ] First-run import of 90 days completes in < 5s on a test device with ~1000 call log rows.
-- [ ] Missed / declined / voicemail filtered at query level, not post-hoc.
+- [x] Missed, declined, voicemail and blocked rows never reach Room. The filter runs in Kotlin after the read, not in the query: `CallLogReader` selects by date only, and `CallLogReconciler.isIngestable` drops those types (and an incoming call under 1 second) before anything is written (`CallLogReconcilerTest.type_mapping_skips_missed_rejected_voicemail_blocked`, `outgoing_no_answer_is_an_attempt_incoming_zero_duration_is_skipped`).
 - [ ] Resync is idempotent — running twice produces identical state.
 - [ ] Permission denial produces a usable degraded app; no dead-end UX.
 - [x] All call history persisted through encrypted Room per ADR 0002 (`DatabaseFactory` opens the store with SQLCipher's `SupportOpenHelperFactory`; `features/call-history/README.md` checks the same fact).

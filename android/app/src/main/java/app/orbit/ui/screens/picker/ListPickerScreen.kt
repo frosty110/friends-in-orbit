@@ -166,7 +166,7 @@ private fun ListPickerContent(
                 ListPickerViewModel.UiState.Phase.NotFound -> OrbitScreenMessage(
                     title = stringResource(R.string.picker_person_not_found),
                     body = stringResource(R.string.picker_person_not_found_body),
-                    actionLabel = stringResource(R.string.picker_go_back),
+                    actionLabel = stringResource(R.string.components_action_go_back),
                     onAction = onBack,
                     actionVariant = OrbitButtonVariant.Primary,
                 )

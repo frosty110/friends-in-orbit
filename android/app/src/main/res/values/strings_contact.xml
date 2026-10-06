@@ -24,7 +24,6 @@
     <!-- The person was removed while the page was open, or the link is stale. -->
     <string name="contact_not_found_title">This person isn\'t in Orbit anymore</string>
     <string name="contact_not_found_body">They may have been removed from your phone\'s contacts.</string>
-    <string name="contact_go_back">Go back</string>
 
     <!-- The body and the Try again action are the shared ones (components_error_body,
          components_error_retry). -->
