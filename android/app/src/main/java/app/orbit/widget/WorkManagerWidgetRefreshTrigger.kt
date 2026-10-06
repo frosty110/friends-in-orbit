@@ -13,9 +13,13 @@ import javax.inject.Inject
  * case that injects [WidgetRefreshTrigger] gets this implementation at
  * runtime. Test fixtures inject a no-op SAM `WidgetRefreshTrigger { }` instead.
  *
- * This class is the ONLY production call site of
- * [WidgetUpdateScheduler.scheduleImmediate] outside the scheduler's own file —
- * the single choke point for widget refresh scheduling.
+ * The domain layer's one door to a widget refresh: every use case that
+ * changes who is due goes through this trigger (WIDGET-06). Two other
+ * production call sites reach [WidgetUpdateScheduler.scheduleImmediate]
+ * directly, because they live outside the domain layer and have a Context:
+ * the Settings appearance writes (theme, dark mode and accent in
+ * `SettingsViewModel`) and the data reset (`ResetService`, which cancels
+ * pending refreshes and runs one more so a wiped name never lingers).
  */
 class WorkManagerWidgetRefreshTrigger @Inject constructor(
     @ApplicationContext private val context: Context,

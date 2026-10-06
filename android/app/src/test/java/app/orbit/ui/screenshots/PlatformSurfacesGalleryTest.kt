@@ -191,8 +191,8 @@ class PlatformSurfacesGalleryTest {
                 monogram = if (photo == null) AvatarBitmaps.initialsMask(context, name, sizePx) else null,
                 colors = tones.forName(name),
             ),
-            open = actionStartActivity(Intent(Intent.ACTION_VIEW)),
-            call = actionStartActivity(Intent(Intent.ACTION_DIAL)),
+            openIntent = Intent(Intent.ACTION_VIEW),
+            dialIntent = Intent(Intent.ACTION_DIAL),
         )
         return listOf(
             person("Kai Nakamura", fakePhoto(sizePx)),

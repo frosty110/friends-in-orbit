@@ -5,9 +5,9 @@
 //
 // THEME NOTE: All color access is via GlanceTheme.colors.* (M3 slot aliases)
 // inside OrbitWidgetTheme, plus the avatar's day and night pairs from
-// WidgetAvatarColors. Zero Color(0x..) literals (THEME-02 grep-enforced).
-// All text styles are OrbitWidgetTextStyles.* and sizes WidgetSizes.* /
-// WidgetSpacing.* (rules.md Design 1).
+// WidgetAvatarColors. Zero Color(0x..) literals, and all text styles are
+// OrbitWidgetTextStyles.* and sizes WidgetSizes.* / WidgetSpacing.*: tokens
+// only (rules.md Design 1).
 //
 // 2026-10-05 (UX rubric plan item 3.2). Before: a square first initial on a
 // grey tile, a bare phone glyph, a 12sp alternatives list, square corners on
@@ -39,6 +39,7 @@ import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.Action
 import androidx.glance.action.clickable
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.background
@@ -194,7 +195,9 @@ private fun LeadPerson(person: WidgetPerson, layout: WidgetLayout) {
     val context = LocalContext.current
     val size = LocalSize.current
     val openLabel = context.getString(R.string.widget_open_person, person.name)
-    val body = GlanceModifier.clickable(person.open).semantics { contentDescription = openLabel }
+    val body = GlanceModifier
+        .clickable(actionStartActivity(person.openIntent))
+        .semantics { contentDescription = openLabel }
     when (layout) {
         WidgetLayout.STRIP -> Row(
             modifier = body.fillMaxSize(),
@@ -276,7 +279,7 @@ private fun OtherPerson(person: WidgetPerson, withCall: Boolean) {
         modifier = GlanceModifier
             .fillMaxWidth()
             .height(WidgetSizes.tapMin.dp)
-            .clickable(person.open)
+            .clickable(actionStartActivity(person.openIntent))
             .semantics { contentDescription = openLabel },
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -288,13 +291,13 @@ private fun OtherPerson(person: WidgetPerson, withCall: Boolean) {
             maxLines = 1,
             modifier = GlanceModifier.defaultWeight(),
         )
-        val call = person.call
+        val call = person.dialIntent
         if (withCall && call != null) {
             val callLabel = context.getString(R.string.widget_call_person, person.name)
             Box(
                 modifier = GlanceModifier
                     .size(WidgetSizes.tapMin.dp)
-                    .clickable(call)
+                    .clickable(actionStartActivity(call))
                     .semantics { contentDescription = callLabel },
                 contentAlignment = Alignment.Center,
             ) {
@@ -337,7 +340,7 @@ private fun Name(
  */
 @Composable
 private fun CallButton(person: WidgetPerson, labelled: Boolean) {
-    val call = person.call ?: return
+    val call = person.dialIntent ?: return
     val context = LocalContext.current
     val callLabel = context.getString(R.string.widget_call_person, person.name)
     val shape = GlanceModifier
@@ -346,7 +349,7 @@ private fun CallButton(person: WidgetPerson, labelled: Boolean) {
             ImageProvider(R.drawable.widget_shape_pill),
             colorFilter = ColorFilter.tint(GlanceTheme.colors.primary),
         )
-        .clickable(call)
+        .clickable(actionStartActivity(call))
         .semantics { contentDescription = callLabel }
     val icon: @Composable () -> Unit = {
         Image(
