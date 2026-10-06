@@ -10,6 +10,8 @@ import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.CallSource
 import app.orbit.data.entity.ContactEntity
+import app.orbit.data.entity.ListEntity
+import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.repository.CallEventRepository
 import app.orbit.domain.FakeCallEventRepository
 import app.orbit.domain.FakeContactRepository
@@ -17,6 +19,7 @@ import app.orbit.domain.FakeListRepository
 import app.orbit.domain.callEventFixture
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.contactFixture
+import app.orbit.domain.listFixture
 import app.orbit.testutil.MainDispatcherRule
 import app.orbit.ui.util.UiText
 import java.io.IOException
@@ -25,6 +28,8 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.Locale
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
 import kotlin.time.Duration.Companion.seconds
@@ -32,6 +37,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.job
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -42,8 +48,10 @@ import org.junit.Test
 
 /**
  * Behavioral tests for the spec-complete [CallLogViewModel]:
- * calendar-day grouping, wall-clock labels, direction filtering (MANUAL
- * events under All + Outgoing), and honest pagination remainders.
+ * calendar-day grouping, wall-clock labels, direction filtering (MANUAL and
+ * ATTEMPT events under All + Outgoing), the row join (list context, the
+ * orphan guard, ignored greying, the kind and duration mapping), honest
+ * pagination remainders, and the LOG-04 and LOG-05 states.
  *
  * All instants are built FROM [ZoneId.systemDefault] local date-times so the
  * grouping assertions are deterministic on any machine — the VM groups by
@@ -97,6 +105,17 @@ class CallLogViewModelTest {
     }
 
     /**
+     * A membership DAO whose `observeAll` emits the seeded rows. The base fake
+     * emits none, which is what every test here wanted until the list-context
+     * join got its own tests.
+     */
+    private class SeededMembershipDao(
+        private val rows: List<ListMembershipEntity>,
+    ) : RecordingListMembershipDao() {
+        override fun observeAll(): Flow<List<ListMembershipEntity>> = flowOf(rows)
+    }
+
+    /**
      * [callLogDenied] = null leaves the permission unreported (the state the VM
      * is in before the screen's first resume); every other value is pushed the
      * way the screen pushes it.
@@ -107,11 +126,13 @@ class CallLogViewModelTest {
         contactIdArg: String? = null,
         callLogDenied: Boolean? = false,
         callEventRepo: CallEventRepository = FakeCallEventRepository(events),
+        memberships: List<ListMembershipEntity> = emptyList(),
+        lists: List<ListEntity> = emptyList(),
     ): CallLogViewModel = CallLogViewModel(
         callEventRepo = callEventRepo,
         contactRepo = FakeContactRepository().apply { seed(contacts) },
-        listMembershipDao = RecordingListMembershipDao(),
-        listRepo = FakeListRepository(),
+        listMembershipDao = SeededMembershipDao(memberships),
+        listRepo = FakeListRepository().apply { seed(lists) },
         clock = TestClock(now),
         savedStateHandle = SavedStateHandle(
             if (contactIdArg == null) emptyMap() else mapOf(CallLogViewModel.ARG_CONTACT_ID to contactIdArg),
@@ -140,6 +161,140 @@ class CallLogViewModelTest {
     }
 
     private fun CallLogUiState.Ready.rowCount(): Int = sections.sumOf { it.rows.size }
+
+    private fun CallLogUiState.Ready.rows(): List<CallLogRow> = sections.flatMap { it.rows }
+
+    private fun CallLogUiState.Ready.rowIds(): List<Long> = rows().map { it.callEventId }
+
+    // ============================================================================
+    // The row join: list context, the orphan guard, ignored greying, kinds
+    // ============================================================================
+
+    @Test
+    fun `list context is the newest membership, and none means no list`() = runVmTest {
+        val vm = vm(
+            events = listOf(
+                callEventFixture(id = 1L, contactId = 1L, occurredAt = at("2026-06-09", "08:00")),
+                callEventFixture(id = 2L, contactId = 2L, occurredAt = at("2026-06-09", "07:00")),
+            ),
+            contacts = listOf(contactFixture(id = 1L), contactFixture(id = 2L)),
+            lists = listOf(listFixture(id = 10L, name = "Inner orbit"), listFixture(id = 20L, name = "Old friends")),
+            // Two memberships for one person: the later `addedAt` wins, whatever
+            // order the rows arrive in. The second person is on no list.
+            memberships = listOf(
+                ListMembershipEntity(contactId = 1L, listId = 20L, addedAt = at("2026-06-01", "12:00")),
+                ListMembershipEntity(contactId = 1L, listId = 10L, addedAt = at("2026-05-01", "12:00")),
+            ),
+        )
+        vm.uiState.test(timeout = 5.seconds) {
+            val rows = awaitReady().rows()
+            assertEquals("Old friends", rows.first { it.callEventId == 1L }.listName)
+            assertEquals("", rows.first { it.callEventId == 2L }.listName)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an event whose contact is gone is dropped, not rendered as a ghost row`() = runVmTest {
+        val vm = vm(
+            events = listOf(
+                callEventFixture(id = 1L, contactId = 1L, occurredAt = at("2026-06-09", "08:00")),
+                // No contact row 99 exists (FK-cascade window, fake repo race).
+                callEventFixture(id = 2L, contactId = 99L, occurredAt = at("2026-06-09", "07:00")),
+            ),
+        )
+        vm.uiState.test(timeout = 5.seconds) {
+            assertEquals(listOf(1L), awaitReady().rowIds())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an ignored person's row carries isIgnored so the screen can grey it`() = runVmTest {
+        val vm = vm(
+            events = listOf(
+                callEventFixture(id = 1L, contactId = 1L, occurredAt = at("2026-06-09", "08:00")),
+                callEventFixture(id = 2L, contactId = 2L, occurredAt = at("2026-06-09", "07:00")),
+            ),
+            contacts = listOf(contactFixture(id = 1L, isIgnored = true), contactFixture(id = 2L)),
+        )
+        vm.uiState.test(timeout = 5.seconds) {
+            val rows = awaitReady().rows()
+            assertTrue(rows.first { it.callEventId == 1L }.isIgnored)
+            assertFalse(rows.first { it.callEventId == 2L }.isIgnored)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `kinds map to their icon, and only real calls carry a duration`() = runVmTest {
+        val vm = vm(
+            events = listOf(
+                callEventFixture(
+                    id = 1L, contactId = 1L, occurredAt = at("2026-06-09", "08:00"),
+                    direction = CallDirection.OUTGOING, durationSeconds = 300,
+                ),
+                callEventFixture(
+                    id = 2L, contactId = 1L, occurredAt = at("2026-06-09", "07:00"),
+                    direction = CallDirection.INCOMING, durationSeconds = 90,
+                ),
+                callEventFixture(
+                    id = 3L, contactId = 1L, occurredAt = at("2026-06-09", "06:00"),
+                    direction = CallDirection.OUTGOING, durationSeconds = 0, source = CallSource.MANUAL,
+                ),
+                callEventFixture(
+                    id = 4L, contactId = 1L, occurredAt = at("2026-06-09", "05:00"),
+                    direction = CallDirection.OUTGOING, durationSeconds = 0, source = CallSource.ATTEMPT,
+                ),
+            ),
+        )
+        vm.uiState.test(timeout = 5.seconds) {
+            val rows = awaitReady().rows().associateBy { it.callEventId }
+
+            assertEquals(CallLogKind.Outgoing, rows.getValue(1L).kind)
+            assertEquals("phone-outgoing", rows.getValue(1L).directionIconName)
+            assertEquals(UiText.plural(R.plurals.time_duration_minutes, 5, 5), rows.getValue(1L).durationLabel)
+
+            assertEquals(CallLogKind.Incoming, rows.getValue(2L).kind)
+            assertEquals("phone-incoming", rows.getValue(2L).directionIconName)
+            assertEquals(UiText.plural(R.plurals.time_duration_minutes, 1, 1), rows.getValue(2L).durationLabel)
+
+            assertEquals(CallLogKind.Logged, rows.getValue(3L).kind)
+            assertEquals("check-circle", rows.getValue(3L).directionIconName)
+            assertNull(rows.getValue(3L).durationLabel, "a logged connection has no length to show")
+
+            assertEquals(CallLogKind.Attempted, rows.getValue(4L).kind)
+            assertEquals("phone-slash", rows.getValue(4L).directionIconName)
+            assertNull(rows.getValue(4L).durationLabel, "an attempt has no length to show")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `attempts count as reaching out, so they show under All and Outgoing only`() = runVmTest {
+        val vm = vm(
+            events = listOf(
+                callEventFixture(
+                    id = 1L, contactId = 1L, occurredAt = at("2026-06-09", "08:00"),
+                    direction = CallDirection.OUTGOING, durationSeconds = 0, source = CallSource.ATTEMPT,
+                ),
+                callEventFixture(
+                    id = 2L, contactId = 1L, occurredAt = at("2026-06-09", "07:00"),
+                    direction = CallDirection.INCOMING,
+                ),
+            ),
+        )
+        vm.uiState.test(timeout = 5.seconds) {
+            assertEquals(listOf(1L, 2L), awaitReady().rowIds())
+
+            vm.onFilterChange(CallLogDirectionFilter.OUTGOING)
+            assertEquals(listOf(1L), awaitReady().rowIds())
+
+            vm.onFilterChange(CallLogDirectionFilter.INCOMING)
+            assertEquals(listOf(2L), awaitReady().rowIds())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 
     // ============================================================================
     // Calendar-day grouping — 11pm call vs next-morning 9am read
@@ -316,6 +471,36 @@ class CallLogViewModelTest {
         }
     }
 
+    @Test
+    fun `re-choosing the active filter keeps the pages already shown`() = runVmTest {
+        // Tapping the chip that is already selected is a no-op in the VM: it
+        // must not collapse 400 revealed rows back to one page.
+        val events = (0 until 450).map { i ->
+            callEventFixture(
+                id = (i + 1).toLong(),
+                contactId = 1L,
+                occurredAt = at("2026-06-09", "08:00").minusSeconds(i * 60L),
+            )
+        }
+        val vm = vm(events)
+        vm.uiState.test(timeout = 5.seconds) {
+            awaitReady()
+            vm.onShowMore()
+            assertEquals(400, awaitReady().rowCount())
+
+            vm.onFilterChange(CallLogDirectionFilter.ALL)
+            expectNoEvents()
+
+            // The next page continues from 400, which it could not if the
+            // re-selection had reset the count to 200.
+            vm.onShowMore()
+            val third = awaitReady()
+            assertEquals(450, third.rowCount())
+            assertEquals(0, third.remainingCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     // ============================================================================
     // Empty — no correlated events at all
     // ============================================================================
@@ -473,6 +658,43 @@ class CallLogViewModelTest {
             assertEquals(CallLogUiState.Error(), awaitSettled())
             vm.onRetry()
             assertEquals(1, awaitReady().rowCount())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `one person's failing stream is an Error that still knows who, and Retry names them`() = runVmTest {
+        var attempts = 0
+        val healthy = FakeCallEventRepository(
+            listOf(callEventFixture(id = 1L, contactId = 1L, occurredAt = at("2026-06-09", "08:00"))),
+        )
+        // With a contactId on the route the VM reads observeForContact, so
+        // that is the stream that has to fail (observeForLog is never called).
+        val flaky = object : CallEventRepository by healthy {
+            override fun observeForContact(contactId: Long, limit: Int): Flow<List<CallEventEntity>> {
+                attempts += 1
+                return if (attempts == 1) {
+                    flow { throw IOException("disk") }
+                } else {
+                    healthy.observeForContact(contactId, limit)
+                }
+            }
+        }
+        val vm = vm(
+            events = emptyList(),
+            contacts = listOf(contactFixture(id = 1L, displayName = "Sarah Levin")),
+            contactIdArg = "1",
+            callEventRepo = flaky,
+        )
+        vm.uiState.test(timeout = 5.seconds) {
+            // The read failed before its first emission, so the name has not
+            // loaded: the Error carries the person with a blank name, and the
+            // screen titles it "Call history" so TalkBack has a pane title.
+            assertEquals(CallLogUiState.Error(CallLogScope.Person(contactId = 1L, name = "")), awaitSettled())
+            vm.onRetry()
+            val ready = awaitReady()
+            assertEquals(listOf(1L), ready.rowIds())
+            assertEquals(CallLogScope.Person(contactId = 1L, name = "Sarah Levin"), ready.scope)
             cancelAndIgnoreRemainingEvents()
         }
     }

@@ -89,8 +89,12 @@ sealed interface CallLogScope {
 
     /**
      * @property name The person's display name; blank until their contact row
-     *                has loaded (the app bar stays blank for that moment rather
-     *                than briefly claiming "Call history" for everyone).
+     *                has loaded (while Loading, the app bar stays blank for
+     *                that moment rather than briefly claiming "Call history"
+     *                for everyone). A settled state with no name, such as an
+     *                Error from a read that failed before its first emission,
+     *                is titled "Call history" by the screen so TalkBack still
+     *                gets a pane title.
      */
     @Immutable
     data class Person(
@@ -100,9 +104,10 @@ sealed interface CallLogScope {
 }
 
 /**
- * Direction filter for the chip row. MANUAL "Logged" events
- * (user-logged connections) count as reaching out, so they stay visible
- * under [ALL] and [OUTGOING] and are hidden only under [INCOMING].
+ * Direction filter for the chip row. MANUAL "Logged" events (connections
+ * logged by hand) and ATTEMPT "Attempted" events (reach-outs that did not
+ * connect) count as reaching out, so they stay visible under [ALL] and
+ * [OUTGOING] and are hidden only under [INCOMING].
  * [label] is the chip's string resource (strings_calllog.xml).
  */
 enum class CallLogDirectionFilter(@StringRes val label: Int) {
@@ -159,7 +164,7 @@ data class CallLogRow(
     val photoUri: String?,
     val listName: String,               // "" when no membership
     val durationLabel: UiText?,         // null for manual and attempted events (subtitle skips it)
-    val directionIconName: String,      // "phone-outgoing" / "phone-incoming" / "check-circle" (manual)
+    val directionIconName: String,      // "phone-outgoing" / "phone-incoming" / "check-circle" (manual) / "phone-slash" (attempted)
     val timeLabel: String,              // "4:30pm"
     val isIgnored: Boolean,
     // What happened, for the one-person log (LOG-04), where every row is the

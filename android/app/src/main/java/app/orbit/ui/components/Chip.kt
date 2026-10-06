@@ -105,7 +105,7 @@ fun OrbitChip(
  *   (rules.md §Design 5), and shows a check, so colour is never the only
  *   signal (rubric D8). A chip with a [trailingIcon] (the applied filter's
  *   "x", a menu's caret) shows that instead of the check.
- * - **Touch** is a 48dp-tall target around a smaller pill (rules.md §Design 3).
+ * - **Touch** is a target at least 48dp each way around a smaller pill (rules.md §Design 3).
  *   The press overlay is drawn on the pill, so it matches what was touched.
  * - **Semantics** follow [role]: [Role.Checkbox] toggles (filters),
  *   [Role.RadioButton] picks one of a group, anything else is a plain button
@@ -165,7 +165,7 @@ fun OrbitFilterChip(
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
-            .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
+            .defaultMinSize(minWidth = OrbitTheme.spacing.tapMin, minHeight = OrbitTheme.spacing.tapMin)
             .then(gesture)
             .then(
                 if (contentDescription != null) {

@@ -91,8 +91,8 @@ class CallEventDaoLogTest {
         callEventDao.insert(event(cid, NOW.minusSeconds(60)))
         callEventDao.insert(event(cid, NOW.minusSeconds(180)))
 
-        // observeForLog is bounded by `limit`; pass Int.MAX_VALUE to
-        // exercise the full feed shape used when the user taps "Show 200 more".
+        // Int.MAX_VALUE is what Call history passes: the log pages in memory,
+        // and the limit is kept for bounded callers (see the DAO's KDoc).
         callEventDao.observeForLog(limit = Int.MAX_VALUE).test {
             val rows = awaitItem()
             assertEquals(3, rows.size)

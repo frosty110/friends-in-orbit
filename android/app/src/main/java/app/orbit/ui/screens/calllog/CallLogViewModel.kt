@@ -38,8 +38,8 @@ import kotlinx.coroutines.flow.update
  *     24-hour windows — an 11pm call read the next morning sits under
  *     "Yesterday". Headers via [formatDayHeader].
  *   - **Direction filter.** [CallLogDirectionFilter] over the full event
- *     set. MANUAL "Logged" events count as reaching out: visible under
- *     All and Outgoing, hidden under Incoming.
+ *     set. MANUAL "Logged" and ATTEMPT "Attempted" events count as reaching
+ *     out: visible under All and Outgoing, hidden under Incoming.
  *   - **Honest pagination.** The VM observes the full correlated set
  *     (`observeForLog(Int.MAX_VALUE)` — bounded in practice by the 90-day
  *     import window) and paginates in-memory in [PAGE_SIZE] increments.
@@ -291,8 +291,13 @@ class CallLogViewModel @Inject constructor(
         val filtered = items.filter { item ->
             when (filter) {
                 CallLogDirectionFilter.ALL -> true
-                // MANUAL "Logged" events are user-initiated reach-outs —
-                // they belong with Outgoing and never under Incoming.
+                // MANUAL "Logged" events are reach-outs the user made, so
+                // they belong with Outgoing and never under Incoming. ATTEMPT
+                // rows need no clause of their own: both writers give them
+                // direction OUTGOING (CallLogReconciler ingests only
+                // unanswered outgoing calls as attempts; Contact detail's
+                // "Couldn't reach them" writes OUTGOING), so the direction
+                // test places them with Outgoing. CallLogViewModelTest pins it.
                 CallLogDirectionFilter.OUTGOING ->
                     item.isManual || item.direction == CallDirection.OUTGOING
                 CallLogDirectionFilter.INCOMING ->
