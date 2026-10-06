@@ -86,7 +86,11 @@ class ContactDetailViewModelTest {
     private fun fixture(
         contactIdArg: String? = "c-5",
         savedArgs: Map<String, String?> = emptyMap(),
-        wrapContactRepo: (FakeContactRepository) -> ContactRepository = { it }
+        wrapContactRepo: (FakeContactRepository) -> ContactRepository = { it },
+        // The zone the VM is built with; a test about day boundaries passes
+        // one the host cannot share, so a ZoneId.systemDefault() in the VM
+        // would show up on any machine.
+        zoneId: ZoneId = ZoneOffset.UTC,
     ): Setup {
         val contactRepo = FakeContactRepository()
         val noteRepo = FakeNoteRepository()
@@ -177,7 +181,7 @@ class ContactDetailViewModelTest {
             markCalledUseCase = markCalledUseCase,
             undoStack = undoStack,
             clock = clock,
-            zoneId = java.time.ZoneOffset.UTC,
+            zoneId = zoneId,
             savedStateHandle = savedState,
             widgetRefreshTrigger = WidgetRefreshTrigger { widgetRefreshes++ }
         )
@@ -768,7 +772,10 @@ class ContactDetailViewModelTest {
     @Test
     fun `onLogConnection on a picked date lands at local noon of that day, and never in the future`() =
         runTest {
-            val setup = fixture()
+            // A fixed offset no host runs on, so the expectation below can only
+            // match if the VM reads the zone it was given.
+            val zone = ZoneOffset.ofHoursMinutes(5, 30)
+            val setup = fixture(zoneId = zone)
             setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
 
             // The date picker hands back UTC midnight of the chosen day.
@@ -793,10 +800,10 @@ class ContactDetailViewModelTest {
 
             val written = setup.callEventRepo.observeForContact(5L, limit = 50).first()
             assertEquals(2, written.size)
-            val localNoon = day.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant()
+            val localNoon = day.atTime(12, 0).atZone(zone).toInstant()
             assertTrue(
                 written.any { it.occurredAt == localNoon },
-                "the picked day lands at local noon"
+                "the picked day lands at noon in the VM's zone"
             )
             assertTrue(written.any { it.occurredAt == T0 }, "a future day is clamped to now")
             assertTrue(written.none { it.occurredAt.isAfter(T0) })

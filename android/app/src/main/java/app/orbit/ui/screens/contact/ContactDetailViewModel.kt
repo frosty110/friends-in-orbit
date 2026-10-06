@@ -630,7 +630,12 @@ class ContactDetailViewModel @Inject constructor(
                             .atZone(ZoneOffset.UTC)
                             .toLocalDate()
                             .atTime(12, 0)
-                            .atZone(ZoneId.systemDefault())
+                            // The injected zone, as the rest of the screen's
+                            // day grouping uses; production injects the
+                            // system zone. Until 2026-10-06 this alone read
+                            // ZoneId.systemDefault(), which the test fixture
+                            // cannot pin.
+                            .atZone(zoneId)
                             .toInstant()
                             .coerceAtMost(now)
                 }
