@@ -128,6 +128,22 @@ class RelativeTimeTest {
         assertEquals("0 days", formatSpan(-3).text())
     }
 
+    // ── formatAgo: the same words for a day count the caller already took ──
+
+    // Card view and Home count whole days between instants and then need the
+    // one "ago" wording as the argument of "You spoke {ago}". One gap per
+    // bucket, plus the two day words and the negative clamp.
+    @Test
+    fun `formatAgo says today, yesterday, then the ago plural of each bucket`() {
+        assertEquals("today", formatAgo(0).text())
+        assertEquals("yesterday", formatAgo(1).text())
+        assertEquals("3 days ago", formatAgo(3).text())
+        assertEquals("3 weeks ago", formatAgo(21).text())
+        assertEquals("3 months ago", formatAgo(90).text())
+        assertEquals("1 year ago", formatAgo(400).text())
+        assertEquals("today", formatAgo(-2).text())
+    }
+
     // ── formatRelativeFine: the first day at a finer grain ─────────────────
 
     // Settings' sync rows read moments after a sync, where "today" says too

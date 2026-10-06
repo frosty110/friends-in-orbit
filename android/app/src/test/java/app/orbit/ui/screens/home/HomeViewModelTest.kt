@@ -25,7 +25,7 @@ import app.orbit.notify.NudgeScheduler
 import app.orbit.testutil.MainDispatcherRule
 import app.orbit.testutil.newPrefs
 import app.orbit.ui.util.UiText
-import app.orbit.ui.util.formatSpan
+import app.orbit.ui.util.formatAgo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -491,16 +491,17 @@ class HomeViewModelTest {
     }
 
     // HOME-3: the why line is recency as context, never shame (voice.md), in
-    // the app's one span wording. TestClock's now is 2026-01-01T12:00Z.
+    // the app's one "ago" wording (WhyLineVoiceTest holds every bucket of it
+    // to the never-say list). TestClock's now is 2026-01-01T12:00Z.
     @Test
-    fun `the why line reads never, today, yesterday or the span since the last call`() = runTest {
+    fun `the why line reads never, today, yesterday or how long ago you spoke`() = runTest {
         val now = TestClock().now()
         assertEquals(UiText.res(R.string.home_why_never), nextUpFor(lastCalledAt = null).why)
         assertEquals(UiText.res(R.string.home_why_today), nextUpFor(lastCalledAt = now.minus(Duration.ofHours(3))).why)
         assertEquals(UiText.res(R.string.home_why_yesterday), nextUpFor(lastCalledAt = now.minus(Duration.ofDays(1))).why)
         val threeWeeks = nextUpFor(lastCalledAt = now.minus(Duration.ofDays(21))).why
-        assertEquals(UiText.res(R.string.home_why_span, formatSpan(21)), threeWeeks)
-        assertEquals("3 weeks since you last spoke", threeWeeks.asString(context))
+        assertEquals(UiText.res(R.string.home_why_ago, formatAgo(21)), threeWeeks)
+        assertEquals("You spoke 3 weeks ago", threeWeeks.asString(context))
         assertEquals("You haven't spoken yet", UiText.res(R.string.home_why_never).asString(context))
     }
 

@@ -10,8 +10,8 @@ import app.orbit.data.Contact
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
+import app.orbit.ui.util.formatAgo
 import app.orbit.ui.util.formatDuration
-import app.orbit.ui.util.formatSpan
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -52,7 +52,7 @@ class CardFaceCurtainTest {
                         listContext = "Inner orbit",
                         nowHour = 19,
                         isAheadOfToday = false,
-                        whyNowLine = UiText.res(R.string.card_why_span, formatSpan(11)),
+                        whyNowLine = UiText.res(R.string.card_why_ago, formatAgo(11)),
                     )
                 }
             }

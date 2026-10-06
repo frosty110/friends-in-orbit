@@ -10,7 +10,7 @@ import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
 import app.orbit.notify.NudgeScheduler
 import app.orbit.ui.util.UiText
-import app.orbit.ui.util.formatSpan
+import app.orbit.ui.util.formatAgo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -220,30 +220,12 @@ class HomeViewModel @Inject constructor(
                 contactId = raw.contactId,
                 name = raw.name,
                 photoUri = raw.photoUri,
-                why = recencyWhy(raw.lastCalledAt, now),
+                why = homeRecencyWhy(raw.lastCalledAt, now),
                 phone = raw.phone?.takeIf { it.isNotBlank() }
             )
         },
         rhythm = e?.rhythm ?: emptyList()
     )
-
-    /**
-     * Warm, neutral recency line for the Next-up person (HOME-3): context, not
-     * shame ("you haven't called X in N days" is forbidden; voice.md). A null
-     * last-call reads as a gentle "you haven't spoken yet".
-     */
-    private fun recencyWhy(lastCalledAt: Instant?, now: Instant): UiText {
-        if (lastCalledAt == null) return UiText.res(R.string.home_why_never)
-        val days = ChronoUnit.DAYS.between(lastCalledAt, now)
-        // The app's one span formatter (voice.md glossary), so Home and the
-        // card never word the same gap two ways. formatSpan's UiText
-        // ("3 weeks") nests as the resource sentence's argument.
-        return when {
-            days <= 0L -> UiText.res(R.string.home_why_today)
-            days == 1L -> UiText.res(R.string.home_why_yesterday)
-            else -> UiText.res(R.string.home_why_span, formatSpan(days))
-        }
-    }
 
     /**
      * Long-press → "Pause nudges" / "Resume nudges". Flips the per-list
@@ -371,4 +353,27 @@ class HomeViewModel @Inject constructor(
             _snackbarEvents.tryEmit(HomeSnackbarEvent(message = UiText.res(R.string.components_snackbar_save_failed)))
             false
         }
+}
+
+/**
+ * Warm, neutral recency line for the Next-up person (HOME-3): context, not
+ * shame ("you haven't called X in N days" is forbidden; voice.md). A null
+ * last-call reads as a gentle "You haven't spoken yet"; then "You spoke
+ * today", "You spoke yesterday", "You spoke 3 weeks ago", with [formatAgo]'s
+ * one wording as the argument so Home and the card never word the same gap
+ * two ways. Until 2026-10-06 the span filled "%1$s since you last spoke",
+ * which read "3 days since you last spoke" for the most common gaps: the
+ * framing voice.md never says and `VoiceRules` forbids ("days since"), hidden
+ * from the string audit because the span arrived as an argument. Top-level,
+ * like `resolvePickerPhase`, so `WhyLineVoiceTest` renders it for every
+ * bucket without the feed.
+ */
+internal fun homeRecencyWhy(lastCalledAt: Instant?, now: Instant): UiText {
+    if (lastCalledAt == null) return UiText.res(R.string.home_why_never)
+    val days = ChronoUnit.DAYS.between(lastCalledAt, now)
+    return when {
+        days <= 0L -> UiText.res(R.string.home_why_today)
+        days == 1L -> UiText.res(R.string.home_why_yesterday)
+        else -> UiText.res(R.string.home_why_ago, formatAgo(days))
+    }
 }

@@ -54,8 +54,8 @@
     <string name="home_why_never">You haven\'t spoken yet</string>
     <string name="home_why_today">You spoke today</string>
     <string name="home_why_yesterday">You spoke yesterday</string>
-    <!-- %1$s: how long it has been, for example "3 weeks". -->
-    <string name="home_why_span">%1$s since you last spoke</string>
+    <!-- %1$s: how long ago, for example "3 weeks ago". -->
+    <string name="home_why_ago">You spoke %1$s</string>
 
     <!-- The 7-day rhythm strip on each card. -->
     <string name="home_rhythm_eyebrow">Last 7 days</string>

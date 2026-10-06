@@ -316,6 +316,16 @@ private fun ContactDetailContent(
         if (curtain) stringResource(R.string.components_curtain_contact) else it.name
     }
     val overflowName: String? = shownContact?.name?.takeUnless { curtain }
+    // With no person to name (deleted, or the read failed) the pane takes the
+    // message's own heading; these states are not momentary, and a page with
+    // no pane title at all is one TalkBack never announces (the Call history
+    // precedent, CallLogScreen). Resolved in composition: semantics blocks
+    // cannot call stringResource.
+    val paneName: String? = displayName ?: when (state) {
+        ContactDetailUiState.NotFound -> stringResource(R.string.contact_not_found_title)
+        ContactDetailUiState.Error -> stringResource(R.string.contact_error_title)
+        else -> null
+    }
 
     Box(
         modifier = Modifier
@@ -325,7 +335,7 @@ private fun ContactDetailContent(
             // navigation swaps this screen in, as OrbitAppBar does for titled
             // screens (rubric D8). Before this a new person's page was never
             // announced and the first focusable was Back.
-            .semantics { if (displayName != null) paneTitle = displayName }
+            .semantics { if (paneName != null) paneTitle = paneName }
     ) {
         OrbitScreen {
             OrbitAppBar(

@@ -65,12 +65,24 @@ fun formatRelative(
     val days = ChronoUnit.DAYS.between(
         occurredAt.atZone(zone).toLocalDate(),
         now.atZone(zone).toLocalDate(),
-    ).coerceAtLeast(0L)
-    return when (days) {
-        0L -> UiText.res(R.string.time_ago_today)
-        1L -> UiText.res(R.string.time_ago_yesterday)
-        else -> spanBucket(days).let { (unit, n) -> UiText.plural(unit.agoPlural, n, n) }
-    }
+    )
+    return formatAgo(days)
+}
+
+/**
+ * [formatRelative]'s words for a day count the caller has already taken:
+ * "today", "yesterday", then "{span} ago" in [formatSpan]'s buckets ("3 days
+ * ago", "3 weeks ago"). For the why-now line on Card view and Home, which
+ * count whole days between instants (their own day boundary) and then need
+ * the one "ago" wording as the argument of "You spoke {ago}". Building the
+ * line from [formatSpan] gave "3 days since you last spoke", the shame
+ * framing voice.md never says, and the string audit could not see it because
+ * the span arrived as an argument. Negative clamps to "today".
+ */
+fun formatAgo(days: Long): UiText = when (val d = days.coerceAtLeast(0L)) {
+    0L -> UiText.res(R.string.time_ago_today)
+    1L -> UiText.res(R.string.time_ago_yesterday)
+    else -> spanBucket(d).let { (unit, n) -> UiText.plural(unit.agoPlural, n, n) }
 }
 
 /**

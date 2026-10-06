@@ -18,7 +18,7 @@
 
 ## What the user sees
 
-- App bar: Back, the person's name as the title (and the pane title TalkBack announces), and "More actions for {name}"
+- App bar: Back and "More actions for {name}"; no title (the hero carries the name, which is also the pane title TalkBack announces; a page with no person is announced by its message heading)
 - When a timed pause has run out, a banner at the top: "{Name} is unpaused" / "They'll come up again on their lists.", with a dismiss control (CONTACT-05)
 - The hero: photo or initials, the name, the number (tappable; TalkBack: "Call {number}"), and a status line where one applies: "Paused until 12 Oct", "Paused until you unpause", "Ignored", "Archived"
 - "Call" and "Log a connection"
@@ -72,7 +72,7 @@
 - `ContactDetailViewModelTest` (Ready, Error and recovery, Orphaned with its notes, the ignored and archived flags, pause and unpause, ignore and undo, archive, logging a connection and an attempt, notes, focusNote, scrollToCallEventId, the lapsed-pause banner, failure snackbars)
 - `ContactOverflowMenuTest` (the overflow's order and its Pause/Unpause, Ignore/Unignore and Open in Contacts variants)
 - `ContactDetailCurtainTest` (every name, the number and the pane title under the curtain)
-- `ContactDetailScreenTest` (added this round: arriving scrolled to a call shows that row and "Add note to this call")
+- `ContactDetailScreenTest` (added this round: arriving scrolled to a call shows that row and "Add note to this call"; the pane title is the name, or the message heading when there is no person)
 - `NotesMenuTest` (added this round), `OrphanBannerTest` and `UnpauseBannerTest` (on the JVM from this round), `RuleOverrideSectionTest`
 - Use cases: `PauseContactUseCaseTest`, `IgnoreContactUseCaseTest`, `UnignoreContactUseCaseTest`, `ArchiveContactUseCaseTest`, `RelinkContactUseCaseTest`, `AddNoteUseCaseTest`, `AddRetroactiveNoteUseCaseTest`, `EditNoteUseCaseTest`, `DeleteNoteUseCaseTest`
 - `OrbitNavHostTest` (added this round: "View all calls" opens this person's calls and back returns to the same entry, LOG-04; "Open settings" leads to Settings)

@@ -96,7 +96,7 @@ import app.orbit.ui.util.asString
 import app.orbit.ui.util.dialPhoneNumber
 import app.orbit.ui.util.formatDayHeader
 import app.orbit.ui.util.formatDuration
-import app.orbit.ui.util.formatSpan
+import app.orbit.ui.util.formatAgo
 import kotlinx.coroutines.flow.collectLatest
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -1117,7 +1117,10 @@ private val previewState: HomeUiState = HomeUiState.Ready(
     lists = listOf(
         ListTileState(
             id = 1L, name = "Inner orbit", dueCount = 3, type = ListType.STATIC, memberCount = 12,
-            nextUp = NextUp(1L, "Kai", null, UiText.res(R.string.home_why_span, formatSpan(21)), phone = "+1 555 0100"),
+            nextUp = NextUp(
+                1L, "Kai", null,
+                UiText.res(R.string.home_why_ago, formatAgo(21)), phone = "+1 555 0100",
+            ),
             rhythm = previewRhythm(0),
         ),
         ListTileState(
@@ -1157,7 +1160,7 @@ private fun HomeContentLongNamesPreview() {
                         id = 1L, name = "Old friends from the climbing gym crew", dueCount = 12, type = ListType.STATIC, memberCount = 48,
                         nextUp = NextUp(
                             1L, "Bartholomew Montgomery-Featherstonehaugh", null,
-                            UiText.res(R.string.home_why_span, "3 weeks"), phone = "+1 555 0100",
+                            UiText.res(R.string.home_why_ago, formatAgo(21)), phone = "+1 555 0100",
                         ),
                         rhythm = previewRhythm(0),
                     ),

@@ -21,7 +21,7 @@
     <string name="time_axis_24h_noon">12</string>
     <string name="time_axis_24h_6pm">18</string>
 
-    <!-- A length of time, lowercase so it can sit mid-sentence ("It's been 3 weeks.",
+    <!-- A length of time, lowercase so it can sit mid-sentence ("Sam comes up in 2 weeks.",
          "in 2 months"). Below two weeks Orbit counts days, below two months weeks, below a
          year months, then years. -->
     <plurals name="time_span_days">
