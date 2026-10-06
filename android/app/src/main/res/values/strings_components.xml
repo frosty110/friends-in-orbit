@@ -34,6 +34,8 @@
 
     <!-- Shown when a change could not be written. Rules: a failed write always tells the user. -->
     <string name="components_snackbar_save_failed">Couldn\'t save your change</string>
+    <!-- Shown when a link, widget or shortcut names a screen Orbit does not have. -->
+    <string name="components_snackbar_open_failed">Couldn\'t open that.</string>
 
     <!-- Snackbars several screens show after changing one person (Contact detail, Browse,
          the contact picker, Settings > Ignored), each with Undo. %1$s: the person's name. -->

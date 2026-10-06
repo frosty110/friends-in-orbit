@@ -21,6 +21,7 @@ import app.orbit.ui.screens.onboarding.OnboardingWelcomeScreen
 import app.orbit.ui.screens.picker.ContactPickerScreen
 import app.orbit.ui.screens.picker.ListPickerScreen
 import app.orbit.ui.screens.picker.PickerCommitSnackbarHost
+import app.orbit.ui.screens.picker.UnknownRouteSnackbar
 import app.orbit.ui.screens.settings.SettingsScreen
 import app.orbit.ui.screens.settings.ignored.SettingsIgnoredScreen
 
@@ -172,6 +173,18 @@ interface OrbitNavScreens {
      */
     @Composable
     fun CommitSnackbarHost(modifier: Modifier)
+
+    /**
+     * Reports a route handed to the app that the graph could not open: a
+     * widget, nudge or shortcut whose route no longer exists, or another
+     * app's extra. [occurrences] counts the misses so far, and each rise
+     * says "Couldn't open that." once (rules.md Code 3). The real one
+     * publishes on the app-level snackbar bus ([PickerCommitSnackbarHost]'s
+     * ViewModel, through Hilt), so the message shows over whatever screen
+     * is open; `OrbitNavHostTest`'s stub records the count it was given.
+     */
+    @Composable
+    fun UnknownRouteNotice(occurrences: Int)
 
     /** The app's screens, each resolving its own ViewModel through Hilt. */
     object Real : OrbitNavScreens {
@@ -375,5 +388,9 @@ interface OrbitNavScreens {
         @Composable
         override fun CommitSnackbarHost(modifier: Modifier) =
             PickerCommitSnackbarHost(modifier = modifier)
+
+        @Composable
+        override fun UnknownRouteNotice(occurrences: Int) =
+            UnknownRouteSnackbar(occurrences = occurrences)
     }
 }

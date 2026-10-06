@@ -7,14 +7,20 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 /**
- * Picker-commit lifecycle — app-lifetime result channel for picker commits.
+ * The app-level snackbar bus: an app-lifetime channel for outcomes whose
+ * origin screen may be gone by the time there is something to say.
  *
  * Why this exists: both pickers pop via the caller's `onCommit` lambda the
  * moment the user taps the commit CTA, so a snackbar hosted on the picker
  * screen dies with it — "Added N · Undo" was unreachable in every production
  * path. The picker VMs publish the commit outcome here instead, and the
  * app-level [PickerCommitSnackbarHost] (mounted above the NavHost in
- * `OrbitNavHost`) shows it on whatever screen the pop lands on.
+ * `OrbitNavHost`) shows it on whatever screen the pop lands on. The same
+ * host carries the nav host's "Couldn't open that." for a route the graph
+ * refused ([UnknownRouteSnackbar]), and it is where a reset's failure
+ * belongs, since a reset finishes after the Settings screen has gone (the
+ * settings package). The name stays "picker commit" after its first
+ * publisher.
  *
  * Pattern choice: an injected `@Singleton` bus over the
  * `previousBackStackEntry.savedStateHandle` nav result pattern because the

@@ -53,6 +53,13 @@ class PickerCommitSnackbarHostViewModel @Inject constructor(
     val events: SharedFlow<SnackbarEvent> = commitBus.events
 
     /**
+     * Puts [event] on the bus for the host to show. For an outcome that
+     * belongs to no screen's ViewModel: the nav host's "Couldn't open that."
+     * ([UnknownRouteSnackbar]) arrives here.
+     */
+    fun publish(event: SnackbarEvent) = commitBus.publish(event)
+
+    /**
      * Replays the depth-1 inverse recorded by the commit (removes the
      * just-added memberships). No-op when nothing is pending — e.g. a second
      * Undo tap racing the first. A failed inverse surfaces on the bus instead
@@ -105,6 +112,28 @@ fun PickerCommitSnackbarHost(
     }
 
     OrbitSnackbarHost(hostState = snackbarHostState, modifier = modifier)
+}
+
+/**
+ * Says "Couldn't open that." once per route the nav host was handed and could
+ * not open (`OrbitNavScreens.UnknownRouteNotice`; rules.md Code 3). It draws
+ * nothing itself: it publishes on the bus [PickerCommitSnackbarHost] collects,
+ * so the message lands over whatever screen is open. [occurrences] keys the
+ * effect, so a recomposition with the same count says nothing again and 0,
+ * nothing refused yet, is quiet. The ViewModel is the host's own,
+ * Activity-scoped, so this is one more publisher on the same stream, not a
+ * second host.
+ */
+@Composable
+fun UnknownRouteSnackbar(
+    occurrences: Int,
+    vm: PickerCommitSnackbarHostViewModel = hiltViewModel(),
+) {
+    LaunchedEffect(occurrences) {
+        if (occurrences > 0) {
+            vm.publish(SnackbarEvent(UiText.res(R.string.components_snackbar_open_failed)))
+        }
+    }
 }
 
 // ─── Previews ──────────────────────────────────────────────────────────────────
