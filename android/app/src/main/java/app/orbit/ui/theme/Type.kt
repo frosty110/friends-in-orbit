@@ -29,7 +29,7 @@ private const val TABULAR = "tnum"
 
 @Immutable
 data class OrbitTypography(
-    val hero: TextStyle,        // --fs-hero 32sp — contact name on card
+    val hero: TextStyle,        // --fs-hero 32sp: Contact detail's name and the Welcome wordmark (the card face is contactName, 28sp)
     val title: TextStyle,       // --fs-title 24sp — screen titles
     val h2: TextStyle,          // --fs-h2 20sp
     val h3: TextStyle,          // --fs-h3 18sp — list row primary
@@ -41,7 +41,7 @@ data class OrbitTypography(
     val badge: TextStyle,       // 13sp Medium — CountBadge count text (THEME-02b promotion)
     val eyebrow: TextStyle,        // micro + caps + tracking — section labels
     val timelineAxis: TextStyle,   // L2: 12sp Normal — HeatStrip hour axis labels (a11y floor)
-    val skipAffordance: TextStyle, // L2: 14sp Normal — Card View Skip link
+    val skipAffordance: TextStyle, // L2: 14sp Normal: Card View's quiet "View details" link (named for the Skip link it used to dress)
     val contactName: TextStyle,    // display treatment
     val button: TextStyle,         // 16sp medium
 )

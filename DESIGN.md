@@ -71,9 +71,9 @@ Material You's dynamic schemes repaint every surface. Orbit's calm comes from it
 
 ---
 
-## Shared components that carry the rules (2026-10-05)
+## Shared components that carry the rules (2026-10-05, completed 2026-10-06)
 
-Reach for these before building a one-off; each exists because one-offs drifted.
+Reach for these before building a one-off; each exists because one-offs drifted. The table is the inventory: a component in `ui/components` that is not here is not yet a rule-bearer, and a screen-local layout that does the job of one of these is the drift this table exists to stop.
 
 | Component | Use it for | The rule it carries |
 |---|---|---|
@@ -84,6 +84,20 @@ Reach for these before building a one-off; each exists because one-offs drifted.
 | `OrbitSearchField` | Search boxes (Browse, Search, the picker) | The whole 48dp pill is the field; the placeholder is its TalkBack label while empty; clear control has its own 48dp target |
 | `OrbitAppBar` | Every screen's top bar | The title is a heading and the screen's pane title, so TalkBack announces each new screen; grows for two-line titles at 200% |
 | `OrbitSnackbarHost` / `OrbitSnackbar` | Every snackbar | Material's snackbar, themed, with its action (Undo) held to 48dp; the default was 40dp |
+| `OrbitScreenMessage` | The one message a screen shows in place of its content: nothing here yet, nothing matches, no permission, couldn't load | Title, body and one action, Secondary unless it is the only thing to do on the screen (it never spends a second accent); an optional Ghost secondary action for a state with two honest ways forward; every error state offers Try again, every empty state the next step (rubric D6); scrolls rather than clips at 200% |
+| `OrbitListSkeleton` | A list of people while it loads | A static placeholder shaped like the rows (no shimmer, Design 8) with one TalkBack "Loading" node; a screen never shows a false empty state while it waits |
+| `OrbitInlineNotice` | A persistent strip above a list with one fix ("Orbit can't see your calls" / "Open settings") | `bgSubtle` row, meta text and a 48dp text action with `Role.Button`; dismiss-free, so the honest state stays until it is fixed |
+| `OrbitDropdownMenu` / `OrbitMenuAction` | Every options and overflow menu | Everyday actions first in the caller's order, destructive last behind a divider in `danger`; leading icons are all-or-none within a menu; the menu dismisses itself before the action runs; a checked option for menus of choices |
+| `OrbitChip` / `OrbitFilterChip` | A read-only label (a list name, "Smart list"); every filter, single choice and chip-shaped menu trigger | Selected fills `accentTint` and shows a check, never `accent` (Design 5); a 48dp touch target around the pill; Checkbox, RadioButton or Button semantics by role; the label never breaks mid-word at 200%, so chips live in a scrolling or flow row |
+| `OrbitCheckbox` | The mark on a multi-select row | Display only: the row is the control and carries the checked state for TalkBack, so the mark has one owner (Code 7); ink with a cream tick, an outline at 3:1 |
+| `PauseDurationSheet` | "Pause for how long?" wherever a pause starts (Contact detail, a Browse row, Pause all) | One sheet, not a sheet and a dialog: 1 week, 1 month and "Until you unpause", the same words as the status line and the snackbar; the title is a heading, the options one group of radio rows |
+| `BrowseRow` | A person in Browse and Search | `onTap = null` when the caller owns the gesture (a clickable here consumed the parent's press, which is how rows once ignored taps); a muted, labelled dial per row (Design 6); the dot for someone worth a call now is the screen's one accent; "Call {name}" and "Open details" as TalkBack actions |
+| `ListContextChip` | A list's name as a chip | Reads the curtain and says "List" in the neutral Stone tone |
+| `CountBadge` | A count on a tab or a row | Tabular 13sp in `accentFg` on the accent; a minimum size that grows at 200%, never fixed; nothing drawn at zero |
+| `PostCallBanner` | Right after a call: "You just called Sam", with "Add a note" | Stateless, the screen owns its visibility; under the curtain the heading is the generic one |
+| `ContactStatsPanel` | A person's stats on Contact detail | The glossary's labels only ("Last call", "Total calls", "Average length", "Longest gap", "Usually"); a stat with nothing to say says so in words ("Not enough calls yet", "Never called"), never a dash |
+| `PhIcon` | Every icon | Phosphor Regular only, from the generated VectorDrawables in `res/drawable/ph_*.xml`; decorative, the control that owns it carries the label (Design 7); an unknown name fails loudly instead of drawing a blank |
+| `OrbitAppBarTextAction` | "Done", "Skip" in the app bar's trailing slot | A 48dp `Role.Button` in the accent; Done exits a screen that has already saved on every change, it never saves |
 | `SectionLabel` | The small label over a group | A heading for TalkBack navigation |
 | `InfoTip` | "What does this mean?" | Tappable (not long-press only), 48dp, Phosphor "info" |
 | `OrbitMark` | Brand moments | Drawn from tokens, settles once, static with animations off |
