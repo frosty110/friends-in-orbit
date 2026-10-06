@@ -332,6 +332,30 @@ class GlobalSearchViewModelTest {
         }
     }
 
+    // ========================================================================
+    // browse-6: call log access off rides Ready, so rows can drop "Never called"
+    // ========================================================================
+
+    @Test
+    fun `call log denied rides Ready and clears when access returns`() = runTest {
+        // Regression: Search had no permission input, so with READ_CALL_LOG
+        // denied every result read "Never called", the false claim Browse
+        // already avoided.
+        val s = makeVm()
+        s.contactRepo.seed(listOf(contactFixture(id = 1L, displayName = "Maya")))
+        s.vm.onCallLogPermissionChanged(denied = true)
+        s.vm.onSearchChanged("maya")
+        s.vm.uiState.test(timeout = 2.seconds) {
+            val denied = awaitReadyWhere(this) { it.callLogPermissionDenied }
+            assertEquals(listOf("Maya"), denied.results.map { it.contact.name })
+            // Back from Settings with access granted: the flag clears on the
+            // next ON_RESUME push, same query, same results.
+            s.vm.onCallLogPermissionChanged(denied = false)
+            awaitReadyWhere(this) { !it.callLogPermissionDenied }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     /** Drains emissions until a [SearchUiState.Ready] satisfying [predicate]. */
     private suspend fun awaitReadyWhere(
         flow: app.cash.turbine.ReceiveTurbine<SearchUiState>,

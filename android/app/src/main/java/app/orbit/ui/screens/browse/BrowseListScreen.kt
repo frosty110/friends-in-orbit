@@ -29,7 +29,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +61,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import app.orbit.R
 import app.orbit.data.Contact
 import app.orbit.data.entity.ListEntity
+import app.orbit.data.entity.ListType
 import app.orbit.domain.model.PauseDuration
 import app.orbit.ui.components.BrowseRow
 import app.orbit.ui.components.LocalPrivacyCurtain
@@ -71,6 +71,7 @@ import app.orbit.ui.components.OrbitCheckbox
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitFilterChip
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitInlineNotice
 import app.orbit.ui.components.OrbitListSkeleton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
@@ -78,8 +79,8 @@ import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSearchField
 import app.orbit.ui.components.OrbitSnackbarHost
+import app.orbit.ui.components.PauseDurationSheet
 import app.orbit.ui.components.SectionLabel
-import app.orbit.ui.screens.contact.sections.PauseSheet
 import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
@@ -103,7 +104,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  *   - inner owns the local debounced TextField buffer (via `snapshotFlow` +
  *     `debounce(250)`) and forwards committed query strings to `vm::onSearchChanged`.
  *
- * BROWSE-01: per-list contacts in queue order (VM-side), under "Up next";
+ * BROWSE-01: per-list contacts in queue order (VM-side), under "Next up";
  *            members outside the rotation follow under "Everyone else".
  * BROWSE-02: 250ms debounced search + 2 filter chips (chip×chip = UNION per
  *            user decision), drawn with the shared [OrbitFilterChip].
@@ -113,15 +114,27 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  *            multi-select, where it used to sit inert).
  * BROWSE-06: a skeleton while the list loads and Retry when it fails, never a
  *            false "No one here yet".
- * BULK-05  : trailing "+" in single-select app-bar → BULK-05 picker entry.
- * MOVE-01  : combinedClickable + LocalHapticFeedback on entry.
+ * BULK-05  : trailing "+" in the app bar → the Add people picker. Not on a
+ *            smart list, whose rows the sync writes (ListRow.kt's "+" hides
+ *            for the same reason); the Empty state's "Add people" likewise.
+ * MOVE-01  : a row's long-press "Select" (combinedClickable + haptic) enters
+ *            with that row; the app bar's Select button enters with nothing
+ *            selected (vision BROWSE-2), so the power is not gesture-only.
  * MOVE-02  : AnimatedContent fadeIn/fadeOut(250) cross-fade swap of
  *            OrbitAppBar ↔ MultiSelectActionBar — replacement, not floating.
- * MOVE-03/04: Move/Copy via inline [ListSelectorSheet].
- * MOVE-05  : VM-side onSelectAllVisible / onSelectAllMatching.
+ * MOVE-03/04: Move/Copy via inline [ListSelectorSheet]; regular lists only.
+ *            Remove and Move are not offered while browsing a smart list.
+ * MOVE-05  : "Select all" in the selection overflow → `onSelectAllMatching`
+ *            with the ids of `Ready.contacts`, the searched and filtered set.
  * MOVE-06  : BackHandler(enabled = isMultiSelect) consumes back gesture.
- * MOVE-07  : Snackbar undo backed by [UndoStack].
- * PRIV-03:   app-bar title + row primary names obey `LocalPrivacyCurtain.current`.
+ * MOVE-07  : Snackbar undo backed by [UndoStack]; the bar is disabled while a
+ *            write is in flight, so a second tap cannot replace the Undo.
+ * PRIV-03:   app-bar title + row primary names obey `LocalPrivacyCurtain.current`;
+ *            [OrbitSearchField] masks what is typed.
+ *
+ * Call log access off: the notice above the rows and the filter state both
+ * offer "Open settings" (Orbit's Settings hosts the grant), as Card view and
+ * Call history do; until 2026-10-06 Browse named Settings and gave no path.
  *
  * One accent element (rules.md §Design 5): the due dot, which marks who is
  * ready. Active filters use the cluster-tier tint, selected rows the same, and
@@ -132,7 +145,11 @@ fun BrowseListScreen(
     @Suppress("UNUSED_PARAMETER") listId: String, // route arg; VM reads from SavedStateHandle
     onBack: () -> Unit,
     onOpenContact: (contactId: String) -> Unit,
-    onAddContacts: (listId: String?) -> Unit,
+    // Non-null: the route arg is required, so the nav host never has to
+    // invent a list id (browse-19).
+    onAddContacts: (listId: String) -> Unit,
+    // Defaulted so the nav host can wire it in its own change.
+    onOpenSettings: () -> Unit = {},
     vm: BrowseViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -140,6 +157,7 @@ fun BrowseListScreen(
     val activeFilters by vm.activeFilters.collectAsStateWithLifecycle()
     val lists by vm.lists.collectAsStateWithLifecycle()
     val listName by vm.listName.collectAsStateWithLifecycle()
+    val listType by vm.listType.collectAsStateWithLifecycle()
 
     // 2026-06-09 #19 — real READ_CALL_LOG state, refreshed on every ON_RESUME
     // (CardViewScreen precedent) so returning from Settings clears the notice.
@@ -161,6 +179,7 @@ fun BrowseListScreen(
         lists = lists,
         listId = listId,
         listName = listName,
+        listType = listType,
         onSearchChanged = vm::onSearchChanged,
         onToggleFilter = vm::onToggleFilter,
         onClearFilters = vm::onClearFilters,
@@ -168,7 +187,10 @@ fun BrowseListScreen(
         onBack = onBack,
         onOpenContact = onOpenContact,
         onAddContacts = onAddContacts,
-        onEnterMultiSelect = vm::onEnterMultiSelect,
+        onOpenSettings = onOpenSettings,
+        onEnterMultiSelect = { id -> vm.onEnterMultiSelect(id) },
+        onSelectPeople = { vm.onEnterMultiSelect() },
+        onSelectAll = vm::onSelectAllMatching,
         onToggleSelect = vm::onToggleSelect,
         onExitMultiSelect = vm::onExitMultiSelect,
         onBulkRemove = vm::onBulkRemove,
@@ -194,14 +216,18 @@ private fun BrowseContent(
     lists: List<ListEntity>,
     listId: String,
     listName: String,
+    listType: ListType?,
     onSearchChanged: (String) -> Unit,
     onToggleFilter: (BrowseFilter) -> Unit,
     onClearFilters: () -> Unit,
     onRetry: () -> Unit,
     onBack: () -> Unit,
     onOpenContact: (contactId: String) -> Unit,
-    onAddContacts: (listId: String?) -> Unit,
+    onAddContacts: (listId: String) -> Unit,
+    onOpenSettings: () -> Unit,
     onEnterMultiSelect: (Long) -> Unit,
+    onSelectPeople: () -> Unit,
+    onSelectAll: (Set<Long>) -> Unit,
     onToggleSelect: (Long) -> Unit,
     onExitMultiSelect: () -> Unit,
     onBulkRemove: () -> Unit,
@@ -256,20 +282,28 @@ private fun BrowseContent(
 
     val isMs = (state as? BrowseUiState.Ready)?.isMultiSelect ?: false
     val selectedIds: Set<Long> = (state as? BrowseUiState.Ready)?.selectedIds ?: emptySet()
+    val isCommitting = (state as? BrowseUiState.Ready)?.isCommitting ?: false
     val sourceListIdLong: Long? = listId.toLongOrNull()
+    // A smart list's rows are written by SmartListMembershipSync, not by the
+    // user (menus-1, browse-1; the ListRow.kt "+" precedent): no "+", no
+    // "Add people", no Remove, no Move. Unknown (null, before the list row
+    // emits) is treated as "not yet": the picker would otherwise open for a
+    // list that may turn out to be smart.
+    val isSmartList = listType == ListType.SMART
+    val canAddPeople = listType == ListType.STATIC
 
     // BackHandler — MOVE-06. Enabled only in multi-select to avoid double-consuming back.
     BackHandler(enabled = isMs) { onExitMultiSelect() }
 
     // Move/Copy/Pause inline triggers (DECISION — see ListSelectorSheet KDoc).
-    var showPauseDialog by remember { mutableStateOf(false) }
+    var showPauseSheet by remember { mutableStateOf(false) }
     var showMoveSheet by remember { mutableStateOf(false) }
     var showCopySheet by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
 
     // Single-row long-press DropdownMenu state.
     // `menuAnchorContactId` tracks WHICH row's menu is open (null = none);
-    // `pauseSheetForContactId` opens the PauseSheet for the chosen
+    // `pauseSheetForContactId` opens the PauseDurationSheet for the chosen
     // single-row Pause action. `pauseSheetForContactName` carries the display
     // name for the snackbar copy ("Paused {Name} for 1 week"). Both clear on
     // dismiss. Multi-select preempts these (long-press is a no-op when
@@ -278,13 +312,14 @@ private fun BrowseContent(
     var pauseSheetForContactId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pauseSheetForContactName by rememberSaveable { mutableStateOf("") }
 
-    if (showPauseDialog) {
-        PauseDurationDialog(
-            onSelect = { duration ->
-                onBulkPause(duration)
-                showPauseDialog = false
-            },
-            onDismiss = { showPauseDialog = false }
+    // Pause all: the one shared "Pause for how long?" sheet (menus-4). Until
+    // 2026-10-06 this path had its own AlertDialog whose third option read
+    // "Indefinitely" while the single-row sheet said "Until you unpause".
+    // The sheet calls onSelect, then onDismiss once its hide animation ends.
+    if (showPauseSheet) {
+        PauseDurationSheet(
+            onSelect = onBulkPause,
+            onDismiss = { showPauseSheet = false }
         )
     }
     if (showMoveSheet || showCopySheet) {
@@ -308,16 +343,10 @@ private fun BrowseContent(
         )
     }
 
-    // Single-row Pause sheet. REUSED from
-    // `app.orbit.ui.screens.contact.sections.PauseSheet`; no duplicate
-    // composable. Sheet uses the `OrbitTheme.shapes.bottomSheet` token.
+    // Single-row Pause: the same shared sheet as Contact detail and Pause all.
     pauseSheetForContactId?.let { cid ->
-        PauseSheet(
-            onSelect = { duration ->
-                onSingleRowPause(cid, pauseSheetForContactName, duration)
-                pauseSheetForContactId = null
-                pauseSheetForContactName = ""
-            },
+        PauseDurationSheet(
+            onSelect = { duration -> onSingleRowPause(cid, pauseSheetForContactName, duration) },
             onDismiss = {
                 pauseSheetForContactId = null
                 pauseSheetForContactName = ""
@@ -361,19 +390,27 @@ private fun BrowseContent(
                         onMove = { showMoveSheet = true },
                         onCopy = { showCopySheet = true },
                         onRemove = onBulkRemove,
-                        onOverflow = { menuExpanded = true }
+                        onOverflow = { menuExpanded = true },
+                        enabled = !isCommitting,
+                        showMove = !isSmartList,
+                        showRemove = !isSmartList
                     )
+                    // OrbitDropdownMenu dismisses itself before each action runs.
                     MultiSelectOverflowMenu(
                         expanded = menuExpanded,
                         onDismiss = { menuExpanded = false },
-                        onIgnoreAll = {
-                            onBulkIgnore()
-                            menuExpanded = false
+                        onSelectAll = {
+                            // MOVE-05: Ready.contacts is already the searched and
+                            // filtered set, so this covers unrendered rows too.
+                            val matching = (state as? BrowseUiState.Ready)?.contacts.orEmpty()
+                                .mapNotNull { it.id.removePrefix("c-").toLongOrNull() }
+                                .toSet()
+                            onSelectAll(matching)
                         },
-                        onPauseAll = {
-                            menuExpanded = false
-                            showPauseDialog = true
-                        }
+                        onPauseAll = { showPauseSheet = true },
+                        onIgnoreAll = onBulkIgnore,
+                        hasSelection = selectedIds.isNotEmpty(),
+                        enabled = !isCommitting
                     )
                 }
             } else {
@@ -395,13 +432,27 @@ private fun BrowseContent(
                         )
                     },
                     trailing = {
-                        // Browse renders in queue order; the BULK-05 "+" affordance
-                        // is the only trailing action.
-                        OrbitIconButton(
-                            icon = "plus",
-                            onClick = { onAddContacts(listId) },
-                            contentDescription = stringResource(R.string.browse_add_people)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Vision BROWSE-2: a visible way into multi-select,
+                            // so Move, Copy, Remove, Pause all and Ignore all are
+                            // not gated behind a long-press nothing advertises.
+                            // Only when there are rows to select.
+                            if (state is BrowseUiState.Ready) {
+                                OrbitIconButton(
+                                    icon = "check-circle",
+                                    onClick = onSelectPeople,
+                                    contentDescription = stringResource(R.string.browse_select_people)
+                                )
+                            }
+                            // BULK-05 "+": regular lists only (see canAddPeople).
+                            if (canAddPeople) {
+                                OrbitIconButton(
+                                    icon = "plus",
+                                    onClick = { onAddContacts(listId) },
+                                    contentDescription = stringResource(R.string.browse_add_people)
+                                )
+                            }
+                        }
                     }
                 )
             }
@@ -434,7 +485,7 @@ private fun BrowseContent(
                 .padding(horizontal = OrbitTheme.spacing.x4)
         ) {
             OrbitFilterChip(
-                label = stringResource(R.string.browse_filter_called_recently),
+                label = stringResource(R.string.browse_filter_recently_called),
                 selected = BrowseFilter.CalledRecently in activeFilters,
                 onClick = { onToggleFilter(BrowseFilter.CalledRecently) }
             )
@@ -450,18 +501,14 @@ private fun BrowseContent(
                 is BrowseUiState.Ready -> Column(modifier = Modifier.fillMaxSize()) {
                     // 2026-06-09 #19 — quiet honest notice when READ_CALL_LOG is
                     // denied: names still render, but rows drop the call-time
-                    // meta (every "Never called" would be a false claim).
+                    // meta (every "Never called" would be a false claim). The
+                    // shared strip carries the fix (calllog-13, browse-5): Orbit's
+                    // Settings hosts the grant.
                     if (state.callLogPermissionDenied) {
-                        Text(
+                        OrbitInlineNotice(
                             text = stringResource(R.string.browse_call_log_denied_notice),
-                            style = OrbitTheme.type.meta,
-                            color = OrbitTheme.colors.fgMuted,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(
-                                    horizontal = OrbitTheme.spacing.x4,
-                                    vertical = OrbitTheme.spacing.x2
-                                )
+                            actionLabel = stringResource(R.string.components_action_open_settings),
+                            onAction = onOpenSettings
                         )
                     }
                     LazyColumn(
@@ -479,7 +526,7 @@ private fun BrowseContent(
                         // suggest them" (vision BROWSE-1); the label says so.
                         if (queuedContacts.isNotEmpty()) {
                             item(key = "up-next-header", contentType = "sectionHeader") {
-                                BrowseSectionLabel(stringResource(R.string.browse_section_up_next))
+                                BrowseSectionLabel(stringResource(R.string.browse_section_next_up))
                             }
                         }
                         personRows(queuedContacts, state, rowActions)
@@ -505,21 +552,27 @@ private fun BrowseContent(
                 // never "No one here yet" for a list that has people.
                 BrowseUiState.Loading -> OrbitListSkeleton()
 
+                // The shared error body and Retry (strings_components.xml): one
+                // error family across the app (strings-12).
                 BrowseUiState.Error -> OrbitScreenMessage(
                     icon = "warning-circle",
                     title = stringResource(R.string.browse_error_title),
-                    body = stringResource(R.string.browse_error_body),
-                    actionLabel = stringResource(R.string.browse_try_again),
+                    body = stringResource(R.string.components_error_body),
+                    actionLabel = stringResource(R.string.components_error_retry),
                     onAction = onRetry,
                     actionVariant = OrbitButtonVariant.Primary
                 )
 
+                // "Add people" only where people can be added: a smart list's
+                // rows come from its rule, so the body says so and offers nothing.
                 BrowseUiState.Empty -> OrbitScreenMessage(
                     icon = "users",
                     title = stringResource(R.string.browse_empty_title),
-                    body = stringResource(R.string.browse_empty_body),
-                    actionLabel = stringResource(R.string.browse_add_people),
-                    onAction = { onAddContacts(listId) }
+                    body = stringResource(
+                        if (isSmartList) R.string.browse_empty_body_smart else R.string.browse_empty_body
+                    ),
+                    actionLabel = if (canAddPeople) stringResource(R.string.browse_add_people) else null,
+                    onAction = if (canAddPeople) ({ onAddContacts(listId) }) else null
                 )
 
                 // 2026-06-09 #19 — the list has people; the chips excluded them.
@@ -541,13 +594,18 @@ private fun BrowseContent(
 
                 // 2026-06-09 #19 — reachable now: READ_CALL_LOG denied while a
                 // call-history chip is active. The chips can't be answered
-                // honestly without the call log.
+                // honestly without the call log. Two honest ways forward: grant
+                // access (the body names Settings, so the Primary action goes
+                // there; browse-5) or clear the chips.
                 BrowseUiState.CallLogDenied -> OrbitScreenMessage(
                     icon = "phone-slash",
                     title = stringResource(R.string.browse_filters_need_calls_title),
                     body = stringResource(R.string.browse_filters_need_calls_body),
-                    actionLabel = stringResource(R.string.browse_clear_filters),
-                    onAction = onClearFilters
+                    actionLabel = stringResource(R.string.components_action_open_settings),
+                    onAction = onOpenSettings,
+                    actionVariant = OrbitButtonVariant.Primary,
+                    secondaryLabel = stringResource(R.string.browse_clear_filters),
+                    onSecondary = onClearFilters
                 )
             }
 
@@ -772,7 +830,9 @@ internal fun browseRowMenuActions(
     onIgnore: () -> Unit
 ): List<OrbitMenuAction> = listOf(
     OrbitMenuAction(label = resources.getString(R.string.browse_menu_call), onClick = onCall, icon = "phone-call"),
-    OrbitMenuAction(label = resources.getString(R.string.browse_menu_select), onClick = onSelect),
+    // Icons are all-or-none within a menu (OrbitMenu.kt); Select had none
+    // and read as a gap (menus-12).
+    OrbitMenuAction(label = resources.getString(R.string.browse_menu_select), onClick = onSelect, icon = "check-circle"),
     if (isPaused) {
         OrbitMenuAction(label = resources.getString(R.string.browse_menu_unpause), onClick = onUnpause, icon = "play")
     } else {
@@ -824,7 +884,8 @@ private val previewState: BrowseUiState = BrowseUiState.Ready(
 @Composable
 private fun BrowsePreviewHost(
     state: BrowseUiState,
-    activeFilters: Set<BrowseFilter> = emptySet()
+    activeFilters: Set<BrowseFilter> = emptySet(),
+    listType: ListType = ListType.STATIC
 ) {
     OrbitTheme {
         BrowseContent(
@@ -834,6 +895,7 @@ private fun BrowsePreviewHost(
             lists = emptyList(),
             listId = "1",
             listName = "Inner orbit",
+            listType = listType,
             onSearchChanged = {},
             onToggleFilter = {},
             onClearFilters = {},
@@ -841,7 +903,10 @@ private fun BrowsePreviewHost(
             onBack = {},
             onOpenContact = {},
             onAddContacts = {},
+            onOpenSettings = {},
             onEnterMultiSelect = {},
+            onSelectPeople = {},
+            onSelectAll = {},
             onToggleSelect = {},
             onExitMultiSelect = {},
             onBulkRemove = {},
@@ -896,4 +961,41 @@ private fun BrowseFilteredEmptyPreview() {
 @Composable
 private fun BrowseErrorPreview() {
     BrowsePreviewHost(BrowseUiState.Error)
+}
+
+@PreviewLightDark
+@Composable
+private fun BrowseNoMatchesPreview() {
+    BrowsePreviewHost(BrowseUiState.NoMatches("zz"))
+}
+
+/** A call filter on, call log access off: the hard gate with both ways forward. */
+@PreviewLightDark
+@Composable
+private fun BrowseCallLogDeniedPreview() {
+    BrowsePreviewHost(BrowseUiState.CallLogDenied, activeFilters = setOf(BrowseFilter.CalledRecently))
+}
+
+/** Call log access off with no filter: the rows, without call times, under the notice. */
+@PreviewLightDark
+@Composable
+private fun BrowseCallLogNoticePreview() {
+    BrowsePreviewHost((previewState as BrowseUiState.Ready).copy(callLogPermissionDenied = true))
+}
+
+/** Browsing a smart list: no "+", and the selection bar offers Copy only. */
+@PreviewLightDark
+@Composable
+private fun BrowseSmartListPreview() {
+    BrowsePreviewHost(
+        (previewState as BrowseUiState.Ready).copy(isMultiSelect = true, selectedIds = setOf(1L)),
+        listType = ListType.SMART
+    )
+}
+
+/** A smart list whose rule matches nobody: no "Add people" to offer. */
+@PreviewLightDark
+@Composable
+private fun BrowseSmartListEmptyPreview() {
+    BrowsePreviewHost(BrowseUiState.Empty, listType = ListType.SMART)
 }
