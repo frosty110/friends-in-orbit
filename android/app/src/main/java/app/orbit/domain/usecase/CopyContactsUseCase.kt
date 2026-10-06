@@ -4,6 +4,7 @@ import app.orbit.data.dao.ListDao
 import app.orbit.data.dao.ListMembershipDao
 import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListMembershipEntity
+import app.orbit.data.entity.ListType
 import app.orbit.data.repository.ListRepository
 import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
@@ -19,6 +20,10 @@ import javax.inject.Inject
  * Guards:
  *  - empty `contactIds`           → no-op result
  *  - missing/archived destination → no-op result (mirrors UnignoreContactUseCase)
+ *  - smart destination            → no-op result (browse-1). A smart list's rows are
+ *    written by `SmartListMembershipSync`, not by the user, so a copy into one is
+ *    a write the sync quietly reverts on its next reconcile. A count of 0 makes
+ *    the caller say "Couldn't save your change" (rules.md Code 3).
  *
  * The `dao.insertAll` is `OnConflictStrategy.IGNORE`, but rather than rely on
  * that for inverse correctness we snapshot pre-existing target memberships
@@ -55,7 +60,7 @@ class CopyContactsUseCase @Inject constructor(
 
         val result = txRunner.withTransaction {
             val target = listDao.get(toListId)
-            if (target == null || target.isArchived) {
+            if (target == null || target.isArchived || target.type != ListType.STATIC) {
                 return@withTransaction Result(inverse = {}, count = 0)
             }
 

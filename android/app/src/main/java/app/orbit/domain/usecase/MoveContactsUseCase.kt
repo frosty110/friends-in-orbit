@@ -4,6 +4,7 @@ import app.orbit.data.dao.ListDao
 import app.orbit.data.dao.ListMembershipDao
 import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListMembershipEntity
+import app.orbit.data.entity.ListType
 import app.orbit.data.repository.ListRepository
 import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
@@ -18,10 +19,16 @@ import javax.inject.Inject
  * source-side rows verbatim (preserving `addedAt` / `nextDueAt` / `skipCount`)
  * while only removing target-side rows that this call actually inserted.
  *
- * Guards (review-fixes C4 + M2 + M3):
+ * Guards (review-fixes C4 + M2 + M3, and browse-1):
  *  - empty `contactIds`           → no-op result
  *  - same-list move               → no-op result (would otherwise destroy `addedAt`)
  *  - missing/archived destination → no-op result (mirrors UnignoreContactUseCase)
+ *  - smart destination            → no-op result. A smart list's rows are written by
+ *    `SmartListMembershipSync`, not by the user (features/orbit-lists/README.md):
+ *    the sync's next reconcile would remove whoever does not match the rule,
+ *    silently, after the Undo window, and Move had already taken them off the
+ *    source list, so they would be on neither. A count of 0 makes the caller say
+ *    "Couldn't save your change" (rules.md Code 3) instead.
  *
  * The [TransactionRunner.withTransaction] body calls only suspending
  * DAO methods; no dispatcher switch inside.
@@ -52,7 +59,7 @@ class MoveContactsUseCase @Inject constructor(
 
         val result = txRunner.withTransaction {
             val target = listDao.get(toListId)
-            if (target == null || target.isArchived) {
+            if (target == null || target.isArchived || target.type != ListType.STATIC) {
                 return@withTransaction Result(inverse = {}, count = 0)
             }
 

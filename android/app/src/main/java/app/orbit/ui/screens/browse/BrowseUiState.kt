@@ -50,7 +50,14 @@ import app.orbit.data.Contact
  * `Loading` = the list's feed has not emitted yet (BROWSE-06); the screen
  * shows a skeleton. Before 2026-10-05 this variant was "retired" and the VM
  * started at `Empty`, so a full list flashed "No one here yet" first.
- * `Error` = a source flow failed (BROWSE-06); the screen offers Retry.
+ * `Error` = a source flow failed (BROWSE-06), or the route's list id did not
+ * parse (a loud guard, rules.md Code 3: until 2026-10-06 that case was `Empty`,
+ * whose "Add people" opened the picker for a list that does not exist).
+ *
+ * Whether the browsed list is smart is not on this state: the app bar's "+"
+ * and the Empty state's "Add people" render outside `Ready`, so the list's
+ * type rides [BrowseViewModel.listType] beside [BrowseViewModel.listName],
+ * from the same `BrowseFeed.lists` source.
  */
 sealed interface BrowseUiState {
 
@@ -65,9 +72,16 @@ sealed interface BrowseUiState {
         val activeFilters: Set<BrowseFilter>,
         val callLogPermissionDenied: Boolean,
         // Multi-select widening (MOVE-01, MOVE-02, MOVE-06).
-        // `isMultiSelect` toggles via long-press entry / BackHandler exit / empty-selection auto-exit.
+        // `isMultiSelect` toggles via the app bar's Select, a row's long-press entry,
+        // BackHandler exit, or the empty-selection auto-exit (deselecting the last
+        // row; an entry with nothing selected does not trip it).
         // `selectedIds` carries domain entity ids (Long) — UI rows convert "c-$id" strings to Longs.
-        // `isCommitting` blocks duplicate dispatches during BulkRemove/Ignore/Pause/Move/Copy.
+        // `isCommitting` is true while a bulk write (Remove/Ignore/Pause/Move/Copy) is in
+        // flight. The VM's handlers take it with `compareAndSet(false, true)`, so a
+        // second tap while one runs returns before reading the selection, and the
+        // selection bar reads it to disable its controls meanwhile (browse-2: two quick
+        // taps on Remove once wrote twice, and the second, empty inverse replaced the
+        // only Undo).
         val isMultiSelect: Boolean = false,
         val selectedIds: Set<Long> = emptySet(),
         val isCommitting: Boolean = false,

@@ -9,10 +9,12 @@ import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListMembershipEntity
+import app.orbit.data.entity.ListType
 import app.orbit.data.feed.BrowseFeed
 import app.orbit.data.mappers.toUiContact
 import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ListRepository
+import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.model.PauseDuration
 import app.orbit.domain.search.ContactSearch
@@ -51,12 +53,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Browse ViewModel — wires per-list filtering + lastCallAt sort +
+ * Browse ViewModel: wires per-list filtering + queue-order sort +
  * debounced search + 2 filter chips + curtain-aware UI.
  *
- * Multi-select widening — multi-select state + 11 dispatch methods + bulk
+ * Multi-select widening: multi-select state + the dispatch methods + bulk
  * use-case injection (Move/Copy/BulkRemove/BulkIgnore/BulkPause) + UndoStack +
- * snackbar event flow.
+ * snackbar event flow. Every bulk handler takes `_isCommitting` with
+ * `compareAndSet(false, true)` before it reads the selection, so a second tap
+ * while one write is in flight returns at once (browse-2).
  *
  * Sort: queue order (matching [SurfaceQueueUseCase]); non-queued members
  * (paused / out-of-active-hours / no-template / engine-null) trail, sorted by
@@ -95,10 +99,20 @@ class BrowseViewModel @Inject constructor(
     private val ignoreContactUseCase: IgnoreContactUseCase,
     private val pauseContactUseCase: PauseContactUseCase,
     private val undoStack: UndoStack,
+    // WIDGET-06 (wnl-6): the unpause and the pause-undo paths below write
+    // `setPausedUntil` directly rather than through a use case, so they fire
+    // the widget refresh themselves; otherwise a person the user just unpaused
+    // stayed off the widget (or a re-paused one stayed on it, with a live Call
+    // button) until the hourly sweep. Defaulted so JVM fixtures that construct
+    // the VM positionally keep compiling (the use cases' precedent).
+    private val widgetRefreshTrigger: WidgetRefreshTrigger = WidgetRefreshTrigger { },
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    // listId arrives as String. null parse -> empty UI.
+    // listId arrives as String; list ids are Longs (Routes.browse takes
+    // ListEntity.id). A parse failure is a caller bug, so it is `Error`, not
+    // `Empty` (rules.md Code 3): the Empty fallback used to offer "Add people"
+    // for a list that does not exist (browse-19).
     private val listId: Long? = savedStateHandle.get<String>("listId")?.toLongOrNull()
 
     // Zone for the shared relative-time formatter (CallLogViewModel
@@ -153,6 +167,25 @@ class BrowseViewModel @Inject constructor(
                 initialValue = ""
             )
 
+    /**
+     * The browsed list's type, from the same source as [listName]; null until
+     * the list row has emitted. A smart list's members are written by
+     * `SmartListMembershipSync`, not by the user (ListRow.kt's "+" and
+     * MembersPreview hide their add and remove controls for the same reason),
+     * so the screen hides "+", the Empty state's "Add people", and the
+     * selection bar's Remove and Move while this is [ListType.SMART]
+     * (menus-1, browse-1). It rides beside the state contract, not on `Ready`,
+     * because the app bar and the Empty state render outside `Ready`.
+     */
+    val listType: StateFlow<ListType?> =
+        browseFeed.lists
+            .map { lists -> lists.firstOrNull { it.id == listId }?.type }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000L),
+                initialValue = null
+            )
+
     // ─── Multi-select state ─────────────────────────────────────────────────────
     //
     // M4 + H5: `selectedIdsFlow` and `isMultiSelectFlow` use
@@ -181,9 +214,10 @@ class BrowseViewModel @Inject constructor(
     val snackbarEvents: SharedFlow<SnackbarEvent> = _snackbarEvents.asSharedFlow()
 
     /**
-     * Non-archived lists for the inline Move/Copy `ListSelectorSheet`. Filters
-     * out the source list at sheet level (Move cannot target source); Copy
-     * shows all.
+     * Every list, for the inline Move/Copy `ListSelectorSheet`, which keeps the
+     * regular (static), non-archived ones other than this list: a smart list
+     * fills itself from its rule, so it is never a target, and copying people
+     * onto the list they are already on would report a copy that did nothing.
      *
      * Sourced from process-scoped [BrowseFeed.lists]; the VM-owned
      * `stateIn(WhileSubscribed)` block is gone (ADR 0006 §Rule 1).
@@ -216,11 +250,12 @@ class BrowseViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<BrowseUiState> =
         if (listId == null) {
-            flowOf<BrowseUiState>(BrowseUiState.Empty)
+            // browse-19: a malformed route is a loud guard, not an empty list.
+            flowOf<BrowseUiState>(BrowseUiState.Error)
                 .stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5_000L),
-                    initialValue = BrowseUiState.Empty
+                    initialValue = BrowseUiState.Error
                 )
         } else {
             combine(
@@ -266,8 +301,21 @@ class BrowseViewModel @Inject constructor(
 
     // ─── Multi-select transitions (MOVE-01, MOVE-06) ────────────────────────────
 
+    /** A row's "Select" (long-press): multi-select with that row selected. */
     fun onEnterMultiSelect(initialId: Long) {
         savedStateHandle[KEY_SELECTED_IDS] = longArrayOf(initialId)
+        savedStateHandle[KEY_IS_MULTI_SELECT] = true
+    }
+
+    /**
+     * The app bar's Select (vision BROWSE-2, browse-4): multi-select with
+     * nothing selected yet. MOVE-06's auto-exit lives in [onToggleSelect]
+     * only, so an empty entry stays until Back, the bar's close, or a
+     * selection; the bar keeps its actions disabled meanwhile, so nothing
+     * dispatches on an empty set (rules.md Code 3).
+     */
+    fun onEnterMultiSelect() {
+        savedStateHandle[KEY_SELECTED_IDS] = LongArray(0)
         savedStateHandle[KEY_IS_MULTI_SELECT] = true
     }
 
@@ -283,27 +331,35 @@ class BrowseViewModel @Inject constructor(
         savedStateHandle[KEY_IS_MULTI_SELECT] = false
     }
 
-    fun onSelectAllVisible(visibleIds: Set<Long>) {
-        // MOVE-05: Select-all = visible filtered rows (UI-rendered).
-        val next = selectedIdsFlow.value + visibleIds
-        savedStateHandle[KEY_SELECTED_IDS] = next.toLongArray()
-    }
-
+    /**
+     * MOVE-05: the overflow's "Select all". The screen passes the ids of
+     * `Ready.contacts`, which is already the searched and filtered set, so the
+     * selection covers rows not yet on screen too. The VM operates on the id
+     * set passed in and never walks UI nodes. (An `onSelectAllVisible` for the
+     * rendered rows only existed beside this until 2026-10-06 with no caller.)
+     */
     fun onSelectAllMatching(matchingIds: Set<Long>) {
-        // MOVE-05: Select-all-matching = all filtered rows incl. unrendered.
-        // Pitfall 8 — VM operates on the matching id set passed in, NEVER walks UI nodes.
         val next = selectedIdsFlow.value + matchingIds
         savedStateHandle[KEY_SELECTED_IDS] = next.toLongArray()
     }
 
     // ─── Bulk dispatch — Remove/Ignore/Pause use the bulk use cases ─────────────
+    //
+    // browse-2: each handler claims `_isCommitting` with compareAndSet BEFORE it
+    // reads the selection. Two quick taps on Remove used to launch two
+    // coroutines before onExitMultiSelect cleared the ids: the second found
+    // nothing left to snapshot, so its inverse restored nothing, yet it
+    // reported the full count, showed a second snackbar and, through
+    // UndoStack.put (depth 1), replaced the only real Undo. The bar disables
+    // its controls while this is true, so the guard is the backstop, not the
+    // only line.
 
     fun onBulkRemove() = viewModelScope.launch {
-        val ids = selectedIdsFlow.value.toList()
-        if (ids.isEmpty()) return@launch
-        val srcListId = listId ?: return@launch
-        _isCommitting.value = true
+        if (!_isCommitting.compareAndSet(expect = false, update = true)) return@launch
         try {
+            val ids = selectedIdsFlow.value.toList()
+            if (ids.isEmpty()) return@launch
+            val srcListId = listId ?: return@launch
             val sourceListName = listRepo.getById(srcListId)?.name ?: ""
             val result = bulkRemoveFromListUseCase(srcListId, ids)
             undoStack.put(UndoStack.PendingUndo(result.inverse))
@@ -319,10 +375,10 @@ class BrowseViewModel @Inject constructor(
     }
 
     fun onBulkIgnore() = viewModelScope.launch {
-        val ids = selectedIdsFlow.value.toList()
-        if (ids.isEmpty()) return@launch
-        _isCommitting.value = true
+        if (!_isCommitting.compareAndSet(expect = false, update = true)) return@launch
         try {
+            val ids = selectedIdsFlow.value.toList()
+            if (ids.isEmpty()) return@launch
             val result = bulkIgnoreUseCase(ids)
             undoStack.put(UndoStack.PendingUndo(result.inverse))
             _snackbarEvents.tryEmit(
@@ -335,10 +391,10 @@ class BrowseViewModel @Inject constructor(
     }
 
     fun onBulkPause(duration: PauseDuration) = viewModelScope.launch {
-        val ids = selectedIdsFlow.value.toList()
-        if (ids.isEmpty()) return@launch
-        _isCommitting.value = true
+        if (!_isCommitting.compareAndSet(expect = false, update = true)) return@launch
         try {
+            val ids = selectedIdsFlow.value.toList()
+            if (ids.isEmpty()) return@launch
             val result = bulkPauseUseCase(ids, duration)
             undoStack.put(UndoStack.PendingUndo(result.inverse))
             _snackbarEvents.tryEmit(SnackbarEvent.undoable(pausedPeopleSnackbar(result.count, duration)))
@@ -360,6 +416,8 @@ class BrowseViewModel @Inject constructor(
     // Pause has no `inverse` from the use case (it returns Unit), so we
     // capture the prior `pausedUntil` Instant before dispatch and build the
     // inverse closure here against `contactRepo.setPausedUntil(id, prior)`.
+    // Those direct writes change who the widget may surface, so each fires
+    // the widget refresh the use cases fire for theirs (WIDGET-06).
 
     fun onSingleRowIgnore(contactId: Long, contactName: String) = viewModelScope.launch {
         val result = ignoreContactUseCase(contactId)
@@ -376,7 +434,15 @@ class BrowseViewModel @Inject constructor(
     fun onSingleRowUnpause(contactId: Long, contactName: String) = viewModelScope.launch {
         val prior = contactRepo.getById(contactId)?.pausedUntil
         contactRepo.setPausedUntil(contactId, null)
-        undoStack.put(UndoStack.PendingUndo(inverse = { contactRepo.setPausedUntil(contactId, prior) }))
+        widgetRefreshTrigger.scheduleRefresh()
+        undoStack.put(
+            UndoStack.PendingUndo(
+                inverse = {
+                    contactRepo.setPausedUntil(contactId, prior)
+                    widgetRefreshTrigger.scheduleRefresh()
+                }
+            )
+        )
         _snackbarEvents.tryEmit(
             SnackbarEvent.undoable(UiText.res(R.string.components_snackbar_unpaused, contactName))
         )
@@ -385,8 +451,16 @@ class BrowseViewModel @Inject constructor(
     fun onSingleRowPause(contactId: Long, contactName: String, duration: PauseDuration) =
         viewModelScope.launch {
             val prior = contactRepo.getById(contactId)?.pausedUntil
+            // The use case fires the widget refresh for the forward write.
             pauseContactUseCase(contactId, duration)
-            undoStack.put(UndoStack.PendingUndo(inverse = { contactRepo.setPausedUntil(contactId, prior) }))
+            undoStack.put(
+                UndoStack.PendingUndo(
+                    inverse = {
+                        contactRepo.setPausedUntil(contactId, prior)
+                        widgetRefreshTrigger.scheduleRefresh()
+                    }
+                )
+            )
             _snackbarEvents.tryEmit(SnackbarEvent.undoable(pausedSnackbar(contactName, duration)))
         }
 
@@ -398,11 +472,11 @@ class BrowseViewModel @Inject constructor(
     // "Add" entry, which doesn't need to carry pre-selected ids).
 
     fun onBulkMove(targetListId: Long, targetListName: String) = viewModelScope.launch {
-        val ids = selectedIdsFlow.value.toList()
-        val srcListId = listId ?: return@launch
-        if (ids.isEmpty()) return@launch
-        _isCommitting.value = true
+        if (!_isCommitting.compareAndSet(expect = false, update = true)) return@launch
         try {
+            val ids = selectedIdsFlow.value.toList()
+            val srcListId = listId ?: return@launch
+            if (ids.isEmpty()) return@launch
             val result = moveUseCase(srcListId, targetListId, ids)
             emitBatchResult(
                 result.count,
@@ -416,10 +490,10 @@ class BrowseViewModel @Inject constructor(
     }
 
     fun onBulkCopy(targetListId: Long, targetListName: String) = viewModelScope.launch {
-        val ids = selectedIdsFlow.value.toList()
-        if (ids.isEmpty()) return@launch
-        _isCommitting.value = true
+        if (!_isCommitting.compareAndSet(expect = false, update = true)) return@launch
         try {
+            val ids = selectedIdsFlow.value.toList()
+            if (ids.isEmpty()) return@launch
             val result = copyUseCase(targetListId, ids)
             emitBatchResult(
                 result.count,
@@ -433,10 +507,12 @@ class BrowseViewModel @Inject constructor(
     }
 
     /**
-     * Move and Copy report a count of 0 when they short-circuit (a missing or
-     * archived destination). That used to put an empty snackbar with Undo on
-     * screen, an Undo for nothing; it is now a failed save (rules.md Code 3),
-     * the way the contact picker reports the same case.
+     * Move and Copy report a count of 0 when they short-circuit (a missing,
+     * archived or smart destination; the sheet offers none of those, so this
+     * is the backstop for a list that changed meanwhile). That used to put an
+     * empty snackbar with Undo on screen, an Undo for nothing; it is now a
+     * failed save (rules.md Code 3), the way the contact picker reports the
+     * same case.
      */
     private fun emitBatchResult(count: Int, inverse: suspend () -> Unit, message: UiText) {
         if (count == 0) {

@@ -2,34 +2,43 @@
 <!--
     Browse (one list's people, with multi-select) and Search (everyone).
     Keys are area_what (features/_foundations/voice.md, "Where copy lives").
-    Shared snackbars (Ignored, Paused, Moved, Copied) are in strings_components.xml.
+    Shared snackbars (Ignored, Paused, Moved, Copied), the pause sheet, "Open settings",
+    "Try again" and the error body are in strings_components.xml.
 -->
 <resources>
 
     <!-- App bar. The list's own name is the title; this one shows under the privacy curtain
          or before the name loads. -->
     <string name="browse_title_fallback">Your people</string>
-    <!-- The "+" that opens the picker to add people to this list. -->
+    <!-- The "+" that opens the picker to add people to this list. Not offered on a smart list,
+         whose people come from its rule. -->
     <string name="browse_add_people">Add people</string>
+    <!-- The app-bar button that enters multi-select with nothing selected yet. -->
+    <string name="browse_select_people">Select people</string>
     <string name="browse_search_placeholder">Search your people</string>
     <!-- The same under the privacy curtain, which hides "your". -->
     <string name="browse_search_placeholder_curtain">Search people</string>
 
-    <!-- Filter chips. -->
-    <string name="browse_filter_called_recently">Called recently</string>
+    <!-- Filter chips. "Recently called" is the glossary's spelling (the picker's sort says the
+         same). -->
+    <string name="browse_filter_recently_called">Recently called</string>
     <string name="browse_filter_not_called_yet">Not called yet</string>
+    <!-- The notice above the rows on Browse and Search when call log access is off; its action
+         is "Open settings" (strings_components.xml). -->
     <string name="browse_call_log_denied_notice">Orbit can\'t see your calls, so call times are hidden.</string>
 
-    <!-- Section headings: who Orbit will suggest next, in order, and everyone else. -->
-    <string name="browse_section_up_next">Up next</string>
+    <!-- Section headings: who Orbit will suggest next, in order, and everyone else. "Next up" is
+         the glossary's spelling, the same as Home's cards. -->
+    <string name="browse_section_next_up">Next up</string>
     <string name="browse_section_on_this_list">On this list</string>
     <string name="browse_section_everyone_else">Everyone else</string>
 
+    <!-- The error title. The body and "Try again" are the shared components_error_* strings. -->
     <string name="browse_error_title">Couldn\'t load this list</string>
-    <string name="browse_error_body">Something went wrong reading it. Try again in a moment.</string>
-    <string name="browse_try_again">Try again</string>
     <string name="browse_empty_title">No one here yet</string>
     <string name="browse_empty_body">Add the people you\'d like this list to bring up.</string>
+    <!-- The same state on a smart list, which has no "Add people": its rule fills it. -->
+    <string name="browse_empty_body_smart">This list fills itself from its rule, and no one matches it right now.</string>
     <string name="browse_filtered_empty_title">No one matches these filters</string>
     <string name="browse_filtered_empty_body">Everyone on this list is hidden by the filters you chose.</string>
     <string name="browse_clear_filters">Clear filters</string>
@@ -59,27 +68,29 @@
         <item quantity="one">%1$d selected</item>
         <item quantity="other">%1$d selected</item>
     </plurals>
-    <string name="browse_select_more">More batch actions</string>
+    <!-- The three-dots button on the selection bar; the glossary's name for an overflow. -->
+    <string name="browse_select_more">More actions</string>
     <string name="browse_select_move">Move to…</string>
     <string name="browse_select_copy">Copy to…</string>
     <string name="browse_select_remove">Remove</string>
+    <!-- The overflow's items. "Select all" covers every row the search and filters match. -->
+    <string name="browse_select_all">Select all</string>
     <string name="browse_select_pause_all">Pause all</string>
     <string name="browse_select_ignore_all">Ignore all</string>
 
-    <!-- The sheet that picks a list to move or copy the selected people to. -->
+    <!-- The sheet that picks a list to move or copy the selected people to. It offers regular
+         lists only: a smart list fills itself from its rule. -->
     <string name="browse_move_to_which_list">Move to which list?</string>
     <string name="browse_copy_to_which_list">Copy to which list?</string>
+    <!-- The same sheet when no other regular list exists yet. -->
+    <string name="browse_move_no_targets_title">No other lists yet</string>
+    <string name="browse_move_no_targets_body">Make another list first.</string>
 
-    <!-- Pausing everyone selected. -->
-    <string name="browse_pause_title">Pause for how long?</string>
-    <string name="browse_pause_week">1 week</string>
-    <string name="browse_pause_month">1 month</string>
-    <string name="browse_pause_indefinitely">Indefinitely</string>
-
-    <!-- Snackbars after a batch change, with Undo. %1$d: how many people, %2$s: the list. -->
+    <!-- Snackbars after a batch change, with Undo. %1$d: how many people, %2$s: the list. The
+         noun is said ("1 person", "3 people"), as in "Ignored 3 people". -->
     <plurals name="browse_snackbar_removed">
-        <item quantity="one">Removed %1$d from %2$s</item>
-        <item quantity="other">Removed %1$d from %2$s</item>
+        <item quantity="one">Removed 1 person from %2$s</item>
+        <item quantity="other">Removed %1$d people from %2$s</item>
     </plurals>
     <plurals name="browse_snackbar_ignored">
         <item quantity="one">Ignored %1$d person</item>
@@ -92,9 +103,10 @@
     <string name="browse_search_hint">Search people</string>
     <string name="browse_search_empty_title">Find someone</string>
     <string name="browse_search_empty_body">Search everyone in your contacts by name or number.</string>
+    <!-- The error title. The body and "Try again" are the shared components_error_* strings. -->
     <string name="browse_search_error_title">Couldn\'t search right now</string>
-    <string name="browse_search_error_body">Something went wrong reading your contacts. Try again in a moment.</string>
     <string name="browse_search_not_on_a_list">Not on any list</string>
-    <string name="browse_search_add_to_list">Add to list</string>
+    <!-- Opens the list picker for this person; the glossary's one name for that action. -->
+    <string name="browse_search_add_to_lists">Add to lists</string>
 
 </resources>

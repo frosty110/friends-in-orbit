@@ -42,13 +42,28 @@ import app.orbit.ui.theme.OrbitTheme
  * clipped the count at 200% font scale (rubric gate G3). Every control here
  * is at least 48dp and every row grows with its text.
  *
- * Locked copy (verified verbatim against the copywriting contract):
+ * The three action buttons are disabled while [count] is 0 (the app bar's
+ * Select enters multi-select with nothing selected, and a bulk write on an
+ * empty set would be a silent no-op, rules.md Code 3) and while [enabled] is
+ * false (a bulk write is in flight, `Ready.isCommitting`; a second tap used to
+ * dispatch twice and replace the only Undo, browse-2). The overflow trigger
+ * stays tappable while the selection is empty because "Select all" lives in
+ * it; the menu disables its own bulk items instead.
+ *
+ * [showMove] and [showRemove] are false while browsing a smart list: its rows
+ * are written by `SmartListMembershipSync`, not by the user (ListRow.kt hides
+ * its "+" for the same reason), so Remove would be undone by the next
+ * reconcile and Move would re-add whoever still matches. Copy out of a smart
+ * list is fine and stays.
+ *
+ * Copy (strings_browse.xml):
  *  - Close icon contentDescription: "Exit selection"
- *  - Count title: "$count selected"
+ *  - Count title: "N selected"
  *  - Move text-button: "Move to…" (single Unicode horizontal-ellipsis char `…`)
  *  - Copy text-button: "Copy to…"
  *  - Remove text-button: "Remove"
- *  - Overflow icon contentDescription: "More batch actions"
+ *  - Overflow icon contentDescription: "More actions" (the glossary's name for
+ *    an overflow; it said "More batch actions" until 2026-10-06)
  *
  * The overflow ([MultiSelectOverflowMenu]) anchors from the dots-three-vertical icon —
  * caller hoists `var expanded by remember { mutableStateOf(false) }` and renders
@@ -68,7 +83,11 @@ fun MultiSelectActionBar(
     onRemove: () -> Unit,
     onOverflow: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    showMove: Boolean = true,
+    showRemove: Boolean = true,
 ) {
+    val actionsEnabled = enabled && count > 0
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -112,21 +131,28 @@ fun MultiSelectActionBar(
                 .fillMaxWidth()
                 .padding(horizontal = OrbitTheme.spacing.x2, vertical = OrbitTheme.spacing.x1),
         ) {
-            OrbitButton(
-                text = stringResource(R.string.browse_select_move),
-                onClick = onMove,
-                variant = OrbitButtonVariant.Ghost,
-            )
+            if (showMove) {
+                OrbitButton(
+                    text = stringResource(R.string.browse_select_move),
+                    onClick = onMove,
+                    variant = OrbitButtonVariant.Ghost,
+                    enabled = actionsEnabled,
+                )
+            }
             OrbitButton(
                 text = stringResource(R.string.browse_select_copy),
                 onClick = onCopy,
                 variant = OrbitButtonVariant.Ghost,
+                enabled = actionsEnabled,
             )
-            OrbitButton(
-                text = stringResource(R.string.browse_select_remove),
-                onClick = onRemove,
-                variant = OrbitButtonVariant.Ghost,
-            )
+            if (showRemove) {
+                OrbitButton(
+                    text = stringResource(R.string.browse_select_remove),
+                    onClick = onRemove,
+                    variant = OrbitButtonVariant.Ghost,
+                    enabled = actionsEnabled,
+                )
+            }
         }
         // 1dp hairline at bottom — gives the bar a defined edge in light mode.
         Box(
@@ -171,6 +197,44 @@ private fun MultiSelectActionBarNarrowPreview() {
                 onCopy = {},
                 onRemove = {},
                 onOverflow = {},
+            )
+        }
+    }
+}
+
+/** Right after the app bar's Select: nothing chosen yet, so the actions wait. */
+@PreviewLightDark
+@Composable
+private fun MultiSelectActionBarEmptyPreview() {
+    OrbitTheme {
+        Box(modifier = Modifier.background(OrbitTheme.colors.bg)) {
+            MultiSelectActionBar(
+                count = 0,
+                onExit = {},
+                onMove = {},
+                onCopy = {},
+                onRemove = {},
+                onOverflow = {},
+            )
+        }
+    }
+}
+
+/** Browsing a smart list: only Copy, since the rule owns the membership. */
+@PreviewLightDark
+@Composable
+private fun MultiSelectActionBarSmartListPreview() {
+    OrbitTheme {
+        Box(modifier = Modifier.background(OrbitTheme.colors.bg)) {
+            MultiSelectActionBar(
+                count = 3,
+                onExit = {},
+                onMove = {},
+                onCopy = {},
+                onRemove = {},
+                onOverflow = {},
+                showMove = false,
+                showRemove = false,
             )
         }
     }
