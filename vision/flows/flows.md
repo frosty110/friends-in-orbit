@@ -189,11 +189,11 @@ Each journey is playable in the Flows view. Order matters within a journey, so t
 
 **F3. Decide on the card: later, sooner, browse.** Swipe left or tap Later; swipe right or tap Sooner. Both buttons are named, there is no Skip, and each move shows a snackbar that names the person and says when they come back ("Kai will come up again on Thursday."), with its own Undo. Only the Call button dials; tapping the card opens details. The three-dots menu leads to S13, where the numbered queue lives under "Next up". If no one is eligible, S11 says "All quiet for now." and offers Browse.
 
-**F4. Start a new list.** S10 New list, S30 template sheet (each template names the rhythm it sets), Create, S31 List settings (saves as you go), S32 Add people, back to S31 with "Added 3 to Family", Done to S30. On S30 a row tap opens that list's cards (LIST-23); List settings is in the row menu.
+**F4. Start a new list.** S10 New list, S30 template sheet (each template names the rhythm it sets), Create, S31 List settings (saves as you go), S32 Add people, back to S31 with "Added 3 people to Family", Done to S30. On S30 a row tap opens that list's cards (LIST-23); List settings is in the row menu.
 
 **F5. Tidy a list in bulk.** S13, long-press a row, Select, tap more rows, Move to which list, snackbar with Undo.
 
-**F6. Find someone and file them.** S10 search icon, S22 type a name, Add to list, S21 tick lists, back to S22 with "Added to 1 list".
+**F6. Find someone and file them.** S10 search icon, S22 type a name, Add to lists, S21 tick lists, back to S22 with "Added to 1 list".
 
 **F7. Take a break from someone.** S20 More actions, Pause, pick a length (1 week, 1 month, Until you unpause; the same sheet Browse uses) with a snackbar and Undo. While paused, a line under the number says so and the menu offers Unpause. When a timed pause ends, S20 shows an unpause banner. Ignored people get back in from S41 under Settings with Unignore and Undo.
 
@@ -207,13 +207,7 @@ Each journey is playable in the Flows view. Order matters within a journey, so t
 
 ## Docs vs code
 
-Reading the code against `features/PAGE_VIEWS.md` and the feature specs turned up fourteen gaps on 2026-10-04. Eleven were closed on 2026-10-05, by fixing the code (B2, B3, B7, B9, B11), by rewriting the page views to the shipped screens (Home, Welcome, List settings, Settings, widgets, notifications, copy without em dashes) or by deleting the page view for a screen that does not exist (the "Up next / Queue" page; its queue is part of S13 Browse, `features/browse/README.md` BROWSE-01). Closed rows are deleted, as the rule below says. What remains:
-
-| Where | The docs say | The code does |
-|---|---|---|
-| S20 Contact detail | Ignored people look no different from anyone else here | True at `783a964`. This round's contact-detail package adds an "Ignored" (or "Archived") status line under the number; delete this row once it has merged. |
-| S32 Add people | Add, Move, Copy modes; "Skip for now" during onboarding | Only Add is reachable, plus a Re-link mode from S20 since the [B2](findings.md#high) fix (Browse moves and copies people with its own sheet). Skip for now never shows: its only caller passes no skip action, and this round's picker package keeps the parameter as a deprecated no-op. The page view ([picker-contacts](../../features/page-views/picker-contacts.md)) still lists all three modes and the skip. |
-| S42 Call history | Filters, one person's log, the honest states | The page view ([call-history](../../features/page-views/call-history.md)) has these, but not yet the long-press and three-dots menu (Call again, Open details) or the sticky day headings; this round's page-views package adds them. |
+Reading the code against `features/PAGE_VIEWS.md` and the feature specs turned up fourteen gaps on 2026-10-04. Eleven were closed on 2026-10-05, by fixing the code (B2, B3, B7, B9, B11), by rewriting the page views to the shipped screens (Home, Welcome, List settings, Settings, widgets, notifications, copy without em dashes) or by deleting the page view for a screen that does not exist (the "Up next / Queue" page; its queue is part of S13 Browse, `features/browse/README.md` BROWSE-01). The last three closed when the 2026-10-06 packages merged: S20's "Ignored" and "Archived" status line shipped with the contact-detail package (`714fa8c`), S32's skip went with the pickers package (`3613c95`, the `onSkip` parameter no longer exists and [picker-contacts](../../features/page-views/picker-contacts.md) lists no skip), and S42's day headings and row menu are in [call-history](../../features/page-views/call-history.md) since the page-views package (`779f873`). Closed rows are deleted, as the rule below says, so no row is open. A new gap goes in a table here with the columns Where, The docs say, The code does.
 
 ---
 

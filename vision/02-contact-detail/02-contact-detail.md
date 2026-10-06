@@ -6,16 +6,16 @@
 
 ---
 
-## Today (as of 2026-10-05)
+## Today (as of 2026-10-06)
 
 <img src="./actual-contact-detail-top.png" width="300" alt="Contact detail, top: a back arrow and a three-dots button; a large AQ initial circle, the name Avery Quinn, the number +1 5550100, a terracotta Call button beside a quiet Log a connection button, and On these lists with an Inner orbit chip." />
 <img src="./actual-contact-detail-bottom.png" width="300" alt="Contact detail, lower part: a Stats group listing Last call 11 days ago, Total calls 12, Average length 14 min, Longest gap 21 days, and Usually with an info tip, Evenings; an Add to lists button; the Notes section with an Add a note field and an Add button." />
 
-*JVM gallery render (`PreviewGalleryTest`, Robolectric, light, 411dp, font scale 1.0) at `783a964`, 2026-10-05, not a device capture (`ContactDetailScreen.ContactDetailContentPreview`, cropped in two).*
+*JVM gallery render (`PreviewGalleryTest`, Robolectric, light, 411dp, font scale 1.0) at `783a964`, 2026-10-05, not a device capture (`ContactDetailScreen.ContactDetailContentPreview`, cropped in two). The 2026-10-06 contact-detail package changed the overflow menu and the status line after this render; the bullets describe the merged build, and the [Contact detail page view](../../features/page-views/contact-detail.md) is canonical.*
 
 - Header: the face, **name** and **number** ("Number hidden" under the privacy curtain), **Call** (the screen's one accent) and **Log a connection**. The sheet has two modes: **We connected** (a call or a visit Orbit could not see) and **Couldn't reach them** (an attempt: voicemail, no answer); an attempt shows as "Attempted" in history and stays out of the stats.
-- A status line under the number while a pause is in force: "Paused until 12 Oct" or "Paused until you unpause".
-- **More actions for Avery** (the three dots): *View all calls*, *Pause* (or *Unpause* while paused), *Ignore*. Pause opens the shared sheet: 1 week, 1 month, Until you unpause; the snackbar names the length and offers Undo.
+- A status line under the number where one applies: "Paused until 12 Oct" or "Paused until you unpause" while a pause is in force, "Ignored" or "Archived" for someone who is.
+- **More actions for Avery** (the three dots): *View all calls*, *Pause* (or *Unpause* while paused; not offered while the person is ignored), *Open in Contacts* (when the person is in your phone's contacts), then *Ignore* (or *Unignore* while ignored). Pause opens the shared sheet: 1 week, 1 month, Until you unpause; the snackbar names the length and offers Undo.
 - **On these lists**: the membership chips ("Not on any list yet" when none). Under the curtain each reads "List".
 - **Stats**: *Last call · Total calls · Average length · Longest gap · Usually* (with an info tip). A stat without enough history says **Not enough calls yet** in words, never a dash (CONTACT-3).
 - **Add to lists** opens the list picker.
