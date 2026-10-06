@@ -106,8 +106,8 @@ Status is about *sequencing and confidence*, not priority ranking. A "Later" can
 
 This directory proposes *what* and *why*. The *how* is bound by the existing system. Before any of these becomes code, it must pass the same bars everything else does:
 
-- **Design tokens only.** Colours, type, spacing, radius, motion come from `android/app/src/main/java/app/orbit/ui/theme/` (warm cream `#FAF6F0`, single terracotta accent `#C8654A`, Inter, 4dp grid, 250ms base motion, ≤5% overshoot). Source of truth: `design/colors_and_type.css`. Never hardcode.
-- **The voice.** Sentence case, no exclamation marks, no gamification (no streaks/achievements/XP), no shame framing ("you haven't called X in N days" is forbidden), no emoji in product copy. Pattern language over performance language. See `README.md` → "Content fundamentals" and `features/_foundations/`.
+- **Design tokens only.** Colours, type, spacing, radius, motion come from `android/app/src/main/java/app/orbit/ui/theme/` (warm cream `#FAF6F0`, single terracotta accent `#B85338`, Inter, 4dp grid, 250ms base motion, ≤5% overshoot). Source of truth: `design/colors_and_type.css`, kept in step with the Kotlin (`DESIGN.md`). Never hardcode.
+- **The voice.** Sentence case, no exclamation marks, no gamification (no streaks/achievements/XP), no shame framing ("you haven't called X in N days" is forbidden), no emoji in product copy, no "due" as a deadline. Pattern language over performance language. See [`features/_foundations/voice.md`](../features/_foundations/voice.md), glossary included: it is canonical for wording and wins over `design/README.md`.
 - **The mission filter.** If a move doesn't serve "hand you one name with enough context to say yes" — or clearly support it — it's a distraction, no matter how nice.
 - **Accessibility floor.** 16sp minimum body, 48dp minimum touch targets, font-scale safety.
 

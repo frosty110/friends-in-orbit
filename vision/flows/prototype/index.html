@@ -15,16 +15,17 @@
 <style>
 /* Layout: review workbench. Screen rail | phone stage | inspector.
    Two layers of colour: the phone uses Orbit's own tokens (ported from
-   design/colors_and_type.css, same values as vision/_prototype/theme.css);
+   design/colors_and_type.css, same values as vision/_prototype/theme.css,
+   brought to the 2026-10-05 contrast values: accent #B85338, fg-subtle #716A63);
    everything outside the phone is review chrome, and review marks
    (hotspots, flow cues, feedback) use the blue "markup" ink so they can
    never be mistaken for app UI. */
 :root {
   /* Orbit product tokens (light) */
   --bg: #FAF6F0; --bg-subtle: #F2ECE2; --surface: #FFFFFF; --surface-alt: #F2ECE2;
-  --fg: #211E1C; --fg-soft: #3A3531; --fg-muted: #6B6560; --fg-subtle: #9A928B;
+  --fg: #211E1C; --fg-soft: #3A3531; --fg-muted: #6B6560; --fg-subtle: #716A63;
   --line: #E5DDD1; --line-soft: #EFE8DC;
-  --accent: #C8654A; --accent-press: #9B4A32; --accent-tint: #EDD6CE; --accent-fg: #FFFFFF;
+  --accent: #B85338; --accent-press: #90412C; --accent-tint: #EDD6CE; --accent-fg: #FFFFFF;
   --good: #4F6A4B; --good-tint: #D8E3D6; --warn: #6F5E1C; --warn-tint: #EEE3B8;
   --heat-0: #EFE8DC; --heat-1: #E2C9A6; --heat-2: #D2A66F; --heat-3: #B9763F; --heat-4: #9B4A32;
   --p-terracotta-bg: #EDD6CE; --p-terracotta-fg: #9B4A32;
@@ -39,7 +40,7 @@
   --bezel: #1B1917; --bezel-edge: #3A3531;
   --wallpaper-a: #6F8B6B; --wallpaper-b: #2E3B33;
   --dir-out: #5E3D96; --dir-in: #2F84B8;
-  --accent-deep: #9B4A32; --tone-b-band: #F2ECE2;
+  --accent-deep: #90412C; --tone-b-band: #F2ECE2;
 
   /* Review chrome tokens (light) */
   --chrome-bg: #ECE6DC; --chrome-panel: #FBF9F5; --chrome-fg: #26221F; --chrome-muted: #6E6862;
@@ -54,9 +55,9 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #1F1C1A; --bg-subtle: #25211F; --surface: #2B2724; --surface-alt: #35302C;
-    --fg: #F0EBE4; --fg-soft: #DDD5CC; --fg-muted: #C9C2B9; --fg-subtle: #8F887F;
+    --fg: #F0EBE4; --fg-soft: #DDD5CC; --fg-muted: #C9C2B9; --fg-subtle: #9D978F;
     --line: #3D3631; --line-soft: #332E2A;
-    --accent: #D87560; --accent-press: #9B4A32; --accent-tint: #4A2D24; --accent-fg: #FFFFFF;
+    --accent: #D87560; --accent-press: #D3654D; --accent-tint: #4A2D24; --accent-fg: #211E1C;
     --good: #C6D8C2; --good-tint: #344035; --warn: #E6D69A; --warn-tint: #4A3E25;
     --heat-0: #332E2A; --heat-1: #5A4632; --heat-2: #8A6440; --heat-3: #B9824E; --heat-4: #D87560;
     --p-terracotta-bg: #4A2D24; --p-terracotta-fg: #EDC3B4;
@@ -81,9 +82,9 @@
 }
 :root[data-theme="dark"] {
   --bg: #1F1C1A; --bg-subtle: #25211F; --surface: #2B2724; --surface-alt: #35302C;
-  --fg: #F0EBE4; --fg-soft: #DDD5CC; --fg-muted: #C9C2B9; --fg-subtle: #8F887F;
+  --fg: #F0EBE4; --fg-soft: #DDD5CC; --fg-muted: #C9C2B9; --fg-subtle: #9D978F;
   --line: #3D3631; --line-soft: #332E2A;
-  --accent: #D87560; --accent-press: #9B4A32; --accent-tint: #4A2D24; --accent-fg: #FFFFFF;
+  --accent: #D87560; --accent-press: #D3654D; --accent-tint: #4A2D24; --accent-fg: #211E1C;
   --good: #C6D8C2; --good-tint: #344035; --warn: #E6D69A; --warn-tint: #4A3E25;
   --heat-0: #332E2A; --heat-1: #5A4632; --heat-2: #8A6440; --heat-3: #B9824E; --heat-4: #D87560;
   --p-terracotta-bg: #4A2D24; --p-terracotta-fg: #EDC3B4;
