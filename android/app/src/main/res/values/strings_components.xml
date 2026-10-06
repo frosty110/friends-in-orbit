@@ -120,10 +120,4 @@
     <!-- Shared error state (rubric D6): what happened, that nothing is lost, and Retry. -->
     <string name="components_error_body">Nothing is lost. Try again in a moment.</string>
     <string name="components_error_retry">Try again</string>
-
-    <!-- The button that opens this app's page in the phone's own settings (a permission the
-         OS will no longer ask about, notifications switched off). Sentence case. -->
-    <string name="components_action_open_phone_settings">Open phone settings</string>
-    <!-- After reversing an ignore (Settings > Ignored, the picker), with Undo. %1$s: the person's name. -->
-    <string name="components_snackbar_unignored">Unignored %1$s</string>
 </resources>
