@@ -115,7 +115,6 @@
     <!-- The list no longer exists (deleted elsewhere, or a stale link). -->
     <string name="lists_config_not_found">List not found</string>
     <string name="lists_config_not_found_body">It may have been deleted.</string>
-    <string name="lists_config_go_back">Go back</string>
 
     <!-- Section titles. -->
     <string name="lists_section_name">Name</string>

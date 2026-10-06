@@ -791,7 +791,7 @@ private fun NotFoundEmpty(mode: PickerMode, onBack: () -> Unit) {
     OrbitScreenMessage(
         title = stringResource(if (relink) R.string.picker_person_not_found else R.string.picker_list_not_found),
         body = stringResource(if (relink) R.string.picker_person_not_found_body else R.string.picker_list_not_found_body),
-        actionLabel = stringResource(R.string.picker_go_back),
+        actionLabel = stringResource(R.string.components_action_go_back),
         onAction = onBack,
         // The only thing to do on the screen, so it takes the accent.
         actionVariant = OrbitButtonVariant.Primary
@@ -822,14 +822,14 @@ private fun PickerEmptyMessage(
             OrbitScreenMessage(
                 icon = "users",
                 title = stringResource(R.string.picker_everyone_on_list_title, listName),
-                actionLabel = stringResource(R.string.picker_go_back),
+                actionLabel = stringResource(R.string.components_action_go_back),
                 onAction = onBack
             )
         }
         ContactPickerUiState.EmptyReason.NoRelinkTargets -> OrbitScreenMessage(
             icon = "users",
             title = stringResource(R.string.picker_relink_none_title),
-            actionLabel = stringResource(R.string.picker_go_back),
+            actionLabel = stringResource(R.string.components_action_go_back),
             onAction = onBack
         )
         ContactPickerUiState.EmptyReason.EveryoneIgnored -> OrbitScreenMessage(

@@ -73,9 +73,6 @@
     <string name="picker_list_not_found_body">It may have been removed.</string>
     <string name="picker_person_not_found">This person isn\'t in Orbit anymore</string>
     <string name="picker_person_not_found_body">They may have been removed.</string>
-    <!-- The one action on a not-found or nothing-to-add state. The same words as
-         Contact detail's "Go back". -->
-    <string name="picker_go_back">Go back</string>
 
     <string name="picker_no_device_contacts_title">No contacts on this device</string>
     <string name="picker_no_device_contacts_body">Add people to your phone\'s contacts, then come back here.</string>

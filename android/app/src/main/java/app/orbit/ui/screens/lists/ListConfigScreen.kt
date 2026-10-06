@@ -222,7 +222,7 @@ private fun ListConfigContent(
                 icon = "list-bullets",
                 title = stringResource(R.string.lists_config_not_found),
                 body = stringResource(R.string.lists_config_not_found_body),
-                actionLabel = stringResource(R.string.lists_config_go_back),
+                actionLabel = stringResource(R.string.components_action_go_back),
                 onAction = onBack,
                 actionVariant = OrbitButtonVariant.Primary,
             )

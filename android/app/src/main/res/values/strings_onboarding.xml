@@ -24,7 +24,6 @@
     <!-- Confirmation before skipping a permission. -->
     <string name="onb_skip_title">Skip for now?</string>
     <string name="onb_skip_confirm">Skip</string>
-    <string name="onb_skip_go_back">Go back</string>
     <string name="onb_skip_lost_contacts">Without contacts access, Orbit can\'t build your lists from your phone book.</string>
     <string name="onb_skip_lost_call_log">Without call log access, Orbit can\'t notice when you\'ve already called someone, so the same person may keep coming up.</string>
     <string name="onb_skip_lost_notifications">Without notifications, Orbit won\'t be able to nudge you when it\'s time to reach out.</string>
