@@ -42,8 +42,8 @@
 
 ## States
 
-- Loading: a quiet skeleton, never a blank page
-- Contacts permission not yet granted: "Allow access to your contacts" / "Orbit reads your phone contacts so you can add them to lists. Nothing is uploaded: your contacts stay on this device." with "Grant access" and "Not now"
+- Loading: a quiet skeleton, never a blank page; also while Orbit reads your contacts after you allow access here, so the screen never says everyone is already on the list before it has looked
+- Contacts permission not yet granted: "Allow access to your contacts" / "Orbit reads your phone contacts so you can add them to lists. Nothing is uploaded: your contacts stay on this device." with "Grant access" and "Not now". Allowing it here (or in the phone's settings, then coming back) reads your contacts right away, as allowing it in onboarding or Settings does
 - Turned off in the phone's settings: "Contacts access is off" / "Turn it on in your phone's settings to add people to your lists. Your contacts stay on this device." with "Open phone settings"
 - No contacts on the phone: "No contacts on this device" / "Add people to your phone's contacts, then come back here."
 - Everyone is already on the list: "Everyone in your contacts is already on {list}", with a way back
@@ -62,7 +62,7 @@
 
 ## Tests that pin it
 
-- `ContactPickerViewModelTest` (candidates, filters, sort, select all and its cap, commit and undo, the smart-list guard, Re-link, Error with the selection kept and recovery)
+- `ContactPickerViewModelTest` (candidates, filters, sort, select all and its cap, commit and undo, the smart-list guard, Re-link, Error with the selection kept and recovery, a grant made here runs the ingest and holds the skeleton until it is done)
 - `ContactPickerUiStateTest` (filters, counts, the empty reasons), `PickerCandidatesTest` (added this round), `PickerModeTitleTest`, `PickerRowMenuTest` (added this round: Open in Contacts, Ignore destructive, Unignore)
 - `ContactSearchTest`, `RelinkContactUseCaseTest`, `UnignoreContactUseCaseTest`
 - Gallery previews: `ContactPickerReadyPreviewLight`, `ContactPickerReadyPreviewDark`, `ContactPickerContentPreview`, `ContactPickerRationalePreviewLight`, `ContactPickerDeniedPreviewLight`, `EmptyDeviceContactsPreviewLight`, `FilterChipsRowPreview`, `SelectAllMatchingChipPreviewLight`, `PickerContactRowPreviewLight`, `BatchCounterAddPreviewLight`, the Error, not-found, no-matches, committing and Re-link previews added this round, with the curtain pass

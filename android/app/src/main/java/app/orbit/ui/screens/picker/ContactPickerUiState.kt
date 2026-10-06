@@ -92,6 +92,10 @@ data class ContactPickerUiState(
      *   [app.orbit.ui.components.OrbitListSkeleton] so a large address book
      *   never shows a blank page (it drew nothing until 2026-10-06, on the
      *   belief that the system dialog covered it; no dialog is up then).
+     *   Also the phase while the first contacts ingest after a grant made on
+     *   this screen is still in flight and Room has no candidates yet
+     *   (`resolvePickerPhase`): the skeleton, not an empty Ready that would
+     *   read as "everyone is already on the list".
      * - [PermissionRationale]: READ_CONTACTS not granted; show a rationale + "Allow" CTA.
      * - [PermissionDenied]: user dismissed the system dialog or set "Don't ask again".
      *   Show a settings deep-link.
