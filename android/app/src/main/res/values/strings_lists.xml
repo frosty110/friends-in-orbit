@@ -40,6 +40,9 @@
          nothing to set, so the line names the rhythm. -->
     <string name="lists_rhythm_late_night">Late night rhythm</string>
     <string name="lists_rhythm_energize">Energize rhythm</string>
+    <!-- Shown as a list's second line when its stored rule cannot be decoded; the deck
+         fails on the same data. -->
+    <string name="lists_rhythm_unreadable">Couldn\'t read this list\'s rhythm</string>
 
     <!-- Subtitle under a smart list's name: its rule, then its setting. -->
     <plurals name="lists_rule_summary_recently_added">

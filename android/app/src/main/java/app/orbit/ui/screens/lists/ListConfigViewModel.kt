@@ -227,19 +227,29 @@ class ListConfigViewModel @Inject constructor(
         )
     }
 
+    /**
+     * The per-list override, else the template's defaults, through the
+     * resolver this screen shares with the Lists row (the top-level
+     * [resolveRuleParams] in RuleParamsResolution.kt). Nothing configured and
+     * a blob that does not decode both come back null here: How often has
+     * nothing honest to show for either, and the Lists row is where the
+     * unreadable case is named ("Couldn't read this list's rhythm"). The
+     * domain's `OverrideResolver.resolveParamsFor` decodes the same JSON
+     * without a catch and throws, so a list whose override is unreadable
+     * here also fails to surface anyone in the deck and the queue.
+     */
     private fun resolveRuleParams(
         entity: ListEntity,
         ruleTemplate: RuleTemplateEntity?
     ): RuleParams? {
-        entity.ruleParamsOverrideJson?.let { override ->
-            return runCatching {
-                json.decodeFromString(RuleParams.serializer(), override)
-            }.getOrNull()
-        }
-        return ruleTemplate?.paramsJson?.let { paramsJson ->
-            runCatching {
-                json.decodeFromString(RuleParams.serializer(), paramsJson)
-            }.getOrNull()
+        val resolved = resolveRuleParams(
+            overrideJson = entity.ruleParamsOverrideJson,
+            templateParamsJson = ruleTemplate?.paramsJson,
+            json = json
+        )
+        return when (resolved) {
+            is RuleParamsResolution.Decoded -> resolved.params
+            RuleParamsResolution.None, RuleParamsResolution.Unreadable -> null
         }
     }
 
@@ -472,11 +482,13 @@ class ListConfigViewModel @Inject constructor(
 
     /**
      * H4 fix — wraps a mutation block with a uniform try/catch + snackbar
-     * surface. Without this, an exception inside `viewModelScope.launch` is
-     * silently dropped (the coroutine's uncaught handler on a viewModelScope is
-     * a no-op for non-Throwable types) and the UI shows stale optimistic state.
-     * `CancellationException` is rethrown so structured concurrency cancellation
-     * still propagates correctly when the screen leaves the back stack.
+     * surface. Without it an exception inside `viewModelScope.launch` is not
+     * dropped: viewModelScope installs no CoroutineExceptionHandler, so the
+     * exception reaches the thread's uncaught handler and crashes the app.
+     * The wrapper exists so a failed write tells the user instead (rules.md
+     * Code 3). `CancellationException` is rethrown so structured concurrency
+     * cancellation still propagates correctly when the screen leaves the back
+     * stack.
      *
      * The failure copy is the shared "Couldn't save your change"
      * (strings_components.xml), the same words Home and Lists use for the same
