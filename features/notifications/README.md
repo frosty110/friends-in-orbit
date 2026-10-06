@@ -1,7 +1,7 @@
 # notifications
 
 **Status:** shipped
-**Last reviewed:** 2026-10-05 (platform pass: lock screen, the named nudge)
+**Last reviewed:** 2026-10-06 (acceptance boxes tied to the tests that pin them)
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/notify/` — full notification system. `OrbitNotifications` registers only the `orbit.list_prompt` (DEFAULT importance) channel on startup; the retired `orbit.digest`, `orbit.incoming_followup`, and `orbit.incoming_followup.v2` channels are deleted on every cold start. `DailyDigestWorker` and `IncomingFollowUpWorker` were both deleted (ADR 0009 — notifications are pull, never push). One notification worker remains: `ListPromptWorker`.
 - `NudgeSchedule`: `@Serializable` per-list schedule model (days of week × times of day); stored as JSON in `ListEntity.nudgeScheduleJson` (schema v12 / `MIGRATION_11_12` backfill). `NudgeScheduler` (@Singleton) enqueues self-re-enqueueing `OneTimeWork` per list via `setInitialDelay` + `ExistingWorkPolicy.REPLACE`. `ListPromptWorker` (@HiltWorker) implements a 5-gate `doWork`: notifications-enabled check, DND check, list-muted check, due-count check, active-hours check; then posts the nudge built by `NudgeNotification`. Title = list name. Body = the list's next person by first name ("Kai is ready when you are. Want to call?", `NotificationCopy.nudgeNamedBody`) with their face and a Call action (NOTIF-14), or, when no one can be named or the name was just said (NOTIF-15, `nudgeSubject`), the name-free `NotificationCopy.nudgeBody` ("Someone in {list} is ready when you are. Want to call?" / "A few people in {list} are ready when you are. Start with one?"; the exact due count is deliberately never shown). Every nudge carries a name-free lock-screen version (NOTIF-13). Re-enqueues in `finally` block.
@@ -76,16 +76,17 @@ Defined 2026-10-05; NOTIF-01 to NOTIF-12 record what the code already cites, NOT
 ### Acceptance criteria
 
 - [ ] A list nudge fires within ±15 minutes of its scheduled slot (doze-compatible tolerance per ADR 0004).
-- [ ] Content passes voice rules automatically via formatter.
-- [ ] Per-list opt-out suppresses that list's nudge without affecting other lists.
-- [ ] The nudge tap deep-links to that list's card view, with Orbit open or closed.
+- [x] Content passes voice rules automatically via formatter (`CopyAuditTest.copy_hasNoForbiddenPatterns`).
+- [x] Per-list opt-out suppresses that list's nudge without affecting other lists (`ListPromptWorkerTest.worker_returnsSuccess_whenListMuted_andReEnqueues`).
+- [x] The nudge's route wins over any action on the launch intent and is handed to the nav host as is (`AppLinksTest.landingFor_extraWinsOverAction`, with `landingFor_callNext_beforeOnboarding_isNothing`, `landingFor_search_opensGlobalSearch` and `landingFor_unrelatedAction_isNothing` for the other launch shapes).
+- [ ] The nudge tap deep-links to that list's card view, with Orbit open or closed (device check: the cold-start timing, `onCreate` reading the intent, is not pinned on the JVM).
 - [ ] No notification fires in reaction to an event — missed/incoming calls surface in-app only (ADR 0009).
 - [ ] `POST_NOTIFICATIONS` requested on Android 13+ before first schedule.
 - [ ] DND respected — manually verify by toggling system DND.
-- [ ] Deleting a list cancels its scheduled work.
+- [x] Deleting a list cancels its scheduled work (`ListsManagerViewModelTest.deleteList_defers_the_purge_until_commit_then_cancels_nudge_chain`, which asserts the cancel on commit).
 - [ ] With "hide sensitive content" on, a locked phone shows only "Someone is ready when you are" (NOTIF-13). Manual, on a device.
 - [ ] A named nudge's Call opens the dialer with the number and places no call (NOTIF-14). Manual, on a device.
-- [ ] Two nudges in a row for an unchanged list name the person once (NOTIF-15; `ListPromptWorkerTest`).
+- [x] Two nudges in a row for an unchanged list name the person once (NOTIF-15; `ListPromptWorkerTest.nextNudge_goesOutWithoutAName_whenTheSamePersonIsStillNext`).
 
 ### Not in scope
 

@@ -5,7 +5,7 @@
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/widget/`. `OrbitWidget2x2` ("Next call") and `OrbitWidget4x2` ("Call suggestions") with their receivers; `WidgetLayouts.kt` (breakpoints and arrangements), `WidgetPeople.kt` (each person's face, colours and taps, resolved before composition), `WidgetContent.kt` (the Glance composables), `WidgetUpdateScheduler` / `WidgetUpdateWorker` (when they refresh). Data: `domain/usecase/WidgetSurfaceUseCase.kt`. Theme: `ui/theme/WidgetColors.kt`, `ui/theme/WidgetTheme.kt`. The avatar: `ui/components/AvatarBitmaps.kt`, `ui/components/AvatarFace.kt`. Resources: `res/xml/widget_info_*.xml`, `res/layout/widget_preview_*.xml`, `res/layout/widget_loading.xml`, `res/drawable-nodpi/widget_preview_*.png`.
 - Launcher: `android/app/src/main/java/app/orbit/launcher/LauncherShortcuts.kt`, `nav/AppLinks.kt`, `MainActivity.routeFrom`; `res/mipmap-anydpi-v26/ic_launcher*.xml` (themed icon).
-- Tests: `OrbitWidgetLayoutTest`, `WidgetPreviewResourcesTest`, `WidgetPeopleTest` (what the widgets draw and what a tap does: masking, the face, `max`, the dial and open intents; Robolectric), `WidgetUpdateSchedulerTest`, `UpdateTriggersTest`, `WidgetSurfaceUseCaseTest`, `WidgetColorsTest`, `AvatarFaceTest`, `AppLinksTest`, `LauncherShortcutsTest`. Renders of both widgets at every breakpoint and typical phone sizes, the empty state and the picker previews, light and dark: `PlatformSurfacesGalleryTest` (`-Pscreenshots`, writes `build/screenshots/platform/`).
+- Tests: `OrbitWidgetLayoutTest`, `WidgetPreviewResourcesTest`, `WidgetPeopleTest` (what the widgets draw and what a tap does: masking, the face, `max`, the dial and open intents; Robolectric), `WidgetUpdateSchedulerTest`, `UpdateTriggersTest`, `WidgetSurfaceUseCaseTest`, `WidgetColorsTest`, `AvatarFaceTest`, `AppLinksTest`, `LauncherShortcutsTest`, `LauncherIconTest`. Renders of both widgets at every breakpoint and typical phone sizes, the empty state and the picker previews, light and dark: `PlatformSurfacesGalleryTest` (`-Pscreenshots`, writes `build/screenshots/platform/`).
 
 ---
 
@@ -76,7 +76,7 @@ Defined 2026-10-05; WIDGET-01 to WIDGET-06 record what the code already cites, t
 - **WIDGET-10: "All quiet for now."** The empty state, with the Orbit glyph, opening Orbit on tap.
 - **WIDGET-11: It looks like Orbit.** Android's widget corner radius, the user's theme in light and dark, and the app's avatar (photo, else the monogram on its palette colour, a circle), from the same rules as the in-app `Avatar` (`avatarInitials`, `OrbitTones.avatarPalette`). The first frame, before Orbit has drawn, is the card with the Orbit glyph, not a spinner.
 - **LAUNCH-01: Shortcuts that name no one.** "Call next" and "Search" as dynamic shortcuts with fixed labels and an action, never a route or list id; `MainActivity` resolves them when tapped, after onboarding. No per-list or per-person shortcuts.
-- **LAUNCH-02: Themed icon.** The adaptive launcher icon and the shortcut icons carry a monochrome layer for Android 13+ themed icons.
+- **LAUNCH-02: Themed icon.** The adaptive launcher icon and the shortcut icons carry a monochrome layer for Android 13+ themed icons: `res/mipmap-anydpi-v26/ic_launcher.xml` declares `<monochrome>` beside its foreground and background, and so does each shortcut icon. Pinned by `LauncherIconTest`, which parses those resources for the element; whether the launcher tints it is a device check.
 
 ### Acceptance criteria
 
@@ -88,6 +88,7 @@ Defined 2026-10-05; WIDGET-01 to WIDGET-06 record what the code already cites, t
 - [ ] Rounded corners match the other widgets on the home screen (device check; the JVM render cannot clip to outlines).
 - [ ] The picker shows the preview, in light and dark (device check).
 - [ ] With themed icons on (Android 13+), Orbit's icon is tinted like the rest (device check).
+- [x] A shortcut's action and a widget's route resolve to the right landing, and the shortcuts wait for onboarding (`AppLinksTest.landingFor_extraWinsOverAction`, `landingFor_callNext_beforeOnboarding_isNothing`, `landingFor_search_opensGlobalSearch`, `landingFor_unrelatedAction_isNothing`).
 - [ ] Long-pressing the icon shows "Call next" and "Search"; "Call next" opens the deck of the person the widget shows (device check).
 
 ### Not in scope
