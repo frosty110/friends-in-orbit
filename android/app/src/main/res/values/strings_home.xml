@@ -70,9 +70,12 @@
         <item quantity="one">%1$d call</item>
         <item quantity="other">%1$d calls</item>
     </plurals>
-    <!-- Screen-reader label for one day column. %1$s: the day ("Monday"), %2$s: "2 calls",
+    <!-- Screen-reader label for one day column. %1$s: the day ("Monday 5 October", "Today"), %2$s: "2 calls",
          %3$s: who called whom ("You called 1 · They called 1"). -->
     <string name="home_rhythm_day_a11y">%1$s, %2$s. %3$s. Tap to see who.</string>
+    <!-- Screen-reader label for a day column with no calls, which cannot be tapped.
+         %1$s: the day ("Monday 5 October", "Yesterday"), %2$s: "No calls" (home_direction_none). -->
+    <string name="home_rhythm_day_quiet_a11y">%1$s, %2$s</string>
 
     <!-- Summary line on the day sheet. Both sides read the same way, with no zeros. -->
     <plurals name="home_direction_you_called_count">

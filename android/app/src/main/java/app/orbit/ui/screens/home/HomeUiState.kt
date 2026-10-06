@@ -10,15 +10,15 @@ import app.orbit.ui.util.UiText
  * for Compose skipping.
  *
  * Notes:
- *   - Due-count hydration depends on `ListMembership.nextDueAt` vs.
- *     `clock.now()` projection — the call-log ingestion + rule engine pipeline
- *     feeds that, and the badge display flows through the full surfacing queue.
+ *   - `dueCount` on a tile is `ListEntity.dueCount`, the denormalized column
+ *     the mutator use cases keep fresh (ADR 0006 Rule 2). Nothing on Home
+ *     renders it as a number (HOME-6); it rides along for the feed's
+ *     consumers and tests.
  *   - Home stays read-only over Room, and the permission gate lives in Settings +
  *     Onboarding. `AppViewModel` owns the live permission flag; Home
- *     does not gate on it.
+ *     does not gate on it, so the state carries no permission field.
  *   - `Empty` = zero lists present in Room, i.e. Onboarding has not produced a
- *     single OrbitList yet. The tile-grid empty-state renders the
- *     `OnboardingHintTile` only.
+ *     single list yet. The screen renders the first-install CTA (HOME-11).
  */
 sealed interface HomeUiState {
 
@@ -41,17 +41,15 @@ sealed interface HomeUiState {
      */
     @Immutable data object Error : HomeUiState
 
+    /**
+     * One card per visible list, in Lists Manager order. This is the whole
+     * contract: HOME-6 retired the "N people ready" header, so there is no
+     * count here, and the per-list membership observers that computed it
+     * (one Room query per list) are gone with it.
+     */
     @Immutable
     data class Ready(
         val lists: List<ListTileState>,
-        val hasPermissions: Boolean,
-        // Distinct contacts due across the visible lists.
-        // Drives the "N people ready" header. Summing per-tile `dueCount`
-        // double-counts a contact who is due on more than one list; this is
-        // the union count, derived in HomeViewModel from
-        // `ListRepository.observeMembersOfList` with the same due predicate
-        // as `ListDao.recomputeDueCount` (nextDueAt IS NULL OR <= now).
-        val dueContactCount: Int = 0,
     ) : HomeUiState
 
     @Immutable data object Empty : HomeUiState
@@ -63,9 +61,10 @@ sealed interface HomeUiState {
  * hydrates from the nextDueAt projection.
  *
  * LIST-07 — `type` carries `ListType.SMART` or `ListType.STATIC` so the
- * renderer can show a "shuffle-angular" auto glyph inline with the due-count
- * badge for smart tiles only. Privacy invariant: the glyph stays visible under
- * the privacy curtain because type isn't a name.
+ * renderer can show a "shuffle-angular" glyph beside the name of a smart list
+ * (announced as "Smart list") and leave "Add people" out of its menu.
+ * Privacy invariant: the glyph stays visible under the privacy curtain
+ * because type isn't a name.
  */
 @Immutable
 data class ListTileState(
@@ -81,10 +80,11 @@ data class ListTileState(
     // index 0 = six days ago, index 6 = today. Bars/colors are derived in the UI
     // (relative scaling + per-person color); this is the raw per-day data.
     val rhythm: List<RhythmDay> = emptyList(),
-    // Drives the home tile long-press menu's "Mute prompts" vs "Unmute prompts"
-    // entry. Sourced straight from `ListEntity.notificationsEnabled` in
-    // `HomeFeed.toTileState`. Defaults true so preview fixtures and any future
-    // call site that doesn't care about prompts compile unchanged.
+    // Drives the home tile long-press menu's "Pause nudges" vs "Resume nudges"
+    // entry (voice.md glossary). Sourced straight from
+    // `ListEntity.notificationsEnabled` in `HomeFeed.toTileState`. Defaults
+    // true so preview fixtures and any future call site that doesn't care
+    // about nudges compile unchanged.
     val notificationsEnabled: Boolean = true,
     // Tile subtitle ("4 people"). Hydrated by HomeViewModel from the existing
     // `ListRepository.observeMemberCountsByListId()` projection (same flow
