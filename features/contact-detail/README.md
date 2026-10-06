@@ -87,7 +87,7 @@ Defined 2026-10-05 from what the code already cites for them (they were cited in
 ### Open product questions
 
 - ~~"Archive contact" action distinct from "remove from list"?~~ Resolved: yes — Ignore and Archive are distinct contact-level actions on this screen; the orphan banner offers Re-link + Archive.
-- ~~Notes retention when phone contact is deleted — PRD says "keep app data"; where/how is this surfaced to the user? (Banner? Archive view?)~~ Resolved 2026-10-06: the notes stay visible on the orphaned page, read-only, under the banner's "History stays here"; Re-link merges them onto the linked person, Archive hides the person from lists and keeps them.
+- ~~Notes retention when phone contact is deleted: PRD says "keep app data"; where/how is this surfaced to the user? (Banner? Archive view?)~~ Resolved 2026-10-06: the notes stay visible on the orphaned page, read-only, under the banner's "History stays here"; Re-link merges them onto the linked person, Archive hides the person from lists and keeps them.
 - Post-call note prompt — dismissal: per-contact, per-call, or global? Leaning per-call.
 - The lists chips should open their list, per this spec; they are read-only today. Doing it needs a navigation callback the screen doesn't have yet.
 

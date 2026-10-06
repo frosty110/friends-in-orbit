@@ -69,7 +69,7 @@ import app.orbit.ui.util.asString
  * **Reuse, not duplication.** The kind picker is the same composable List
  * Configuration uses. The interval slider is the shared [OrbitSlider]
  * (DESIGN.md: one slider, ink track, a value TalkBack reads in words) and
- * mirrors the `IntervalSliderLocal` pattern in ListConfigBody — same
+ * mirrors the `IntervalSliderLocal` pattern in ListConfigBody: same
  * `onValueChangeFinished` save-on-commit semantics — but operates on
  * `RuleParams` rather than the list-level state because the per-contact
  * override path writes `Contact.ruleOverrideJson`. Until 2026-10-06 this
@@ -219,22 +219,19 @@ private fun IntervalDaysSlider(currentHours: Int, onCommit: (days: Int) -> Unit)
     ) {
         val rounded = days.toInt().coerceAtLeast(1)
         val everyLabel = pluralStringResource(R.plurals.lists_interval_every_days, rounded, rounded)
-        val aimLabel = stringResource(R.string.lists_interval_aim)
-        Row(
-            verticalAlignment = Alignment.Bottom,
+        // One sentence with the value inside it ("Aim for every 14 days"), the
+        // same string and shape as ListConfigBody's IntervalSliderLocal; the
+        // string took its argument on 2026-10-06 and a bare call rendered the
+        // placeholder.
+        val aimLabel = stringResource(
+            R.string.lists_interval_aim,
+            pluralStringResource(R.plurals.lists_interval_days, rounded, rounded),
+        )
+        Text(
+            text = aimLabel,
+            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                text = aimLabel,
-                style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                modifier = Modifier.weight(1f)
-            )
-            // Ink, not accentPress: the Call button is the screen's accent.
-            Text(
-                text = pluralStringResource(R.plurals.lists_interval_days, rounded, rounded),
-                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg)
-            )
-        }
+        )
         // The shared slider owns the look (ink, no accent) and the semantics:
         // TalkBack reads "Every 14 days", not "10 percent" (rubric D8).
         OrbitSlider(

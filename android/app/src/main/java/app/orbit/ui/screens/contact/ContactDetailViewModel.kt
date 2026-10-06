@@ -314,29 +314,29 @@ class ContactDetailViewModel @Inject constructor(
         val draftStr = six.draft
         val entity = tuple.entity ?: return@combine ContactDetailUiState.NotFound
 
-        // B3 — single Clock read per emission; passed into both the call
+        // B3: single Clock read per emission; passed into both the call
         // mapper and the note mapper so derivations share one "now".
         val now = clock.now()
 
         val listsOn = tuple.memberships
             .mapNotNull { m -> tuple.allLists.firstOrNull { it.id == m.listId }?.name }
         val recentCalls = tuple.events.map { it.toUiCallEntry(now) }
-        // LOG-03 — parallel-indexed call-event ids for the screen's
+        // LOG-03: parallel-indexed call-event ids for the screen's
         // scroll-to + retro-note affordance lookup. Same order as
         // `recentCalls` above (DESC by occurredAt).
         val recentCallEventIds = tuple.events.map { it.id }
-        // Manual-log surface — parallel-indexed MANUAL flags so the
+        // Manual-log surface: parallel-indexed MANUAL flags so the
         // history row can render "Logged" + a distinct icon without
         // widening the CallEntry shape (same rationale as
         // recentCallEventIds above).
         val recentCallIsManual = tuple.events.map { it.source == CallSource.MANUAL }
-        // Attempt surface — parallel-indexed with recentCalls; reach-outs
+        // Attempt surface: parallel-indexed with recentCalls; reach-outs
         // that didn't connect render "Attempted" + a phone-slash icon.
         val recentCallIsAttempt = tuple.events.map { it.source == CallSource.ATTEMPT }
         val longestGapLabel = computeLongestGap(tuple.events)
         val noteRows = tuple.noteEntities.map { it.toNoteRow(now) }
 
-        // CONTACT-05 — derive UnpauseBanner visibility.
+        // CONTACT-05: derive UnpauseBanner visibility.
         // True iff pausedUntil has lapsed AND it's NOT the indefinite
         // sentinel. Indefinite pauses ("until I unpause") are user-explicit
         // and never auto-expire; clearing them goes through the overflow
@@ -357,7 +357,7 @@ class ContactDetailViewModel @Inject constructor(
                 }
             }
 
-        // CONTACT-03 — derive RuleOverrideSection
+        // CONTACT-03: derive RuleOverrideSection
         // inputs. Corrupted-JSON recovery is the try/catch
         // around decodeFromString; failed decode flips currentParams and
         // currentTemplateName to null (the section shows the editor).
@@ -376,9 +376,9 @@ class ContactDetailViewModel @Inject constructor(
             tuple.allLists.firstOrNull { it.id == lid }?.name
         } ?: ""
 
-        // Overlay call-derived stats — `lastCalledLabel`, `totalCalls`,
-        // `avgLengthLabel` — onto the placeholder mapper output. Without
-        // this overlay the Stats panel reads "Never called / 0 / —" even
+        // Overlay call-derived stats (`lastCalledLabel`, `totalCalls`,
+        // `avgLengthLabel`) onto the placeholder mapper output. Without
+        // this overlay the Stats panel reads "Never called / 0 / a dash" even
         // for contacts with a populated call history (CallEventEntity
         // rows existed for the contact but the bare toUiContact mapper
         // emitted placeholders).
@@ -424,8 +424,8 @@ class ContactDetailViewModel @Inject constructor(
                 primaryListName = primaryListName,
                 hasOverride = hasOverride,
                 currentParams = currentParams,
-                // LOG-03 — CallLog deep-link surface. Both fields carry the
-                // same id by default — scrolling and showing the affordance
+                // LOG-03: CallLog deep-link surface. Both fields carry the
+                // same id by default; scrolling and showing the affordance
                 // are coupled signals. A future variant could decouple them
                 // (e.g., scroll without affordance) but the user
                 // story is single-purpose: tap row → arrive scrolled with

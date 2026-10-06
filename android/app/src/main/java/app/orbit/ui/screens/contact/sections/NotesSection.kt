@@ -172,7 +172,7 @@ fun NotesSection(
                     text = stringResource(R.string.contact_notes_add),
                     onClick = onAdd,
                     enabled = draft.isNotBlank(),
-                    // Secondary — the hero Call button is the screen's one
+                    // Secondary: the hero Call button is the screen's one
                     // terracotta element (rules.md design rule 5).
                     variant = OrbitButtonVariant.Secondary
                 )

@@ -32,7 +32,7 @@ import app.orbit.ui.theme.OrbitTheme
  * `AnimatedVisibility`.
  *
  * Tap-anywhere on the banner clears the pause. The dismiss-x is the
- * explicit affordance for the same action — both call `onUnpause()`. The
+ * explicit affordance for the same action; both call `onUnpause()`. The
  * row announces as a button named for what it does ("Dismiss unpause
  * notice"), the same words as the x: until 2026-10-06 it was a bare
  * clickable, so TalkBack read the copy and then "double tap to activate"

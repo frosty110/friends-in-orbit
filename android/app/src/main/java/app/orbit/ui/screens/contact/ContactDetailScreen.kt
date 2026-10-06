@@ -191,7 +191,7 @@ fun ContactDetailScreen(
         }
     }
 
-    // NOTE-02 — listen for the VM's one-shot focus signal (delivered once per
+    // NOTE-02: listen for the VM's one-shot focus signal (delivered once per
     // VM instance when `focusNote=1` is in SavedStateHandle). The 100ms delay
     // mitigates "requestFocus() called before the BasicTextField is laid out"
     // on cold deep-links.
@@ -296,7 +296,7 @@ private fun ContactDetailContent(
     // the sheet is open keeps it open (matches CreateListBottomSheet pattern).
     var showOverflow by remember { mutableStateOf(false) }
     var showPauseSheet by rememberSaveable { mutableStateOf(false) }
-    // Manual connection log — same rememberSaveable rationale as the pause sheet.
+    // Manual connection log: same rememberSaveable rationale as the pause sheet.
     var showLogConnectionSheet by rememberSaveable { mutableStateOf(false) }
 
     val curtain = LocalPrivacyCurtain.current
@@ -504,7 +504,7 @@ private fun ContactDetailContent(
                 onDismiss = { showPauseSheet = false }
             )
         }
-        // Manual connection log — sheet at screen scope, mirroring the pause
+        // Manual connection log: sheet at screen scope, mirroring the pause
         // sheet. Confirm dispatches to the VM; dismissal follows the Pitfall 1
         // launch-then-flip pattern inside the sheet.
         if (showLogConnectionSheet) {
@@ -673,7 +673,7 @@ private fun ContactBodyLazyColumn(
         add(ContactDetailItemKey.BOTTOM_SPACE)
     }
 
-    // LOG-03 — `LazyListState` hoisted so the screen can animateScrollToItem
+    // LOG-03: `LazyListState` hoisted so the screen can animateScrollToItem
     // to the matching call-event row when the user arrives via the CallLog
     // deep link. The target is found by key in [itemKeys].
     val listState = rememberLazyListState()
@@ -703,7 +703,7 @@ private fun ContactBodyLazyColumn(
             contentType = { key -> if (key is Long) CONTENT_TYPE_CALL_ROW else key }
         ) { key ->
             when (key) {
-                // CONTACT-05 — UnpauseBanner item at top of body.
+                // CONTACT-05: UnpauseBanner item at top of body.
                 // Renders only when pausedUntil <= now AND not the indefinite sentinel
                 // (VM-derived). AnimatedVisibility uses OrbitMotion.DurBaseMs (250ms).
                 ContactDetailItemKey.UNPAUSE_BANNER -> AnimatedVisibility(
@@ -748,7 +748,7 @@ private fun ContactBodyLazyColumn(
                             // jump to it and hear whose page this is.
                             modifier = Modifier.semantics { heading() }
                         )
-                        // FINDING A — tappable phone row. ACTION_DIAL via the shared
+                        // FINDING A: tappable phone row. ACTION_DIAL via the shared
                         // Dialer util (never CALL_PHONE); 48dp target per design rule 3.
                         // PRIV-07: masked under the curtain like the name and photo, and
                         // then not a control at all: a disabled clickable would still
@@ -810,7 +810,7 @@ private fun ContactBodyLazyColumn(
                             )
                         }
                         Spacer(Modifier.height(OrbitTheme.spacing.x3))
-                        // FINDING A + B — hero action row. Call opens the system
+                        // FINDING A + B: hero action row. Call opens the system
                         // dialer pre-filled (ACTION_DIAL); Log a connection records a
                         // call Orbit can't see (another app, in person).
                         Row(
@@ -939,7 +939,7 @@ private fun ContactBodyLazyColumn(
                     }
                 }
 
-                // BULK-06 — "Add to lists" entry to the reverse picker.
+                // BULK-06: "Add to lists" entry to the reverse picker.
                 // Absent when the contact is orphaned (edit affordances are off per
                 // the orphan banner copy).
                 ContactDetailItemKey.ADD_TO_LISTS -> {
@@ -947,7 +947,7 @@ private fun ContactBodyLazyColumn(
                     OrbitButton(
                         text = stringResource(R.string.contact_add_to_lists),
                         onClick = { onAddToLists?.invoke() },
-                        // Secondary — the hero Call button is the screen's one
+                        // Secondary: the hero Call button is the screen's one
                         // terracotta element (rules.md design rule 5).
                         variant = OrbitButtonVariant.Secondary,
                         leadingIcon = "user-plus",
@@ -955,7 +955,7 @@ private fun ContactBodyLazyColumn(
                     )
                 }
 
-                // NOTE-01 — Notes journaling section. Read-only while the
+                // NOTE-01: Notes journaling section. Read-only while the
                 // contact is Orphaned: the notes stay ("History stays here"),
                 // editing waits for the re-link.
                 ContactDetailItemKey.NOTES -> {
@@ -972,7 +972,7 @@ private fun ContactBodyLazyColumn(
                     )
                 }
 
-                // CONTACT-03 — RuleOverrideSection. Visibility
+                // CONTACT-03: RuleOverrideSection. Visibility
                 // is double-gated: the screen-side `customScheduleVisible` (VM-derived
                 // from listsOn.size >= 2) decides whether to add the LazyColumn item
                 // at all, and the section's own AnimatedVisibility wraps the body
@@ -1041,7 +1041,7 @@ private fun ContactBodyLazyColumn(
                             isManual = recentCallIsManual.getOrNull(idx) ?: false,
                             isAttempt = recentCallIsAttempt.getOrNull(idx) ?: false
                         )
-                        // LOG-03 — inline "Add note to this call" affordance. Renders
+                        // LOG-03: inline "Add note to this call" affordance. Renders
                         // below the tinted call row (the one the CallLog deep link
                         // pointed at). The composable is a small Secondary button + a
                         // BasicTextField; tapping it invokes vm::onAddRetroactiveNote
@@ -1237,11 +1237,11 @@ private fun CallHistoryRow(
 }
 
 /**
- * LOG-03 — inline retroactive-note affordance rendered below the tinted
+ * LOG-03: inline retroactive-note affordance rendered below the tinted
  * CallHistoryRow when the user arrives via Routes.contactWithFocus with
  * `scrollToCallEventId` set. Pragmatic v1 design: a small inline TextField +
  * Secondary "Add note to this call" button (Call is the screen's one accent,
- * rules.md §Design 5) — no dialog, no extra route, no new ViewModel state
+ * rules.md §Design 5): no dialog, no extra route, no new ViewModel state
  * surface.
  *
  * On Save:

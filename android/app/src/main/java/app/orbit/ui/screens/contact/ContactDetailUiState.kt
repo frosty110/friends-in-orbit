@@ -129,7 +129,7 @@ sealed interface ContactDetailUiState {
     ) : ContactDetailUiState
 
     /**
-     * CONTACT-06 — phone contact removed; surfaces with a re-link/archive
+     * CONTACT-06: phone contact removed; surfaces with a re-link/archive
      * affordance. Notes are Orbit's own data and stay readable here (the
      * banner says "History stays here"); until 2026-10-06 they vanished with
      * the phone contact.
