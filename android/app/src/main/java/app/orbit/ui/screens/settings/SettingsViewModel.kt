@@ -301,8 +301,13 @@ class SettingsViewModel @Inject constructor(
         retryCount.update { it + 1 }
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<SettingsUiState> = retryCount.flatMapLatest {
+    // SET-06: true from the Reset confirmation until ResetService.resetAll
+    // returns, whichever way. Screen-side it disables the Data rows and holds
+    // Back; the outcome itself is MainActivity's to act on.
+    private val _isResetting = MutableStateFlow(false)
+
+    /** The saved settings and the OS readings, before the reset flag is stitched in. */
+    private val readyState: Flow<SettingsUiState.Ready> =
         combine(
             snapshot,
             syncStatus,
@@ -329,6 +334,14 @@ class SettingsViewModel @Inject constructor(
                 darkMode = appr.darkMode,
                 accentHue = appr.accentHue,
             )
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<SettingsUiState> = retryCount.flatMapLatest {
+        // A second stage for the reset flag: the five-flow combine above is at
+        // Kotlin's type-safe arity ceiling.
+        combine(readyState, _isResetting) { ready, resetting ->
+            ready.copy(isResetting = resetting)
         }.map<SettingsUiState.Ready, SettingsUiState> { it }.catch { t ->
             if (t is CancellationException) throw t
             emit(SettingsUiState.Error)
@@ -545,13 +558,24 @@ class SettingsViewModel @Inject constructor(
      * sync, so without this a user who moved from 3 months to 1 year saw nothing
      * new until "Sync now". Narrowing changes nothing on screen (the log keeps
      * what it already has), so it stays a plain write.
+     *
+     * A failed write tells the user ("Couldn't save your change", rules.md
+     * Code 3) and schedules nothing: the resync stays inside the guarded block,
+     * after the write, so a window that was not saved is never imported.
+     * Cancellation passes through (Code 5).
      */
     fun onImportDaysChanged(days: Int) {
         viewModelScope.launch {
-            val previous = appPrefs.callLogImportDays.first()
-            appPrefs.setCallLogImportDays(days)
-            if (days > previous && _permissionState.value is CallLogPermissionState.Granted) {
-                contentObserverController.enqueueImmediateSync(fullResync = true)
+            try {
+                val previous = appPrefs.callLogImportDays.first()
+                appPrefs.setCallLogImportDays(days)
+                if (days > previous && _permissionState.value is CallLogPermissionState.Granted) {
+                    contentObserverController.enqueueImmediateSync(fullResync = true)
+                }
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                _snackbarEvents.tryEmit(UiText.res(R.string.components_snackbar_save_failed))
             }
         }
     }
@@ -572,19 +596,11 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * One-shot signal that [ResetService.resetAll] finished.
-     * The screen collects this and restarts the task (the onboarding flag
-     * was just cleared, so the relaunched MainActivity resolves the
-     * onboarding start destination) instead of leaving the user in a
-     * ghost app with empty state. Sourced from the app-scoped service, not
-     * from this ViewModel's own job, so it fires even if the reset outlived
-     * the ViewModel that started it.
-     */
-    val resetCompleteEvents: SharedFlow<Unit> get() = resetService.resetCompleteEvents
-
-    /**
      * One-off messages for the screen's snackbar, as [UiText] (voice.md: ViewModels
-     * hold no Context). Today only the reset failure (SET-06).
+     * hold no Context). Today only a failed import-window write. The reset's
+     * failure is not here: it is reported through [ResetService.outcome], which
+     * MainActivity shows wherever the user is, because this flow has no
+     * collector once Settings is popped.
      */
     private val _snackbarEvents = MutableSharedFlow<UiText>(extraBufferCapacity = 1)
     val snackbarEvents: SharedFlow<UiText> = _snackbarEvents.asSharedFlow()
@@ -594,22 +610,24 @@ class SettingsViewModel @Inject constructor(
      * button via the screen's `vm::onResetConfirmed` lambda.
      * [ResetService.resetAll] cancels the unique WorkManager jobs and stops the
      * content observers before wiping Room + DataStore (per
-     * features/settings/README.md); once it returns, [resetCompleteEvents] fires
-     * so the screen can restart the task into onboarding.
+     * features/settings/README.md) and records its outcome; MainActivity reads
+     * that outcome and restarts the task into onboarding, or tells the user it
+     * failed.
      *
      * Runs on the application scope (rules.md Code 6): a back press while the
      * tables were half cleared used to cancel the job mid-way and leave a wiped
-     * database with the onboarding flag still set. A failure is told to the user
-     * (rules.md Code 3); the one exception rethrown is cancellation (Code 5).
+     * database with the onboarding flag still set. This ViewModel only marks
+     * the reset as in flight ([SettingsUiState.Ready.isResetting]) for as long
+     * as it runs; `resetAll` throws nothing but cancellation, so there is no
+     * failure to report from here.
      */
     fun onResetConfirmed() {
+        _isResetting.value = true
         appScope.launch {
             try {
                 resetService.resetAll()
-            } catch (ce: CancellationException) {
-                throw ce
-            } catch (t: Throwable) {
-                _snackbarEvents.tryEmit(UiText.res(R.string.settings_reset_failed))
+            } finally {
+                _isResetting.value = false
             }
         }
     }

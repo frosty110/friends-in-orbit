@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -97,7 +98,9 @@ import kotlinx.coroutines.launch
  *      "Ignored" read as sync settings.
  *   6. **Data**: Export your data row + Import backup row (SAF open →
  *      passphrase → validate → confirm-replace) + [ResetDataRow]
- *      (destructive; on completion the task restarts into onboarding).
+ *      (destructive; MainActivity acts on the outcome, restarting the task
+ *      into onboarding or showing the failure, since the reset outlives
+ *      this screen).
  *   plus **About**: [AboutSection] (version, the privacy promise, feedback
  *      mailto, links, licenses dialog).
  *
@@ -205,7 +208,10 @@ fun SettingsScreen(
             }
         }
     }
-    // The Settings VM's own messages (today: the reset failing, SET-06).
+    // The Settings VM's own messages (today: a failed import-range write).
+    // The reset's outcome is not collected here: the reset outlives this
+    // screen, so MainActivity reads it from ResetService through AppViewModel
+    // and restarts the task or shows the failure wherever the user is (SET-06).
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             vm.snackbarEvents.collect { message ->
@@ -214,28 +220,13 @@ fun SettingsScreen(
         }
     }
 
-    // Once ResetService finishes (works cancelled, observers
-    // stopped, Room + DataStore wiped) the user must land somewhere honest.
-    // Restarting the task is the simplest reliable mechanism: the relaunched
-    // MainActivity re-resolves its start destination from the now-cleared
-    // onboarding flag and lands on the welcome screen. An in-place
-    // nav.navigate would leave stale back-stack entries and ViewModels
-    // holding pre-reset state; Activity.recreate() keeps the nav back stack.
-    LaunchedEffect(lifecycleOwner) {
-        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            vm.resetCompleteEvents.collect {
-                val launchIntent = context.packageManager
-                    .getLaunchIntentForPackage(context.packageName)
-                if (launchIntent != null) {
-                    launchIntent.addFlags(
-                        Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK,
-                    )
-                    context.startActivity(launchIntent)
-                }
-                (context as? Activity)?.finish()
-            }
-        }
-    }
+    // SET-06: while the wipe runs, Back (the gesture and the app bar's arrow)
+    // is held. Leaving is no longer harmful, since the restart lands from the
+    // Activity, but a pop mid-wipe would show Home over half-cleared tables for
+    // the moment before it; the Reset row reads "Resetting…" meanwhile, so the
+    // held Back is not a silent short-circuit.
+    val isResetting = (state as? SettingsUiState.Ready)?.isResetting == true
+    BackHandler(enabled = isResetting) {}
 
     // SET-12: every launcher callback records that the OS was asked, before
     // the refresh, so "Off in your phone's settings" can only ever follow a
@@ -381,7 +372,7 @@ fun SettingsScreen(
             state = state,
             exportState = exportState,
             importState = importState,
-            onBack = onBack,
+            onBack = { if (!isResetting) onBack() },
             onOpenIgnored = onOpenIgnored,
             onOpenCallHistory = onOpenCallHistory,
             onOpenAndroidSettings = openAppSettings,
@@ -452,7 +443,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsContent(
+internal fun SettingsContent(
     onRetry: () -> Unit = {},
     state: SettingsUiState,
     exportState: ExportUiState = ExportUiState.Idle,
@@ -492,6 +483,7 @@ private fun SettingsContent(
     val colorTheme = ready?.colorTheme ?: app.orbit.ui.theme.OrbitThemeId.DEFAULT
     val darkMode = ready?.darkMode ?: app.orbit.ui.theme.OrbitDarkMode.DEFAULT
     val accentHue = ready?.accentHue
+    val isResetting = ready?.isResetting ?: false
 
     // PICK-07: dialog visibility hoisted at the screen level so dismissals
     // route through onDismiss without unwinding parent state. Saveable, like
@@ -504,12 +496,15 @@ private fun SettingsContent(
     // dialog (an already-committed user shouldn't have to re-tap on rotate).
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
 
-    // SET-05: while a backup is being written, checked or restored, the three
-    // Data rows wait. A second export mid-write, or a reset mid-restore, would
-    // race the file or the tables; the subtitle says what is happening.
+    // SET-05 / SET-06: while a backup is being written, checked or restored,
+    // or Orbit is being reset, the three Data rows wait. A second export
+    // mid-write, or a reset mid-restore, would race the file or the tables.
+    // The busy row's subtitle says what is happening and the other two say
+    // they are waiting: a muted title alone, or a vanished chevron under an
+    // unchanged line, left colour as the only signal (vision/ux-rubric.md D8).
     val exportInFlight = exportState is ExportUiState.InFlight
     val importBusy = importState is ImportUiState.Validating || importState is ImportUiState.Applying
-    val dataRowsEnabled = !exportInFlight && !importBusy
+    val dataRowsEnabled = !exportInFlight && !importBusy && !isResetting
 
     OrbitScreen {
         OrbitAppBar(
@@ -616,7 +611,11 @@ private fun SettingsContent(
                     onClick = onExport,
                     enabled = dataRowsEnabled,
                     subtitle = stringResource(
-                        if (exportInFlight) R.string.settings_export_in_progress else R.string.settings_export_sub,
+                        when {
+                            exportInFlight -> R.string.settings_export_in_progress
+                            importBusy || isResetting -> R.string.settings_data_wait
+                            else -> R.string.settings_export_sub
+                        },
                     ),
                 )
                 Divider()
@@ -627,12 +626,25 @@ private fun SettingsContent(
                         when (importState) {
                             ImportUiState.Validating -> R.string.settings_import_checking
                             ImportUiState.Applying -> R.string.settings_import_in_progress
-                            else -> R.string.settings_import_sub
+                            else -> when {
+                                exportInFlight || isResetting -> R.string.settings_data_wait
+                                else -> R.string.settings_import_sub
+                            }
                         },
                     ),
                 )
                 Divider()
-                ResetDataRow(onClick = { showResetDialog = true }, enabled = dataRowsEnabled)
+                ResetDataRow(
+                    onClick = { showResetDialog = true },
+                    enabled = dataRowsEnabled,
+                    subtitle = stringResource(
+                        when {
+                            isResetting -> R.string.settings_reset_in_progress
+                            !dataRowsEnabled -> R.string.settings_data_wait
+                            else -> R.string.settings_reset_sub
+                        },
+                    ),
+                )
             }
 
             SettingGroup(title = stringResource(R.string.settings_section_about)) {
@@ -896,8 +908,8 @@ private fun Modifier.verticalScrollContainer(): Modifier {
 // fresh-install state uses Ready.INITIAL ("Not allowed" rows, "No one
 // ignored"); the second is a phone with everything allowed, a call-log sync
 // running and a backup being written, so the spinner, "Saving…" and the
-// disabled Data rows are rendered; then Loading (app bar only, SET-09) and
-// Error (SET-11).
+// waiting Data rows are rendered; the third is mid-reset ("Resetting…");
+// then Loading (app bar only, SET-09) and Error (SET-11).
 private val previewState: SettingsUiState = SettingsUiState.Ready.INITIAL
 
 private val previewNow: Instant = Instant.parse("2026-10-06T10:00:00Z")
@@ -956,6 +968,12 @@ private fun SettingsContentPreview() {
 @Composable
 private fun SettingsContentGrantedSyncingPreview() {
     SettingsContentPreviewHost(state = previewGrantedSyncing, exportState = ExportUiState.InFlight)
+}
+
+@PreviewLightDark
+@Composable
+private fun SettingsContentResettingPreview() {
+    SettingsContentPreviewHost(state = SettingsUiState.Ready.INITIAL.copy(isResetting = true))
 }
 
 @PreviewLightDark

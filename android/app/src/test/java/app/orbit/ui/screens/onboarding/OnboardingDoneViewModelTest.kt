@@ -1,17 +1,22 @@
 package app.orbit.ui.screens.onboarding
 
 import android.app.Application
+import app.orbit.R
 import app.orbit.data.AppPrefs
 import app.orbit.testutil.MainDispatcherRule
 import app.orbit.testutil.awaitValue
+import app.orbit.testutil.newFailingStore
 import app.orbit.testutil.newPrefs
+import app.orbit.ui.util.UiText
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -36,7 +41,8 @@ import org.robolectric.annotation.Config
  *      once the write lands (gates the "Open Orbit" CTA).
  *
  * And `onNudgeLauncherFired` records that notifications were asked for
- * (ONB-30), the flag Settings reads to tell never-asked from turned-off.
+ * (ONB-30), the flag Settings reads to tell never-asked from turned-off; when
+ * that write fails the user is told (rules.md Code 3).
  *
  * Fixture:
  *   - Robolectric; `@Config(application = Application::class)` bypasses
@@ -148,5 +154,28 @@ class OnboardingDoneViewModelTest {
 
         awaitValue(true) { prefs.hasAskedNotifications.first() }
         assertTrue(prefs.hasAskedNotifications.first())
+    }
+
+    // ============================================================================
+    // Test 5 (rules.md Code 3): a failed "asked once" write says "Couldn't save
+    // your change" instead of leaving Settings quietly reading "Not allowed"
+    // for a permission the phone will no longer ask about.
+    // ============================================================================
+
+    @Test
+    fun `a failed asked-once write tells the user`() = runBlocking {
+        // The completion write in init must land; only the flag's write fails.
+        val store = tmp.newFailingStore(storeScope).apply { failWrites = false }
+        val failingPrefs = AppPrefs(store)
+        val vm = OnboardingDoneViewModel(failingPrefs)
+        vm.awaitCompleted()
+        store.failWrites = true
+        val snackbar = async { withTimeout(30_000L) { vm.snackbarEvents.first() } }
+        delay(50)
+
+        vm.onNudgeLauncherFired()
+
+        assertEquals(UiText.res(R.string.components_snackbar_save_failed), snackbar.await().message)
+        assertEquals(false, failingPrefs.hasAskedNotifications.first(), "the flag was not written")
     }
 }

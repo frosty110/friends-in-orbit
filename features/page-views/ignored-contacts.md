@@ -21,7 +21,7 @@
 
 ## Actions and menus
 
-- "Unignore": they come back to their lists and nudges at once; "Unignored {name}" with Undo, which ignores them again
+- "Unignore": they come back to their lists and nudges at once; "Unignored {name}" with Undo, which ignores them again. If the unignore or the Undo cannot be written, "Couldn't save your change", with no Undo, and nothing changes
 
 ## States
 
@@ -36,6 +36,6 @@
 
 ## Tests that pin it
 
-- `SettingsIgnoredViewModelTest` (rows newest first, unignore and undo, Error and recovery)
+- `SettingsIgnoredViewModelTest` (rows newest first, unignore and undo and their failures, Error and recovery)
 - `UnignoreContactUseCaseTest`, `IgnoreContactUseCaseTest`, `ContactDaoIgnoredTest`
 - Gallery previews: `SettingsIgnoredContentPreview`, the Ready with two people, Loading and Error previews added this round, with the curtain pass

@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import app.orbit.data.AppPrefs
 import app.orbit.data.repository.CallEventRepository
 import app.orbit.data.repository.ContactRepository
+import app.orbit.data.repository.ResetOutcome
+import app.orbit.data.repository.ResetService
 import app.orbit.domain.clock.Clock
 import app.orbit.nav.Routes
 import app.orbit.ui.screens.onboarding.OnboardingStep
@@ -29,6 +31,8 @@ import kotlinx.coroutines.launch
  * in per-screen Hilt view-models. This VM owns:
  *   - start destination (onboarding vs home) — resolved once from [AppPrefs].
  *   - privacy curtain (auto-only — flips on focus loss, restores on focus regain).
+ *   - the reset's outcome ([resetOutcome], SET-06), read from the app-scoped
+ *     [ResetService] so MainActivity can act on it wherever the user is.
  *
  * Hilt constructs this VM via `@AndroidEntryPoint` on MainActivity +
  * `by viewModels<AppViewModel>()`; there is no manual factory companion. The
@@ -45,7 +49,8 @@ class AppViewModel @Inject constructor(
     private val appPrefs: AppPrefs,
     private val callEventRepo: CallEventRepository,
     private val contactRepo: ContactRepository,
-    private val clock: Clock
+    private val clock: Clock,
+    private val resetService: ResetService,
 ) : ViewModel() {
 
     private val _startDestination = MutableStateFlow<String?>(null)
@@ -62,6 +67,18 @@ class AppViewModel @Inject constructor(
     val themeSettings: StateFlow<ThemeSettings?> = _themeSettings.asStateFlow()
 
     private val _isForeground = MutableStateFlow(true)
+
+    /**
+     * SET-06: how the last Reset Orbit ended, or null. Sticky on the service,
+     * so it is still there when Settings has been popped or the app comes
+     * back from the background; MainActivity collects it while resumed,
+     * restarts the task on Completed, shows the failure on Failed, and calls
+     * [onResetOutcomeHandled] first so the restarted process (the same one)
+     * does not act on it again.
+     */
+    val resetOutcome: StateFlow<ResetOutcome?> = resetService.outcome
+
+    fun onResetOutcomeHandled() = resetService.clearOutcome()
 
     /**
      * NOTE-02 — post-call banner state.

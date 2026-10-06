@@ -61,6 +61,11 @@
     <string name="settings_import_in_progress">Restoring…</string>
     <string name="settings_reset_title">Reset Orbit</string>
     <string name="settings_reset_sub">Erase every list, person, and note on this phone</string>
+    <!-- Replaces the reset row's subtitle while Orbit is being reset. -->
+    <string name="settings_reset_in_progress">Resetting…</string>
+    <!-- Under a Data row that is disabled because another Data row's work (an export, an import
+         or a reset) is running, so a muted title is never the only sign the row is waiting. -->
+    <string name="settings_data_wait">Waiting for the other backup step to finish</string>
 
     <!-- People the user chose to hide from suggestions. -->
     <string name="settings_ignored_title">Ignored</string>

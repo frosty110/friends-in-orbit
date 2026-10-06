@@ -70,6 +70,10 @@ sealed interface SettingsUiState {
         val colorTheme: OrbitThemeId = OrbitThemeId.DEFAULT,
         val darkMode: OrbitDarkMode = OrbitDarkMode.DEFAULT,
         val accentHue: Int? = null,
+        // SET-06: true from the Reset confirmation until ResetService.resetAll
+        // returns. The Data rows wait and Back is held while it is set; the
+        // outcome itself is read by MainActivity, not by this screen.
+        val isResetting: Boolean = false,
     ) : SettingsUiState {
         companion object {
             /**

@@ -19,12 +19,14 @@ import app.orbit.data.dao.PreIgnoreSnapshot
 import app.orbit.data.db.OrbitDatabase
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.repository.ContactRepository
+import app.orbit.data.repository.ResetOutcome
 import app.orbit.data.repository.ResetService
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.contactFixture
 import app.orbit.testutil.MainDispatcherRule
 import app.orbit.testutil.awaitValue
+import app.orbit.testutil.newFailingStore
 import app.orbit.testutil.newPrefs
 import app.orbit.ui.theme.OrbitDarkMode
 import app.orbit.ui.theme.OrbitThemeId
@@ -48,6 +50,7 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -204,10 +207,11 @@ class SettingsViewModelTest {
 
     /**
      * Minimal [ResetService] stub. Most Settings tests do not exercise the
-     * destructive-reset path; this subclass replaces [resetAll] with a
-     * counting stand-in so we do not need to stand up a real wipe (the full
-     * reset behavior is pinned by [app.orbit.data.repository.ResetServiceTest]).
-     * [gate], when set, holds the reset open so a test can clear the ViewModel
+     * destructive-reset path; this subclass replaces the wipe (`performReset`)
+     * with a counting stand-in so we do not need to stand up a real one (the
+     * full reset behavior is pinned by [app.orbit.data.repository.ResetServiceTest]),
+     * while `resetAll` keeps the service's own outcome bookkeeping. [gate],
+     * when set, holds the reset open so a test can clear the ViewModel
      * mid-way; [failWith] makes it throw. The constructor still requires real
      * dependency instances per the [ResetService] @Inject signature.
      */
@@ -225,11 +229,10 @@ class SettingsViewModelTest {
         @Volatile var resetCount: Int = 0
         var gate: CompletableDeferred<Unit>? = null
         var failWith: Throwable? = null
-        override suspend fun resetAll() {
+        override suspend fun performReset() {
             gate?.await()
             failWith?.let { throw it }
             resetCount++
-            signalResetComplete()
         }
     }
 
@@ -515,6 +518,27 @@ class SettingsViewModelTest {
         assertTrue(controller.syncRequests.tryReceive().isFailure, "narrowing must not have enqueued anything")
     }
 
+    // rules.md Code 3: a failed DataStore write tells the user and schedules
+    // nothing. The resync sits inside the guarded block, after the write, so a
+    // window that was not saved is never imported; the saved value is unchanged.
+    @Test
+    fun `a failed import-window write tells the user and runs no resync`() = runBlocking {
+        grant(android.Manifest.permission.READ_CALL_LOG)
+        val failingPrefs = AppPrefs(tmp.newFailingStore(storeScope))
+        val controller = CountingController(context)
+        val vm = buildVm(prefs = failingPrefs, controller = controller)
+        vm.uiState.awaitReady()
+        val snackbar = async { withTimeout(30_000L) { vm.snackbarEvents.first() } }
+        delay(50)
+
+        vm.onImportDaysChanged(365)
+
+        assertEquals(UiText.res(R.string.components_snackbar_save_failed), snackbar.await())
+        delay(100)
+        assertTrue(controller.syncRequests.tryReceive().isFailure, "no resync, nothing was saved")
+        assertEquals(90, failingPrefs.callLogImportDays.first(), "the saved window is unchanged")
+    }
+
     @Test
     fun `widening the import window without the call log does not resync`() = runBlocking {
         val controller = CountingController(context)
@@ -702,39 +726,48 @@ class SettingsViewModelTest {
     }
 
     // ============================================================================
-    // Reset (SET-06). After ResetService.resetAll() returns, resetCompleteEvents
-    // fires so the screen can restart the task into onboarding (the user must
-    // not be stranded in a ghost app). The reset runs on the app scope, so it
-    // finishes even when the ViewModel that started it is cleared mid-way; a
-    // failure is told to the user.
+    // Reset (SET-06). The reset runs on the app scope, so it finishes even when
+    // the ViewModel that started it is cleared mid-way. Its outcome is sticky
+    // state on ResetService, read by MainActivity after the fact (the Settings
+    // screen may be gone); this ViewModel only marks it as in flight. A failure
+    // is the service's to report, never this ViewModel's snackbar, which has no
+    // collector once Settings is popped.
     // ============================================================================
 
     @Test
-    fun `onResetConfirmed runs reset and emits completion event`() = runBlocking {
+    fun `onResetConfirmed runs the reset once and its outcome can be read after the fact`() =
+        runBlocking {
         val resetService = buildResetService()
         val vm = buildVm(resetService = resetService)
 
-        // Subscribe BEFORE triggering: resetCompleteEvents has no replay.
-        val received = async {
-            withTimeout(30_000L) { vm.resetCompleteEvents.first() }
-        }
-        // Let the collector attach before the emit races it.
-        delay(50)
-
         vm.onResetConfirmed()
 
-        received.await()
+        // Nobody was collecting when the reset finished; the outcome is still there.
+        awaitValue(ResetOutcome.Completed) { resetService.outcome.value }
         assertEquals(1, resetService.resetCount, "resetAll must run exactly once")
+        assertEquals(ResetOutcome.Completed, resetService.outcome.first(), "seen late")
+    }
+
+    @Test
+    fun `the reset reads as in flight from the confirmation until it returns`() = runBlocking {
+        val resetService = buildResetService().apply { gate = CompletableDeferred() }
+        val vm = buildVm(resetService = resetService)
+        assertEquals(false, vm.uiState.awaitReady().isResetting)
+
+        vm.onResetConfirmed()
+        assertTrue(vm.uiState.awaitReady { it.isResetting }.isResetting, "rows wait, Back is held")
+        assertEquals(0, resetService.resetCount, "still held at the gate")
+
+        resetService.gate!!.complete(Unit)
+
+        assertEquals(false, vm.uiState.awaitReady { !it.isResetting }.isResetting)
+        awaitValue(ResetOutcome.Completed) { resetService.outcome.value }
     }
 
     @Test
     fun `a reset outlives the ViewModel that started it`() = runBlocking {
         val resetService = buildResetService().apply { gate = CompletableDeferred() }
         val vm = buildVm(resetService = resetService)
-        val received = async {
-            withTimeout(30_000L) { resetService.resetCompleteEvents.first() }
-        }
-        delay(50)
 
         vm.onResetConfirmed()
         // The user leaves Settings while the tables are being cleared:
@@ -748,22 +781,26 @@ class SettingsViewModelTest {
 
         resetService.gate!!.complete(Unit)
 
-        received.await()
+        awaitValue(ResetOutcome.Completed) { resetService.outcome.value }
         assertEquals(1, resetService.resetCount, "the reset must finish after the ViewModel is gone")
     }
 
     @Test
-    fun `a failing reset tells the user`() = runBlocking {
+    fun `a failing reset yields Failed on the service and nothing on this ViewModel's snackbar`() =
+        runBlocking {
         val resetService = buildResetService().apply { failWith = IllegalStateException("db locked") }
         val vm = buildVm(resetService = resetService)
-        val snackbar = async {
-            withTimeout(30_000L) { vm.snackbarEvents.first() }
-        }
+        val seen = mutableListOf<UiText>()
+        val collector = launch { vm.snackbarEvents.collect { seen += it } }
         delay(50)
 
         vm.onResetConfirmed()
 
-        assertEquals(UiText.res(R.string.settings_reset_failed), snackbar.await())
+        awaitValue(ResetOutcome.Failed) { resetService.outcome.value }
+        assertEquals(false, vm.uiState.awaitReady { !it.isResetting }.isResetting, "not in flight")
+        delay(100)
+        assertTrue(seen.isEmpty(), "the failure is MainActivity's to show, wherever the user is")
         assertEquals(0, resetService.resetCount)
+        collector.cancel()
     }
 }

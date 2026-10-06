@@ -1,6 +1,8 @@
 package app.orbit.ui.screens.onboarding
 
 import android.app.Application
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
@@ -29,6 +31,9 @@ import org.robolectric.annotation.Config
  *  - The CTA gate: "Open Orbit" waits for the completion write, so a relaunch
  *    never lands back in onboarding half-done (ONB-23's clean exit depends
  *    on the flag being written first).
+ *  - A snackbar host: the screen's failed-write message ("Couldn't save your
+ *    change", rules.md Code 3) has somewhere to show. OnboardingScaffold's
+ *    KDoc warns that `showSnackbar` with no host on screen suspends for ever.
  *
  * Semantics only (labels, text, enabled), so it runs on the JVM under
  * Robolectric like `ContactDetailCurtainTest`. The nudge card sits below the
@@ -86,6 +91,28 @@ class OnboardingDoneScreenTest {
 
         compose.onNodeWithText("No nudges for now. You can turn them on in Settings.").assertExists()
         compose.onAllNodes(hasText("Allow nudges")).assertCountEquals(0)
+    }
+
+    // The clock is driven by hand so the snackbar's own timeout cannot dismiss
+    // it before the assertion (the gallery test does the same for animations).
+    @Test
+    fun a_message_on_the_snackbar_host_shows_over_the_content() {
+        val host = SnackbarHostState()
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            OrbitTheme {
+                OnboardingDoneContent(
+                    completed = true,
+                    onFinish = {},
+                    nudges = NudgeAsk.On,
+                    snackbarHostState = host,
+                )
+                LaunchedEffect(Unit) { host.showSnackbar("Couldn't save your change") }
+            }
+        }
+        compose.mainClock.advanceTimeBy(500L)
+
+        compose.onNodeWithText("Couldn't save your change").assertExists()
     }
 
     // onb-5: the screen names itself to TalkBack (pane title) and its title is

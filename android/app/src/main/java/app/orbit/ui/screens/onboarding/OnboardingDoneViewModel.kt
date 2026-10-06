@@ -3,11 +3,18 @@ package app.orbit.ui.screens.onboarding
 import android.Manifest
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.AppPrefs
+import app.orbit.ui.screens.picker.SnackbarEvent
+import app.orbit.ui.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
@@ -39,6 +46,13 @@ class OnboardingDoneViewModel @Inject constructor(
     private val _completed = MutableStateFlow(false)
     val completed: StateFlow<Boolean> = _completed.asStateFlow()
 
+    /**
+     * One-off messages for the screen's snackbar, as [UiText] (voice.md:
+     * ViewModels hold no Context). Today only a failed "asked once" write.
+     */
+    private val _snackbarEvents = MutableSharedFlow<SnackbarEvent>(extraBufferCapacity = 1)
+    val snackbarEvents: SharedFlow<SnackbarEvent> = _snackbarEvents.asSharedFlow()
+
     init {
         viewModelScope.launch {
             appPrefs.setOnboardingComplete(true)
@@ -59,8 +73,22 @@ class OnboardingDoneViewModel @Inject constructor(
      * screens flip through `OnboardingPermissionsViewModel.onLauncherFired`.
      * Before 2026-10-06 the Done screen asked without recording it, so a
      * decline here still read as "never asked" in Settings.
+     *
+     * A failed write tells the user (rules.md Code 3) instead of leaving
+     * Settings quietly saying "Not allowed" for a permission the phone will no
+     * longer ask about; cancellation passes through (Code 5).
      */
     fun onNudgeLauncherFired() {
-        viewModelScope.launch { appPrefs.setHasAsked(Manifest.permission.POST_NOTIFICATIONS) }
+        viewModelScope.launch {
+            try {
+                appPrefs.setHasAsked(Manifest.permission.POST_NOTIFICATIONS)
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                _snackbarEvents.tryEmit(
+                    SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)),
+                )
+            }
+        }
     }
 }
