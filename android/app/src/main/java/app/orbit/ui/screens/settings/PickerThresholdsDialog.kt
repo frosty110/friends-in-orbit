@@ -13,7 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -29,15 +29,19 @@ import app.orbit.ui.theme.OrbitTheme
  * PICK-07 — Material3 AlertDialog wrapping 4 [ThresholdStepperRow] rows
  * for the picker's threshold knobs (`commonlyTopPct`, `rarelyBottomPct`, `recentlyAddedDays`,
  * `longGapDays`). Save commits all four through [SettingsViewModel.onCommitThresholds]; Cancel
- * discards (local `remember { mutableIntStateOf(...) }` state never round-trips to DataStore
- * until Save runs — mitigation against stale-state writes).
+ * discards (the local state never round-trips to DataStore until Save runs, a
+ * mitigation against stale-state writes).
+ *
+ * The four values are `rememberSaveable`, like the dialog's own visibility in
+ * SettingsScreen: a rotation mid-edit used to close the dialog and drop the
+ * edits (rubric G1, "no lost work"), while the reset dialog beside it survived.
  *
  * Pattern: ConvertToStaticDialog is the precedent — same Material3 AlertDialog
  * primitive, same `confirmButton` / `dismissButton` shape, same OrbitButton + Ghost variant
  * for Cancel.
  *
- * Title, subtitle, and four field labels are locked copy. Helper texts and unit
- * suffixes track the spec's per-field guidance.
+ * Each row's label is a whole sentence with the value in it (SET-10,
+ * voice.md), rendered by [ThresholdStepperRow] above its stepper.
  */
 @Composable
 fun PickerThresholdsDialog(
@@ -45,10 +49,10 @@ fun PickerThresholdsDialog(
     onSave: (PickerThresholds) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var commonlyTop by remember { mutableIntStateOf(initial.commonlyTopPct) }
-    var rarelyBottom by remember { mutableIntStateOf(initial.rarelyBottomPct) }
-    var recentlyAdded by remember { mutableIntStateOf(initial.recentlyAddedDays) }
-    var longGap by remember { mutableIntStateOf(initial.longGapDays) }
+    var commonlyTop by rememberSaveable { mutableIntStateOf(initial.commonlyTopPct) }
+    var rarelyBottom by rememberSaveable { mutableIntStateOf(initial.rarelyBottomPct) }
+    var recentlyAdded by rememberSaveable { mutableIntStateOf(initial.recentlyAddedDays) }
+    var longGap by rememberSaveable { mutableIntStateOf(initial.longGapDays) }
 
     // The two percentile bands must not overlap (a contact
     // can't be both commonly and rarely called). Save disables with a quiet
@@ -77,9 +81,9 @@ fun PickerThresholdsDialog(
             // steppers fell under 48dp (gate G3).
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                 ThresholdStepperRow(
-                    label = stringResource(R.string.settings_thresholds_commonly),
+                    label = stringResource(R.string.settings_thresholds_commonly, commonlyTop),
+                    name = stringResource(R.string.settings_thresholds_commonly_name),
                     helper = stringResource(R.string.settings_thresholds_percent_helper),
-                    unit = stringResource(R.string.settings_thresholds_percent_unit),
                     value = commonlyTop,
                     minValue = 5,
                     maxValue = 50,
@@ -87,9 +91,9 @@ fun PickerThresholdsDialog(
                 )
                 HorizontalDivider(color = OrbitTheme.colors.lineSoft)
                 ThresholdStepperRow(
-                    label = stringResource(R.string.settings_thresholds_rarely),
+                    label = stringResource(R.string.settings_thresholds_rarely, rarelyBottom),
+                    name = stringResource(R.string.settings_thresholds_rarely_name),
                     helper = stringResource(R.string.settings_thresholds_percent_helper),
-                    unit = stringResource(R.string.settings_thresholds_percent_unit),
                     value = rarelyBottom,
                     minValue = 10,
                     maxValue = 90,
@@ -97,9 +101,9 @@ fun PickerThresholdsDialog(
                 )
                 HorizontalDivider(color = OrbitTheme.colors.lineSoft)
                 ThresholdStepperRow(
-                    label = stringResource(R.string.settings_thresholds_recently_added),
+                    label = pluralStringResource(R.plurals.settings_thresholds_recently_added, recentlyAdded, recentlyAdded),
+                    name = stringResource(R.string.settings_thresholds_recently_added_name),
                     helper = stringResource(R.string.settings_thresholds_recently_added_helper),
-                    unit = pluralStringResource(R.plurals.settings_thresholds_days_unit, recentlyAdded),
                     value = recentlyAdded,
                     minValue = 1,
                     maxValue = 3650,
@@ -107,9 +111,9 @@ fun PickerThresholdsDialog(
                 )
                 HorizontalDivider(color = OrbitTheme.colors.lineSoft)
                 ThresholdStepperRow(
-                    label = stringResource(R.string.settings_thresholds_long_gap),
+                    label = pluralStringResource(R.plurals.settings_thresholds_long_gap, longGap, longGap),
+                    name = stringResource(R.string.settings_thresholds_long_gap_name),
                     helper = stringResource(R.string.settings_thresholds_long_gap_helper),
-                    unit = pluralStringResource(R.plurals.settings_thresholds_days_unit, longGap),
                     value = longGap,
                     minValue = 1,
                     maxValue = 3650,

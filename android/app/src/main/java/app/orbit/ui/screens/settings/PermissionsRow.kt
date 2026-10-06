@@ -31,7 +31,11 @@ import app.orbit.ui.theme.OrbitTheme
  *     button fires the runtime permission launcher directly.
  *   - [PermissionStatus.PermanentlyDenied] — the OS will silently
  *     auto-deny a launcher request, so the only honest action is the
- *     "Open Android Settings" deep link.
+ *     "Open phone settings" deep link. The row reads this only after the OS
+ *     has been asked once (SET-12), and for Notifications also when the
+ *     app's notifications are switched off in the phone's settings (SET-14),
+ *     which is why [onOpenAndroidSettings] is per row: that row opens the
+ *     app's notification settings, the others its details page.
  *
  * Reused for Contacts and Notifications. The call-log permission still
  * uses [app.orbit.calllog.CallLogPermissionState] at the VM layer for
@@ -71,7 +75,7 @@ fun PermissionsRow(
                 variant = OrbitButtonVariant.Ghost,
             )
             PermissionRowAction.OpenSettings -> OrbitButton(
-                text = stringResource(R.string.settings_perm_open_android_settings),
+                text = stringResource(R.string.components_action_open_phone_settings),
                 onClick = onOpenAndroidSettings,
                 variant = OrbitButtonVariant.Ghost,
             )
@@ -86,7 +90,7 @@ fun PermissionsRow(
  * ContentObserverController plumbing keeps compiling unchanged.
  *
  * `PermanentlyDenied.labelRes` names the recovery path explicitly because the
- * Open-Android-Settings button is the only way out of that state. Labels are
+ * "Open phone settings" button is the only way out of that state. Labels are
  * string resources (strings_settings.xml).
  */
 enum class PermissionStatus(@StringRes val labelRes: Int) {
@@ -108,9 +112,11 @@ internal fun PermissionStatus.rowAction(): PermissionRowAction = when (this) {
     PermissionStatus.PermanentlyDenied -> PermissionRowAction.OpenSettings
 }
 
+// positiveText, not positive: the status is text, and rules.md Design 4 holds
+// text to 4.5:1, which the fill-tier green does not reach on surface.
 @Composable
 private fun PermissionStatus.color(): Color = when (this) {
-    PermissionStatus.Granted -> OrbitTheme.colors.positive
+    PermissionStatus.Granted -> OrbitTheme.colors.positiveText
     PermissionStatus.Denied,
     PermissionStatus.PermanentlyDenied -> OrbitTheme.colors.fgMuted
 }

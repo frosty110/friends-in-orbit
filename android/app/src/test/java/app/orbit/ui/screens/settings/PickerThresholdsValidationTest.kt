@@ -40,7 +40,7 @@ class PickerThresholdsValidationTest {
     fun overlapping_bands_return_the_helper_line() {
         val line = thresholdsContradictionLine(commonlyTopPct = 50, rarelyBottomPct = 51)
         assertNotNull(line)
-        assertEquals("These two bands overlap: together they can't be more than 100%.", context.getString(line))
+        assertEquals("These two groups overlap: together they can't be more than 100%.", context.getString(line))
     }
 
     @Test

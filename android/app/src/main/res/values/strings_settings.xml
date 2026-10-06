@@ -12,6 +12,8 @@
     <string name="settings_section_permissions">Permissions</string>
     <string name="settings_section_contacts">Contacts</string>
     <string name="settings_section_call_history">Call history</string>
+    <!-- The people Orbit knows: where the picker's groups begin, and who is ignored. -->
+    <string name="settings_section_people">People</string>
     <string name="settings_section_data">Data</string>
     <string name="settings_section_about">About</string>
 
@@ -23,10 +25,10 @@
     <string name="settings_perm_status_not_allowed">Not allowed</string>
     <string name="settings_perm_status_off">Off in your phone\'s settings</string>
     <string name="settings_perm_allow">Allow</string>
-    <string name="settings_perm_open_android_settings">Open Android Settings</string>
 
-    <!-- Sync rows (Contacts and Call history). %1$s: a relative time, for example "5 minutes ago". -->
-    <string name="settings_sync_never">Never synced.</string>
+    <!-- Sync rows (Contacts and Call history). %1$s: how long ago, from strings_time.xml,
+         for example "just now" or "5 minutes ago". -->
+    <string name="settings_sync_never">Never synced</string>
     <string name="settings_sync_last">Last synced %1$s</string>
     <string name="settings_sync_now">Sync now</string>
     <string name="settings_syncing">Syncing…</string>
@@ -48,12 +50,17 @@
     </plurals>
 
     <!-- Data rows. -->
-    <string name="settings_export_title">Export my data</string>
-    <string name="settings_export_sub">Encrypted JSON, password protected</string>
+    <string name="settings_export_title">Export your data</string>
+    <string name="settings_export_sub">An encrypted file, protected by a password</string>
+    <!-- Replaces the export row's subtitle while the file is being written. -->
+    <string name="settings_export_in_progress">Saving…</string>
     <string name="settings_import_title">Import backup</string>
     <string name="settings_import_sub">Replace what\'s here with an exported file</string>
+    <!-- Replace the import row's subtitle while the backup is read, then while it is restored. -->
+    <string name="settings_import_checking">Checking the file…</string>
+    <string name="settings_import_in_progress">Restoring…</string>
     <string name="settings_reset_title">Reset Orbit</string>
-    <string name="settings_reset_sub">Erase every list, contact, and note on this phone</string>
+    <string name="settings_reset_sub">Erase every list, person, and note on this phone</string>
 
     <!-- People the user chose to hide from suggestions. -->
     <string name="settings_ignored_title">Ignored</string>
@@ -61,27 +68,35 @@
         <item quantity="one">%1$d ignored</item>
         <item quantity="other">%1$d ignored</item>
     </plurals>
-    <string name="settings_ignored_none">No ignored contacts</string>
-    <string name="settings_ignored_empty_body">Hidden from surfacing, history kept</string>
-    <string name="settings_ignored_unignore">Un-ignore</string>
+    <string name="settings_ignored_none">No one ignored</string>
+    <!-- Under the Ignored screen's title, and in its empty state: what ignoring means. -->
+    <string name="settings_ignored_empty_body">Ignored people don\'t come up on your lists or in nudges. Their calls and notes are kept.</string>
+    <string name="settings_ignored_unignore">Unignore</string>
+    <!-- The Ignored screen could not read its list; shown with Try again. -->
+    <string name="settings_ignored_error_title">Couldn\'t load ignored people</string>
     <!-- Under an ignored person's name. %1$s: when, for example "today" or "3 days ago". -->
     <string name="settings_ignored_relative">Ignored %1$s</string>
 
     <string name="settings_call_history_title">Call history</string>
-    <string name="settings_call_history_sub">Every call to people on your lists</string>
+    <string name="settings_call_history_sub">Calls with the people in your contacts</string>
 
     <!-- Snackbars after export and import. -->
     <string name="settings_export_saved">Saved your encrypted backup.</string>
-    <string name="settings_export_failed">Couldn\'t save the file. Try again?</string>
+    <!-- The row is the way to try again, so the message does not ask. -->
+    <string name="settings_export_failed">Couldn\'t save the file.</string>
     <string name="settings_import_restored">Backup restored.</string>
     <string name="settings_import_unreadable">That file couldn\'t be read. Check it\'s an Orbit backup.</string>
     <string name="settings_import_too_new">This backup was made by a newer version of Orbit. Update Orbit first.</string>
     <string name="settings_import_failed">Couldn\'t restore the backup. Nothing was changed.</string>
+    <!-- Reset Orbit did not finish. The row stays, so Try again is the row. -->
+    <string name="settings_reset_failed">Couldn\'t finish the reset. Try again.</string>
 
     <!-- About. -->
     <!-- %1$s: the version number, for example "1.4.0". -->
     <string name="settings_about_version">Version %1$s</string>
     <string name="settings_about_feedback">Send feedback</string>
+    <!-- The same sentence onboarding's welcome screen makes. Not tappable. -->
+    <string name="settings_about_privacy_promise">Everything stays on your phone: no cloud, no tracking.</string>
     <string name="settings_about_privacy">Privacy policy</string>
     <string name="settings_about_privacy_sub">Read how Orbit handles your data</string>
     <string name="settings_about_source">Source code</string>
@@ -91,19 +106,19 @@
 
     <!-- Reset confirmation. -->
     <string name="settings_reset_dialog_title">Reset Orbit?</string>
-    <string name="settings_reset_dialog_body">Every list, contact, note, and call record on this phone will be erased. Your phone\'s contacts and call log are not touched.</string>
+    <string name="settings_reset_dialog_body">Every list, person, note, and call record on this phone will be erased. Your phone\'s own contacts and call log are not touched.</string>
     <string name="settings_reset_confirm">Reset</string>
 
-    <!-- Restore-from-backup confirmation. %1$s: "4 lists", %2$s: "52 contacts". -->
+    <!-- Restore-from-backup confirmation. %1$s: "4 lists", %2$s: "52 people". -->
     <string name="settings_import_confirm_title">Restore this backup?</string>
     <string name="settings_import_confirm_body">This replaces everything in Orbit with the backup: %1$s and %2$s. What\'s on this phone now will be erased.</string>
     <plurals name="settings_import_confirm_lists">
         <item quantity="one">%1$d list</item>
         <item quantity="other">%1$d lists</item>
     </plurals>
-    <plurals name="settings_import_confirm_contacts">
-        <item quantity="one">%1$d contact</item>
-        <item quantity="other">%1$d contacts</item>
+    <plurals name="settings_import_confirm_people">
+        <item quantity="one">%1$d person</item>
+        <item quantity="other">%1$d people</item>
     </plurals>
     <string name="settings_import_confirm_replace">Replace</string>
 
@@ -111,22 +126,28 @@
     <string name="settings_thresholds_title">Groups when adding people</string>
     <string name="settings_thresholds_row_sub">Where Commonly called, Rarely called and the others begin</string>
     <string name="settings_thresholds_body">When you add people to a list, Orbit sorts your contacts into these groups. Choose where each one begins.</string>
-    <string name="settings_thresholds_commonly">Commonly called: the top</string>
-    <string name="settings_thresholds_rarely">Rarely called: the bottom</string>
+    <!-- One whole sentence per group, shown above its stepper, with the current value in it.
+         %1$d: the value. "%%" is a literal percent sign. -->
+    <string name="settings_thresholds_commonly">Commonly called: the top %1$d%%</string>
+    <string name="settings_thresholds_rarely">Rarely called: the bottom %1$d%%</string>
     <string name="settings_thresholds_percent_helper">Percent of the contacts you\'ve called</string>
-    <string name="settings_thresholds_recently_added">Recently added</string>
-    <string name="settings_thresholds_recently_added_helper">Days since Orbit first saw them</string>
-    <string name="settings_thresholds_long_gap">Long gap</string>
-    <string name="settings_thresholds_long_gap_helper">Days since your last call</string>
-    <!-- Unit after a percentage value. -->
-    <string name="settings_thresholds_percent_unit" formatted="false">%</string>
-    <!-- Unit after a number of days. -->
-    <plurals name="settings_thresholds_days_unit">
-        <item quantity="one">day</item>
-        <item quantity="other">days</item>
+    <plurals name="settings_thresholds_recently_added">
+        <item quantity="one">Recently added: the last %1$d day</item>
+        <item quantity="other">Recently added: the last %1$d days</item>
     </plurals>
-    <string name="settings_thresholds_overlap" formatted="false">These two bands overlap: together they can\'t be more than 100%.</string>
-    <!-- Stepper buttons. %1$s: the setting's label. -->
+    <string name="settings_thresholds_recently_added_helper">Days since Orbit first saw them</string>
+    <plurals name="settings_thresholds_long_gap">
+        <item quantity="one">Long gap: no call in %1$d day</item>
+        <item quantity="other">Long gap: no call in %1$d days</item>
+    </plurals>
+    <string name="settings_thresholds_long_gap_helper">Days since your last call</string>
+    <!-- The group's short name, for the stepper buttons' screen-reader labels below. -->
+    <string name="settings_thresholds_commonly_name">Commonly called</string>
+    <string name="settings_thresholds_rarely_name">Rarely called</string>
+    <string name="settings_thresholds_recently_added_name">Recently added</string>
+    <string name="settings_thresholds_long_gap_name">Long gap</string>
+    <string name="settings_thresholds_overlap" formatted="false">These two groups overlap: together they can\'t be more than 100%.</string>
+    <!-- Stepper buttons. %1$s: the group's short name, for example "Commonly called". -->
     <string name="settings_thresholds_decrease">Decrease %1$s</string>
     <string name="settings_thresholds_increase">Increase %1$s</string>
 
@@ -169,7 +190,7 @@
 
     <!-- Export: choose a password for the encrypted file. -->
     <string name="settings_export_sheet_title">Export your data</string>
-    <string name="settings_export_sheet_body">We\'ll save an encrypted file of your lists, contacts, call history, notes, and rule overrides. Pick a strong password: we don\'t store it, and we can\'t recover it.</string>
+    <string name="settings_export_sheet_body">We\'ll save an encrypted file of your lists, people, call history, notes, and custom schedules. Pick a strong password: we don\'t store it, and we can\'t recover it.</string>
     <string name="settings_password">Password</string>
     <string name="settings_password_hint">At least 8 characters.</string>
     <string name="settings_password_too_short">Use 8 or more characters.</string>

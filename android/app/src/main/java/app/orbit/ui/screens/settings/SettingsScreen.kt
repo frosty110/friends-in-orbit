@@ -65,30 +65,41 @@ import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.lists.SettingGroup
 import app.orbit.ui.screens.settings.export.ExportPassphraseSheet
 import app.orbit.ui.screens.settings.export.ExportSnackbar
+import app.orbit.ui.screens.settings.export.ExportUiState
 import app.orbit.ui.screens.settings.export.ExportViewModel
 import app.orbit.ui.screens.settings.export.ImportPassphraseSheet
 import app.orbit.ui.screens.settings.export.ImportSnackbar
 import app.orbit.ui.screens.settings.export.ImportUiState
 import app.orbit.ui.screens.settings.export.ImportViewModel
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.asString
+import java.time.Instant
 import kotlinx.coroutines.launch
 
 /**
  * Settings screen (SET-04 / SET-06 / SET-07; SET-08 propagation) — the
  * post-2026-04-28 layout.
  *
- * Visible sections, top-down:
- *   1. **Permissions** — three [PermissionsRow]s (Contacts, Call log,
+ * Visible sections, top-down (features/settings/README.md, Behavior):
+ *   1. **Appearance**: [AppearanceSection]: theme, light/dark, accent dial.
+ *      First because it is the one section every user has a reason to open.
+ *   2. **Permissions**: three [PermissionsRow]s (Contacts, Call log,
  *      Notifications). Granted rows show a quiet "Allowed"; Denied rows
- *      fire the runtime launcher; PermanentlyDenied rows deep-link to
- *      Android Settings.
- *   2. **Call history** — [CallSyncStatusRow] + [ImportRangeRow] +
- *      [PickerThresholdsRow] + Ignored entry row + Call history entry row.
- *   3. **Data** — Export my data row + Import backup row (SAF open →
+ *      fire the runtime launcher; PermanentlyDenied rows open the phone's
+ *      settings (SET-07, SET-12, SET-14).
+ *   3. **Contacts**: [ContactsSyncRow].
+ *   4. **Call history**: [CallSyncStatusRow] + [ImportRangeRow] + the
+ *      Call history entry row: everything about what Orbit reads from the
+ *      phone's call log.
+ *   5. **People**: [PickerThresholdsRow] + the Ignored entry row: how Orbit
+ *      groups the people it knows, and who it leaves out. These two used to
+ *      sit under Call history, where "Groups when adding people" and
+ *      "Ignored" read as sync settings.
+ *   6. **Data**: Export your data row + Import backup row (SAF open →
  *      passphrase → validate → confirm-replace) + [ResetDataRow]
  *      (destructive; on completion the task restarts into onboarding).
- *   4. **About** — [AboutSection] (version, feedback mailto, links,
- *      licenses dialog).
+ *   plus **About**: [AboutSection] (version, the privacy promise, feedback
+ *      mailto, links, licenses dialog).
  *
  * Removed in this rewrite: the disabled global-digest `ToggleRow`, the
  * standalone notifications-section block, the biometric / minimal-mode toggles
@@ -113,6 +124,7 @@ fun SettingsScreen(
     importVm: ImportViewModel = hiltViewModel(),
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val exportState by exportVm.uiState.collectAsStateWithLifecycle()
     val importState by importVm.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -193,6 +205,14 @@ fun SettingsScreen(
             }
         }
     }
+    // The Settings VM's own messages (today: the reset failing, SET-06).
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            vm.snackbarEvents.collect { message ->
+                snackbarHostState.showSnackbar(message.asString(context))
+            }
+        }
+    }
 
     // Once ResetService finishes (works cancelled, observers
     // stopped, Room + DataStore wiped) the user must land somewhere honest.
@@ -217,9 +237,13 @@ fun SettingsScreen(
         }
     }
 
+    // SET-12: every launcher callback records that the OS was asked, before
+    // the refresh, so "Off in your phone's settings" can only ever follow a
+    // system dialog the user actually saw.
     val callLogPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
+        vm.onLauncherFired(Manifest.permission.READ_CALL_LOG)
         val activity = context as? Activity
         val resolved = when {
             granted -> CallLogPermissionState.Granted
@@ -232,13 +256,16 @@ fun SettingsScreen(
     }
 
     // Contacts + Notifications launchers. Both feed
-    // refreshAllPermissionStates rather than VM-side dedicated handlers
-    // because (a) neither enables any side-effect on grant
-    // (no observer bind, no cleanup branch — that's call-log-only), and
-    // (b) the ON_RESUME observer below already runs the same refresh path.
+    // refreshAllPermissionStates rather than VM-side dedicated handlers: the
+    // refresh compares the prior and next readings and runs the grant side
+    // effects itself (a Contacts grant registers the contacts observer and
+    // runs one forced ingest, SET-07), so a grant from this row, from the
+    // ON_RESUME observer below (the phone's settings) and from onboarding all
+    // take the one path.
     val contactsRequestLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) {
+        vm.onLauncherFired(Manifest.permission.READ_CONTACTS)
         val activity = context as? Activity
         val rationale = activity != null &&
             ActivityCompat.shouldShowRequestPermissionRationale(
@@ -264,6 +291,7 @@ fun SettingsScreen(
     val notificationsRequestLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) {
+        vm.onLauncherFired(Manifest.permission.POST_NOTIFICATIONS)
         val activity = context as? Activity
         vm.refreshAllPermissionStates(
             callLogRationale = activity != null &&
@@ -325,9 +353,19 @@ fun SettingsScreen(
         context.startActivity(intent)
     }
 
-    // Source-code link. No published privacy-policy URL exists
-    // in the repo yet (that row reads "Coming soon"); the repository URL is
-    // the source-available home per the PRD distribution constraint.
+    // SET-14: the Notifications row's "Open phone settings" lands on the
+    // app's notification page, where the switch that reads "off" actually
+    // is, not on the app details page the other two rows open.
+    val openNotificationSettings: () -> Unit = {
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+    }
+
+    // Source-code link: the repository URL is the source-available home per
+    // the PRD distribution constraint. (The privacy policy row lives in
+    // AboutSection and opens the hosted policy, RELEASE-05.)
     val openSourceCode: () -> Unit = {
         val intent = Intent(
             Intent.ACTION_VIEW,
@@ -339,12 +377,15 @@ fun SettingsScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         SettingsContent(
-        onRetry = vm::onRetry,
+            onRetry = vm::onRetry,
             state = state,
+            exportState = exportState,
+            importState = importState,
             onBack = onBack,
             onOpenIgnored = onOpenIgnored,
             onOpenCallHistory = onOpenCallHistory,
             onOpenAndroidSettings = openAppSettings,
+            onOpenNotificationSettings = openNotificationSettings,
             onRequestContactsPermission = {
                 contactsRequestLauncher.launch(Manifest.permission.READ_CONTACTS)
             },
@@ -414,10 +455,13 @@ fun SettingsScreen(
 private fun SettingsContent(
     onRetry: () -> Unit = {},
     state: SettingsUiState,
+    exportState: ExportUiState = ExportUiState.Idle,
+    importState: ImportUiState = ImportUiState.Idle,
     onBack: () -> Unit,
     onOpenIgnored: () -> Unit,
     onOpenCallHistory: () -> Unit,
     onOpenAndroidSettings: () -> Unit,
+    onOpenNotificationSettings: () -> Unit = onOpenAndroidSettings,
     onRequestContactsPermission: () -> Unit,
     onRequestCallLogPermission: () -> Unit,
     onRequestNotificationsPermission: () -> Unit,
@@ -442,19 +486,30 @@ private fun SettingsContent(
     val lastSyncedAtMs = ready?.lastCallLogSyncAtMs ?: 0L
     val contactsSyncInFlight = ready?.contactsSyncInFlight ?: false
     val lastContactsSyncAtMs = ready?.lastContactsSyncAtMs ?: 0L
+    val now = ready?.now ?: Instant.EPOCH
     val pickerThresholds = ready?.pickerThresholds ?: PickerThresholds.DEFAULT
     val ignoredContactCount = ready?.ignoredContactCount ?: 0
     val colorTheme = ready?.colorTheme ?: app.orbit.ui.theme.OrbitThemeId.DEFAULT
     val darkMode = ready?.darkMode ?: app.orbit.ui.theme.OrbitDarkMode.DEFAULT
     val accentHue = ready?.accentHue
 
-    // PICK-07 — dialog visibility hoisted at the screen
-    // level so dismissals route through onDismiss without unwinding parent state.
-    var showThresholdsDialog by remember { mutableStateOf(false) }
+    // PICK-07: dialog visibility hoisted at the screen level so dismissals
+    // route through onDismiss without unwinding parent state. Saveable, like
+    // the reset dialog below: a rotation mid-edit used to close it and drop
+    // the four edits (rubric G1, "no lost work"); the dialog's own values
+    // are saveable too.
+    var showThresholdsDialog by rememberSaveable { mutableStateOf(false) }
     // SET-06 — Reset Orbit confirmation dialog. Saveable
     // so a config change mid-confirmation doesn't drop the user out of the
     // dialog (an already-committed user shouldn't have to re-tap on rotate).
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
+
+    // SET-05: while a backup is being written, checked or restored, the three
+    // Data rows wait. A second export mid-write, or a reset mid-restore, would
+    // race the file or the tables; the subtitle says what is happening.
+    val exportInFlight = exportState is ExportUiState.InFlight
+    val importBusy = importState is ImportUiState.Validating || importState is ImportUiState.Applying
+    val dataRowsEnabled = !exportInFlight && !importBusy
 
     OrbitScreen {
         OrbitAppBar(
@@ -519,13 +574,14 @@ private fun SettingsContent(
                     label = stringResource(R.string.settings_perm_notifications),
                     status = notificationsPermission,
                     onRequestPermission = onRequestNotificationsPermission,
-                    onOpenAndroidSettings = onOpenAndroidSettings,
+                    onOpenAndroidSettings = onOpenNotificationSettings,
                 )
             }
 
             SettingGroup(title = stringResource(R.string.settings_section_contacts)) {
                 ContactsSyncRow(
                     lastSyncedAtMs = lastContactsSyncAtMs,
+                    now = now,
                     inFlight = contactsSyncInFlight,
                     enabled = contactsPermission == PermissionStatus.Granted,
                     onSyncNow = onManualContactsResync,
@@ -535,6 +591,7 @@ private fun SettingsContent(
             SettingGroup(title = stringResource(R.string.settings_section_call_history)) {
                 CallSyncStatusRow(
                     lastSyncedAtMs = lastSyncedAtMs,
+                    now = now,
                     inFlight = callLogSyncInFlight,
                     enabled = callLogPermission is CallLogPermissionState.Granted,
                     onSyncNow = onManualResync,
@@ -545,19 +602,37 @@ private fun SettingsContent(
                     onChange = onImportDaysChanged,
                 )
                 Divider()
-                PickerThresholdsRow(onClick = { showThresholdsDialog = true })
-                Divider()
-                IgnoredEntryRow(count = ignoredContactCount, onClick = onOpenIgnored)
-                Divider()
                 CallHistoryEntryRow(onClick = onOpenCallHistory)
             }
 
+            SettingGroup(title = stringResource(R.string.settings_section_people)) {
+                PickerThresholdsRow(onClick = { showThresholdsDialog = true })
+                Divider()
+                IgnoredEntryRow(count = ignoredContactCount, onClick = onOpenIgnored)
+            }
+
             SettingGroup(title = stringResource(R.string.settings_section_data)) {
-                ExportEntryRow(onClick = onExport)
+                ExportEntryRow(
+                    onClick = onExport,
+                    enabled = dataRowsEnabled,
+                    subtitle = stringResource(
+                        if (exportInFlight) R.string.settings_export_in_progress else R.string.settings_export_sub,
+                    ),
+                )
                 Divider()
-                ImportEntryRow(onClick = onImport)
+                ImportEntryRow(
+                    onClick = onImport,
+                    enabled = dataRowsEnabled,
+                    subtitle = stringResource(
+                        when (importState) {
+                            ImportUiState.Validating -> R.string.settings_import_checking
+                            ImportUiState.Applying -> R.string.settings_import_in_progress
+                            else -> R.string.settings_import_sub
+                        },
+                    ),
+                )
                 Divider()
-                ResetDataRow(onClick = { showResetDialog = true })
+                ResetDataRow(onClick = { showResetDialog = true }, enabled = dataRowsEnabled)
             }
 
             SettingGroup(title = stringResource(R.string.settings_section_about)) {
@@ -660,73 +735,77 @@ private fun importRangeLabel(days: Int): String = when (days) {
 }
 
 /**
- * Data section "Export my data" entry. Tap routes
- * through the [onClick] callback which the bottom-sheet
- * implementation hooks to the passphrase form. The default no-op callback in
- * [SettingsScreen] keeps the row visible for screenshot-based design
- * review without dispatching an actual export.
+ * Data section "Export your data" entry. Tap routes through the [onClick]
+ * callback which the bottom-sheet implementation hooks to the passphrase
+ * form. [subtitle] is the default line or "Saving…" while the file is being
+ * written, when [enabled] is false (SET-05).
  */
 @Composable
-private fun ExportEntryRow(onClick: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.settings_export_title),
-                style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-            )
-            Text(
-                text = stringResource(R.string.settings_export_sub),
-                style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
-            )
-        }
-        PhIcon(name = "caret-right", size = 16.dp, tint = OrbitTheme.colors.fgSubtle)
-    }
+private fun ExportEntryRow(onClick: () -> Unit, enabled: Boolean, subtitle: String) {
+    DataEntryRow(
+        title = stringResource(R.string.settings_export_title),
+        subtitle = subtitle,
+        enabled = enabled,
+        onClick = onClick,
+    )
 }
 
 /**
- * Data section "Import backup" entry, the restore half of
- * the export row above it. Tap fires the SAF ACTION_OPEN_DOCUMENT picker
- * via [ImportViewModel.onImportRequested].
+ * Data section "Import backup" entry, the restore half of the export row
+ * above it. Tap fires the SAF ACTION_OPEN_DOCUMENT picker via
+ * [ImportViewModel.onImportRequested]. [subtitle] says "Checking the file…"
+ * or "Restoring…" while the flow is busy, when [enabled] is false (SET-05).
  */
 @Composable
-private fun ImportEntryRow(onClick: () -> Unit) {
+private fun ImportEntryRow(onClick: () -> Unit, enabled: Boolean, subtitle: String) {
+    DataEntryRow(
+        title = stringResource(R.string.settings_import_title),
+        subtitle = subtitle,
+        enabled = enabled,
+        onClick = onClick,
+    )
+}
+
+/**
+ * The export and import rows' shared shape. Disabled, the title drops to
+ * fgMuted and the chevron goes, so a waiting row does not look tappable.
+ */
+@Composable
+private fun DataEntryRow(title: String, subtitle: String, enabled: Boolean, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                text = stringResource(R.string.settings_import_title),
-                style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
+                text = title,
+                style = OrbitTheme.type.body.copy(
+                    color = if (enabled) OrbitTheme.colors.fg else OrbitTheme.colors.fgMuted,
+                ),
             )
             Text(
-                text = stringResource(R.string.settings_import_sub),
+                text = subtitle,
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
             )
         }
-        PhIcon(name = "caret-right", size = 16.dp, tint = OrbitTheme.colors.fgSubtle)
+        if (enabled) {
+            PhIcon(name = "caret-right", size = 16.dp, tint = OrbitTheme.colors.fgSubtle)
+        }
     }
 }
 
 /**
  * Entry-point row for Settings → Ignored.
  *
- * Subtitle reads "{N} ignored" when [count] > 0, else "No ignored contacts" —
- * sentence case, no exclamation (IGNORE-10 voice gate). Leading icon is
- * `eye-slash` (matches the empty-state icon on SettingsIgnoredScreen).
+ * Subtitle reads "{N} ignored" when [count] > 0, else "No one ignored":
+ * sentence case, no exclamation, people not contacts (IGNORE-10 voice gate).
+ * Leading icon is `eye-slash` (matches the empty-state icon on
+ * SettingsIgnoredScreen).
  */
 @Composable
 private fun IgnoredEntryRow(count: Int, onClick: () -> Unit) {
@@ -812,18 +891,38 @@ private fun Modifier.verticalScrollContainer(): Modifier {
     return this.then(verticalScroll(scrollState))
 }
 
-// Preview fixture for the stateless SettingsContent
-// (THEME-04 / THEME-05 — D-06). Uses Ready.INITIAL so the empty-state copy
-// renders ("No ignored contacts" subtitle, etc.).
+// Previews of the stateless SettingsContent (THEME-04 / THEME-05), one per
+// state so each renders in the screenshot gallery and its audits. The
+// fresh-install state uses Ready.INITIAL ("Not allowed" rows, "No one
+// ignored"); the second is a phone with everything allowed, a call-log sync
+// running and a backup being written, so the spinner, "Saving…" and the
+// disabled Data rows are rendered; then Loading (app bar only, SET-09) and
+// Error (SET-11).
 private val previewState: SettingsUiState = SettingsUiState.Ready.INITIAL
 
-@PreviewLightDark
-@PreviewFontScale
+private val previewNow: Instant = Instant.parse("2026-10-06T10:00:00Z")
+
+private val previewGrantedSyncing: SettingsUiState = SettingsUiState.Ready(
+    callLogPermissionState = CallLogPermissionState.Granted,
+    callLogImportDays = 365,
+    callLogSyncInFlight = true,
+    contactsPermissionState = PermissionStatus.Granted,
+    notificationsPermissionState = PermissionStatus.Granted,
+    lastCallLogSyncAtMs = previewNow.minusSeconds(5 * 60).toEpochMilli(),
+    lastContactsSyncAtMs = previewNow.minusSeconds(3 * 3600).toEpochMilli(),
+    now = previewNow,
+    ignoredContactCount = 3,
+)
+
 @Composable
-private fun SettingsContentPreview() {
+private fun SettingsContentPreviewHost(
+    state: SettingsUiState,
+    exportState: ExportUiState = ExportUiState.Idle,
+) {
     OrbitTheme {
         SettingsContent(
-            state = previewState,
+            state = state,
+            exportState = exportState,
             onBack = {},
             onOpenIgnored = {},
             onOpenCallHistory = {},
@@ -844,4 +943,29 @@ private fun SettingsContentPreview() {
             onAccentHue = {},
         )
     }
+}
+
+@PreviewLightDark
+@PreviewFontScale
+@Composable
+private fun SettingsContentPreview() {
+    SettingsContentPreviewHost(state = previewState)
+}
+
+@PreviewLightDark
+@Composable
+private fun SettingsContentGrantedSyncingPreview() {
+    SettingsContentPreviewHost(state = previewGrantedSyncing, exportState = ExportUiState.InFlight)
+}
+
+@PreviewLightDark
+@Composable
+private fun SettingsContentLoadingPreview() {
+    SettingsContentPreviewHost(state = SettingsUiState.Loading)
+}
+
+@PreviewLightDark
+@Composable
+private fun SettingsContentErrorPreview() {
+    SettingsContentPreviewHost(state = SettingsUiState.Error)
 }

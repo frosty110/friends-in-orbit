@@ -21,7 +21,7 @@ import org.robolectric.annotation.Config
  * Calendar-day bug: the old implementation compared 24-hour windows, so an
  * 11pm call read "today" the next morning. Day-relative labels now compare
  * LOCAL calendar days in an explicit zone. Pluralization bug: 30..59 days
- * rendered "1 months ago" — singular forms are asserted here.
+ * rendered "1 months ago": singular forms are asserted here.
  *
  * Locale is pinned to English for the pattern-formatted labels
  * ([formatWallClock], [formatDayHeader]) because both use
@@ -58,11 +58,11 @@ class RelativeTimeTest {
         Locale.setDefault(savedLocale)
     }
 
-    // ── formatRelative — calendar-day comparison ────────────────────────────
+    // ── formatRelative: calendar-day comparison ────────────────────────────
 
     @Test
     fun `call at 11pm read at 9am next morning is yesterday`() {
-        // Only 10 hours elapsed — the old 24h-window logic said "today".
+        // Only 10 hours elapsed: the old 24h-window logic said "today".
         val call = at("2026-06-08", "23:00")
         val now = at("2026-06-09", "09:00")
         assertEquals("yesterday", formatRelative(call, now, zone).text())
@@ -89,7 +89,7 @@ class RelativeTimeTest {
         assertEquals("today", formatRelative(call, now, zone).text())
     }
 
-    // ── formatRelative — pluralization ──────────────────────────────────────
+    // ── formatRelative: pluralization ──────────────────────────────────────
 
     // Buckets come from formatSpan (voice.md glossary): days below 14, weeks
     // below 60, months below a year. "27 days ago" beside "3 weeks" on
@@ -126,6 +126,39 @@ class RelativeTimeTest {
         assertEquals("1 year", formatSpan(365).text())
         assertEquals("2 years", formatSpan(800).text())
         assertEquals("0 days", formatSpan(-3).text())
+    }
+
+    // ── formatRelativeFine: the first day at a finer grain ─────────────────
+
+    // Settings' sync rows read moments after a sync, where "today" says too
+    // little; from a calendar day on the fine formatter hands over to
+    // formatRelative so the two can never disagree.
+    @Test
+    fun `fine relative says just now, then minutes, then hours`() {
+        val now = at("2026-06-09", "12:00")
+        assertEquals("just now", formatRelativeFine(now.minusSeconds(0), now, zone).text())
+        assertEquals("just now", formatRelativeFine(now.minusSeconds(59), now, zone).text())
+        assertEquals("1 minute ago", formatRelativeFine(now.minusSeconds(60), now, zone).text())
+        assertEquals("5 minutes ago", formatRelativeFine(now.minusSeconds(5 * 60 + 30), now, zone).text())
+        assertEquals("59 minutes ago", formatRelativeFine(now.minusSeconds(59 * 60 + 59), now, zone).text())
+        assertEquals("1 hour ago", formatRelativeFine(now.minusSeconds(3600), now, zone).text())
+        assertEquals("3 hours ago", formatRelativeFine(now.minusSeconds(3 * 3600 + 1200), now, zone).text())
+        assertEquals("23 hours ago", formatRelativeFine(now.minusSeconds(23 * 3600 + 59 * 60), now, zone).text())
+    }
+
+    @Test
+    fun `fine relative hands over to the day words after a full day`() {
+        val now = at("2026-06-09", "09:00")
+        // 25 hours: a full day has passed, and the calendar day before is "yesterday".
+        assertEquals("yesterday", formatRelativeFine(at("2026-06-08", "08:00"), now, zone).text())
+        assertEquals("3 days ago", formatRelativeFine(at("2026-06-06", "09:00"), now, zone).text())
+        assertEquals("2 weeks ago", formatRelativeFine(at("2026-05-26", "09:00"), now, zone).text())
+    }
+
+    @Test
+    fun `fine relative clamps a future time to just now`() {
+        val now = at("2026-06-09", "09:00")
+        assertEquals("just now", formatRelativeFine(at("2026-06-09", "10:00"), now, zone).text())
     }
 
     // ── formatWallClock ─────────────────────────────────────────────────────

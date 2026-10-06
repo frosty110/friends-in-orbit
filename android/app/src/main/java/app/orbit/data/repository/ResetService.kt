@@ -12,6 +12,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
 
 /**
@@ -32,14 +35,18 @@ import kotlinx.coroutines.withContext
  *   3. Wipe Room (clearAllTables, FK cascades per schema).
  *   4. Wipe DataStore ([AppPrefs.resetAll] — every key including the
  *      onboarding flag).
- *   5. Schedule ONE final widget refresh (review WR-06) so placed widgets
- *      re-render the empty state ("All quiet for now.") within ~30s instead of showing the wiped
- *      contact's name until the next cold start.
+ *   5. Run ONE final widget refresh right away (WIDGET-06,
+ *      [WidgetUpdateScheduler.refreshNow]) so placed widgets re-render the
+ *      empty state ("All quiet for now.") instead of showing the wiped
+ *      person's name until the next cold start.
  *
  * After this returns the caller is responsible for landing the user
- * somewhere honest — [app.orbit.ui.screens.settings.SettingsViewModel]
- * emits a completion event and the screen restarts the task, so the next
- * cold start re-enters onboarding (the flag was just cleared).
+ * somewhere honest: [resetCompleteEvents] fires, the Settings screen
+ * collects it (through [app.orbit.ui.screens.settings.SettingsViewModel])
+ * and restarts the task, so the next cold start re-enters onboarding (the
+ * flag was just cleared). The event lives here, on the app-scoped service,
+ * because the reset itself runs on the application scope and must finish
+ * even if the ViewModel that started it is gone (rules.md Code 6).
  *
  * Caveats:
  *   - Phone contacts and call log are NOT touched; only Orbit's mirror
@@ -68,7 +75,22 @@ open class ResetService @Inject constructor(
     private val appPrefs: AppPrefs,
     private val contentObserverController: ContentObserverController,
 ) {
-    open suspend fun resetAll() = withContext(Dispatchers.IO) {
+    private val _resetCompleteEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** Fires once per completed [resetAll]; no replay, so subscribe before confirming. */
+    val resetCompleteEvents: SharedFlow<Unit> = _resetCompleteEvents.asSharedFlow()
+
+    /** For subclasses that replace [resetAll] (test doubles) and still want the event. */
+    protected fun signalResetComplete() {
+        _resetCompleteEvents.tryEmit(Unit)
+    }
+
+    open suspend fun resetAll() {
+        performReset()
+        signalResetComplete()
+    }
+
+    private suspend fun performReset() = withContext(Dispatchers.IO) {
         // 1. Cancel scheduled work BEFORE the wipe so nothing fires against
         //    an empty DB (features/settings/README.md §Known gotchas).
         val workManager = WorkManager.getInstance(context)
@@ -102,12 +124,16 @@ open class ResetService @Inject constructor(
         //    reads in [AppPrefs].
         appPrefs.resetAll()
 
-        // 5. One final widget refresh AFTER the wipe (review WR-06): placed
-        //    widgets still show the last surfaced contact's name — a privacy
-        //    problem after an explicit delete-all. This re-renders "No one
-        //    due" within ~30s. It MUST accompany cancelAll: cancel-only would
-        //    leave the stale name until the next cold start re-registers the
-        //    periodic sweep (OrbitApp.onCreate runs schedulePeriodic).
-        WidgetUpdateScheduler.scheduleImmediate(context)
+        // 5. One final widget refresh AFTER the wipe (WIDGET-06): placed
+        //    widgets still show the last surfaced person's name, a privacy
+        //    problem after an explicit reset. refreshNow, not the debounced
+        //    scheduleImmediate: the 30 second debounce exists for bulk edits
+        //    (WIDGET-05), and here it kept the wiped name on the home screen
+        //    for half a minute after the user confirmed erasing everything.
+        //    This re-renders "All quiet for now." at once. It MUST accompany
+        //    cancelAll: cancel-only would leave the stale name until the next
+        //    cold start re-registers the periodic sweep (OrbitApp.onCreate runs
+        //    schedulePeriodic).
+        WidgetUpdateScheduler.refreshNow(context)
     }
 }
