@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -67,14 +68,20 @@ fun OnboardingDoneScreen(
     val completed by vm.completed.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    // The VM's one-off messages (a failed "asked once" write) show over the
-    // content through the scaffold's host; repeatOnLifecycle(STARTED) so a
-    // backgrounded screen does not queue them.
+    // The VM's one-off messages (a failed completion write with its Try again,
+    // a failed "asked once" write) show over the content through the
+    // scaffold's host; repeatOnLifecycle(STARTED) so a backgrounded screen does
+    // not queue them. The only action the VM offers is the completion retry.
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             vm.snackbarEvents.collect { event ->
-                snackbarHostState.showSnackbar(event.message.asString(context))
+                val result = snackbarHostState.showSnackbar(
+                    message = event.message.asString(context),
+                    actionLabel = event.actionLabel?.asString(context),
+                    withDismissAction = false,
+                )
+                if (result == SnackbarResult.ActionPerformed) vm.onRetryComplete()
             }
         }
     }

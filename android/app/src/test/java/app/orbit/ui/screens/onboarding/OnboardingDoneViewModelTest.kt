@@ -42,7 +42,9 @@ import org.robolectric.annotation.Config
  *
  * And `onNudgeLauncherFired` records that notifications were asked for
  * (ONB-30), the flag Settings reads to tell never-asked from turned-off; when
- * that write fails the user is told (rules.md Code 3).
+ * that write fails the user is told (rules.md Code 3). When the completion
+ * write itself fails the user is told too, with a Try again that finishes it
+ * (test 6); before 2026-10-06 "Open Orbit" stayed disabled with nothing said.
  *
  * Fixture:
  *   - Robolectric; `@Config(application = Application::class)` bypasses
@@ -177,5 +179,39 @@ class OnboardingDoneViewModelTest {
 
         assertEquals(UiText.res(R.string.components_snackbar_save_failed), snackbar.await().message)
         assertEquals(false, failingPrefs.hasAskedNotifications.first(), "the flag was not written")
+    }
+
+    // ============================================================================
+    // Test 6 (rules.md Code 3): a failed completion write says "Couldn't save
+    // your change" with Try again, keeps "Open Orbit" disabled, and the retry
+    // finishes the write once the store recovers. Fails without the fix: the
+    // exception reached the thread's uncaught handler and nothing was emitted.
+    // ============================================================================
+
+    @Test
+    fun `a failed completion write tells the user and Try again finishes it`() = runBlocking {
+        val store = tmp.newFailingStore(storeScope) // failWrites = true from the start
+        val failingPrefs = AppPrefs(store)
+        val vm = OnboardingDoneViewModel(failingPrefs)
+        delay(50)
+        // The init write failed and was caught: no exception reached the test,
+        // nothing was written, and "Open Orbit" stays disabled. (The event flow
+        // has no replay, so the init failure's snackbar is observed through the
+        // same function on the retry below, with a collector in place.)
+        assertEquals(false, vm.completed.value, "Open Orbit stays disabled")
+        assertEquals(false, failingPrefs.isOnboardingComplete.first(), "nothing was written")
+
+        val snackbar = async { withTimeout(30_000L) { vm.snackbarEvents.first() } }
+        delay(50)
+        vm.onRetryComplete()
+        val event = snackbar.await()
+        assertEquals(UiText.res(R.string.components_snackbar_save_failed), event.message)
+        assertEquals(UiText.res(R.string.components_error_retry), event.actionLabel)
+        assertEquals(false, vm.completed.value, "a failed retry keeps Open Orbit disabled")
+
+        store.failWrites = false
+        vm.onRetryComplete()
+        vm.awaitCompleted()
+        awaitValue(true) { failingPrefs.isOnboardingComplete.first() }
     }
 }
