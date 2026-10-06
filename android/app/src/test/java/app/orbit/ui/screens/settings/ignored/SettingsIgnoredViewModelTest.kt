@@ -44,6 +44,8 @@ import org.junit.Test
  *      [UnignoreContactUseCase] and emits an "Unignored {Name}" snackbar with Undo;
  *      `onUndo()` re-ignores through the recorded inverse.
  *   5. A failing read shows [SettingsIgnoredUiState.Error], and Try again recovers.
+ *   6. A failing unignore, or a failing Undo, says "Couldn't save your change"
+ *      with no Undo and leaves nothing on the stack (rules.md Code 3).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsIgnoredViewModelTest {
@@ -74,9 +76,33 @@ class SettingsIgnoredViewModelTest {
         }
     }
 
+    /**
+     * Wraps the fake so `markIgnored` fails for one direction of the write:
+     * `failWhenIgnored = false` fails the unignore itself, `true` fails the
+     * re-ignore that Undo runs. Reads pass through, so the list still renders
+     * and the fake still records every write that reached it. The use cases
+     * are final, so the failure is injected through the repository they write
+     * to rather than by subclassing them.
+     */
+    private class FailingIgnoreWriteRepository(
+        private val inner: FakeContactRepository,
+        private val failWhenIgnored: Boolean,
+    ) : ContactRepository by inner {
+        override suspend fun markIgnored(
+            id: Long,
+            isIgnored: Boolean,
+            ignoredAt: Instant?,
+            preIgnoreListMembershipsJson: String?,
+        ) {
+            if (isIgnored == failWhenIgnored) throw IllegalStateException("disk")
+            inner.markIgnored(id, isIgnored, ignoredAt, preIgnoreListMembershipsJson)
+        }
+    }
+
     private fun fixture(
         initial: List<ContactEntity> = emptyList(),
         vmRepo: (FakeContactRepository) -> ContactRepository = { it },
+        useCaseRepo: (FakeContactRepository) -> ContactRepository = { it },
     ): Setup {
         val contactRepo = FakeContactRepository(initial)
         val listDao = TestListDaoStub()
@@ -85,14 +111,14 @@ class SettingsIgnoredViewModelTest {
         val listRepo = FakeListRepository()
         val ignoreContactUseCase = IgnoreContactUseCase(
             txRunner = passThruTx,
-            contactRepo = contactRepo,
+            contactRepo = useCaseRepo(contactRepo),
             listMembershipDao = membershipDao,
             listRepo = listRepo,
             clock = clock
         )
         val unignoreContactUseCase = UnignoreContactUseCase(
             txRunner = passThruTx,
-            contactRepo = contactRepo,
+            contactRepo = useCaseRepo(contactRepo),
             listDao = listDao,
             listMembershipDao = membershipDao,
             listRepo = listRepo,
@@ -259,5 +285,66 @@ class SettingsIgnoredViewModelTest {
 
         val ready = vm.uiState.filterIsInstance<SettingsIgnoredUiState.Ready>().first()
         assertEquals(listOf(42L), ready.ignored.map { it.id })
+    }
+
+    // ============================================================================
+    // Test 7: a failed unignore tells the user (rules.md Code 3). No "Unignored"
+    // promise, no Undo for a change that did not land, nothing on the stack.
+    // ============================================================================
+
+    @Test
+    fun `a failed unignore tells the user and offers no Undo`() = runTest {
+        val ignored = contactFixture(id = 42L, isIgnored = true)
+            .copy(displayName = "Alex Chen", ignoredAt = T0)
+        val (vm, contactRepo, undoStack) = fixture(
+            initial = listOf(ignored),
+            useCaseRepo = { FailingIgnoreWriteRepository(it, failWhenIgnored = false) },
+        )
+        vm.uiState.filterIsInstance<SettingsIgnoredUiState.Ready>().first()
+
+        vm.snackbarEvents.test(timeout = 2.seconds) {
+            vm.onUnignore(42L, "Alex Chen")
+            val event = awaitItem()
+            assertEquals(UiText.res(R.string.components_snackbar_save_failed), event.message)
+            assertNull(event.actionLabel, "no Undo for a change that did not land")
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertNull(undoStack.peek(), "nothing to undo")
+        assertTrue(contactRepo.markIgnoredCalls.isEmpty(), "the write never reached the repository")
+    }
+
+    // ============================================================================
+    // Test 8: a failed Undo says so and leaves the person unignored, as the
+    // first snackbar said; the undo is consumed, so a second tap does nothing.
+    // ============================================================================
+
+    @Test
+    fun `a failed Undo tells the user and leaves the person unignored`() = runTest {
+        val ignored = contactFixture(id = 42L, isIgnored = true)
+            .copy(displayName = "Alex Chen", ignoredAt = T0)
+        val (vm, contactRepo, undoStack) = fixture(
+            initial = listOf(ignored),
+            useCaseRepo = { FailingIgnoreWriteRepository(it, failWhenIgnored = true) },
+        )
+        vm.uiState.filterIsInstance<SettingsIgnoredUiState.Ready>().first()
+
+        vm.snackbarEvents.test(timeout = 2.seconds) {
+            vm.onUnignore(42L, "Alex Chen")
+            assertEquals(
+                UiText.res(R.string.components_snackbar_unignored, "Alex Chen"),
+                awaitItem().message,
+            )
+
+            vm.onUndo()
+
+            val failed = awaitItem()
+            assertEquals(UiText.res(R.string.components_snackbar_save_failed), failed.message)
+            assertNull(failed.actionLabel)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(false, contactRepo.markIgnoredCalls.last().isIgnored, "the unignore stands")
+        assertNull(undoStack.peek(), "the undo is consumed")
     }
 }

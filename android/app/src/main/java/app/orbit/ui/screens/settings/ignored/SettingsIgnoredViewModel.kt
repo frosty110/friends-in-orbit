@@ -113,16 +113,45 @@ class SettingsIgnoredViewModel @Inject constructor(
      *
      * The snackbar says "Unignored {name}", the one word for the inverse of
      * Ignore everywhere (voice.md glossary; the picker's row says the same).
+     *
+     * A failed write tells the user (rules.md Code 3): "Couldn't save your
+     * change", the shared key, and no Undo is offered for a change that did
+     * not land. The success snackbar and the Undo are pushed only after the
+     * use case returned, so the words never promise more than the row did.
+     * Cancellation passes through (Code 5).
      */
     fun onUnignore(contactId: Long, name: String) = viewModelScope.launch {
-        unignoreContactUseCase(contactId)
+        try {
+            unignoreContactUseCase(contactId)
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (t: Throwable) {
+            _snackbarEvents.tryEmit(
+                SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)),
+            )
+            return@launch
+        }
         undoStack.put(UndoStack.PendingUndo(inverse = { ignoreContactUseCase(contactId) }))
         _snackbarEvents.tryEmit(SnackbarEvent.undoable(UiText.res(R.string.components_snackbar_unignored, name)))
     }
 
-    /** Snackbar "Undo" tap: replay the inverse closure recorded on [UndoStack]. */
+    /**
+     * Snackbar "Undo" tap: replay the inverse closure recorded on [UndoStack].
+     * The undo is consumed before it runs, so a second tap racing the first is
+     * a no-op; if the re-ignore fails the person stays unignored, as the first
+     * snackbar said, and "Couldn't save your change" says the Undo did not land.
+     */
     fun onUndo() = viewModelScope.launch {
-        undoStack.take()?.inverse?.invoke()
+        val pending = undoStack.take() ?: return@launch
+        try {
+            pending.inverse()
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (t: Throwable) {
+            _snackbarEvents.tryEmit(
+                SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)),
+            )
+        }
     }
 
     private fun ContactEntity.toRow(now: Instant): IgnoredContactRow {
