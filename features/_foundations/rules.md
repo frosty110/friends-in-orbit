@@ -13,7 +13,7 @@ rule** — retire it in place (strike it, keep the number) and add a new one at 
 end.
 
 This file holds rules that apply to *all* work. Product requirements are
-different — they are per-feature and carry their own IDs (`PICK-03`, `ONB-21`);
+different: they are per-feature and carry their own IDs (`PICK-05`, `ARCH-02`);
 see [Citing conventions](#citing-conventions) below.
 
 > **Provenance.** This file was reconstructed on 2026-08-15 after the original
@@ -166,8 +166,18 @@ into the bug. Two citation forms, and they resolve to different places:
 | Form | Means | Resolves to |
 |---|---|---|
 | `rules.md §Design 3`, `rules.md Code 4` | A global rule | This file |
-| `PICK-03`, `ONB-21`, `ARCH-02` | A product/architecture requirement | The owning feature spec under [`features/`](../INDEX.md) |
+| `PICK-05`, `BROWSE-06`, `ARCH-02` | A product/architecture requirement | The owning feature spec under [`features/`](../INDEX.md) |
 | `Pitfall 3`, `RESEARCH §Pitfall 2` | A hazard found during that feature's research | That feature's research notes |
+
+The example IDs in this file are real, defined ones on purpose.
+`scripts/check-conventions.py` treats any `PREFIX-NN` that appears in a Markdown
+file under `features/` as defined, so an invented example here would count as
+a definition and hide a dangling citation from the ratchet. Until 2026-10-05
+the examples were two IDs the picker's code cites (a `PICK-` one for "Select
+all matching" and an `ONB-` one for its sort mode) that no spec defined; the
+example alone kept them out of the debt count, and the 2026-10-05 lists and
+picker work defines them in their specs. Excluding this file from the checker
+is not the fix: it legitimately defines `ARCH-02` and `ARCH-04` above.
 
 Adding a requirement ID means adding it to the owning feature's spec in the same
 PR. An ID that exists only in a code comment is a dangling citation — the next
