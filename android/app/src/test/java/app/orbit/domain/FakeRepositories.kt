@@ -225,6 +225,11 @@ class FakeListRepository(
     val updateActiveHoursCalls: MutableList<Triple<Long, LocalTime?, LocalTime?>> = mutableListOf()
     val updateNotificationsEnabledCalls: MutableList<Pair<Long, Boolean>> = mutableListOf()
 
+    // Set to make the schedule writes (incrementSkipCount, updateNextDueAt)
+    // throw, the way a failed transaction would, so a ViewModel's failure
+    // snackbar (rules.md Code 3) is testable. The write is not recorded.
+    var failWrites: Boolean = false
+
     override fun observeAll(): Flow<List<ListEntity>> = lists.asStateFlow()
 
     /**
@@ -248,6 +253,7 @@ class FakeListRepository(
         listId: Long,
         newNextDueAt: Instant
     ): MutationResult {
+        if (failWrites) throw IllegalStateException("database write failed")
         incrementSkipCalls += IncrementSkipArgs(contactId, listId, newNextDueAt)
         var matched = false
         memberships.update { rows ->
@@ -268,6 +274,7 @@ class FakeListRepository(
         listId: Long,
         nextDueAt: Instant
     ): MutationResult {
+        if (failWrites) throw IllegalStateException("database write failed")
         updateNextDueAtCalls += IncrementSkipArgs(contactId, listId, nextDueAt)
         var matched = false
         memberships.update { rows ->
@@ -427,8 +434,15 @@ class FakeListRepository(
         return true
     }
 
+    // Set to make the list read fail on its next subscription, the way a
+    // database read error would; Card view's error-state tests flip it back
+    // to check that Try again recovers (the failMemberCounts seam below is
+    // Home's equivalent).
+    var failObserveById: Boolean = false
+
     override fun observeById(id: Long): Flow<ListEntity?> =
-        lists.map { rows -> rows.firstOrNull { it.id == id } }
+        if (failObserveById) kotlinx.coroutines.flow.flow { throw IllegalStateException("database read failed") }
+        else lists.map { rows -> rows.firstOrNull { it.id == id } }
 
     /**
      * Derives counts from the seeded `memberships` flow so tests that seed

@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import app.orbit.R
 import app.orbit.data.NoteRow
 import app.orbit.data.entity.CallEventEntity
+import app.orbit.data.entity.CallSource
 import app.orbit.data.entity.ListMembershipEntity
+import app.orbit.data.entity.ListType
 import app.orbit.data.entity.NoteEntity
 import app.orbit.data.feed.CardFeed
 import app.orbit.data.feed.CardSnapshot
@@ -26,17 +28,21 @@ import app.orbit.ui.util.formatRelative
 import app.orbit.ui.util.formatSpan
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Duration
@@ -72,10 +78,24 @@ import javax.inject.Inject
  * survival).
  *
  * Tide marker (2026-05-08) — the terminal `AllCaughtUp` state is gone; the
- * unparseable-listId branch routes to `EmptyNothingEligible`, and the
  * data-bound branch maps `SurfaceResult` → `Ready` / `EmptyNoMembers` /
  * `EmptyNothingEligible` with `Loading` as the structural pre-emission
  * placeholder (F-8).
+ *
+ * Card-view audit (2026-10-06):
+ *   - **Error with Try again (CARD-07).** A failed read arrives from CardFeed
+ *     as a snapshot with `error` set (the feed catches before its `stateIn`,
+ *     see its KDoc) and a malformed list id is the same deck; [onRetry]
+ *     re-subscribes through `retryCount.flatMapLatest` (HOME-10 precedent).
+ *     The malformed id used to render "All quiet for now." over a list that
+ *     does not exist.
+ *   - **Loading until the feed has answered.** The feed's placeholder is
+ *     `loaded = false` and maps to Loading, so a cold first open never
+ *     flashes an empty deck (F-8 in full; before, the placeholder looked
+ *     like NothingEligible).
+ *   - **CARD-03 by evidence.** "Called {name}" waits for a connected call at
+ *     or after the dial, or for the deck to move past the person, not for
+ *     motion alone (see [acknowledgeCallWhenConfirmed]).
  */
 @HiltViewModel
 class CardViewViewModel @Inject constructor(
@@ -90,26 +110,47 @@ class CardViewViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    // listId arrives as a String. If it doesn't parse as Long (e.g. demo
-    // sentinels "inner" / "drifted"), we route to EmptyNothingEligible —
-    // there's no list to bind, so the surface is neutrally empty.
+    // listId arrives as a String. One that does not parse as Long (a bad deep
+    // link) has no list to bind, so it is the Error deck (CARD-07, rules.md
+    // Code 3: a path that cannot happen gets a loud guard, not a shrug). It
+    // used to render "All quiet for now." with a Browse button into a list
+    // that does not exist.
     private val listId: Long? = savedStateHandle.get<String>("listId")?.toLongOrNull()
 
+    // CARD-07: bumped by [onRetry] to re-subscribe after a failed read (the
+    // HOME-10 precedent). CardFeed evicts a failed entry from its cache, so
+    // the next forList call builds a fresh subscription instead of handing
+    // back the memoized flow that already failed and will never emit again.
+    private val retryCount = MutableStateFlow(0)
+
+    /** The Error deck's Try again. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<CardViewUiState> =
         if (listId == null) {
-            flowOf<CardViewUiState>(CardViewUiState.EmptyNothingEligible())
+            flowOf<CardViewUiState>(CardViewUiState.Error())
                 .stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5_000L),
-                    initialValue = CardViewUiState.EmptyNothingEligible(),
+                    initialValue = CardViewUiState.Error(),
                 )
         } else {
             // F-8 — initial value is Loading (rendered as a transparent
             // placeholder) so the screen doesn't flash an empty-state shell
             // before CardFeed's first emission.
-            cardFeed.forList(listId)
-                .map { snapshot -> snapshot.toUiState() }
-                .catch { t -> emit(CardViewUiState.Error(t.message ?: "unknown")) }
+            retryCount.flatMapLatest {
+                cardFeed.forList(listId)
+                    .map { snapshot -> snapshot.toUiState() }
+                    // A failed upstream read arrives as a snapshot (CardFeed's
+                    // own catch), so this one covers only toUiState itself.
+                    .catch { t ->
+                        if (t is CancellationException) throw t
+                        emit(CardViewUiState.Error())
+                    }
+            }
                 .stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5_000L),
@@ -123,9 +164,11 @@ class CardViewViewModel @Inject constructor(
 
     // Dial-in-flight marker: the contact id set on tap-to-call, consumed on the
     // next ON_RESUME to trigger an immediate call-log resync ([onReturnedFromDial]).
-    // Plain field; no UI reads it. A non-null value just means "a dial happened".
+    // Plain fields; no UI reads them. A non-null id just means "a dial happened";
+    // the instant is what a logged call must be at or after to count (CARD-03).
     private var dialPendingContactId: Long? = null
     private var dialPendingName: String? = null
+    private var dialPendingAt: Instant? = null
 
     // The newest undoable action. Older snackbars are replaced on screen, and a
     // stale token can never replay an inverse that belongs to someone else.
@@ -181,6 +224,7 @@ class CardViewViewModel @Inject constructor(
     fun onCall(contactId: Long) {
         dialPendingContactId = contactId
         dialPendingName = firstNameOf(contactId)
+        dialPendingAt = clock.now()
     }
 
     /**
@@ -204,27 +248,36 @@ class CardViewViewModel @Inject constructor(
     fun onReturnedFromDial() {
         val dialed = dialPendingContactId ?: return
         val name = dialPendingName
+        val dialedAt = dialPendingAt ?: clock.now()
         dialPendingContactId = null
         dialPendingName = null
+        dialPendingAt = null
         callLogResync.enqueueImmediateSync(fullResync = false)
-        acknowledgeCallWhenConfirmed(dialed, name)
+        acknowledgeCallWhenConfirmed(dialed, name, dialedAt)
     }
 
     /**
-     * CARD-03: once the call log confirms the call (the deck moves past the
-     * person, CORE-04), say so: "Called Avery", with "Add a note" while the
-     * conversation is fresh. Nothing is said if the call is not confirmed
-     * within [CALL_ACK_WAIT_MS] (it did not connect, or call-log access is
-     * off), because thanking someone for a call that didn't happen is worse
-     * than silence.
+     * CARD-03: once the call log confirms the call, say so: "Called Avery",
+     * with "Add a note" while the conversation is fresh. Confirmation is
+     * evidence of the call, not motion of the deck: a Ready for the same
+     * person whose newest connected call is at or after the dial, or the deck
+     * moving past them (the call re-scheduled them behind someone else,
+     * CORE-04). Motion alone was the old test, and on a one-member list, or
+     * when everyone else is further out, the person stays at the head after
+     * a real call, so nothing was ever said. An unanswered dial logs an
+     * ATTEMPT, which is not a connection (Enums.kt), so it is never thanked
+     * for. Nothing is said if the call is not confirmed within
+     * [CALL_ACK_WAIT_MS] (it did not connect, or call-log access is off),
+     * because thanking someone for a call that didn't happen is worse than
+     * silence; and an Error deck is not evidence either way.
      */
-    private fun acknowledgeCallWhenConfirmed(contactId: Long, name: String?) {
+    private fun acknowledgeCallWhenConfirmed(contactId: Long, name: String?, dialedAt: Instant) {
         callAckJob?.cancel()
         callAckJob = viewModelScope.launch {
-            val moved = withTimeoutOrNull(CALL_ACK_WAIT_MS) {
-                uiState.first { state -> state !is CardViewUiState.Loading && (state as? CardViewUiState.Ready)?.contactId != contactId }
+            val confirmed = withTimeoutOrNull(CALL_ACK_WAIT_MS) {
+                uiState.first { state -> state.confirmsCall(contactId, dialedAt) }
             }
-            if (moved != null) {
+            if (confirmed != null) {
                 val text = if (name != null) {
                     UiText.res(R.string.card_called_named, name)
                 } else {
@@ -233,6 +286,15 @@ class CardViewViewModel @Inject constructor(
                 _messages.tryEmit(CardMessage.Called(text = text, contactId = contactId))
             }
         }
+    }
+
+    /** CARD-03's evidence test; see [acknowledgeCallWhenConfirmed]. */
+    private fun CardViewUiState.confirmsCall(contactId: Long, dialedAt: Instant): Boolean = when (this) {
+        CardViewUiState.Loading, is CardViewUiState.Error -> false
+        is CardViewUiState.Ready ->
+            this.contactId != contactId || (lastCallAt != null && !lastCallAt.isBefore(dialedAt))
+        // The deck emptied behind the person: the call moved them on.
+        is CardViewUiState.EmptyNoMembers, is CardViewUiState.EmptyNothingEligible -> true
     }
 
     /**
@@ -342,40 +404,58 @@ class CardViewViewModel @Inject constructor(
      * snapshot's `recentCalls`.
      */
     private fun CardSnapshot.toUiState(): CardViewUiState {
+        val listName = listEntity?.name.orEmpty()
+        val listType = listEntity?.type ?: ListType.STATIC
+        // CARD-07 / F-8: a failed read and the pre-emission placeholder carry
+        // no data (CardSnapshot KDoc), so they are decided before the surface
+        // is read.
+        if (error != null) return CardViewUiState.Error(listName = listName)
+        if (!loaded) return CardViewUiState.Loading
         val now = clock.now()
         return when (val s = surface) {
-            SurfaceResult.NoMembers -> CardViewUiState.EmptyNoMembers
+            SurfaceResult.NoMembers -> CardViewUiState.EmptyNoMembers(listName = listName, listType = listType)
             SurfaceResult.NothingEligible -> CardViewUiState.EmptyNothingEligible(
                 upNextName = upNext?.displayName,
                 upNextLabel = upNext?.let { futureDueLabel(it.dueAt, now) },
+                listName = listName,
+                listType = listType,
             )
             is SurfaceResult.Found -> {
                 // Snapshot the local hour ONCE per emission for the HeatStrip
                 // highlight. WR-02 — injected ZoneId.
                 val nowHour = now.atZone(zoneId).hour
                 val isAhead = s.nextDueAt.isAfter(now)
+                // Connections only for "when you last spoke" and for CARD-03's
+                // evidence: an ATTEMPT is a reach-out that did not connect
+                // (Enums.kt), the same filter withCallStats applies to "Last
+                // call", so the face never says "You spoke today" over a
+                // voicemail.
+                val connections = recentCalls.filter { it.source != CallSource.ATTEMPT }
                 CardViewUiState.Ready(
                     contactId = s.contact.id,
                     contact = s.contact.toUiContact()
                         .withCallStats(recentCalls, now)
                         .withCallPatterns(recentCalls, zoneId),
-                    listContext = listEntity?.name.orEmpty(),
+                    listContext = listName,
                     queueSize = queueSize,
                     recentNotes = recentNotes.map { it.toNoteRow(now) },
                     nowHour = nowHour,
                     isAheadOfToday = isAhead,
-                    whyNowLine = whyNowLine(recentCalls, now),
+                    whyNowLine = whyNowLine(connections, now),
+                    listType = listType,
+                    lastCallAt = connections.maxOfOrNull { it.occurredAt },
                 )
             }
         }
     }
 
     /**
-     * Honest one-line framing from the most recent call event (manual marks
-     * count, the user told us they talked): "It's been 3 weeks." Null when
-     * there is no history at all — the screen's neutral "No call history yet"
-     * panel covers that case instead. formatSpan's [UiText] ("3 weeks") nests
-     * as the sentence's argument.
+     * Honest one-line framing from the most recent connected call (manual
+     * marks count, the user told us they talked): "3 weeks since you last
+     * spoke." (Home's words for the same gap, so one idea has one wording).
+     * Null when there is no history at all; the face then shows only the
+     * neutral "Not enough calls yet to see a pattern" panel. formatSpan's
+     * [UiText] ("3 weeks") nests as the sentence's argument.
      */
     private fun whyNowLine(recentCalls: List<CallEventEntity>, now: Instant): UiText? {
         val lastCallAt = recentCalls
@@ -421,7 +501,7 @@ class CardViewViewModel @Inject constructor(
      * / "in 2 months". Lowercase fragment so it slots mid-sentence (a nested
      * [UiText] argument of the snackbar and up-next sentences).
      */
-    private fun futureDueLabel(due: Instant, now: Instant): UiText {
+    internal fun futureDueLabel(due: Instant, now: Instant): UiText {
         val days = Duration.between(now, due).toDays()
         return when {
             days <= 0L -> UiText.res(R.string.card_due_later_today)

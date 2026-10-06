@@ -2,6 +2,7 @@ package app.orbit.ui.screens.card
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.Resources
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -45,7 +46,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -68,6 +68,7 @@ import app.orbit.R
 import app.orbit.data.ChipTone
 import app.orbit.data.Contact
 import app.orbit.data.NoteRow
+import app.orbit.data.entity.ListType
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.InfoTip
 import app.orbit.ui.components.ListContextChip
@@ -78,8 +79,10 @@ import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitChip
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitInlineNotice
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitMotion
@@ -98,12 +101,22 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.abs
 
-// Card View — drag to defer/surface, tap to call.
+// Card View: drag to defer/surface, tap Call to dial.
 // 2026-06-09 card-loop revision: hydrated stats + heat, swipe undo snackbars,
 // call-log-denied notice, actionable empty states, and crossfaded card
 // advancement via [CardSwipeFrame]. A call placed from here advances the deck
 // silently once the call log is synced (no "did you talk?" confirmation).
+// 2026-10-06 card-view audit: every state message is the shared
+// OrbitScreenMessage (the error one with Try again, CARD-07), the app bar is
+// titled in every state, and "Add a note" lands in the note field (NOTE-02).
 
+/**
+ * @param onOpenContact opens a person's page from the face or "Open details".
+ * @param onAddNote opens the same page with the note field focused (NOTE-02),
+ *   from the "Called {name}" snackbar's "Add a note" (CARD-03). Defaults to
+ *   [onOpenContact] so a host that has not wired the focus still opens the
+ *   person; the NavHost passes `Routes.contactWithFocus`.
+ */
 @Composable
 fun CardViewScreen(
     listId: String,
@@ -113,6 +126,7 @@ fun CardViewScreen(
     onEditList: (listId: String) -> Unit = {},
     onAddContacts: (listId: String) -> Unit = {},
     onOpenContact: (contactId: String) -> Unit = onCall, // NOTE-03 — RecentNotesSummary tap target
+    onAddNote: (contactId: String) -> Unit = onOpenContact,
     onOpenSettings: () -> Unit = {},
     vm: CardViewViewModel = hiltViewModel()
 ) {
@@ -152,8 +166,10 @@ fun CardViewScreen(
         onSwipeLeft = vm::onSwipeLeft,
         onSwipeRight = vm::onSwipeRight,
         onUndo = vm::onUndo,
+        onRetry = vm::onRetry,
         onOpenSettings = onOpenSettings,
-        onOpenContact = { contactId -> onOpenContact("c-$contactId") }
+        onOpenContact = { contactId -> onOpenContact("c-$contactId") },
+        onAddNote = { contactId -> onAddNote("c-$contactId") }
     )
 }
 
@@ -161,10 +177,14 @@ fun CardViewScreen(
  * List actions overflow for the Card view. Three dots, the platform's sign for
  * "more options" (it was a hamburger, which on Home means "your lists"; one
  * icon meaning two things is the navigation bug the rubric's D2 names).
- * Nothing here is destructive, so the whole menu stays in fg.
+ * Named for the list it acts on, "More actions for Inner orbit", like every
+ * overflow button (voice.md glossary; it said "List options", a third name
+ * for the same control). [listName] is already masked under the curtain.
  */
 @Composable
 private fun ListActionsMenu(
+    listName: String,
+    isSmart: Boolean,
     onBrowse: () -> Unit,
     onEditList: () -> Unit,
     onAddContacts: () -> Unit
@@ -174,22 +194,57 @@ private fun ListActionsMenu(
         OrbitIconButton(
             icon = "dots-three-vertical",
             onClick = { expanded = true },
-            contentDescription = stringResource(R.string.card_list_options)
+            contentDescription = if (listName.isBlank()) {
+                stringResource(R.string.card_list_options_unnamed)
+            } else {
+                stringResource(R.string.card_list_options, listName)
+            }
         )
         OrbitDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            actions = listOf(
-                OrbitMenuAction(label = stringResource(R.string.card_menu_browse), onClick = onBrowse, icon = "list-bullets"),
-                OrbitMenuAction(label = stringResource(R.string.card_menu_add_people), onClick = onAddContacts, icon = "plus"),
-                OrbitMenuAction(label = stringResource(R.string.card_menu_list_settings), onClick = onEditList, icon = "pencil-simple")
+            actions = cardListMenuActions(
+                LocalContext.current.resources,
+                isSmart = isSmart,
+                onBrowse = onBrowse,
+                onAddContacts = onAddContacts,
+                onEditList = onEditList
             )
         )
     }
 }
 
+/**
+ * The Card view's list menu, in order: Browse people, Add people, List
+ * settings. Nothing here is destructive, so the whole menu stays in fg. "Add
+ * people" is withheld on a smart list: its members are what its rule matches
+ * (`SmartListMembershipSync`), so anyone added by hand was removed again on
+ * the next sync with no word (rules.md Code 3), the same reason Lists
+ * manager's row hides its "+". `internal` so the order and the omission are
+ * unit-tested (CardListMenuTest); takes [Resources] because [OrbitMenuAction]
+ * carries resolved text (the `listRowMenuActions` precedent).
+ */
+internal fun cardListMenuActions(
+    resources: Resources,
+    isSmart: Boolean,
+    onBrowse: () -> Unit,
+    onAddContacts: () -> Unit,
+    onEditList: () -> Unit
+): List<OrbitMenuAction> = listOfNotNull(
+    OrbitMenuAction(label = resources.getString(R.string.card_menu_browse), onClick = onBrowse, icon = "list-bullets"),
+    if (isSmart) {
+        null
+    } else {
+        OrbitMenuAction(label = resources.getString(R.string.card_menu_add_people), onClick = onAddContacts, icon = "plus")
+    },
+    OrbitMenuAction(label = resources.getString(R.string.card_menu_list_settings), onClick = onEditList, icon = "pencil-simple")
+)
+
+// internal (not private) so CardViewScreenTest can drive the stateless content
+// with a Ready state and callbacks (CARD-01, CARD-06); CardViewScreen itself
+// takes a Hilt ViewModel and cannot be composed on the JVM.
 @Composable
-private fun CardViewContent(
+internal fun CardViewContent(
     state: CardViewUiState,
     listId: String,
     callLogDenied: Boolean,
@@ -202,17 +257,25 @@ private fun CardViewContent(
     onSwipeLeft: (contactId: Long) -> Unit,
     onSwipeRight: (contactId: Long) -> Unit,
     onUndo: (token: Long) -> Unit,
+    onRetry: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenContact: (contactId: Long) -> Unit
+    onOpenContact: (contactId: Long) -> Unit,
+    onAddNote: (contactId: Long) -> Unit = onOpenContact
 ) {
     val curtain = LocalPrivacyCurtain.current
     val context = LocalContext.current
-    val appBarTitle = when (state) {
-        // PRIV-03: the title is the list's name, so it masks as "List" (it
-        // read "Contact", the noun for a person).
-        is CardViewUiState.Ready -> if (curtain) stringResource(R.string.components_curtain_list) else state.listContext
-        else -> ""
+    // The list's name titles every state that knows it (an empty or failed
+    // deck used to leave the bar untitled, so TalkBack announced no pane and
+    // "this list" was never named on screen). PRIV-03: it masks as "List"
+    // (it read "Contact", the noun for a person). Blank while loading or when
+    // the list itself could not be read; OrbitAppBar then sets no pane title.
+    val listName = state.listName
+    val appBarTitle = when {
+        listName.isBlank() -> ""
+        curtain -> stringResource(R.string.components_curtain_list)
+        else -> listName
     }
+    val isSmart = state.listType == ListType.SMART
 
     // One snackbar at a time, newest wins (CARD-02, gate G1): collectLatest
     // cancels the older showSnackbar, which dismisses it, so the Undo on
@@ -221,7 +284,7 @@ private fun CardViewContent(
     // "time to take action" setting, which Material's host honours).
     val snackbarHostState = remember { SnackbarHostState() }
     val currentOnUndo by rememberUpdatedState(onUndo)
-    val currentOnOpenContact by rememberUpdatedState(onOpenContact)
+    val currentOnAddNote by rememberUpdatedState(onAddNote)
     LaunchedEffect(Unit) {
         messages.collectLatest { message ->
             snackbarHostState.currentSnackbarData?.dismiss()
@@ -239,7 +302,9 @@ private fun CardViewContent(
             if (result == SnackbarResult.ActionPerformed) {
                 when (message) {
                     is CardMessage.Undoable -> currentOnUndo(message.token)
-                    is CardMessage.Called -> currentOnOpenContact(message.contactId)
+                    // CARD-03: "Add a note" lands in the note field (NOTE-02),
+                    // as Home's does; it used to open the top of the page.
+                    is CardMessage.Called -> currentOnAddNote(message.contactId)
                     is CardMessage.Failed -> Unit
                 }
             }
@@ -254,6 +319,8 @@ private fun CardViewContent(
             },
             trailing = {
                 ListActionsMenu(
+                    listName = appBarTitle,
+                    isSmart = isSmart,
                     onBrowse = { onBrowse(listId) },
                     onEditList = { onEditList(listId) },
                     onAddContacts = { onAddContacts(listId) }
@@ -261,8 +328,16 @@ private fun CardViewContent(
             }
         )
 
+        // Without READ_CALL_LOG, calls aren't detected and cards don't advance
+        // on their own; the honest state stays visible until it is fixed. The
+        // shared notice (it was a private copy that had drifted from Call
+        // history's, calllog-13), with the screen's own words.
         if (callLogDenied) {
-            CallLogDeniedNotice(onOpenSettings = onOpenSettings)
+            OrbitInlineNotice(
+                text = stringResource(R.string.card_call_log_denied),
+                actionLabel = stringResource(R.string.components_action_open_settings),
+                onAction = onOpenSettings
+            )
         }
 
         Box(
@@ -275,8 +350,10 @@ private fun CardViewContent(
                 // nothing avoids a flash of empty copy between screen open and
                 // the CardFeed's first emission.
                 CardViewUiState.Loading -> Box(modifier = Modifier.fillMaxSize())
-                CardViewUiState.EmptyNoMembers -> NoMembersShell(
+                is CardViewUiState.EmptyNoMembers -> NoMembersShell(
+                    isSmart = isSmart,
                     onAddContacts = { onAddContacts(listId) },
+                    onEditList = { onEditList(listId) },
                     onGoHome = onBack
                 )
                 is CardViewUiState.EmptyNothingEligible -> NothingEligibleShell(
@@ -284,7 +361,7 @@ private fun CardViewContent(
                     onBrowse = { onBrowse(listId) },
                     onGoHome = onBack
                 )
-                is CardViewUiState.Error -> ErrorShell(state.cause, onGoHome = onBack)
+                is CardViewUiState.Error -> ErrorShell(onRetry = onRetry, onGoHome = onBack)
                 is CardViewUiState.Ready -> ReadyCard(
                     state = state,
                     onTapToCall = onTapToCall,
@@ -303,98 +380,59 @@ private fun CardViewContent(
     }
 }
 
-/**
- * Quiet persistent notice for the READ_CALL_LOG-denied state — without the
- * permission, calls aren't detected and cards don't advance on their own.
- * Inline (not a dialog), dismiss-free: the honest state deserves to stay
- * visible until it's fixed.
- */
-@Composable
-private fun CallLogDeniedNotice(onOpenSettings: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x1)
-            .clip(OrbitTheme.shapes.md)
-            .background(OrbitTheme.colors.bgSubtle)
-            .padding(start = OrbitTheme.spacing.x3)
-    ) {
-        Text(
-            text = stringResource(R.string.card_call_log_denied),
-            style = OrbitTheme.type.meta,
-            color = OrbitTheme.colors.fgMuted,
-            modifier = Modifier
-                .weight(1f)
-                .padding(vertical = OrbitTheme.spacing.x2)
-        )
-        InlineTextAction(text = stringResource(R.string.card_open_settings), onClick = onOpenSettings)
-    }
-}
+// The three state messages below are the shared OrbitScreenMessage (DESIGN.md:
+// one component for "nothing here yet / nothing matches / couldn't load"),
+// each with the next step as its one action and "Go home" as the quieter
+// Ghost second way out. They kept a layout of their own (EmptyShell) until
+// 2026-10-06, which is the drift the component table exists to stop
+// (state-9). On these decks there is no Call button, so the one action is
+// the screen's single accent (rules.md §Design 5) and may be Primary.
 
 /**
- * 48dp-min text affordance for inline strips (denied notice, post-dial
- * prompt) — keeps tap targets honest without a full button fill.
+ * Tide-marker empty state #1: the list has zero non-archived non-ignored
+ * members. The action is the fix ("Add people"), not an exit. On a smart
+ * list the members are its rule's matches, so the fix is the rule: "No one
+ * matches this rule right now." with "List settings" (the same words as List
+ * settings' own members section), and "Add people" is not offered (see
+ * [cardListMenuActions]).
  */
 @Composable
-private fun InlineTextAction(
-    text: String,
-    onClick: () -> Unit,
-    color: Color = OrbitTheme.colors.fg
+private fun NoMembersShell(
+    isSmart: Boolean,
+    onAddContacts: () -> Unit,
+    onEditList: () -> Unit,
+    onGoHome: () -> Unit
 ) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .defaultMinSize(
-                minWidth = OrbitTheme.spacing.tapMin,
-                minHeight = OrbitTheme.spacing.tapMin
-            )
-            .clip(OrbitTheme.shapes.md)
-            .clickable(onClick = onClick)
-            .padding(horizontal = OrbitTheme.spacing.x3)
-    ) {
-        Text(text = text, style = OrbitTheme.type.button, color = color)
-    }
-}
-
-@PreviewLightDark
-@Composable
-private fun InlineTextActionPreview() {
-    OrbitTheme {
-        InlineTextAction(text = "Mark it", onClick = {})
-    }
-}
-
-@PreviewLightDark
-@Composable
-private fun CallLogDeniedNoticePreview() {
-    OrbitTheme {
-        CallLogDeniedNotice(onOpenSettings = {})
+    if (isSmart) {
+        OrbitScreenMessage(
+            icon = "users",
+            title = stringResource(R.string.lists_members_empty_smart),
+            actionLabel = stringResource(R.string.card_menu_list_settings),
+            onAction = onEditList,
+            actionVariant = OrbitButtonVariant.Primary,
+            secondaryLabel = stringResource(R.string.card_go_home),
+            onSecondary = onGoHome
+        )
+    } else {
+        OrbitScreenMessage(
+            icon = "users",
+            title = stringResource(R.string.card_no_members_heading),
+            body = stringResource(R.string.card_no_members_body),
+            actionLabel = stringResource(R.string.card_add_people),
+            onAction = onAddContacts,
+            actionVariant = OrbitButtonVariant.Primary,
+            secondaryLabel = stringResource(R.string.card_go_home),
+            onSecondary = onGoHome
+        )
     }
 }
 
 /**
- * Tide-marker empty state #1 — the list has zero non-archived non-ignored
- * members. 2026-06-09: the primary action is now the fix ("Add people"),
- * not an exit. Sentence case, no exclamation marks — voice rules.
- */
-@Composable
-private fun NoMembersShell(onAddContacts: () -> Unit, onGoHome: () -> Unit) {
-    EmptyShell(
-        heading = stringResource(R.string.card_no_members_heading),
-        body = stringResource(R.string.card_no_members_body),
-        primaryText = stringResource(R.string.card_add_people),
-        onPrimary = onAddContacts,
-        secondaryText = stringResource(R.string.card_go_home),
-        onSecondary = onGoHome
-    )
-}
-
-/**
- * Tide-marker empty state #2 — the list has visible members but none
+ * Tide-marker empty state #2: the list has visible members but none
  * surfaces right now. 2026-06-09: the old "paused or out of reach" line was
  * false for lists whose members simply aren't due; the copy now leads with
- * the soonest upcoming member when the feed can see one, and offers Browse
+ * the member who comes back soonest when the feed can see one (a paused
+ * person for when the pause lifts, CardFeed.upNextFor), and offers Browse
  * as a way in rather than stranding the user.
  */
 @Composable
@@ -410,71 +448,39 @@ private fun NothingEligibleShell(
     } else {
         stringResource(R.string.card_quiet_body)
     }
-    EmptyShell(
+    OrbitScreenMessage(
+        icon = "moon",
         // CARD-05: a calm word for "nobody is due right now". Not "caught up":
         // the queue is continuous by design (HOME-6, SurfaceResult.kt), so
         // nothing here suggests a backlog was cleared or a task finished.
-        heading = stringResource(R.string.card_quiet_heading),
+        title = stringResource(R.string.card_quiet_heading),
         body = body,
-        primaryText = stringResource(R.string.card_browse_list),
-        onPrimary = onBrowse,
-        secondaryText = stringResource(R.string.card_go_home),
+        actionLabel = stringResource(R.string.card_browse_list),
+        onAction = onBrowse,
+        actionVariant = OrbitButtonVariant.Primary,
+        secondaryLabel = stringResource(R.string.card_go_home),
         onSecondary = onGoHome
     )
 }
 
+/**
+ * CARD-07: a failed read, or a malformed list id, says so and offers Try
+ * again (the accent) with Go home beneath. The body is the shared one
+ * ("Nothing is lost. Try again in a moment."); the old body told the user to
+ * try again while the screen offered no way to.
+ */
 @Composable
-private fun EmptyShell(
-    heading: String,
-    body: String,
-    primaryText: String,
-    onPrimary: () -> Unit,
-    secondaryText: String? = null,
-    onSecondary: (() -> Unit)? = null
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(OrbitTheme.spacing.x8)
-    ) {
-        Text(
-            text = heading,
-            style = OrbitTheme.type.h2,
-            color = OrbitTheme.colors.fg
-        )
-        Spacer(Modifier.height(OrbitTheme.spacing.x3))
-        Text(
-            text = body,
-            style = OrbitTheme.type.body,
-            color = OrbitTheme.colors.fgMuted
-        )
-        Spacer(Modifier.height(OrbitTheme.spacing.x6))
-        OrbitButton(text = primaryText, onClick = onPrimary)
-        if (secondaryText != null && onSecondary != null) {
-            Spacer(Modifier.height(OrbitTheme.spacing.x3))
-            OrbitButton(
-                text = secondaryText,
-                onClick = onSecondary,
-                variant = OrbitButtonVariant.Ghost
-            )
-        }
-    }
-}
-
-@Composable
-private fun ErrorShell(cause: String, onGoHome: () -> Unit) {
-    EmptyShell(
-        heading = stringResource(R.string.card_error_heading),
-        body = stringResource(R.string.card_error_body),
-        primaryText = stringResource(R.string.card_go_home),
-        onPrimary = onGoHome
+private fun ErrorShell(onRetry: () -> Unit, onGoHome: () -> Unit) {
+    OrbitScreenMessage(
+        icon = "warning-circle",
+        title = stringResource(R.string.card_error_heading),
+        body = stringResource(R.string.components_error_body),
+        actionLabel = stringResource(R.string.components_error_retry),
+        onAction = onRetry,
+        actionVariant = OrbitButtonVariant.Primary,
+        secondaryLabel = stringResource(R.string.card_go_home),
+        onSecondary = onGoHome
     )
-    // Keep `cause` referenced so the parameter isn't elided; surface only
-    // in logs once Timber lands.
-    @Suppress("UNUSED_EXPRESSION")
-    cause
 }
 
 @Composable
@@ -538,8 +544,10 @@ private fun ReadyCard(
                             // It used to dial, so the natural "look closer" tap
                             // placed a call (one was placed by accident in review).
                             // A call reaches another person and can't be undone, so
-                            // only the labelled Call button dials.
-                            .clickable(onClickLabel = stringResource(R.string.card_open_details), role = Role.Button) {
+                            // only the labelled Call button dials. "Open details" is
+                            // the one name for this everywhere (voice.md glossary),
+                            // on screen below and to TalkBack here.
+                            .clickable(onClickLabel = stringResource(R.string.components_action_open_details), role = Role.Button) {
                                 onOpenContact(face.contactId)
                             }
                             // The swipes, and the call, as named actions on the node
@@ -621,7 +629,8 @@ private fun ReadyCard(
 
             // A visible way in for anyone who doesn't guess the card is tappable.
             // "Skip" used to sit here too; it did exactly what Later does, under a
-            // third name for the same thing.
+            // third name for the same thing. "Open details", the same words the
+            // face's TalkBack label uses (it read "View details", a second name).
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -629,7 +638,7 @@ private fun ReadyCard(
                     .padding(bottom = OrbitTheme.spacing.x3)
             ) {
                 Text(
-                    text = stringResource(R.string.card_view_details),
+                    text = stringResource(R.string.components_action_open_details),
                     style = OrbitTheme.type.skipAffordance,
                     color = OrbitTheme.colors.fgMuted,
                     textAlign = TextAlign.Center,
@@ -780,9 +789,10 @@ internal fun ContactCardFace(
                 Avatar(name = shownName, size = 104.dp, photoUri = if (curtain) null else contact.photoUri)
                 Spacer(Modifier.height(OrbitTheme.spacing.x3))
                 // Tide marker (2026-05-08): small framing line above the contact
-                // name. "Due today" when the engine's nextDueAt has arrived; "Not
-                // due yet" past the waterline. Sentence case per voice.md (it was
-                // lowercase "due today" / "ahead of today", which read as a typo).
+                // name. "Up now" when the engine's nextDueAt has arrived; "Coming
+                // up" past the waterline. A fact about the rhythm, never a
+                // deadline: it read "Due today" / "Not due yet", and "due" is the
+                // deadline framing voice.md retired with HOME-6.
                 Text(
                     text = stringResource(if (isAheadOfToday) R.string.card_not_due_yet else R.string.card_due_today),
                     style = OrbitTheme.type.eyebrow,
@@ -835,7 +845,7 @@ internal fun ContactCardFace(
                 if (contact.heat.any { it > 0f }) {
                     UsuallyAnswersCard(contact, nowHour)
                 } else {
-                    NoCallHistoryPanel()
+                    NotEnoughCallsPanel()
                 }
             }
             Spacer(Modifier.height(OrbitTheme.spacing.x6))
@@ -844,9 +854,15 @@ internal fun ContactCardFace(
     }
 }
 
-/** Neutral stand-in for the pattern panel when call history is too thin. */
+/**
+ * Neutral stand-in for the pattern panel below the three-connected-call floor
+ * (`withCallPatterns`). Worded for what is true in every case it covers: it
+ * said "No call history yet" beside "Last call 3 days ago" and "Total calls
+ * 2", because the stats hydrate from the first call and the pattern from the
+ * third.
+ */
 @Composable
-private fun NoCallHistoryPanel() {
+private fun NotEnoughCallsPanel() {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -856,18 +872,19 @@ private fun NoCallHistoryPanel() {
             .padding(OrbitTheme.spacing.x4)
     ) {
         Text(
-            text = stringResource(R.string.card_no_call_history),
+            text = stringResource(R.string.card_pattern_not_enough_calls),
             style = OrbitTheme.type.meta,
-            color = OrbitTheme.colors.fgMuted
+            color = OrbitTheme.colors.fgMuted,
+            textAlign = TextAlign.Center
         )
     }
 }
 
 @PreviewLightDark
 @Composable
-private fun NoCallHistoryPanelPreview() {
+private fun NotEnoughCallsPanelPreview() {
     OrbitTheme {
-        NoCallHistoryPanel()
+        NotEnoughCallsPanel()
     }
 }
 
@@ -971,12 +988,13 @@ private fun StatRow(contact: Contact) {
             .padding(top = OrbitTheme.spacing.x4),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 2026-06-09 — hydrated by withCallStats; blanks coalesce to honest
-        // placeholders. "Pickup" was dropped: call_events stores connected
-        // calls only, so a pickup rate is not computable — "Calls" (total
-        // recorded) is the truthful third stat.
-        val none = stringResource(R.string.card_stat_none)
-        val never = stringResource(R.string.card_stat_never)
+        // 2026-06-09: hydrated by withCallStats; a blank stat says so in the
+        // words Contact detail uses ("Never called", "Not enough calls yet"),
+        // never a dash, which TalkBack read as "en dash" or nothing. "Pickup"
+        // was dropped: call_events stores connected calls only, so a pickup
+        // rate is not computable, so "Total calls" is the truthful third stat.
+        val none = stringResource(R.string.components_stat_not_enough_calls)
+        val never = stringResource(R.string.components_stat_never_called)
         Stat(
             stringResource(R.string.card_stat_last_called),
             contact.lastCalledLabel?.asString() ?: never,
@@ -1011,6 +1029,7 @@ internal fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
             text = value,
             color = OrbitTheme.colors.fg,
             style = OrbitTheme.type.statValue,
+            textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = OrbitTheme.spacing.hair)
         )
     }
@@ -1095,6 +1114,7 @@ private fun PreviewContent(state: CardViewUiState, callLogDenied: Boolean = fals
         onSwipeLeft = {},
         onSwipeRight = {},
         onUndo = {},
+        onRetry = {},
         onOpenSettings = {},
         onOpenContact = {}
     )
@@ -1132,6 +1152,30 @@ private fun CardViewContentAheadOfTodayPreview() {
     }
 }
 
+// Someone never called: the three stats say so in words ("Never called", "Not
+// enough calls yet", never a dash) and the pattern panel says what it needs.
+// Rendered at 200% too, because those words share a third of the width each.
+@PreviewLightDark
+@Preview(name = "200%", fontScale = 2f)
+@Composable
+private fun CardViewContentNeverCalledPreview() {
+    OrbitTheme {
+        PreviewContent(
+            state = (previewState as CardViewUiState.Ready).copy(
+                contact = previewContact.copy(
+                    lastCalledLabel = null,
+                    avgLengthLabel = null,
+                    totalCalls = 0,
+                    bestWindowLabel = null,
+                    heat = FloatArray(24),
+                ),
+                recentNotes = emptyList(),
+                whyNowLine = null,
+            )
+        )
+    }
+}
+
 @PreviewLightDark
 @Composable
 private fun CardViewContentCallLogDeniedPreview() {
@@ -1140,11 +1184,22 @@ private fun CardViewContentCallLogDeniedPreview() {
     }
 }
 
+// One preview per state, so each renders in the screenshot gallery and its
+// a11y and curtain audits see it (state-10). The list name is on every one.
+
 @PreviewLightDark
 @Composable
 private fun CardViewContentNoMembersPreview() {
     OrbitTheme {
-        PreviewContent(state = CardViewUiState.EmptyNoMembers)
+        PreviewContent(state = CardViewUiState.EmptyNoMembers(listName = "Inner orbit"))
+    }
+}
+
+@PreviewLightDark
+@Composable
+private fun CardViewContentSmartNoMembersPreview() {
+    OrbitTheme {
+        PreviewContent(state = CardViewUiState.EmptyNoMembers(listName = "Late night", listType = ListType.SMART))
     }
 }
 
@@ -1155,9 +1210,27 @@ private fun CardViewContentNothingEligiblePreview() {
         PreviewContent(
             state = CardViewUiState.EmptyNothingEligible(
                 upNextName = "Avery Quinn",
-                upNextLabel = UiText.res(R.string.card_due_on_day, "Tuesday")
+                upNextLabel = UiText.res(R.string.card_due_on_day, "Tuesday"),
+                listName = "Inner orbit"
             )
         )
+    }
+}
+
+@PreviewLightDark
+@Composable
+private fun CardViewContentLoadingPreview() {
+    OrbitTheme {
+        PreviewContent(state = CardViewUiState.Loading)
+    }
+}
+
+@PreviewLightDark
+@Preview(name = "200%", fontScale = 2f)
+@Composable
+private fun CardViewContentErrorPreview() {
+    OrbitTheme {
+        PreviewContent(state = CardViewUiState.Error(listName = "Inner orbit"))
     }
 }
 
