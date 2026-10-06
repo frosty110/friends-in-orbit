@@ -42,6 +42,7 @@ import app.orbit.ui.util.pausedSnackbar
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -68,7 +69,9 @@ import org.junit.Test
  * The bulk use cases run over the recording DAOs
  * ([RecordingListMembershipDao], [RecordingContactDao]) so a test can read
  * what a forward write and its Undo dispatched; the single-row ones run over
- * [FakeContactRepository], whose state the inverse round-trips.
+ * [FakeContactRepository], whose state the inverse round-trips. A write that
+ * fails is a use case whose [TransactionRunner] throws ([makeVm]'s
+ * `useCaseTx`), the way Room would fail inside its transaction.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class BrowseViewModelTest {
@@ -81,6 +84,12 @@ class BrowseViewModelTest {
         override suspend fun <T> withTransaction(block: suspend () -> T): T = block()
     }
 
+    /** A transaction that fails before its block runs: the use case throws, as Room would. */
+    private val failingTx = object : TransactionRunner {
+        override suspend fun <T> withTransaction(block: suspend () -> T): T =
+            throw IllegalStateException("disk full")
+    }
+
     /**
      * Builds the VM over the fakes.
      *
@@ -90,7 +99,9 @@ class BrowseViewModelTest {
      * destination to. [ignoredSnapshots] and [pausedSnapshots] seed what the
      * bulk Ignore and Pause use cases read as each person's prior state.
      * [getByIdGate], when set, parks the VM's `listRepo.getById` until it
-     * completes, so a test can overlap two dispatches (browse-2).
+     * completes, so a test can overlap two dispatches (browse-2). [useCaseTx]
+     * is the transaction runner the bulk use cases and the single-row Ignore
+     * run in; [failingTx] makes each of them throw.
      */
     private fun makeVm(
         savedStateListId: String? = "1",
@@ -99,7 +110,8 @@ class BrowseViewModelTest {
         targetLists: List<ListEntity> = emptyList(),
         ignoredSnapshots: List<IgnoredSnapshot> = emptyList(),
         pausedSnapshots: List<PausedUntilSnapshot> = emptyList(),
-        getByIdGate: CompletableDeferred<Unit>? = null
+        getByIdGate: CompletableDeferred<Unit>? = null,
+        useCaseTx: TransactionRunner = passThruTx
     ): Setup {
         val contactRepo = FakeContactRepository()
         val listRepo = FakeListRepository()
@@ -173,21 +185,21 @@ class BrowseViewModelTest {
             listRepo = vmListRepo,
             browseFeed = browseFeed,
             clock = clock,
-            moveUseCase = MoveContactsUseCase(passThruTx, recDao, listDao, listRepo, clock),
-            copyUseCase = CopyContactsUseCase(passThruTx, recDao, listDao, listRepo, clock),
+            moveUseCase = MoveContactsUseCase(useCaseTx, recDao, listDao, listRepo, clock),
+            copyUseCase = CopyContactsUseCase(useCaseTx, recDao, listDao, listRepo, clock),
             bulkRemoveFromListUseCase = BulkRemoveFromListUseCase(
-                passThruTx,
+                useCaseTx,
                 recDao,
                 listRepo,
                 clock
             ),
-            bulkIgnoreUseCase = BulkIgnoreUseCase(passThruTx, recContactDao),
-            bulkPauseUseCase = BulkPauseUseCase(passThruTx, recContactDao, clock),
+            bulkIgnoreUseCase = BulkIgnoreUseCase(useCaseTx, recContactDao),
+            bulkPauseUseCase = BulkPauseUseCase(useCaseTx, recContactDao, clock),
             // Single-row Ignore + Pause use cases. IgnoreContactUseCase
             // takes the same passThruTx + recDao so the inverse closure round-trips
             // through the FakeContactRepository state without a real Room transaction.
             ignoreContactUseCase = IgnoreContactUseCase(
-                passThruTx,
+                useCaseTx,
                 contactRepo,
                 recDao,
                 listRepo,
@@ -266,13 +278,19 @@ class BrowseViewModelTest {
     }
 
     @Test
-    fun `an unparseable list id is Error, never an empty list`() = runTest {
+    fun `an unparseable list id is Error that cannot retry, never an empty list`() = runTest {
         // Regression (browse-19): a malformed route used to render "No one here
         // yet" with an "Add people" that opened the picker for a list that does
         // not exist. A path that cannot happen gets a loud guard (rules.md Code 3).
+        // That Error has no feed behind it, so it says so (canRetry = false) and
+        // Retry leaves it exactly as it was; until 2026-10-06 the screen offered
+        // Retry as its accent and the tap changed nothing.
         val (vm, _, _) = makeVm(savedStateListId = "inner")
         vm.uiState.test(timeout = 2.seconds) {
-            assertEquals(BrowseUiState.Error, awaitItem())
+            assertEquals(BrowseUiState.Error(canRetry = false), awaitItem())
+            vm.onRetry()
+            expectNoEvents()
+            assertEquals(BrowseUiState.Error(canRetry = false), vm.uiState.value)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -331,7 +349,7 @@ class BrowseViewModelTest {
         vm.uiState.test(timeout = 2.seconds) {
             var item = awaitItem()
             while (item == BrowseUiState.Loading) item = awaitItem()
-            assertEquals(BrowseUiState.Error, item)
+            assertEquals(BrowseUiState.Error(), item)
             vm.onRetry()
             assertEquals(listOf("Alex"), awaitReady(this).contacts.map { it.name })
             cancelAndIgnoreRemainingEvents()
@@ -845,6 +863,54 @@ class BrowseViewModelTest {
     }
 
     // ============================================================================
+    // A write that throws (rules.md Code 3). Until 2026-10-06 the bulk handlers
+    // were try/finally with no catch and the single-row ones bare launches; with
+    // no CoroutineExceptionHandler in the app the exception took the process
+    // down, and either way nothing told the user. Now the failure is a
+    // "Couldn't save your change" snackbar with no Undo, the bar is freed, and
+    // the selection stays for another try.
+    // ============================================================================
+
+    @Test
+    fun `a bulk write that throws says Couldn't save, has no Undo and frees the bar`() = runTest {
+        val s = makeVmWithContactsAndMembership(useCaseTx = failingTx)
+        s.vm.onEnterMultiSelect(1L)
+        s.vm.onToggleSelect(2L)
+        s.vm.snackbarEvents.test(timeout = 2.seconds) {
+            s.vm.onBulkIgnore()
+            val event = awaitItem()
+            assertEquals(UiText.res(R.string.components_snackbar_save_failed), event.message)
+            assertNull(event.actionLabel, "no Undo for a write that did not happen")
+            expectNoEvents()
+            cancel()
+        }
+        assertNull(s.undoStack.peek(), "nothing to undo")
+        assertTrue(s.recContactDao.setIgnoredCalls.isEmpty(), "nothing written")
+        s.vm.uiState.test(timeout = 2.seconds) {
+            val ready = awaitReady(this)
+            assertFalse(ready.isCommitting, "the bar is enabled again")
+            assertTrue(ready.isMultiSelect, "the selection stays for another try")
+            assertEquals(setOf(1L, 2L), ready.selectedIds)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a single-row write that throws says Couldn't save and offers no Undo`() = runTest {
+        val s = makeVmWithContacts(useCaseTx = failingTx)
+        s.vm.snackbarEvents.test(timeout = 2.seconds) {
+            s.vm.onSingleRowIgnore(1L, "Alex")
+            val event = awaitItem()
+            assertEquals(UiText.res(R.string.components_snackbar_save_failed), event.message)
+            assertNull(event.actionLabel, "no Undo for a write that did not happen")
+            expectNoEvents()
+            cancel()
+        }
+        assertNull(s.undoStack.peek(), "nothing to undo")
+        assertEquals(false, s.contactRepo.getById(1L)?.isIgnored, "Alex is not ignored")
+    }
+
+    // ============================================================================
     // Single-row quick actions (BROWSE-04)
     // ============================================================================
 
@@ -1049,14 +1115,16 @@ class BrowseViewModelTest {
         targetLists: List<ListEntity> = emptyList(),
         ignoredSnapshots: List<IgnoredSnapshot> = emptyList(),
         pausedSnapshots: List<PausedUntilSnapshot> = emptyList(),
-        getByIdGate: CompletableDeferred<Unit>? = null
+        getByIdGate: CompletableDeferred<Unit>? = null,
+        useCaseTx: TransactionRunner = passThruTx
     ): Setup {
         val s = makeVm(
             savedStateListId = "1",
             targetLists = targetLists,
             ignoredSnapshots = ignoredSnapshots,
             pausedSnapshots = pausedSnapshots,
-            getByIdGate = getByIdGate
+            getByIdGate = getByIdGate,
+            useCaseTx = useCaseTx
         )
         s.contactRepo.seed(
             listOf(
@@ -1081,9 +1149,12 @@ class BrowseViewModelTest {
         targetLists: List<ListEntity> = emptyList(),
         ignoredSnapshots: List<IgnoredSnapshot> = emptyList(),
         pausedSnapshots: List<PausedUntilSnapshot> = emptyList(),
-        getByIdGate: CompletableDeferred<Unit>? = null
+        getByIdGate: CompletableDeferred<Unit>? = null,
+        useCaseTx: TransactionRunner = passThruTx
     ): Setup {
-        val s = makeVmWithContacts(targetLists, ignoredSnapshots, pausedSnapshots, getByIdGate)
+        val s = makeVmWithContacts(
+            targetLists, ignoredSnapshots, pausedSnapshots, getByIdGate, useCaseTx
+        )
         s.listRepo.seed(
             listOf(
                 listFixture(id = 1L, name = "Inner orbit")

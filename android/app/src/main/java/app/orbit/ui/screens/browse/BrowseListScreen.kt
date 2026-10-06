@@ -113,7 +113,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  * BROWSE-05: trailing phone icon on each row → `dialPhoneNumber` (hidden in
  *            multi-select, where it used to sit inert).
  * BROWSE-06: a skeleton while the list loads and Retry when it fails, never a
- *            false "No one here yet".
+ *            false "No one here yet". A list id that never parsed has nothing
+ *            to retry, so that Error offers Go back alone.
  * BULK-05  : trailing "+" in the app bar → the Add people picker. Not on a
  *            smart list, whose rows the sync writes (ListRow.kt's "+" hides
  *            for the same reason); the Empty state's "Add people" likewise.
@@ -553,15 +554,31 @@ private fun BrowseContent(
                 BrowseUiState.Loading -> OrbitListSkeleton()
 
                 // The shared error body and Retry (strings_components.xml): one
-                // error family across the app (strings-12).
-                BrowseUiState.Error -> OrbitScreenMessage(
-                    icon = "warning-circle",
-                    title = stringResource(R.string.browse_error_title),
-                    body = stringResource(R.string.components_error_body),
-                    actionLabel = stringResource(R.string.components_error_retry),
-                    onAction = onRetry,
-                    actionVariant = OrbitButtonVariant.Primary
-                )
+                // error family across the app (strings-12). When nothing can be
+                // retried (the route's list id never parsed, so the VM has no
+                // feed to re-subscribe) the one action is Go back, which the
+                // screen's own onBack already wires; a Try again that did
+                // nothing was the accent here until 2026-10-06 (rules.md
+                // Code 3).
+                is BrowseUiState.Error -> if (state.canRetry) {
+                    OrbitScreenMessage(
+                        icon = "warning-circle",
+                        title = stringResource(R.string.browse_error_title),
+                        body = stringResource(R.string.components_error_body),
+                        actionLabel = stringResource(R.string.components_error_retry),
+                        onAction = onRetry,
+                        actionVariant = OrbitButtonVariant.Primary
+                    )
+                } else {
+                    OrbitScreenMessage(
+                        icon = "warning-circle",
+                        title = stringResource(R.string.browse_error_title),
+                        body = stringResource(R.string.components_error_body),
+                        actionLabel = stringResource(R.string.components_action_go_back),
+                        onAction = onBack,
+                        actionVariant = OrbitButtonVariant.Primary
+                    )
+                }
 
                 // "Add people" only where people can be added: a smart list's
                 // rows come from its rule, so the body says so and offers nothing.
@@ -881,8 +898,11 @@ private val previewState: BrowseUiState = BrowseUiState.Ready(
     queuePositions = mapOf("c-1" to 1, "c-2" to 2, "c-3" to 3)
 )
 
+// internal (not private) so BrowseErrorShellTest can render a state's shell
+// on the JVM through the same host the gallery uses; BrowseListScreen itself
+// takes a Hilt ViewModel and cannot be composed there.
 @Composable
-private fun BrowsePreviewHost(
+internal fun BrowsePreviewHost(
     state: BrowseUiState,
     activeFilters: Set<BrowseFilter> = emptySet(),
     listType: ListType = ListType.STATIC
@@ -960,7 +980,14 @@ private fun BrowseFilteredEmptyPreview() {
 @PreviewLightDark
 @Composable
 private fun BrowseErrorPreview() {
-    BrowsePreviewHost(BrowseUiState.Error)
+    BrowsePreviewHost(BrowseUiState.Error())
+}
+
+/** A list id that never parsed (a bad deep link): nothing to retry, so Go back alone. */
+@PreviewLightDark
+@Composable
+private fun BrowseBadLinkPreview() {
+    BrowsePreviewHost(BrowseUiState.Error(canRetry = false))
 }
 
 @PreviewLightDark

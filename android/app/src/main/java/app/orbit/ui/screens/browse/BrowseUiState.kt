@@ -53,6 +53,10 @@ import app.orbit.data.Contact
  * `Error` = a source flow failed (BROWSE-06), or the route's list id did not
  * parse (a loud guard, rules.md Code 3: until 2026-10-06 that case was `Empty`,
  * whose "Add people" opened the picker for a list that does not exist).
+ * `Error.canRetry` is false for the unparseable id: the VM has no feed to
+ * re-subscribe, so Try again could change nothing and the screen offers Go
+ * back alone (a Try again that did nothing was the screen's accent until
+ * 2026-10-06). Carried on the state so the screen never has to guess.
  *
  * Whether the browsed list is smart is not on this state: the app bar's "+"
  * and the Empty state's "Add people" render outside `Ready`, so the list's
@@ -63,7 +67,7 @@ sealed interface BrowseUiState {
 
     @Immutable data object Loading : BrowseUiState
 
-    @Immutable data object Error : BrowseUiState
+    @Immutable data class Error(val canRetry: Boolean = true) : BrowseUiState
 
     @Immutable
     data class Ready(

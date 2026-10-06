@@ -37,7 +37,7 @@
 - When no other regular list exists the sheet says "No other lists yet" / "Make another list first." with "Done"
 - The overflow, in order: "Select all" (every row matching the current search and filters, including those not yet on screen; MOVE-05), "Pause all" (the same duration sheet; "Paused 3 people for 1 week" with Undo), then "Ignore all" ("Ignored 3 people" with Undo)
 - Every bulk action can be undone from its snackbar (MOVE-07); a second tap while one is committing does nothing extra
-- A move or copy that could not happen says "Couldn't save your change"
+- A move or copy that could not happen says "Couldn't save your change"; so does any write that fails (a bulk action, a row's Pause, Unpause or Ignore, an Undo), with no Undo and no success message, and the selection stays for another try
 - Back, the bar's close, or deselecting the last row leaves multi-select (MOVE-06)
 - "+" and the empty list's "Add people" open the Add people picker for this list (BULK-05)
 - "Open settings" on the notice or the filter state: opens Orbit's Settings, where the Call log row hosts the grant
@@ -45,11 +45,11 @@
 ## States
 
 - Loading: a quiet skeleton, never "No one here yet" for a list with people (BROWSE-06)
-- Empty: "No one here yet" / "Add the people you'd like this list to bring up." with "Add people" (not on smart lists)
+- Empty: "No one here yet" / "Add the people you'd like this list to bring up." with "Add people". On a smart list the body reads "This list fills itself from its rule, and no one matches it right now." with no action
 - Filters match nobody: "No one matches these filters" / "Everyone on this list is hidden by the filters you chose." with "Clear filters"
 - Search matches nobody: "Nothing matches “q”" / "Try a shorter name, or part of their number." with "Clear search"
 - A call filter without call log access: "These filters need your call history" / "Orbit can't see your calls, so it can't tell who you've called. You can turn call log access on in Settings." with "Open settings" and "Clear filters"
-- Error: "Couldn't load this list" / "Nothing is lost. Try again in a moment." with Try again; a malformed list id is this error, never an empty list
+- Error: "Couldn't load this list" / "Nothing is lost. Try again in a moment." with Try again. A malformed list id is this error, never an empty list, with "Go back" alone in place of Try again: there is nothing a retry could re-read
 - Ready with call log access off: the notice above the rows, and no call times on them
 - Privacy curtain: names read "Contact", the title "List", and the typed search is masked (PRIV-03)
 
@@ -63,9 +63,10 @@
 
 ## Tests that pin it
 
-- `BrowseViewModelTest` (states, queue order, filters and search, every bulk action with its snackbar and undo, smart-list targets refused, select all after a search, a second dispatch ignored)
+- `BrowseViewModelTest` (states, queue order, filters and search, every bulk action with its snackbar and undo, smart-list targets refused, select all after a search, a second dispatch ignored, a write that throws reported with no Undo, a malformed id unchanged by Retry)
+- `BrowseErrorShellTest` (added this round: a failed feed offers Try again; a malformed id offers Go back and no Try again)
 - `BrowseRowMenuTest` (quick-action order); `MultiSelectOverflowMenuTest` (added this round: Select all, Pause all, Ignore all)
 - `MoveContactsUseCaseTest`, `CopyContactsUseCaseTest`, `BulkPauseUseCaseTest`, `BulkIgnoreUseCaseTest`
 - `BrowseRowGestureTest` (instrumented: tap and long-press stay separate)
 - `OrbitNavHostTest` (added this round: "Open settings" leads to Settings)
-- Gallery previews: `BrowseContentPreview`, `BrowseMultiSelectPreview`, `BrowseLoadingPreview`, `BrowseEmptyPreview`, `BrowseFilteredEmptyPreview`, `BrowseErrorPreview`, the no-matches and call-log-denied previews added this round, `ListSelectorSheetLightPreview`, `MultiSelectActionBarPreview`, with the curtain pass
+- Gallery previews: `BrowseContentPreview`, `BrowseMultiSelectPreview`, `BrowseLoadingPreview`, `BrowseEmptyPreview`, `BrowseFilteredEmptyPreview`, `BrowseErrorPreview`, `BrowseBadLinkPreview`, the no-matches and call-log-denied previews added this round, `ListSelectorSheetPreview`, `ListSelectorSheetNoTargetsPreview`, `MultiSelectActionBarPreview`, with the curtain pass
