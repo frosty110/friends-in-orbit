@@ -79,7 +79,7 @@ import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSearchField
 import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.SectionLabel
-import app.orbit.ui.screens.contact.sections.PauseSheet
+import app.orbit.ui.components.PauseDurationSheet
 import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
@@ -312,7 +312,7 @@ private fun BrowseContent(
     // `app.orbit.ui.screens.contact.sections.PauseSheet`; no duplicate
     // composable. Sheet uses the `OrbitTheme.shapes.bottomSheet` token.
     pauseSheetForContactId?.let { cid ->
-        PauseSheet(
+        PauseDurationSheet(
             onSelect = { duration ->
                 onSingleRowPause(cid, pauseSheetForContactName, duration)
                 pauseSheetForContactId = null
