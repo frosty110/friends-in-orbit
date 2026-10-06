@@ -11,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
@@ -40,6 +42,8 @@ fun OnboardingWelcomeScreen(
     onContinue: () -> Unit,
 ) {
     OnboardingScaffold(
+        // The app name is the screen's name too: TalkBack announces "Orbit".
+        title = stringResource(R.string.app_name),
         step = null,
         onBack = null,
         primary = OnboardingAction(
@@ -61,6 +65,7 @@ fun OnboardingWelcomeScreen(
                 text = stringResource(R.string.app_name),
                 style = OrbitTheme.type.hero.copy(color = OrbitTheme.colors.fg),
                 textAlign = TextAlign.Center,
+                modifier = Modifier.semantics { heading() },
             )
             Spacer(Modifier.height(OrbitTheme.spacing.x6))
             Text(

@@ -28,6 +28,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
@@ -72,6 +74,11 @@ fun OnboardingDoneScreen(
         )
     }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        // The OS has now been asked once. Settings reads this flag to tell a
+        // never-asked permission (offer Allow) from one turned off in the
+        // phone's settings (SET-12); without it a decline here read as
+        // "never asked" there.
+        vm.onNudgeLauncherFired()
         nudges = if (granted) NudgeAsk.On else NudgeAsk.Declined
     }
     OnboardingDoneContent(
@@ -88,16 +95,19 @@ internal enum class NudgeAsk { Ask, On, Declined }
 /**
  * Stateless inner extracted so `@PreviewLightDark` +
  * `@PreviewFontScale` (D-06) can render without `hiltViewModel()` /
- * `collectAsStateWithLifecycle()` at preview time.
+ * `collectAsStateWithLifecycle()` at preview time, and so
+ * `OnboardingDoneScreenTest` can pin the nudge ask and the CTA gate (ONB-30,
+ * ONB-23) on the JVM.
  */
 @Composable
-private fun OnboardingDoneContent(
+internal fun OnboardingDoneContent(
     completed: Boolean,
     onFinish: () -> Unit,
     nudges: NudgeAsk = NudgeAsk.Ask,
     onAllowNudges: () -> Unit = {},
 ) {
     OnboardingScaffold(
+        title = stringResource(R.string.onb_done_title),
         step = null,
         onBack = null,
         primary = OnboardingAction(
@@ -128,6 +138,7 @@ private fun OnboardingDoneContent(
                 text = stringResource(R.string.onb_done_title),
                 style = OrbitTheme.type.title.copy(color = OrbitTheme.colors.fg),
                 textAlign = TextAlign.Center,
+                modifier = Modifier.semantics { heading() },
             )
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
             // Teach the core loop (one card, yes or no), not list-browsing.

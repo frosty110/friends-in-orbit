@@ -31,6 +31,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
@@ -44,9 +46,13 @@ import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
 
 /**
- * Reusable permission rationale screen. Drives all three permission
- * onboarding steps (call log, contacts, notifications) — each route is a
- * thin caller that supplies the copy and the manifest constant.
+ * Reusable permission rationale screen. Drives the two permission onboarding
+ * steps (contacts, call log), and the legacy notifications route that only a
+ * saved resume step still reaches (ONB-30). Each route is a thin caller that
+ * supplies the copy and the manifest constant.
+ *
+ * `onBack` is null on a resumed step: it is the first entry on the back stack,
+ * so there is nothing to pop to and the arrow is hidden (see OnboardingScaffold).
  *
  * Pain-points addressed:
  *   - #1 dead-end disabled Continue → secondary "Continue without it"
@@ -77,7 +83,7 @@ fun OnboardingPermScreen(
     hasBeenAsked: Boolean,
     onRefresh: () -> Unit,
     onLauncherFired: () -> Unit,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     onContinue: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -112,13 +118,15 @@ fun OnboardingPermScreen(
     }
 
     OnboardingScaffold(
+        title = title,
         step = step,
         onBack = onBack,
         primary = OnboardingAction(
             label = stringResource(
                 when {
                     granted -> R.string.components_action_continue
-                    permanentlyDenied -> R.string.onb_perm_open_settings
+                    // The glossary's one name for Android's page for Orbit.
+                    permanentlyDenied -> R.string.components_action_open_phone_settings
                     else -> R.string.onb_perm_allow
                 },
             ),
@@ -138,6 +146,7 @@ fun OnboardingPermScreen(
         Text(
             text = title,
             style = OrbitTheme.type.title.copy(color = OrbitTheme.colors.fg),
+            modifier = Modifier.semantics { heading() },
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
@@ -175,9 +184,11 @@ fun OnboardingPermScreen(
 }
 
 /**
- * ONB-14 — surfaced when [isPermanentlyDenied] returns true. Tells the user
- * exactly which three permissions to flip in their phone's settings. Copy
- * locked by 09-UI-SPEC §"Permanently-denied banner".
+ * ONB-14: surfaced when [isPermanentlyDenied] returns true. One sentence
+ * saying where to turn the permission on later. It names no permission,
+ * because the same banner serves every screen built on this composable (the
+ * two live steps and the legacy notifications route), and it used to be a
+ * glyph-joined fragment that listed three permissions where two are asked.
  */
 @Composable
 private fun PermanentlyDeniedBanner() {
@@ -223,7 +234,10 @@ private fun PermissionExplainerCard(
             PhIcon(
                 name = if (granted) "check" else iconName,
                 size = 20.dp,
-                tint = if (granted) OrbitTheme.colors.positive else OrbitTheme.colors.accentPress,
+                // positiveText, not positive: green status text and the glyph
+                // on its tint must clear the contrast floor (rules.md §Design 4),
+                // the same way the Done screen draws its check.
+                tint = if (granted) OrbitTheme.colors.positiveText else OrbitTheme.colors.accentPress,
             )
         }
         Column(Modifier.weight(1f)) {
@@ -235,7 +249,7 @@ private fun PermissionExplainerCard(
                 },
                 style = OrbitTheme.type.body.copy(
                     color = when {
-                        granted -> OrbitTheme.colors.positive
+                        granted -> OrbitTheme.colors.positiveText
                         permanentlyDenied -> OrbitTheme.colors.fgMuted
                         else -> OrbitTheme.colors.fg
                     },
@@ -278,27 +292,45 @@ private fun openAppSettings(context: Context) {
     context.startActivity(intent)
 }
 
+@Composable
+private fun OnboardingPermScreenPreviewBody(granted: Boolean, onBack: (() -> Unit)? = {}) {
+    OnboardingPermScreen(
+        step = OnboardingStep.PermContacts,
+        permission = "android.permission.READ_CONTACTS",
+        skipPermission = SkipPermission.Contacts,
+        iconName = "users",
+        title = stringResource(R.string.onb_perm_contacts_title),
+        body = stringResource(R.string.onb_perm_contacts_body),
+        promiseTitle = stringResource(R.string.onb_perm_promise_on_device),
+        promise = stringResource(R.string.onb_perm_contacts_promise),
+        deniedNote = stringResource(R.string.onb_perm_contacts_denied),
+        granted = granted,
+        hasBeenAsked = false,
+        onRefresh = {},
+        onLauncherFired = {},
+        onBack = onBack,
+        onContinue = {},
+    )
+}
+
 @PreviewLightDark
 @PreviewFontScale
 @Composable
 private fun OnboardingPermScreenPreview() {
-    OrbitTheme {
-        OnboardingPermScreen(
-            step = OnboardingStep.PermContacts,
-            permission = "android.permission.READ_CONTACTS",
-            skipPermission = SkipPermission.Contacts,
-            iconName = "users",
-            title = stringResource(R.string.onb_perm_contacts_title),
-            body = stringResource(R.string.onb_perm_contacts_body),
-            promiseTitle = stringResource(R.string.onb_perm_promise_on_device),
-            promise = stringResource(R.string.onb_perm_contacts_promise),
-            deniedNote = stringResource(R.string.onb_perm_contacts_denied),
-            granted = false,
-            hasBeenAsked = false,
-            onRefresh = {},
-            onLauncherFired = {},
-            onBack = {},
-            onContinue = {},
-        )
-    }
+    OrbitTheme { OnboardingPermScreenPreviewBody(granted = false) }
+}
+
+// Granted: the card reads "Allowed" in positiveText, the button "Continue",
+// and the skip CTA is gone. The gallery's contrast and label audits see it.
+@PreviewLightDark
+@Composable
+private fun OnboardingPermScreenGrantedPreview() {
+    OrbitTheme { OnboardingPermScreenPreviewBody(granted = true) }
+}
+
+// Resumed after a relaunch: first on the back stack, so no back arrow.
+@PreviewLightDark
+@Composable
+private fun OnboardingPermScreenResumedPreview() {
+    OrbitTheme { OnboardingPermScreenPreviewBody(granted = false, onBack = null) }
 }

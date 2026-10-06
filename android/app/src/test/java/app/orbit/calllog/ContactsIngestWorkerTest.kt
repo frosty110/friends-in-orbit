@@ -95,6 +95,8 @@ class ContactsIngestWorkerTest {
                 ): ListenableWorker = ContactsIngestWorker(
                     appContext, workerParameters,
                     stubIngest, clock, appPrefs,
+                    // The resync request is pinned by ContactsIngestWorkerResyncTest.
+                    callLogResync = { },
                 )
             })
             .build()
