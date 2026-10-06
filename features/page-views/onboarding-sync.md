@@ -33,7 +33,7 @@
 - Reading: progress and the live count; Continue waits until both your contacts and your calls have been read
 - Done: the final count and "We'll learn as you go."
 - Nothing found: "No calls found in the last 90 days. That's okay." and "We'll learn as you go."
-- Call log access skipped: "Starting fresh" / "Without call history, Orbit starts from what you tell it." and "Orbit doesn't have call history access. You can grant it any time in Settings."; Continue is available at once
+- Call log access skipped: "Starting fresh" / "Without call history, Orbit starts from what you tell it." and "Orbit doesn't have call history access. You can grant it any time in Settings."; Continue is available at once. A failed read (Room or the saved settings throwing) without call-log access is still this state, with Continue available, never Failed: there was no sync to fail, and Try again could not start one
 - Failed: "Couldn't finish the sync. Try again?" with "Try again"; after that: "Couldn't finish the sync." / "We'll try again later in the background." with "Try one more time" and "Continue anyway"
 - Privacy curtain: only counts are shown, so nothing changes
 
@@ -45,7 +45,8 @@
 
 ## Tests that pin it
 
-- `OnboardingSyncViewModelTest` (rewritten this round: no permission reads as Skipped, success with and without calls, failure and retry, a thrown read, the initial state)
+- `OnboardingSyncViewModelTest` (rewritten this round: no permission reads as Skipped, success with and without calls, failure and retry, a thrown read with and without the permission, the initial state)
+- `OnboardingSyncChipsSemanticsTest` (the range chips are one radio group of four with the current window selected, and a tap reports its window)
 - `OnboardingListStarterTest` (the list under way is reused, never duplicated)
 - `CallLogSyncWorkerTest`, `ContactsIngestWorkerTest`
 - `OrbitNavHostTest` (added this round: Continue with a list under way goes straight into it with no Preview between; without one, Preview, and back from the first-list step lands here)

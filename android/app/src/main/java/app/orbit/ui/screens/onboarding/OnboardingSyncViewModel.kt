@@ -60,7 +60,9 @@ import kotlinx.coroutines.launch
  * `Failed(retries)` and uses the same Try again / Continue anyway UI as a
  * FAILED worker, instead of ending the first run with an uncaught exception.
  * A bare `catch` terminates the upstream, which is why the retry has to
- * start a new one.
+ * start a new one. Without READ_CALL_LOG the same throw is Skipped, not
+ * Failed: the Skipped precedence holds in the catch as in the transform, so
+ * Continue stays available (ONB-18, rules.md Code 3).
  */
 @HiltViewModel
 class OnboardingSyncViewModel @Inject constructor(
@@ -127,7 +129,19 @@ class OnboardingSyncViewModel @Inject constructor(
                 if (t is CancellationException) throw t
                 emit(
                     OnboardingSyncUiState.Ready(
-                        syncState = SyncState.Failed(retries),
+                        // The same precedence as the transform above: without
+                        // READ_CALL_LOG there is no sync to have failed, and
+                        // the five flows here are subscribed either way, so a
+                        // Room or DataStore throw on the denied path would
+                        // otherwise read as Failed, whose Try again cannot
+                        // enqueue anything and whose Continue needs a retry
+                        // that never comes: the dead end ONB-18 and rules.md
+                        // Code 3 forbid, with no back arrow on this step.
+                        syncState = if (!hasCallLogPermission()) {
+                            SyncState.Skipped
+                        } else {
+                            SyncState.Failed(retries)
+                        },
                         callCount = 0,
                         contactCount = 0,
                         importDays = DEFAULT_IMPORT_DAYS,
@@ -147,9 +161,17 @@ class OnboardingSyncViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Try again. The counter advances first, whatever the permission says:
+     * it is the outer flow of the `flatMapLatest`, so bumping it is what
+     * re-subscribes a pipeline the `catch` has terminated. Only the sync
+     * enqueue is gated on READ_CALL_LOG, since there is nothing to import
+     * without it. Until 2026-10-06 the guard returned before the bump, so a
+     * thrown read on the denied path could never be retried.
+     */
     fun onRetry() {
-        if (!hasCallLogPermission()) return
         _retryCount.value = _retryCount.value + 1
+        if (!hasCallLogPermission()) return
         controller.enqueueImmediateSync(fullResync = true)
     }
 

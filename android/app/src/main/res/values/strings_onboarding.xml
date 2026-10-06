@@ -123,9 +123,12 @@
     <string name="onb_first_list_add_another">Add another list</string>
     <!-- The list could not be read; shown with the shared "Try again". -->
     <string name="onb_first_list_error_title">Orbit couldn\'t load this list</string>
-    <!-- The list is gone (deleted or archived between steps). "Start again" returns to
-         Reading your call history, which continues into a fresh list. -->
-    <string name="onb_first_list_not_found_title">This list isn\'t here any more</string>
+    <!-- The list is gone (deleted or archived between steps). The title is the shared
+         missing-list wording, "List not found", which List settings owns
+         (lists_config_not_found); the body is this step's own because it explains its
+         "Start again" action, which returns to Reading your call history and continues
+         into a fresh list. -->
+    <string name="onb_first_list_not_found_title">List not found</string>
     <string name="onb_first_list_not_found_body">Start again and Orbit will set up a fresh one.</string>
     <string name="onb_first_list_start_again">Start again</string>
     <!-- Helper above the list settings while Done is not yet available. -->

@@ -6,7 +6,17 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.Configuration
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.Worker
+import androidx.work.WorkerParameters
+import androidx.work.testing.SynchronousExecutor
+import androidx.work.testing.WorkManagerTestInitHelper
 import app.cash.turbine.test
+import app.orbit.calllog.ContactsIngestWorker
+import app.orbit.calllog.ContentObserverController
 import app.orbit.data.android.ContactsReader
 import app.orbit.data.android.PhoneContact
 import app.orbit.data.dao.RecordingListMembershipDao
@@ -32,6 +42,7 @@ import app.orbit.testutil.MainDispatcherRule
 import app.orbit.testutil.newPrefs
 import app.orbit.ui.util.UiText
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,14 +50,18 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -73,6 +88,11 @@ import org.robolectric.annotation.Config
  * all, which left the read-failure path, the retry generation tagging and
  * "the selection survives the error" unverified. Filter and sort semantics
  * stay in [ContactPickerUiStateTest] as pure state.
+ *
+ * The test WorkManager (SettingsViewModelTest's fixture) backs the VM's
+ * ingest-in-flight flow and receives the real ingest request a grant made on
+ * this screen enqueues; [CountingController] keeps `start()` off the
+ * ContentResolver.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -110,10 +130,41 @@ class ContactPickerViewModelTest {
     /** Snackbar copy is UiText (strings_picker.xml and shared); resolved against real resources. */
     private fun UiText?.text(): String? = this?.asString(ApplicationProvider.getApplicationContext<Context>())
 
+    @Before
+    fun initWorkManager() {
+        // The VM observes getWorkInfosForUniqueWorkFlow and the controller
+        // enqueues a real WorkRequest on a grant. A synchronous executor runs
+        // each request to its terminal state before enqueue returns.
+        val config = Configuration.Builder()
+            .setMinimumLoggingLevel(android.util.Log.DEBUG)
+            .setExecutor(SynchronousExecutor())
+            .build()
+        WorkManagerTestInitHelper.initializeTestWorkManager(
+            ApplicationProvider.getApplicationContext<Context>(),
+            config
+        )
+    }
+
     @After
     fun tearDown() {
         storeScope.cancel()
         db.close()
+    }
+
+    /**
+     * Counts `start()` without registering against the ContentResolver; the
+     * ingest request still goes to the (test) WorkManager, so a test can read
+     * it back under ContactsIngestWorker.UNIQUE_NAME.
+     */
+    private class CountingController(ctx: Context) : ContentObserverController(ctx) {
+        var startCount: Int = 0
+        override fun start() { startCount++ }
+        override fun stop() {}
+    }
+
+    /** A stand-in for the ingest worker that ends SUCCEEDED. Public: built by reflection. */
+    class Succeeds(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
+        override fun doWork(): Result = Result.success()
     }
 
     /** Device address book stub — the ignore flows never touch the provider. */
@@ -138,7 +189,8 @@ class ContactPickerViewModelTest {
         val membershipDao: RecordingListMembershipDao,
         val undoStack: UndoStack,
         val commitBus: PickerCommitBus,
-        val savedState: SavedStateHandle
+        val savedState: SavedStateHandle,
+        val controller: CountingController
     )
 
     private fun fixture(
@@ -151,10 +203,15 @@ class ContactPickerViewModelTest {
         contactsReader: ContactsReader? = null,
         // Wraps the seeded fake (interface delegation) so one test can make a
         // Room source fail.
-        listRepoOverride: ((FakeListRepository) -> app.orbit.data.repository.ListRepository)? = null
+        listRepoOverride: ((FakeListRepository) -> app.orbit.data.repository.ListRepository)? =
+            null,
+        // False builds the VM with READ_CONTACTS denied (the Robolectric
+        // default), so a test can grant it afterwards and drive the edge.
+        grantContacts: Boolean = true
     ): Setup {
         val app = ApplicationProvider.getApplicationContext<Application>()
-        Shadows.shadowOf(app).grantPermissions(Manifest.permission.READ_CONTACTS)
+        if (grantContacts) Shadows.shadowOf(app).grantPermissions(Manifest.permission.READ_CONTACTS)
+        val controller = CountingController(app)
 
         val contactRepo = FakeContactRepository()
         val listRepo = FakeListRepository()
@@ -212,13 +269,26 @@ class ContactPickerViewModelTest {
             clock = clock,
             commitBus = commitBus,
             appScope = CoroutineScope(SupervisorJob() + mainDispatcherRule.testDispatcher),
+            contentObserverController = controller,
+            workManager = WorkManager.getInstance(app),
             savedStateHandle = savedState,
             // Both flowOn hops on the test dispatcher, so uiState can be
             // collected without racing real IO/Default threads.
             ioDispatcher = mainDispatcherRule.testDispatcher,
             defaultDispatcher = mainDispatcherRule.testDispatcher
         )
-        return Setup(vm, contactRepo, membershipDao, undoStack, commitBus, savedState)
+        return Setup(vm, contactRepo, membershipDao, undoStack, commitBus, savedState, controller)
+    }
+
+    private fun ingestWorkCount(): Int =
+        WorkManager.getInstance(ApplicationProvider.getApplicationContext<Context>())
+            .getWorkInfosForUniqueWork(ContactsIngestWorker.UNIQUE_NAME)
+            .get()
+            .size
+
+    private fun grantContacts() {
+        Shadows.shadowOf(ApplicationProvider.getApplicationContext<Application>())
+            .grantPermissions(Manifest.permission.READ_CONTACTS)
     }
 
     private fun selectedIdsIn(savedState: SavedStateHandle): Set<Long> =
@@ -475,7 +545,8 @@ class ContactPickerViewModelTest {
                 basePhase = ContactPickerUiState.Phase.Ready,
                 isCommitting = false,
                 deviceEmpty = true,
-                hasAnyContacts = false
+                hasAnyContacts = false,
+                ingesting = false
             )
         )
         // Read not finished yet (null) → stay Ready, no skeleton lie.
@@ -485,7 +556,8 @@ class ContactPickerViewModelTest {
                 basePhase = ContactPickerUiState.Phase.Ready,
                 isCommitting = false,
                 deviceEmpty = null,
-                hasAnyContacts = false
+                hasAnyContacts = false,
+                ingesting = false
             )
         )
         // Device empty but store still projects pickable contacts
@@ -496,7 +568,8 @@ class ContactPickerViewModelTest {
                 basePhase = ContactPickerUiState.Phase.Ready,
                 isCommitting = false,
                 deviceEmpty = true,
-                hasAnyContacts = true
+                hasAnyContacts = true,
+                ingesting = false
             )
         )
         // Permission surfaces are never overridden.
@@ -506,7 +579,8 @@ class ContactPickerViewModelTest {
                 basePhase = ContactPickerUiState.Phase.PermissionRationale,
                 isCommitting = false,
                 deviceEmpty = true,
-                hasAnyContacts = false
+                hasAnyContacts = false,
+                ingesting = false
             )
         )
         // Committing wins over everything.
@@ -516,9 +590,129 @@ class ContactPickerViewModelTest {
                 basePhase = ContactPickerUiState.Phase.Ready,
                 isCommitting = true,
                 deviceEmpty = true,
-                hasAnyContacts = false
+                hasAnyContacts = false,
+                ingesting = false
             )
         )
+    }
+
+    @Test
+    fun `resolvePickerPhase holds the skeleton while the first ingest is in flight`() {
+        fun resolve(deviceEmpty: Boolean?, hasAnyContacts: Boolean, ingesting: Boolean) =
+            resolvePickerPhase(
+                basePhase = ContactPickerUiState.Phase.Ready,
+                isCommitting = false,
+                deviceEmpty = deviceEmpty,
+                hasAnyContacts = hasAnyContacts,
+                ingesting = ingesting
+            )
+        // Phone read non-empty, Room still empty, ingest running: the skeleton,
+        // not an empty Ready that reads "everyone is already on the list".
+        assertEquals(
+            ContactPickerUiState.Phase.LoadingPermission,
+            resolve(deviceEmpty = false, hasAnyContacts = false, ingesting = true)
+        )
+        // Nothing in flight: Ready, and the empty state is honest.
+        assertEquals(
+            ContactPickerUiState.Phase.Ready,
+            resolve(deviceEmpty = false, hasAnyContacts = false, ingesting = false)
+        )
+        // Rows already there: the list shows while the ingest refreshes it.
+        assertEquals(
+            ContactPickerUiState.Phase.Ready,
+            resolve(deviceEmpty = false, hasAnyContacts = true, ingesting = true)
+        )
+        // A truly empty address book has nothing to wait for.
+        assertEquals(
+            ContactPickerUiState.Phase.EmptyDevice,
+            resolve(deviceEmpty = true, hasAnyContacts = false, ingesting = true)
+        )
+        // The read not finished yet, ingest in flight: still the skeleton.
+        assertEquals(
+            ContactPickerUiState.Phase.LoadingPermission,
+            resolve(deviceEmpty = null, hasAnyContacts = false, ingesting = true)
+        )
+    }
+
+    // ─── A grant made on this screen runs the ingest (CMP-1) ──
+
+    @Test
+    fun `granting contacts from the rationale starts the observer and runs one ingest`() = runTest {
+        val s = fixture(mode = "add", grantContacts = false)
+        assertEquals(0, s.controller.startCount)
+        assertEquals("nothing enqueued while denied", 0, ingestWorkCount())
+
+        // The user tapped Grant access and allowed it.
+        grantContacts()
+        s.vm.onPermissionResult(granted = true)
+
+        assertEquals("the grant registers the contacts observer", 1, s.controller.startCount)
+        assertEquals("one ingest under the unique name", 1, ingestWorkCount())
+    }
+
+    @Test
+    fun `a grant noticed on resume runs the ingest once, a later resume does not`() = runTest {
+        val s = fixture(mode = "add", grantContacts = false)
+
+        // Still denied on the first resume: nothing.
+        s.vm.refreshPermission()
+        assertEquals(0, s.controller.startCount)
+        assertEquals(0, ingestWorkCount())
+
+        // Allowed in the phone's settings, then back to the picker.
+        grantContacts()
+        s.vm.refreshPermission()
+        assertEquals(1, s.controller.startCount)
+        assertEquals(1, ingestWorkCount())
+
+        // Already Ready: a second resume is not a grant.
+        s.vm.refreshPermission()
+        assertEquals(1, s.controller.startCount)
+        assertEquals(1, ingestWorkCount())
+    }
+
+    @Test
+    fun `opening the picker with contacts already granted enqueues no ingest`() = runTest {
+        // Init's LoadingPermission -> Ready is not a grant made here; the
+        // ingest for that grant ran in onboarding or Settings.
+        val s = fixture(mode = "add")
+        s.vm.refreshPermission()
+
+        assertEquals(0, s.controller.startCount)
+        assertEquals(0, ingestWorkCount())
+    }
+
+    // runBlocking (real time): the WorkInfo flow emits on WorkManager's own
+    // executor, and the test driver's setInitialDelayMet runs the stand-in
+    // worker there too, the OnboardingSyncViewModelTest idiom.
+    @Test
+    fun `while the ingest runs, an empty store is the skeleton, then honest Ready`() = runBlocking {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val wm = WorkManager.getInstance(app)
+        // An ingest that has not run yet: ENQUEUED. The hour's delay stands in
+        // for an address book still being read.
+        val ingest = OneTimeWorkRequestBuilder<Succeeds>()
+            .setInitialDelay(1, TimeUnit.HOURS)
+            .build()
+        wm.enqueueUniqueWork(ContactsIngestWorker.UNIQUE_NAME, ExistingWorkPolicy.KEEP, ingest)
+            .result.get()
+        // The phone has a contact; Room has none of them yet.
+        val s = fixture(mode = "add", contactsReader = FlakyContactsReader(app))
+
+        // The first pipeline emission carries the target's name; the stateIn
+        // initial value does not, which tells the two LoadingPermissions apart.
+        val waiting = withTimeout(30_000L) { s.vm.uiState.first { it.targetListName.isNotEmpty() } }
+        assertEquals(ContactPickerUiState.Phase.LoadingPermission, waiting.phase)
+        assertTrue(waiting.allContacts.isEmpty())
+
+        // The ingest finishes (and, in this fixture, finds nobody to insert).
+        WorkManagerTestInitHelper.getTestDriver(app)!!.setInitialDelayMet(ingest.id)
+
+        val settled = withTimeout(30_000L) {
+            s.vm.uiState.first { it.phase != ContactPickerUiState.Phase.LoadingPermission }
+        }
+        assertEquals(ContactPickerUiState.Phase.Ready, settled.phase)
+        assertEquals(ContactPickerUiState.EmptyReason.EveryoneOnList, settled.emptyReason)
     }
 
     // ─── Starred filter persistence ──────────────────────────

@@ -112,11 +112,11 @@ class ListPickerViewModelTest {
     }
 
     private suspend fun awaitReady(
-        flow: app.cash.turbine.ReceiveTurbine<ListPickerViewModel.UiState>,
-    ): ListPickerViewModel.UiState {
+        flow: app.cash.turbine.ReceiveTurbine<ListPickerUiState>,
+    ): ListPickerUiState {
         while (true) {
             val item = flow.awaitItem()
-            if (item.phase == ListPickerViewModel.UiState.Phase.Ready) return item
+            if (item.phase == ListPickerUiState.Phase.Ready) return item
         }
     }
 
@@ -153,7 +153,7 @@ class ListPickerViewModelTest {
         seedReadyFor(s, contactId = 12L)
         s.vm.uiState.test(timeout = 2.seconds) {
             val state = awaitItem()
-            assertEquals(ListPickerViewModel.UiState.Phase.NotFound, state.phase)
+            assertEquals(ListPickerUiState.Phase.NotFound, state.phase)
             assertEquals("", state.contactName)
             assertTrue(state.lists.isEmpty())
             assertTrue(state.selectedListIds.isEmpty())
@@ -167,7 +167,7 @@ class ListPickerViewModelTest {
         seedReadyFor(s, contactId = 12L)
         s.vm.uiState.test(timeout = 2.seconds) {
             val state = awaitItem()
-            assertEquals(ListPickerViewModel.UiState.Phase.NotFound, state.phase)
+            assertEquals(ListPickerUiState.Phase.NotFound, state.phase)
             assertTrue(state.lists.isEmpty())
             cancelAndIgnoreRemainingEvents()
         }
@@ -410,12 +410,12 @@ class ListPickerViewModelTest {
         )
         vm.uiState.test {
             var item = awaitItem()
-            while (item.phase == ListPickerViewModel.UiState.Phase.Loading) item = awaitItem()
-            assertEquals(ListPickerViewModel.UiState.Phase.Error, item.phase)
+            while (item.phase == ListPickerUiState.Phase.Loading) item = awaitItem()
+            assertEquals(ListPickerUiState.Phase.Error, item.phase)
             failing = false
             vm.onRetry()
             var next = awaitItem()
-            while (next.phase != ListPickerViewModel.UiState.Phase.Ready) next = awaitItem()
+            while (next.phase != ListPickerUiState.Phase.Ready) next = awaitItem()
             assertTrue(next.lists.isNotEmpty())
             cancelAndIgnoreRemainingEvents()
         }
@@ -717,8 +717,8 @@ class ListPickerViewModelTest {
         // Contact 99 is never seeded: Room emits null for a missing row.
         s.vm.uiState.test(timeout = 2.seconds) {
             var item = awaitItem()
-            while (item.phase == ListPickerViewModel.UiState.Phase.Loading) item = awaitItem()
-            assertEquals(ListPickerViewModel.UiState.Phase.NotFound, item.phase)
+            while (item.phase == ListPickerUiState.Phase.Loading) item = awaitItem()
+            assertEquals(ListPickerUiState.Phase.NotFound, item.phase)
             cancelAndIgnoreRemainingEvents()
         }
     }

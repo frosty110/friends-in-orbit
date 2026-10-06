@@ -7,7 +7,11 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import app.orbit.R
+import app.orbit.calllog.ContactsIngestWorker
+import app.orbit.calllog.ContentObserverController
 import app.orbit.data.AppPrefs
 import app.orbit.data.PickerThresholds
 import app.orbit.data.android.ContactsReader
@@ -71,6 +75,12 @@ import kotlinx.coroutines.launch
  *    to read READ_CONTACTS state — same pattern as
  *    [app.orbit.ui.screens.onboarding.OnboardingPermissionsViewModel]
  *    (no PermissionSource interface, no test seam — refresh on init + on result).
+ *  - A grant made on this screen (the rationale's button, or the phone's
+ *    settings and a return) runs the contacts ingest, as the onboarding and
+ *    Settings grants do; see [onPermissionGranted]. Until 2026-10-06 nothing
+ *    did, so with Room still empty the picker resolved Ready and said
+ *    "Everyone in your contacts is already on {list}" to a user whose
+ *    contacts had never been read.
  *  - Exposes [uiState] as a `StateFlow<ContactPickerUiState>` via
  *    `combine(...).stateIn(WhileSubscribed(5_000L))` — ARCH-02 invariant.
  *  - Search debounce lives in the screen (immediate field state, debounced
@@ -121,6 +131,12 @@ class ContactPickerViewModel(
     private val clock: Clock,
     private val commitBus: PickerCommitBus,
     private val appScope: CoroutineScope,
+    // The grant edge's two collaborators (SettingsViewModel is the
+    // precedent): the controller registers the address-book observer and
+    // runs the forced ingest; the WorkManager's WorkInfo says whether that
+    // ingest is still in flight. A test passes the test WorkManager.
+    private val contentObserverController: ContentObserverController,
+    private val workManager: WorkManager,
     savedStateHandle: SavedStateHandle,
     // The two dispatchers the pipeline hops to: the address-book read and the
     // candidate reduction. Hilt's constructor below passes the real ones; a
@@ -151,6 +167,7 @@ class ContactPickerViewModel(
         clock: Clock,
         commitBus: PickerCommitBus,
         @ApplicationScope appScope: CoroutineScope,
+        contentObserverController: ContentObserverController,
         savedStateHandle: SavedStateHandle
     ) : this(
         appContext = appContext,
@@ -169,6 +186,8 @@ class ContactPickerViewModel(
         clock = clock,
         commitBus = commitBus,
         appScope = appScope,
+        contentObserverController = contentObserverController,
+        workManager = WorkManager.getInstance(appContext),
         savedStateHandle = savedStateHandle,
         ioDispatcher = Dispatchers.IO,
         defaultDispatcher = Dispatchers.Default
@@ -312,20 +331,68 @@ class ContactPickerViewModel(
             appContext,
             Manifest.permission.READ_CONTACTS
         ) == PackageManager.PERMISSION_GRANTED
-        _permissionPhase.value = if (granted) {
-            ContactPickerUiState.Phase.Ready
-        } else {
-            ContactPickerUiState.Phase.PermissionRationale
-        }
+        movePermissionPhase(
+            if (granted) {
+                ContactPickerUiState.Phase.Ready
+            } else {
+                ContactPickerUiState.Phase.PermissionRationale
+            }
+        )
     }
 
     fun onPermissionResult(granted: Boolean) {
-        _permissionPhase.value = if (granted) {
-            ContactPickerUiState.Phase.Ready
-        } else {
-            ContactPickerUiState.Phase.PermissionDenied
-        }
+        movePermissionPhase(
+            if (granted) {
+                ContactPickerUiState.Phase.Ready
+            } else {
+                ContactPickerUiState.Phase.PermissionDenied
+            }
+        )
     }
+
+    /**
+     * Sets the permission phase and, on the denied-to-granted edge only,
+     * runs [onPermissionGranted]. The edge is a prior PermissionRationale or
+     * PermissionDenied becoming Ready: init's LoadingPermission -> Ready is
+     * not a grant made here (the ingest for that grant ran in onboarding or
+     * Settings), and Ready -> Ready on a resume changes nothing.
+     */
+    private fun movePermissionPhase(next: ContactPickerUiState.Phase) {
+        val prior = _permissionPhase.value
+        _permissionPhase.value = next
+        val wasDenied = prior == ContactPickerUiState.Phase.PermissionRationale ||
+            prior == ContactPickerUiState.Phase.PermissionDenied
+        if (wasDenied && next == ContactPickerUiState.Phase.Ready) onPermissionGranted()
+    }
+
+    /**
+     * What every other READ_CONTACTS grant does (OnboardingPermissionsViewModel,
+     * SettingsViewModel.refreshAllPermissionStates): register the
+     * address-book observer, then run the ingest. The forced, expedited path,
+     * so ContactsIngestWorker's 24h TTL cannot skip it: this user's contacts
+     * have never been read, and the TTL exists to dedupe grant re-runs, not
+     * to defer a first read. Until this ran, the only ways out of the false
+     * empty state were an address-book change or Settings' grant path.
+     */
+    private fun onPermissionGranted() {
+        contentObserverController.start()
+        contentObserverController.enqueueImmediateContactsIngest()
+    }
+
+    /**
+     * Whether the contacts ingest is ENQUEUED or RUNNING (the
+     * SettingsViewModel.contactsSyncInFlight shape). While it is and Room has
+     * no candidates yet, [resolvePickerPhase] keeps the skeleton up instead
+     * of resolving an empty Ready, which would read as "everyone is already
+     * on the list".
+     */
+    private val ingestInFlight: Flow<Boolean> =
+        workManager.getWorkInfosForUniqueWorkFlow(ContactsIngestWorker.UNIQUE_NAME)
+            .map { infos ->
+                infos.any {
+                    it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING
+                }
+            }
 
     // ─── Public callbacks (9 — one per UI event) ──────────────────────────────────────
 
@@ -799,21 +866,29 @@ class ContactPickerViewModel(
             .onStart { emit(null) }
             .distinctUntilChanged()
 
+    // The permission phase and the ingest flag folded together, since the
+    // chrome combine below is already at arity 5.
+    private val permissionGateFlow: Flow<PermissionGate> =
+        combine(_permissionPhase, ingestInFlight) { phase, ingesting ->
+            PermissionGate(phase, ingesting)
+        }
+
     private val chromeFlow: Flow<PickerChrome> =
         combine(
-            _permissionPhase,
+            permissionGateFlow,
             _isCommitting,
             targetNameFlow,
             availableListsFlow,
             deviceEmptyFlow
-        ) { phase, committing, name, lists, deviceEmpty ->
+        ) { gate, committing, name, lists, deviceEmpty ->
             PickerChrome(
                 // A missing target is terminal whatever the permission says.
-                phase = if (name == null) ContactPickerUiState.Phase.NotFound else phase,
+                phase = if (name == null) ContactPickerUiState.Phase.NotFound else gate.phase,
                 isCommitting = committing,
                 targetListName = name.orEmpty(),
                 availableLists = lists,
-                deviceEmpty = deviceEmpty
+                deviceEmpty = deviceEmpty,
+                ingesting = gate.ingesting
             )
         }
 
@@ -858,7 +933,8 @@ class ContactPickerViewModel(
                     basePhase = chrome.phase,
                     isCommitting = chrome.isCommitting,
                     deviceEmpty = chrome.deviceEmpty,
-                    hasAnyContacts = allContacts.isNotEmpty()
+                    hasAnyContacts = allContacts.isNotEmpty(),
+                    ingesting = chrome.ingesting
                 ),
                 mode = mode,
                 targetListName = chrome.targetListName,
@@ -1040,18 +1116,26 @@ class ContactPickerViewModel(
         val sortBy: PickerSort
     )
 
+    /** The permission phase with whether the contacts ingest is in flight; see [ingestInFlight]. */
+    private data class PermissionGate(
+        val phase: ContactPickerUiState.Phase,
+        val ingesting: Boolean
+    )
+
     /**
      * Low-churn "chrome" inputs (phase, commit flag, target
      * name, list summaries) folded into one record for the same arity reason.
      * [deviceEmpty] (null until the first address-book read completes) lets the
-     * final combine resolve the EmptyDevice phase.
+     * final combine resolve the EmptyDevice phase; [ingesting] keeps the
+     * skeleton up through the first ingest after a grant made on this screen.
      */
     private data class PickerChrome(
         val phase: ContactPickerUiState.Phase,
         val isCommitting: Boolean,
         val targetListName: String,
         val availableLists: List<PickerListSummary>,
-        val deviceEmpty: Boolean?
+        val deviceEmpty: Boolean?,
+        val ingesting: Boolean
     )
 }
 
@@ -1069,6 +1153,14 @@ class ContactPickerViewModel(
  *    false`) — call-log-only rows can outlive an emptied address book and
  *    remain honestly pickable.
  *
+ * LoadingPermission (the skeleton) when the base phase is Ready, Room has no
+ * candidates and the contacts ingest is still in flight (`ingesting`): a
+ * grant made on this screen has just asked for the first read of the
+ * address book, and an empty Ready in that window would be worded as
+ * "everyone is already on the list" (rubric G4: an empty state tells the
+ * truth). EmptyDevice wins over it, since a device with no contacts has
+ * nothing to wait for.
+ *
  * Top-level (not VM-private) so the unit test can pin the predicate without
  * collecting the dispatcher-hopping uiState pipeline — same rationale as
  * [countFor].
@@ -1077,12 +1169,16 @@ internal fun resolvePickerPhase(
     basePhase: ContactPickerUiState.Phase,
     isCommitting: Boolean,
     deviceEmpty: Boolean?,
-    hasAnyContacts: Boolean
+    hasAnyContacts: Boolean,
+    ingesting: Boolean
 ): ContactPickerUiState.Phase = when {
     isCommitting -> ContactPickerUiState.Phase.Committing
     basePhase == ContactPickerUiState.Phase.Ready &&
         deviceEmpty == true &&
         !hasAnyContacts -> ContactPickerUiState.Phase.EmptyDevice
+    basePhase == ContactPickerUiState.Phase.Ready &&
+        !hasAnyContacts &&
+        ingesting -> ContactPickerUiState.Phase.LoadingPermission
     else -> basePhase
 }
 
