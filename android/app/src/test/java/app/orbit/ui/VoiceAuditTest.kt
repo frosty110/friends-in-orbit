@@ -50,8 +50,6 @@ class VoiceAuditTest {
         "onb_welcome_beat_choice",
         // Empty states that name where people come from.
         "browse_search_empty_body", "calllog_empty_body", "lists_delete_body",
-        // Smart-list percentages are over the address book.
-        "lists_smart_percent_.*",
         // A person's page: the phone record behind them, and re-linking to one.
         "contact_menu_open_in_contacts", "contact_not_found_body", "contact_orphan_title", "contact_orphan_body",
         // The phone's contacts app.
