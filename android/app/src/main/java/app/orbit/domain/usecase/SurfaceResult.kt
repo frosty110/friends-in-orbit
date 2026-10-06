@@ -34,15 +34,16 @@ sealed interface SurfaceResult {
     /**
      * The list has zero non-archived non-ignored memberships — the user has
      * not put anyone in this list (or has archived everyone). UI copy:
-     * "Add people to this list."
+     * "No one is in this list yet." with "Add people" (on a smart list, "No
+     * one matches this rule right now." with "List settings").
      */
     @Immutable
     data object NoMembers : SurfaceResult
 
     /**
      * The list has visible members, but none survives filtering right now —
-     * paused, outside active hours, no rule template, or engine returned
-     * `nextDue == null`. UI copy: "No one is up next on this list."
+     * paused, no rule template, or engine returned `nextDue == null`. UI
+     * copy: "All quiet for now." and who comes up next and when (CARD-05).
      */
     @Immutable
     data object NothingEligible : SurfaceResult

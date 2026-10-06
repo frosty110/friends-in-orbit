@@ -6,15 +6,19 @@
 -->
 <resources>
 
+    <!-- The three-dots button that opens the list's menu, named for the list it acts on, as
+         every overflow button is (voice.md glossary). %1$s: the list's name. -->
+    <string name="card_list_options">More actions for %1$s</string>
+    <!-- The same button while the list's name is not known (the deck failed to load). -->
+    <string name="card_list_options_unnamed">More actions for this list</string>
     <!-- App bar menu of list actions. The same words as Home's list menu. -->
-    <string name="card_list_options">List options</string>
     <string name="card_menu_browse">Browse people</string>
     <string name="card_menu_add_people">Add people</string>
     <string name="card_menu_list_settings">List settings</string>
 
-    <!-- Notice while the call log permission is off. -->
+    <!-- Notice while the call log permission is off. Its action is the shared
+         components_action_open_settings. -->
     <string name="card_call_log_denied">Orbit can\'t see your calls, so cards won\'t move on by themselves.</string>
-    <string name="card_open_settings">Open settings</string>
 
     <!-- Empty list. -->
     <string name="card_no_members_heading">No one is in this list yet.</string>
@@ -29,20 +33,19 @@
     <string name="card_quiet_body">No one needs a call right now.</string>
     <string name="card_browse_list">Browse this list</string>
 
+    <!-- The deck could not be read (CARD-07). The body and "Try again" are the shared
+         components_error_body and components_error_retry. -->
     <string name="card_error_heading">Something\'s off here.</string>
-    <string name="card_error_body">Pull back and try this list again in a moment.</string>
 
-    <!-- Screen-reader hint: tapping the card opens the person's details. -->
-    <string name="card_open_details">Open details</string>
     <!-- The Call button and its screen-reader action. %1$s: the person's first name. -->
     <string name="card_call">Call %1$s</string>
     <string name="card_later">Later</string>
     <string name="card_sooner">Sooner</string>
-    <string name="card_view_details">View details</string>
 
-    <!-- Small label above the person's name. -->
-    <string name="card_due_today">Due today</string>
-    <string name="card_not_due_yet">Not due yet</string>
+    <!-- Small label above the person's name: a fact about the rhythm, never a deadline
+         (voice.md never says "due"). "Up now" when their time has come, "Coming up" before it. -->
+    <string name="card_due_today">Up now</string>
+    <string name="card_not_due_yet">Coming up</string>
 
     <!-- The user's most recent note about this person, in quotation marks. Use your
          language's quotation marks. %1$s: the note. -->
@@ -50,7 +53,9 @@
     <!-- %1$s: when the note was written, for example "12 days ago". -->
     <string name="card_last_note_meta">Your note, %1$s</string>
 
-    <string name="card_no_call_history">No call history yet</string>
+    <!-- In place of the "Usually answers" panel until there are three connected calls to
+         read a pattern from. True beside "Total calls 2", which "No call history yet" was not. -->
+    <string name="card_pattern_not_enough_calls">Not enough calls yet to see a pattern</string>
     <!-- When this person tends to pick up, from past calls. -->
     <string name="card_usually_answers">Usually answers</string>
     <string name="card_usually_tooltip">Based on when you usually answer or call this person.</string>
@@ -59,13 +64,12 @@
     <string name="card_answer_sometimes">Sometimes answers now</string>
     <string name="card_answer_rarely">Rarely answers now</string>
 
-    <!-- Three small stats at the foot of the card. -->
+    <!-- Three small stats at the foot of the card, the glossary's labels (voice.md: "Last
+         call", "Average length", "Total calls"). A stat with nothing to say uses the shared
+         components_stat_never_called / components_stat_not_enough_calls, never a dash. -->
     <string name="card_stat_last_called">Last call</string>
-    <string name="card_stat_never">Never</string>
     <string name="card_stat_avg_length">Average length</string>
-    <string name="card_stat_calls">Calls</string>
-    <!-- Stands in for a stat that has no value yet. A short dash. -->
-    <string name="card_stat_none">–</string>
+    <string name="card_stat_calls">Total calls</string>
 
     <!-- Snackbar action after a call: open the person to write a note. -->
     <string name="card_snackbar_add_note">Add a note</string>
@@ -77,8 +81,8 @@
     <string name="card_later_unnamed_when">They will come up again %1$s.</string>
     <string name="card_later_named">%1$s moved to later.</string>
     <string name="card_later_unnamed">They moved to later.</string>
-    <string name="card_sooner_named_when">%1$s is now due %2$s.</string>
-    <string name="card_sooner_unnamed_when">They are now due %1$s.</string>
+    <string name="card_sooner_named_when">%1$s comes up %2$s.</string>
+    <string name="card_sooner_unnamed_when">They come up %1$s.</string>
     <string name="card_sooner_named">%1$s moved sooner.</string>
     <string name="card_sooner_unnamed">They moved sooner.</string>
 
@@ -101,11 +105,12 @@
     <!-- %1$s: a span, for example "in 3 weeks". -->
     <string name="card_due_in_span">in %1$s</string>
 
-    <!-- "Why now" line under the name: how long since the last call. Honest, never blame. -->
-    <string name="card_why_today">You talked today.</string>
-    <string name="card_why_yesterday">You talked yesterday.</string>
+    <!-- "Why now" line under the name: how long since you last spoke. Honest, never blame.
+         Home's words for the same gap (home_why_today, home_why_span), with a full stop. -->
+    <string name="card_why_today">You spoke today.</string>
+    <string name="card_why_yesterday">You spoke yesterday.</string>
     <!-- %1$s: a span, for example "3 weeks". -->
-    <string name="card_why_span">It\'s been %1$s.</string>
+    <string name="card_why_span">%1$s since you last spoke.</string>
     <!-- Joins the line above with the rhythm line below it. -->
     <string name="card_why_two_lines" translatable="false">%1$s\n%2$s</string>
 

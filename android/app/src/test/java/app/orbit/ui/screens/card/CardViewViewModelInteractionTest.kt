@@ -2,6 +2,8 @@ package app.orbit.ui.screens.card
 
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import app.orbit.R
+import app.orbit.data.entity.CallSource
 import app.orbit.data.feed.CardFeed
 import app.orbit.domain.CallLogResyncTrigger
 import app.orbit.domain.FakeCallEventRepository
@@ -22,10 +24,12 @@ import app.orbit.domain.usecase.SurfaceNextUseCase
 import app.orbit.domain.usecase.SurfaceQueueUseCase
 import app.orbit.domain.usecase.SurfaceSoonerUseCase
 import app.orbit.testutil.MainDispatcherRule
+import app.orbit.ui.util.UiText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -38,14 +42,21 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Interaction-loop tests for [CardViewViewModel] — the swipe / mark-called /
- * undo / call-prompt surface that [CardViewViewModelTest] (state contract)
- * does not cover.
+ * Interaction-loop tests for [CardViewViewModel]: the swipe / undo / dial /
+ * acknowledgement surface that [CardViewViewModelTest] (state contract) does
+ * not cover: Later and Sooner with their undo (CARD-02), the failure snackbar
+ * (rules.md Code 3), and "Called {name}" with what confirms and what cancels
+ * it (CARD-03).
  *
  * Same construction pattern as [CardViewViewModelTest]: real use cases over the
  * [app.orbit.domain.FakeRepositories] fakes, [TestClock] pinned at
  * `2026-01-01T12:00:00Z`, UTC zone, and [MainDispatcherRule]'s
  * `UnconfinedTestDispatcher` so `viewModelScope.launch` mutations run eagerly.
+ * `runTest` picks up that dispatcher's scheduler, so `advanceTimeBy` moves the
+ * VM's 15-second acknowledgement window.
+ *
+ * Plain JUnit, no Robolectric: copy is asserted as the [UiText] the VM meant
+ * to say (`UiText.res(R.string.card_called_named, "Sarah")`), not resolved.
  *
  * The fixture here returns the extra fake handles (`callEventRepo`, `undoStack`)
  * the interaction assertions read; the state-contract file only needs the
@@ -268,7 +279,8 @@ class CardViewViewModelInteractionTest {
                 setup.vm.onSwipeRight(contactId = 1L)
                 val event = awaitItem()
                 assertTrue(event is CardMessage.Undoable, "expected an undoable message, got $event")
-                // "Sarah is now due {when}." from strings_card.xml.
+                // "Sarah comes up {when}." from strings_card.xml (CARD-02; not
+                // "is now due", the deadline framing voice.md retired).
                 val text = event.text
                 assertTrue(
                     text is app.orbit.ui.util.UiText.Res &&
@@ -329,10 +341,11 @@ class CardViewViewModelInteractionTest {
         assertNull(setup.undoStack.peek())
     }
 
-    // Gate G1 (UX rubric): Undo on an older snackbar must never revert the
-    // newest action, which belongs to someone else. Only the newest token works.
+    // CARD-02, gate G1 (UX rubric): three quick swipes, then Undo on the first
+    // snackbar, changes nothing. Undo on an older snackbar must never revert the
+    // newest action, which belongs to someone else; only the newest token works.
     @Test
-    fun `onUndo with a stale token does not revert the newer action`() = runTest {
+    fun `CARD-02 - three quick Laters then Undo on the first snackbar changes nothing`() = runTest {
         val setup = fixture()
         setup.seedSarahReady()
         setup.vm.uiState.test(timeout = 2.seconds) {
@@ -342,14 +355,66 @@ class CardViewViewModelInteractionTest {
                 assertEquals(1L, (awaitItem() as CardMessage.Undoable).token)
                 setup.vm.onSwipeLeft(contactId = 1L)
                 assertEquals(2L, (awaitItem() as CardMessage.Undoable).token)
+                setup.vm.onSwipeLeft(contactId = 1L)
+                assertEquals(3L, (awaitItem() as CardMessage.Undoable).token)
                 cancelAndIgnoreRemainingEvents()
             }
             setup.vm.onUndo(token = 1L) // the first snackbar's Undo, tapped late
             cancelAndIgnoreRemainingEvents()
         }
         val row = setup.listRepo.observeMembershipsForContact(1L).first().single()
-        assertEquals(2, row.skipCount, "both Laters stand; the stale Undo replayed nothing")
+        assertEquals(3, row.skipCount, "all three Laters stand; the stale Undo replayed nothing")
         assertTrue(setup.undoStack.peek() != null, "the newest action stays undoable")
+    }
+
+    // ========================================================================
+    // Failure path (rules.md Code 3): a write that fails says so on the
+    // snackbar, names the person, and stages nothing to undo.
+    // ========================================================================
+
+    @Test
+    fun `a Later whose write fails emits Failed naming the person and stages no undo`() = runTest {
+        val setup = fixture()
+        setup.seedSarahReady()
+        setup.listRepo.failWrites = true
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            awaitItem() // Ready
+            setup.vm.messages.test(timeout = 2.seconds) {
+                setup.vm.onSwipeLeft(contactId = 1L)
+                assertEquals(
+                    CardMessage.Failed(UiText.res(R.string.card_later_failed_named, "Sarah")),
+                    awaitItem(),
+                )
+                cancelAndIgnoreRemainingEvents()
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+        val row = setup.listRepo.observeMembershipsForContact(1L).first().single()
+        assertEquals(0, row.skipCount, "the failed write changed nothing")
+        assertNull(setup.undoStack.peek(), "nothing to undo after a failure")
+    }
+
+    @Test
+    fun `a Sooner whose write fails emits Failed naming the person`() = runTest {
+        val setup = fixture()
+        setup.contactRepo.seed(listOf(contactFixture(id = 1L, displayName = "Sarah Connor")))
+        setup.listRepo.seed(listOf(listFixture(id = 1L, ruleTemplateId = 1L)))
+        setup.listRepo.seedMemberships(
+            listOf(membershipFixture(contactId = 1L, listId = 1L, nextDueAt = T0.plus(Duration.ofDays(10)))),
+        )
+        setup.listRepo.failWrites = true
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            awaitItem()
+            setup.vm.messages.test(timeout = 2.seconds) {
+                setup.vm.onSwipeRight(contactId = 1L)
+                assertEquals(
+                    CardMessage.Failed(UiText.res(R.string.card_sooner_failed_named, "Sarah")),
+                    awaitItem(),
+                )
+                cancelAndIgnoreRemainingEvents()
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     // ========================================================================
@@ -422,6 +487,133 @@ class CardViewViewModelInteractionTest {
     }
 
     // ========================================================================
+    // CARD-03: "Called {name}" once the call is real. Confirmation is evidence
+    // of the call: a connected call at or after the dial for the person, or the
+    // deck moving past them. Nothing after 15 seconds without either; a swipe
+    // cancels the wait.
+    //
+    // The first test is the case the old motion-only check missed: on a
+    // one-member list the called person stays at the head (re-surfaced as
+    // "Coming up"), so a real, logged call was never acknowledged.
+    // ========================================================================
+
+    private val calledSarah = CardMessage.Called(UiText.res(R.string.card_called_named, "Sarah"), contactId = 1L)
+
+    @Test
+    fun `CARD-03 - a call that lands while the person stays at the head is acknowledged`() = runTest {
+        val setup = fixture()
+        setup.seedSarahReady()
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            awaitItem() // Ready(Sarah)
+            setup.vm.messages.test(timeout = 2.seconds) {
+                setup.vm.onCall(contactId = 1L)
+                setup.vm.onReturnedFromDial()
+                expectNoEvents() // nothing until the call log has the call
+                // The call log sync lands the call; Sarah is still the head.
+                setup.callEventRepo.seed(listOf(callEventFixture(id = 1L, contactId = 1L, occurredAt = T0)))
+                assertEquals(calledSarah, awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+            val head = expectMostRecentItem()
+            assertTrue(head is CardViewUiState.Ready && head.contactId == 1L, "Sarah stays at the head, got $head")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `CARD-03 - a dial that only logs an attempt is not acknowledged`() = runTest {
+        val setup = fixture()
+        setup.seedSarahReady()
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            awaitItem()
+            setup.vm.messages.test(timeout = 2.seconds) {
+                setup.vm.onCall(contactId = 1L)
+                setup.vm.onReturnedFromDial()
+                // Voicemail: an ATTEMPT is a reach-out that did not connect.
+                setup.callEventRepo.seed(
+                    listOf(callEventFixture(id = 1L, contactId = 1L, occurredAt = T0, durationSeconds = 0, source = CallSource.ATTEMPT)),
+                )
+                expectNoEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `CARD-03 - the deck moving past the person is acknowledged`() = runTest {
+        val setup = fixture()
+        // Two cold-start members; Sarah (id 1) is the head by the id tiebreak.
+        setup.contactRepo.seed(
+            listOf(contactFixture(id = 1L, displayName = "Sarah Connor"), contactFixture(id = 2L, displayName = "Kai Reyes")),
+        )
+        setup.listRepo.seed(listOf(listFixture(id = 1L, ruleTemplateId = 1L)))
+        setup.listRepo.seedMemberships(
+            listOf(
+                membershipFixture(contactId = 1L, listId = 1L, nextDueAt = null),
+                membershipFixture(contactId = 2L, listId = 1L, nextDueAt = null),
+            ),
+        )
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            val head = awaitItem()
+            assertTrue(head is CardViewUiState.Ready && head.contactId == 1L, "Sarah first, got $head")
+            setup.vm.messages.test(timeout = 2.seconds) {
+                setup.vm.onCall(contactId = 1L)
+                setup.vm.onReturnedFromDial()
+                // The call log sync re-schedules Sarah (markCalledAtomic writes
+                // nextDueAt), so Kai becomes the head.
+                setup.listRepo.updateMemberships { rows ->
+                    rows.map { if (it.contactId == 1L) it.copy(nextDueAt = T0.plus(Duration.ofDays(14))) else it }
+                }
+                assertEquals(calledSarah, awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `CARD-03 - nothing is said when the call is not confirmed within 15 seconds`() = runTest {
+        val setup = fixture()
+        setup.seedSarahReady()
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            awaitItem()
+            setup.vm.messages.test(timeout = 2.seconds) {
+                setup.vm.onCall(contactId = 1L)
+                setup.vm.onReturnedFromDial()
+                advanceTimeBy(16_000L)
+                // A call logged after the window is not credited either: the
+                // wait ended and nothing is pending.
+                setup.callEventRepo.seed(listOf(callEventFixture(id = 1L, contactId = 1L, occurredAt = T0)))
+                expectNoEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `CARD-03 - a swipe after the dial cancels the acknowledgement`() = runTest {
+        val setup = fixture()
+        setup.seedSarahReady()
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            awaitItem()
+            setup.vm.messages.test(timeout = 2.seconds) {
+                setup.vm.onCall(contactId = 1L)
+                setup.vm.onReturnedFromDial()
+                setup.vm.onSwipeLeft(contactId = 1L)
+                assertTrue(awaitItem() is CardMessage.Undoable, "the Later's own snackbar")
+                // A call that lands now would have confirmed, had the wait
+                // still been running.
+                setup.callEventRepo.seed(listOf(callEventFixture(id = 1L, contactId = 1L, occurredAt = T0)))
+                expectNoEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ========================================================================
     // Empty / nothing-due states (post-load) — exercises the EmptyNothingEligible
     // upNext hint and the EmptyNoMembers branch with a parked collector.
     // ========================================================================
@@ -449,8 +641,8 @@ class CardViewViewModelInteractionTest {
     @Test
     fun `whyNowLine reflects last call recency on a Ready card`() = runTest {
         // A contact called 3 days ago, due now (nextDueAt in the past) → Ready
-        // with the "It's been 3 days." framing line derived from the latest
-        // call event.
+        // with the "3 days since you last spoke." framing line derived from
+        // the latest connected call event.
         val setup = fixture()
         setup.contactRepo.seed(listOf(contactFixture(id = 1L, displayName = "Sarah Connor")))
         setup.listRepo.seed(listOf(listFixture(id = 1L, ruleTemplateId = 1L)))
@@ -463,8 +655,8 @@ class CardViewViewModelInteractionTest {
         setup.vm.uiState.test(timeout = 2.seconds) {
             val state = awaitItem()
             assertTrue(state is CardViewUiState.Ready, "expected Ready, got $state")
-            // "It's been {3 days}." from strings_card.xml; the span is formatSpan's
-            // UiText ("3 days", strings_time.xml), nested as the argument.
+            // "{3 days} since you last spoke." from strings_card.xml; the span is
+            // formatSpan's UiText ("3 days", strings_time.xml), nested as the argument.
             assertEquals(
                 app.orbit.ui.util.UiText.res(
                     app.orbit.R.string.card_why_span,
