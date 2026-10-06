@@ -15,30 +15,25 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.tooling.preview.Preview
 import app.orbit.R
 import app.orbit.data.entity.RuleKind
 import app.orbit.domain.rule.RuleParams
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
-import app.orbit.ui.screens.lists.RuleTemplatePicker
+import app.orbit.ui.components.OrbitSlider
 import app.orbit.ui.components.SectionLabel
+import app.orbit.ui.screens.lists.RuleTemplatePicker
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.asString
@@ -72,11 +67,14 @@ import app.orbit.ui.util.asString
  * for those kinds.
  *
  * **Reuse, not duplication.** The kind picker is the same composable List
- * Configuration uses. The interval slider mirrors the
- * `IntervalSliderLocal` pattern in ListConfigBody — same
+ * Configuration uses. The interval slider is the shared [OrbitSlider]
+ * (DESIGN.md: one slider, ink track, a value TalkBack reads in words) and
+ * mirrors the `IntervalSliderLocal` pattern in ListConfigBody — same
  * `onValueChangeFinished` save-on-commit semantics — but operates on
  * `RuleParams` rather than the list-level state because the per-contact
- * override path writes `Contact.ruleOverrideJson`.
+ * override path writes `Contact.ruleOverrideJson`. Until 2026-10-06 this
+ * was a stock Material slider styled by hand, so the same control looked
+ * different here and in List settings.
  *
  * **Corrupted JSON recovery.** When the VM cannot decode `ruleOverrideJson`
  * (`currentParams == null`), the screen passes a fresh default RuleParams
@@ -99,7 +97,7 @@ fun RuleOverrideSection(
     onOverride: () -> Unit,
     onParamsChange: (RuleParams) -> Unit,
     onResetDefault: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
         // Visibility gate: listsOn.size >= 2 — contacts on a single list
@@ -108,7 +106,7 @@ fun RuleOverrideSection(
         visible = listsOnSize >= 2,
         enter = fadeIn() + expandVertically(),
         exit = fadeOut() + shrinkVertically(),
-        modifier = modifier,
+        modifier = modifier
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             SectionLabel(text = stringResource(R.string.contact_schedule_title))
@@ -125,7 +123,7 @@ fun RuleOverrideSection(
                     } else {
                         stringResource(R.string.contact_schedule_follows_hidden_list, rhythm)
                     },
-                    style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
+                    style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted)
                 )
                 Spacer(Modifier.height(OrbitTheme.spacing.x3))
                 // Secondary, in plain words: the hero Call button is this
@@ -134,7 +132,7 @@ fun RuleOverrideSection(
                 OrbitButton(
                     text = stringResource(R.string.contact_schedule_set),
                     onClick = onOverride,
-                    variant = OrbitButtonVariant.Secondary,
+                    variant = OrbitButtonVariant.Secondary
                 )
             } else {
                 OverrideEditor(params = currentParams, onChange = onParamsChange)
@@ -142,7 +140,7 @@ fun RuleOverrideSection(
                 OrbitButton(
                     text = stringResource(R.string.contact_schedule_reset),
                     onClick = onResetDefault,
-                    variant = OrbitButtonVariant.Ghost,
+                    variant = OrbitButtonVariant.Ghost
                 )
             }
         }
@@ -167,13 +165,13 @@ private fun OverrideEditor(params: RuleParams, onChange: (RuleParams) -> Unit) {
         RuleTemplatePicker(
             currentKind = params.toRuleKind(),
             templates = emptyList(),
-            onSelect = { newKind -> onChange(defaultParamsFor(newKind)) },
+            onSelect = { newKind -> onChange(defaultParamsFor(newKind)) }
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x3))
         when (params) {
             is RuleParams.KeepInTouch -> IntervalDaysSlider(
                 currentHours = params.cooldownMinHours,
-                onCommit = { days -> onChange(commitOverrideInterval(params, days)) },
+                onCommit = { days -> onChange(commitOverrideInterval(params, days)) }
             )
             is RuleParams.LateNight, is RuleParams.Energize -> Text(
                 text = rhythmNoteFor(params.toRuleKind())?.let { stringResource(it) }.orEmpty(),
@@ -182,8 +180,8 @@ private fun OverrideEditor(params: RuleParams, onChange: (RuleParams) -> Unit) {
                     .fillMaxWidth()
                     .padding(
                         horizontal = OrbitTheme.spacing.x4,
-                        vertical = OrbitTheme.spacing.x3,
-                    ),
+                        vertical = OrbitTheme.spacing.x3
+                    )
             )
         }
     }
@@ -202,7 +200,7 @@ private fun OverrideEditor(params: RuleParams, onChange: (RuleParams) -> Unit) {
  */
 internal fun commitOverrideInterval(
     params: RuleParams.KeepInTouch,
-    days: Int,
+    days: Int
 ): RuleParams.KeepInTouch = params.withIntervalHours(days.coerceAtLeast(1) * 24)
 
 /**
@@ -211,70 +209,57 @@ internal fun commitOverrideInterval(
  * VM only writes `Contact.ruleOverrideJson` once per drag, not on every frame.
  */
 @Composable
-private fun IntervalDaysSlider(
-    currentHours: Int,
-    onCommit: (days: Int) -> Unit,
-) {
+private fun IntervalDaysSlider(currentHours: Int, onCommit: (days: Int) -> Unit) {
     val initialDays = (currentHours / 24f).coerceAtLeast(1f)
     var days by remember(currentHours) { mutableFloatStateOf(initialDays) }
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4)
     ) {
         val rounded = days.toInt().coerceAtLeast(1)
         val everyLabel = pluralStringResource(R.plurals.lists_interval_every_days, rounded, rounded)
         val aimLabel = stringResource(R.string.lists_interval_aim)
         Row(
             verticalAlignment = Alignment.Bottom,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text(
                 text = aimLabel,
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
             )
             // Ink, not accentPress: the Call button is the screen's accent.
             Text(
                 text = pluralStringResource(R.plurals.lists_interval_days, rounded, rounded),
-                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
+                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg)
             )
         }
-        Slider(
+        // The shared slider owns the look (ink, no accent) and the semantics:
+        // TalkBack reads "Every 14 days", not "10 percent" (rubric D8).
+        OrbitSlider(
             value = days,
             onValueChange = { days = it },
-            onValueChangeFinished = { onCommit(days.toInt().coerceAtLeast(1)) },
             valueRange = 1f..60f,
+            valueDescription = everyLabel,
+            label = aimLabel,
             // One step per day, so the thumb lands on whole days and TalkBack's
             // adjust gesture moves a day at a time.
             steps = 58,
-            colors = SliderDefaults.colors(
-                thumbColor = OrbitTheme.colors.fg,
-                activeTrackColor = OrbitTheme.colors.fgSoft,
-                inactiveTrackColor = OrbitTheme.colors.line,
-                activeTickColor = Color.Transparent,
-                inactiveTickColor = Color.Transparent,
-            ),
-            modifier = Modifier
-                .padding(top = OrbitTheme.spacing.x1)
-                // TalkBack read "10 percent"; it now says what the value means
-                // (rubric D8: sliders announce meaningful values).
-                .semantics {
-                    contentDescription = aimLabel
-                    stateDescription = everyLabel
-                },
+            onValueChangeFinished = { onCommit(days.toInt().coerceAtLeast(1)) },
+            modifier = Modifier.padding(top = OrbitTheme.spacing.x1)
         )
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = OrbitTheme.spacing.x1),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
                 text = pluralStringResource(R.plurals.lists_interval_days, 1, 1),
-                style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
+                style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle)
             )
             Text(
                 text = pluralStringResource(R.plurals.lists_interval_days, 60, 60),
-                style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
+                style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle)
             )
         }
     }
@@ -312,7 +297,9 @@ private fun defaultParamsFor(kind: RuleKind): RuleParams = when (kind) {
 @Composable
 private fun PreviewNoOverrideLight() {
     OrbitTheme(darkTheme = false) {
-        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x4)) {
+        Box(
+            modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x4)
+        ) {
             RuleOverrideSection(
                 listsOnSize = 2,
                 currentTemplateName = UiText.res(R.string.contact_rhythm_name_keep_in_touch),
@@ -321,7 +308,7 @@ private fun PreviewNoOverrideLight() {
                 currentParams = RuleParams.KeepInTouch(),
                 onOverride = {},
                 onParamsChange = {},
-                onResetDefault = {},
+                onResetDefault = {}
             )
         }
     }
@@ -331,7 +318,9 @@ private fun PreviewNoOverrideLight() {
 @Composable
 private fun PreviewWithOverrideDark() {
     OrbitTheme(darkTheme = true) {
-        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x4)) {
+        Box(
+            modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x4)
+        ) {
             RuleOverrideSection(
                 listsOnSize = 2,
                 currentTemplateName = UiText.res(R.string.contact_rhythm_name_keep_in_touch),
@@ -342,7 +331,7 @@ private fun PreviewWithOverrideDark() {
                 currentParams = RuleParams.KeepInTouch().withIntervalHours(14 * 24),
                 onOverride = {},
                 onParamsChange = {},
-                onResetDefault = {},
+                onResetDefault = {}
             )
         }
     }
@@ -352,7 +341,9 @@ private fun PreviewWithOverrideDark() {
 @Composable
 private fun PreviewGatedOff() {
     OrbitTheme(darkTheme = false) {
-        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x4)) {
+        Box(
+            modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x4)
+        ) {
             RuleOverrideSection(
                 listsOnSize = 1,
                 currentTemplateName = UiText.res(R.string.contact_rhythm_name_keep_in_touch),
@@ -361,7 +352,7 @@ private fun PreviewGatedOff() {
                 currentParams = RuleParams.KeepInTouch(),
                 onOverride = {},
                 onParamsChange = {},
-                onResetDefault = {},
+                onResetDefault = {}
             )
         }
     }

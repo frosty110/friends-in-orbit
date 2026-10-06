@@ -1,9 +1,12 @@
 package app.orbit.ui.screens.contact
 
 import androidx.lifecycle.SavedStateHandle
+import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import app.orbit.R
+import app.orbit.data.NoteRow
 import app.orbit.data.dao.RecordingListMembershipDao
+import app.orbit.data.dao.TestListDaoStub
 import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.CallEventEntity
@@ -17,6 +20,7 @@ import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
 import app.orbit.domain.FakeNoteRepository
 import app.orbit.domain.JsonProvider
+import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.contactFixture
 import app.orbit.domain.model.PauseDuration
@@ -30,17 +34,25 @@ import app.orbit.domain.usecase.EditNoteUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
+import app.orbit.domain.usecase.UnignoreContactUseCase
 import app.orbit.testutil.MainDispatcherRule
 import app.orbit.ui.util.UiText
+import app.orbit.ui.util.formatDuration
 import java.io.IOException
+import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -66,10 +78,15 @@ class ContactDetailViewModelTest {
 
     private val T0: Instant = Instant.parse("2026-01-01T12:00:00Z")
 
-    /** [wrapContactRepo] lets a test make the VM's contact stream fail. */
+    /**
+     * [wrapContactRepo] lets a test make the VM's contact stream fail;
+     * [savedArgs] adds route args beside `contactId` (`focusNote`,
+     * `scrollToCallEventId`).
+     */
     private fun fixture(
         contactIdArg: String? = "c-5",
-        wrapContactRepo: (FakeContactRepository) -> ContactRepository = { it },
+        savedArgs: Map<String, String?> = emptyMap(),
+        wrapContactRepo: (FakeContactRepository) -> ContactRepository = { it }
     ): Setup {
         val contactRepo = FakeContactRepository()
         val noteRepo = FakeNoteRepository()
@@ -102,6 +119,16 @@ class ContactDetailViewModelTest {
             listRepo = listRepo,
             clock = clock
         )
+        // The inverse, for CONTACT-10's Unignore: the same real use case the
+        // Ignored screen uses, over an empty list DAO (nothing to restore).
+        val unignoreContactUseCase = UnignoreContactUseCase(
+            txRunner = passThruTx,
+            contactRepo = contactRepo,
+            listDao = TestListDaoStub(),
+            listMembershipDao = membershipDao,
+            listRepo = listRepo,
+            clock = clock
+        )
         // ArchiveContactUseCase wired into the VM. Real use case over the same
         // FakeContactRepository so the captured setArchivedCalls list shows the
         // archive write went through.
@@ -129,7 +156,10 @@ class ContactDetailViewModelTest {
             json = JsonProvider.json
         )
         val undoStack = UndoStack()
-        val savedState = SavedStateHandle(mapOf("contactId" to contactIdArg))
+        val savedState = SavedStateHandle(mapOf("contactId" to contactIdArg) + savedArgs)
+        // WIDGET-06: counts the refreshes the VM asks for beside its direct
+        // pausedUntil writes (the use case's own trigger is not under test).
+        var widgetRefreshes = 0
         val vm = ContactDetailViewModel(
             contactRepo = wrapContactRepo(contactRepo),
             listRepo = listRepo,
@@ -140,6 +170,7 @@ class ContactDetailViewModelTest {
             editNoteUseCase = editNoteUseCase,
             deleteNoteUseCase = deleteNoteUseCase,
             ignoreContactUseCase = ignoreContactUseCase,
+            unignoreContactUseCase = unignoreContactUseCase,
             archiveContactUseCase = archiveContactUseCase,
             ruleTemplateRepo = ruleTemplateRepo,
             addRetroactiveNoteUseCase = addRetroactiveNoteUseCase,
@@ -147,9 +178,10 @@ class ContactDetailViewModelTest {
             undoStack = undoStack,
             clock = clock,
             zoneId = java.time.ZoneOffset.UTC,
-            savedStateHandle = savedState
+            savedStateHandle = savedState,
+            widgetRefreshTrigger = WidgetRefreshTrigger { widgetRefreshes++ }
         )
-        return Setup(vm, contactRepo, noteRepo, listRepo, callEventRepo)
+        return Setup(vm, contactRepo, noteRepo, listRepo, callEventRepo) { widgetRefreshes }
     }
 
     private data class Setup(
@@ -157,8 +189,33 @@ class ContactDetailViewModelTest {
         val contactRepo: FakeContactRepository,
         val noteRepo: FakeNoteRepository,
         val listRepo: FakeListRepository,
-        val callEventRepo: app.orbit.domain.FakeCallEventRepository
+        val callEventRepo: app.orbit.domain.FakeCallEventRepository,
+        val widgetRefreshes: () -> Int
     )
+
+    private fun callEvent(
+        id: Long,
+        occurredAt: Instant,
+        durationSeconds: Int = 600,
+        source: CallSource = CallSource.CALL_LOG
+    ) = CallEventEntity(
+        id = id,
+        contactId = 5L,
+        occurredAt = occurredAt,
+        direction = CallDirection.OUTGOING,
+        durationSeconds = durationSeconds,
+        source = source
+    )
+
+    /** Skips Loading and intermediate emissions until a Ready that [accept]s. */
+    private suspend fun ReceiveTurbine<ContactDetailUiState>.awaitReady(
+        accept: (ContactDetailUiState.Ready) -> Boolean = { true }
+    ): ContactDetailUiState.Ready {
+        while (true) {
+            val next = awaitItem()
+            if (next is ContactDetailUiState.Ready && accept(next)) return next
+        }
+    }
 
     // ============================================================================
     // Test 1 — unparseable contactId → NotFound
@@ -595,4 +652,519 @@ class ContactDetailViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    // ============================================================================
+    // 2026-10-06: the README behaviours that had no VM test (contact-detail-13):
+    // a regression in any of them passed CI.
+    // ============================================================================
+
+    @Test
+    fun `onIgnore ignores with an Undo snackbar, and Undo restores`() = runTest {
+        val setup = fixture()
+        setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+
+        setup.vm.snackbarEvents.test(timeout = 2.seconds) {
+            setup.vm.onIgnore("Sarah")
+            val event = awaitItem()
+            assertEquals(UiText.res(R.string.components_snackbar_ignored, "Sarah"), event.message)
+            assertEquals(UiText.res(R.string.components_action_undo), event.actionLabel)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(true, setup.contactRepo.getById(5L)?.isIgnored)
+
+        setup.vm.onUndo()
+        advanceUntilIdle()
+        assertEquals(false, setup.contactRepo.getById(5L)?.isIgnored)
+    }
+
+    @Test
+    fun `onUnignore unignores with an Undo snackbar, and Undo re-ignores`() = runTest {
+        // CONTACT-10: the inverse offered on the page itself; before, the way
+        // back from an ignored person's page was Settings > Ignored.
+        val setup = fixture()
+        setup.contactRepo.seed(
+            listOf(contactFixture(id = 5L, displayName = "Sarah", isIgnored = true))
+        )
+
+        setup.vm.snackbarEvents.test(timeout = 2.seconds) {
+            setup.vm.onUnignore("Sarah")
+            val event = awaitItem()
+            assertEquals(UiText.res(R.string.components_snackbar_unignored, "Sarah"), event.message)
+            assertEquals(UiText.res(R.string.components_action_undo), event.actionLabel)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(false, setup.contactRepo.getById(5L)?.isIgnored)
+
+        setup.vm.onUndo()
+        advanceUntilIdle()
+        assertEquals(true, setup.contactRepo.getById(5L)?.isIgnored)
+    }
+
+    @Test
+    fun `onArchive archives with an Undo snackbar, and Undo restores`() = runTest {
+        val setup = fixture()
+        setup.contactRepo.seed(
+            listOf(contactFixture(id = 5L, displayName = "Sarah", isOrphaned = true))
+        )
+
+        setup.vm.snackbarEvents.test(timeout = 2.seconds) {
+            setup.vm.onArchive("Sarah")
+            val event = awaitItem()
+            assertEquals(UiText.res(R.string.contact_snackbar_archived, "Sarah"), event.message)
+            assertEquals(UiText.res(R.string.components_action_undo), event.actionLabel)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(true, setup.contactRepo.getById(5L)?.isArchived)
+
+        setup.vm.onUndo()
+        advanceUntilIdle()
+        assertEquals(false, setup.contactRepo.getById(5L)?.isArchived)
+    }
+
+    @Test
+    fun `onLogConnection today records a MANUAL connection now and says Logged`() = runTest {
+        val setup = fixture()
+        setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+
+        setup.vm.snackbarEvents.test(timeout = 2.seconds) {
+            setup.vm.onLogConnection(LogConnectionWhen.Today, note = "", isAttempt = false)
+            assertEquals(UiText.res(R.string.contact_snackbar_logged), awaitItem().message)
+            cancelAndIgnoreRemainingEvents()
+        }
+        val written = setup.callEventRepo.observeForContact(5L, limit = 50).first().single()
+        assertEquals(CallSource.MANUAL, written.source)
+        assertEquals(0, written.durationSeconds)
+        assertEquals(T0, written.occurredAt)
+        assertTrue(setup.noteRepo.insertCalls.isEmpty(), "a blank note is not written")
+    }
+
+    @Test
+    fun `onLogConnection as an attempt records ATTEMPT yesterday, back-dates the note and says Attempt logged`() =
+        runTest {
+            val setup = fixture()
+            setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+
+            setup.vm.snackbarEvents.test(timeout = 2.seconds) {
+                setup.vm.onLogConnection(
+                    LogConnectionWhen.Yesterday,
+                    note = "  voicemail  ",
+                    isAttempt = true
+                )
+                assertEquals(
+                    UiText.res(R.string.contact_snackbar_attempt_logged),
+                    awaitItem().message
+                )
+                cancelAndIgnoreRemainingEvents()
+            }
+            val yesterday = T0.minus(Duration.ofDays(1))
+            val written = setup.callEventRepo.observeForContact(5L, limit = 50).first().single()
+            assertEquals(CallSource.ATTEMPT, written.source)
+            assertEquals(yesterday, written.occurredAt)
+            val note = setup.noteRepo.insertCalls.single()
+            assertEquals("voicemail", note.body)
+            assertEquals(yesterday, note.createdAt, "the note is dated to the attempt, not to now")
+        }
+
+    @Test
+    fun `onLogConnection on a picked date lands at local noon of that day, and never in the future`() =
+        runTest {
+            val setup = fixture()
+            setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+
+            // The date picker hands back UTC midnight of the chosen day.
+            val day = LocalDate.of(2025, 12, 20)
+            setup.vm.onLogConnection(
+                LogConnectionWhen.OnDate(
+                    day.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+                ),
+                note = "",
+                isAttempt = false
+            )
+            // A day after today is clamped to now: no event may sit in the future.
+            val future = T0.plus(Duration.ofDays(10)).atZone(ZoneOffset.UTC).toLocalDate()
+            setup.vm.onLogConnection(
+                LogConnectionWhen.OnDate(
+                    future.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+                ),
+                note = "",
+                isAttempt = false
+            )
+            advanceUntilIdle()
+
+            val written = setup.callEventRepo.observeForContact(5L, limit = 50).first()
+            assertEquals(2, written.size)
+            val localNoon = day.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant()
+            assertTrue(
+                written.any { it.occurredAt == localNoon },
+                "the picked day lands at local noon"
+            )
+            assertTrue(written.any { it.occurredAt == T0 }, "a future day is clamped to now")
+            assertTrue(written.none { it.occurredAt.isAfter(T0) })
+        }
+
+    @Test
+    fun `onDeleteNote deletes with Undo, and Undo re-inserts the same note`() = runTest {
+        val setup = fixture()
+        setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+        setup.noteRepo.seed(
+            listOf(NoteEntity(id = 1L, contactId = 5L, createdAt = T0, body = "Met at the park"))
+        )
+        val row =
+            NoteRow(
+                id = 1L,
+                contactId = 5L,
+                body = "Met at the park",
+                createdAtMs = T0.toEpochMilli()
+            )
+
+        setup.vm.snackbarEvents.test(timeout = 2.seconds) {
+            setup.vm.onDeleteNote(row)
+            val event = awaitItem()
+            assertEquals(UiText.res(R.string.contact_snackbar_note_deleted), event.message)
+            assertEquals(UiText.res(R.string.components_action_undo), event.actionLabel)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(1L, setup.noteRepo.deleteCalls.single().id)
+
+        setup.vm.onUndo()
+        advanceUntilIdle()
+        val restored = setup.noteRepo.insertCalls.single()
+        assertEquals(1L, restored.id)
+        assertEquals(T0, restored.createdAt, "the note comes back in its place, not as a new one")
+    }
+
+    @Test
+    fun `onEditNote writes the trimmed body`() = runTest {
+        val setup = fixture()
+        setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+        setup.noteRepo.seed(
+            listOf(NoteEntity(id = 1L, contactId = 5L, createdAt = T0, body = "Met at the park"))
+        )
+        val row =
+            NoteRow(
+                id = 1L,
+                contactId = 5L,
+                body = "Met at the park",
+                createdAtMs = T0.toEpochMilli()
+            )
+
+        setup.vm.onEditNote(row, "  Met at the lake  ")
+        advanceUntilIdle()
+
+        val updated = setup.noteRepo.updateCalls.single()
+        assertEquals(1L, updated.id)
+        assertEquals("Met at the lake", updated.body)
+        assertEquals(T0, updated.createdAt)
+    }
+
+    @Test
+    fun `longest gap needs two events, then spans the widest gap between neighbours`() = runTest {
+        val one = fixture()
+        one.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+        one.callEventRepo.seed(listOf(callEvent(1L, T0.minus(Duration.ofDays(3)))))
+        one.vm.uiState.test(timeout = 2.seconds) {
+            assertNull(awaitReady().longestGapLabel)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val many = fixture()
+        many.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+        many.callEventRepo.seed(
+            listOf(
+                callEvent(1L, T0.minus(Duration.ofDays(30))),
+                callEvent(2L, T0.minus(Duration.ofDays(9))), // 21 days after the first
+                callEvent(3L, T0.minus(Duration.ofDays(6))) // 3 days after the second
+            )
+        )
+        many.vm.uiState.test(timeout = 2.seconds) {
+            // "21 days" (strings_time.xml), the widest gap, not the total span.
+            assertEquals(
+                UiText.plural(R.plurals.time_span_days, 21, 21),
+                awaitReady().longestGapLabel
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `one measured call and two logged connections count three calls but one measured`() =
+        runTest {
+            // CONTACT-02: the screen gates "Average length" on measuredCalls, so
+            // this person reads "Not enough calls yet" instead of the one call's length.
+            val setup = fixture()
+            setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+            setup.callEventRepo.seed(
+                listOf(
+                    callEvent(1L, T0.minus(Duration.ofDays(3)), durationSeconds = 600),
+                    callEvent(
+                        2L,
+                        T0.minus(Duration.ofDays(2)),
+                        durationSeconds = 0,
+                        source = CallSource.MANUAL
+                    ),
+                    callEvent(
+                        3L,
+                        T0.minus(Duration.ofDays(1)),
+                        durationSeconds = 0,
+                        source = CallSource.MANUAL
+                    )
+                )
+            )
+            setup.vm.uiState.test(timeout = 2.seconds) {
+                val contact = awaitReady { it.contact.totalCalls == 3 }.contact
+                assertEquals(3, contact.totalCalls)
+                assertEquals(1, contact.measuredCalls)
+                assertEquals(formatDuration(600), contact.avgLengthLabel)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `focusNote=1 reaches a screen that starts collecting after the VM exists, once`() =
+        runTest {
+            // NOTE-02. The screen's LaunchedEffect collects after hiltViewModel()
+            // has built the VM, so the event must survive until then.
+            val setup = fixture(savedArgs = mapOf("focusNote" to "1"))
+            setup.vm.focusNoteEvent.test(timeout = 2.seconds) {
+                awaitItem()
+                awaitComplete()
+            }
+            // Collecting again (a rotation re-runs the LaunchedEffect on the same
+            // VM) must not re-focus the field.
+            setup.vm.focusNoteEvent.test(timeout = 2.seconds) { awaitComplete() }
+            // And without the arg there is nothing to deliver.
+            val plain = fixture()
+            plain.vm.focusNoteEvent.test(timeout = 2.seconds) { awaitComplete() }
+        }
+
+    @Test
+    fun `scrollToCallEventId reaches Ready with the row's id and the parallel call ids`() =
+        runTest {
+            val setup = fixture(savedArgs = mapOf("scrollToCallEventId" to "42"))
+            setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+            setup.callEventRepo.seed(
+                listOf(
+                    callEvent(43L, T0.minus(Duration.ofDays(2))),
+                    callEvent(42L, T0.minus(Duration.ofDays(1)))
+                )
+            )
+            setup.vm.uiState.test(timeout = 2.seconds) {
+                val ready = awaitReady { it.recentCalls.size == 2 }
+                assertEquals(42L, ready.scrollToCallEventId)
+                assertEquals(42L, ready.retroNoteAffordanceFor)
+                // Newest first, the same order as recentCalls.
+                assertEquals(listOf(42L, 43L), ready.recentCallEventIds)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `an orphaned person emits Orphaned with their notes and call ids`() = runTest {
+        // CONTACT-06: notes are Orbit's data and outlive the phone contact.
+        val setup = fixture()
+        setup.contactRepo.seed(
+            listOf(contactFixture(id = 5L, displayName = "Sarah", isOrphaned = true))
+        )
+        setup.noteRepo.seed(
+            listOf(NoteEntity(id = 1L, contactId = 5L, createdAt = T0, body = "Met at the park"))
+        )
+        setup.callEventRepo.seed(listOf(callEvent(42L, T0.minus(Duration.ofDays(1)))))
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state !is ContactDetailUiState.Orphaned || state.notes.isEmpty() || state.recentCalls.isEmpty()) {
+                state = awaitItem()
+            }
+            assertEquals("Met at the park", state.notes.single().body)
+            assertEquals(listOf(42L), state.recentCallEventIds)
+            assertEquals(1, state.recentCalls.size)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a lapsed timed pause shows the unpause banner, an indefinite pause never does`() =
+        runTest {
+            // CONTACT-05.
+            val lapsed = fixture()
+            lapsed.contactRepo.seed(
+                listOf(
+                    contactFixture(
+                        id = 5L,
+                        displayName = "Sarah",
+                        pausedUntil = T0.minusSeconds(60)
+                    )
+                )
+            )
+            lapsed.vm.uiState.test(timeout = 2.seconds) {
+                val ready = awaitReady()
+                assertTrue(ready.unpausePromptVisible)
+                assertNull(ready.pausedLabel, "a lapsed pause is no longer in force")
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            val indefinite = fixture()
+            indefinite.contactRepo.seed(
+                listOf(
+                    contactFixture(
+                        id = 5L,
+                        displayName = "Sarah",
+                        pausedUntil = PauseContactUseCase.INDEFINITE_PAUSE_SENTINEL
+                    )
+                )
+            )
+            indefinite.vm.uiState.test(timeout = 2.seconds) {
+                assertEquals(false, awaitReady().unpausePromptVisible)
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            val inForce = fixture()
+            inForce.contactRepo.seed(
+                listOf(
+                    contactFixture(
+                        id = 5L,
+                        displayName = "Sarah",
+                        pausedUntil = T0.plus(Duration.ofDays(10))
+                    )
+                )
+            )
+            inForce.vm.uiState.test(timeout = 2.seconds) {
+                assertEquals(false, awaitReady().unpausePromptVisible)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `onRelink emits the Re-link nav event for this person`() = runTest {
+        val setup = fixture()
+        setup.contactRepo.seed(
+            listOf(contactFixture(id = 5L, displayName = "Sarah", isOrphaned = true))
+        )
+        setup.vm.navEvents.test(timeout = 2.seconds) {
+            setup.vm.onRelink()
+            assertEquals(ContactDetailViewModel.NavEvent.RelinkPicker(5L), awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a failed write says so instead of failing silently`() = runTest {
+        // rules.md Code 3: runMutation turns the exception into a snackbar.
+        val setup = fixture(
+            wrapContactRepo = { fake ->
+                object : ContactRepository by fake {
+                    override suspend fun setPausedUntil(id: Long, until: Instant?) {
+                        throw IOException("simulated write failure")
+                    }
+                }
+            }
+        )
+        setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+        setup.vm.snackbarEvents.test(timeout = 2.seconds) {
+            setup.vm.onUnpauseContact()
+            assertEquals(UiText.res(R.string.contact_snackbar_unpause_failed), awaitItem().message)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a new call event re-emits Ready with the stats updated`() = runTest {
+        // README acceptance: stats update live when call detection records a call.
+        val setup = fixture()
+        setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            val before = awaitReady()
+            assertEquals(0, before.contact.totalCalls)
+            assertNull(before.contact.lastCalledLabel)
+
+            setup.callEventRepo.seed(listOf(callEvent(42L, T0.minus(Duration.ofDays(1)))))
+
+            val after = awaitReady { it.contact.totalCalls == 1 }
+            assertEquals(1, after.recentCalls.size)
+            assertEquals(listOf(42L), after.recentCallEventIds)
+            assertNotNull(after.contact.lastCalledLabel)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `ignored, archived and the phone contact id reach Ready`() = runTest {
+        // CONTACT-10 and "Open in Contacts" read these.
+        val setup = fixture()
+        setup.contactRepo.seed(
+            listOf(
+                contactFixture(
+                    id = 5L,
+                    displayName = "Sarah",
+                    isIgnored = true,
+                    isArchived = true,
+                    phoneContactId = 77L
+                )
+            )
+        )
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            val ready = awaitReady()
+            assertTrue(ready.isIgnored)
+            assertTrue(ready.isArchived)
+            assertEquals(77L, ready.phoneContactId)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val callLogOnly = fixture()
+        callLogOnly.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+        callLogOnly.vm.uiState.test(timeout = 2.seconds) {
+            val ready = awaitReady()
+            assertEquals(false, ready.isIgnored)
+            assertEquals(false, ready.isArchived)
+            assertNull(ready.phoneContactId)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the call log permission reaches Ready and clears again`() = runTest {
+        // ARCH-04: the screen reports on every resume, the VM carries the flag.
+        val setup = fixture()
+        setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+        setup.vm.onCallLogPermissionChanged(denied = true)
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            assertTrue(awaitReady().callLogDenied)
+            setup.vm.onCallLogPermissionChanged(denied = false)
+            awaitReady { !it.callLogDenied }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `unpausing refreshes the widget, and so does undoing a pause`() = runTest {
+        // WIDGET-06: these writes bypass PauseContactUseCase, where the trigger
+        // otherwise fires, so the widget kept offering a paused person (or
+        // hiding an unpaused one) until the hourly sweep.
+        val setup = fixture()
+        setup.contactRepo.seed(
+            listOf(
+                contactFixture(
+                    id = 5L,
+                    displayName = "Sarah",
+                    pausedUntil = PauseContactUseCase.INDEFINITE_PAUSE_SENTINEL
+                )
+            )
+        )
+        setup.vm.onUnpauseNow()
+        advanceUntilIdle()
+        assertEquals(1, setup.widgetRefreshes())
+
+        setup.vm.onUndo()
+        advanceUntilIdle()
+        assertEquals(2, setup.widgetRefreshes(), "undoing the unpause pauses again")
+
+        setup.vm.onUnpauseContact()
+        advanceUntilIdle()
+        assertEquals(3, setup.widgetRefreshes(), "the banner's dismiss unpauses")
+
+        setup.vm.onPauseContact(PauseDuration.OneWeek)
+        advanceUntilIdle()
+        setup.vm.onUndo()
+        advanceUntilIdle()
+        assertEquals(4, setup.widgetRefreshes(), "undoing a pause unpauses")
+    }
 }

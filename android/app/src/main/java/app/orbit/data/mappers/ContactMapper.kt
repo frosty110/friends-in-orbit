@@ -43,7 +43,7 @@ fun ContactEntity.toUiContact(): Contact = Contact(
     history = emptyList(),
     notes = emptyList(),
     patternNote = "",
-    photoUri = photoUri,
+    photoUri = photoUri
 )
 
 /**
@@ -62,10 +62,14 @@ fun ContactEntity.toUiContact(): Contact = Contact(
  *     them in dragged a 22-min average to 19 after one logged connection.
  *     When no measured calls exist the label is null: there is no average to
  *     state, and each screen says so in its own words (it used to be the em
- *     dash [formatDuration] returned for zero). The screen gates display on
- *     `totalCalls >= 3` to avoid surfacing a meaningless mean from one or
- *     two calls; the field is still populated here so other consumers
- *     can decide their own gating threshold.
+ *     dash [formatDuration] returned for zero).
+ *   - `measuredCalls`: how many connections fed that mean. Contact detail
+ *     gates "Average length" on `measuredCalls >= 3`, not `totalCalls >= 3`:
+ *     the two counts differ by the zero-length MANUAL rows, so gating on the
+ *     total let one measured call plus two logged connections show that
+ *     single call's length as an average (CONTACT-02). The label is still
+ *     populated below three so other consumers can decide their own gate
+ *     (Card view reads it ungated).
  *
  * Per-direction breakdowns (`pickupRateLabel`) are out of scope here —
  * `call_events` stores connected calls only (the reconciler drops MISSED /
@@ -88,7 +92,8 @@ fun Contact.withCallStats(events: List<CallEventEntity>, now: Instant): Contact 
     return copy(
         lastCalledLabel = mostRecent?.let { formatRelative(it.occurredAt, now) },
         totalCalls = connections.size,
-        avgLengthLabel = avgSeconds?.let(::formatDuration),
+        measuredCalls = measured.size,
+        avgLengthLabel = avgSeconds?.let(::formatDuration)
     )
 }
 
@@ -120,7 +125,7 @@ fun Contact.withCallPatterns(events: List<CallEventEntity>, zoneId: ZoneId): Con
     if (peak == 0) return this
     return copy(
         heat = FloatArray(24) { h -> hourCounts[h].toFloat() / peak },
-        bestWindowLabel = bestWindowLabel(hourCounts),
+        bestWindowLabel = bestWindowLabel(hourCounts)
     )
 }
 
@@ -138,7 +143,7 @@ private fun bestWindowLabel(hourCounts: IntArray): UiText {
         R.string.time_daypart_mornings to (5..11).toList(),
         R.string.time_daypart_afternoons to (12..16).toList(),
         R.string.time_daypart_evenings to (17..21).toList(),
-        R.string.time_daypart_late_nights to listOf(22, 23, 0, 1, 2, 3, 4),
+        R.string.time_daypart_late_nights to listOf(22, 23, 0, 1, 2, 3, 4)
     )
     return UiText.res(windows.maxBy { (_, hours) -> hours.sumOf { hourCounts[it] } }.first)
 }

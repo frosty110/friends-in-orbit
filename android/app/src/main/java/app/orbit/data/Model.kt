@@ -22,14 +22,14 @@ enum class CallDirection { Outgoing, Incoming }
 @Immutable
 data class CallEntry(
     val direction: CallDirection,
-    val relativeWhen: UiText,   // "11 days ago" (formatRelative)
-    val lengthLabel: UiText,    // "14 min" (formatDuration)
+    val relativeWhen: UiText, // "11 days ago" (formatRelative)
+    val lengthLabel: UiText // "14 min" (formatDuration)
 )
 
 @Immutable
 data class Note(
     val relativeWhen: String,
-    val body: String,
+    val body: String
 )
 
 @Immutable
@@ -37,18 +37,23 @@ data class Contact(
     val id: String,
     val name: String,
     val phone: String,
-    val lastCalledLabel: UiText?,  // "11 days ago"; null when never called
-    val avgLengthLabel: UiText?,   // "14 min"; null when no call was measured
-    val pickupRateLabel: String,   // "82%"
+    val lastCalledLabel: UiText?, // "11 days ago"; null when never called
+    val avgLengthLabel: UiText?, // "14 min"; null when no call was measured
+    val pickupRateLabel: String, // "82%"
     val totalCalls: Int,
     val due: Boolean,
     val listIds: List<String>,
-    val bestWindowLabel: UiText?,  // "Evenings"; null until there is enough history
-    val heat: FloatArray,          // 24 hourly pickup rates 0..1
+    val bestWindowLabel: UiText?, // "Evenings"; null until there is enough history
+    val heat: FloatArray, // 24 hourly pickup rates 0..1
     val history: List<CallEntry>,
     val notes: List<Note>,
-    val patternNote: String,       // "Usually calls in the evening..."
-    val photoUri: String? = null,  // Coil AsyncImage on Card + Detail
+    val patternNote: String, // "Usually calls in the evening..."
+    val photoUri: String? = null, // Coil AsyncImage on Card + Detail
+    // Connections with a measured length (durationSeconds > 0). Contact detail
+    // gates "Average length" on three of these, not on totalCalls: a logged
+    // connection counts as a call but has no length, so one carrier call plus
+    // two hand-logged ones used to show that single call's length as a mean.
+    val measuredCalls: Int = 0
 ) {
     // Avoid auto-generated equals pitfalls on FloatArray — good enough for UI state.
     override fun equals(other: Any?) = this === other || (other is Contact && id == other.id)
