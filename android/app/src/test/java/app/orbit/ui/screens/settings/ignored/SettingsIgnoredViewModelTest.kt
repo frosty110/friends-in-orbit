@@ -5,6 +5,8 @@ import app.orbit.R
 import app.orbit.data.dao.RecordingListMembershipDao
 import app.orbit.data.dao.TestListDaoStub
 import app.orbit.data.db.TransactionRunner
+import app.orbit.data.entity.ContactEntity
+import app.orbit.data.repository.ContactRepository
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
 import app.orbit.domain.clock.TestClock
@@ -16,11 +18,15 @@ import app.orbit.testutil.MainDispatcherRule
 import app.orbit.ui.util.UiText
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -28,14 +34,16 @@ import org.junit.Test
 /**
  * Behavioral tests for [SettingsIgnoredViewModel].
  *
- * Asserts the four behavioral invariants:
+ * Asserts the behavioral invariants:
  *   1. Empty repo → [SettingsIgnoredUiState.Empty].
  *   2. One ignored contact → [SettingsIgnoredUiState.Ready] with one row, name +
  *      "Ignored today" subtitle, sorted by ignoredAt DESC.
- *   3. **B1 — `isArchived` filter:** an ignored AND archived contact is filtered
+ *   3. **B1: `isArchived` filter:** an ignored AND archived contact is filtered
  *      out so only the non-archived ignored row appears.
  *   4. `onUnignore(...)` flips `isIgnored = false` via the real
- *      [UnignoreContactUseCase] and emits a "Restored {Name}" snackbar with Undo.
+ *      [UnignoreContactUseCase] and emits an "Unignored {Name}" snackbar with Undo;
+ *      `onUndo()` re-ignores through the recorded inverse.
+ *   5. A failing read shows [SettingsIgnoredUiState.Error], and Try again recovers.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsIgnoredViewModelTest {
@@ -45,12 +53,31 @@ class SettingsIgnoredViewModelTest {
 
     private val T0: Instant = Instant.parse("2026-04-26T12:00:00Z")
 
-    /** Pass-through TransactionRunner — runs the block directly on the calling coroutine. */
+    /** Pass-through TransactionRunner: runs the block directly on the calling coroutine. */
     private val passThruTx = object : TransactionRunner {
         override suspend fun <R> withTransaction(block: suspend () -> R): R = block()
     }
 
-    private fun fixture(initial: List<app.orbit.data.entity.ContactEntity> = emptyList()): Setup {
+    /**
+     * Wraps the fake so the FIRST subscription to `observeIgnored()` fails and
+     * every later one passes through. The use cases keep writing to the inner
+     * fake, so the rest of the fixture is unchanged.
+     */
+    private class FlakyIgnoredRepository(private val inner: FakeContactRepository) : ContactRepository by inner {
+        var failuresLeft: Int = 1
+        override fun observeIgnored(): Flow<List<ContactEntity>> = flow {
+            if (failuresLeft > 0) {
+                failuresLeft--
+                throw IllegalStateException("disk")
+            }
+            emitAll(inner.observeIgnored())
+        }
+    }
+
+    private fun fixture(
+        initial: List<ContactEntity> = emptyList(),
+        vmRepo: (FakeContactRepository) -> ContactRepository = { it },
+    ): Setup {
         val contactRepo = FakeContactRepository(initial)
         val listDao = TestListDaoStub()
         val clock = TestClock(T0)
@@ -73,7 +100,7 @@ class SettingsIgnoredViewModelTest {
         )
         val undoStack = UndoStack()
         val vm = SettingsIgnoredViewModel(
-            contactRepo = contactRepo,
+            contactRepo = vmRepo(contactRepo),
             ignoreContactUseCase = ignoreContactUseCase,
             unignoreContactUseCase = unignoreContactUseCase,
             undoStack = undoStack,
@@ -89,7 +116,7 @@ class SettingsIgnoredViewModelTest {
     )
 
     // ============================================================================
-    // Test 1 — empty repo → Empty
+    // Test 1: empty repo → Empty
     // ============================================================================
 
     @Test
@@ -103,7 +130,7 @@ class SettingsIgnoredViewModelTest {
     }
 
     // ============================================================================
-    // Test 2 — one ignored contact → Ready with one row carrying relative label.
+    // Test 2: one ignored contact → Ready with one row carrying relative label.
     // Subtitle prefix "Ignored " is fixed; the relative formatter is the single
     // source of truth (ui/util/RelativeTime.kt). At T0 == ignoredAt, expected
     // label is "Ignored today".
@@ -131,7 +158,7 @@ class SettingsIgnoredViewModelTest {
     }
 
     // ============================================================================
-    // Test 3 — B1: ignored AND archived row is filtered out.
+    // Test 3: B1: ignored AND archived row is filtered out.
     // Two contacts seeded: one ignored-only, one ignored-and-archived. The
     // ignored query (mirrored by the fake) drops the archived one so only the visible
     // row appears.
@@ -148,17 +175,17 @@ class SettingsIgnoredViewModelTest {
         val ready = vm.uiState
             .filterIsInstance<SettingsIgnoredUiState.Ready>()
             .first()
-        assertEquals(1, ready.ignored.size, "B1 — archived contact must be filtered")
+        assertEquals(1, ready.ignored.size, "B1: archived contact must be filtered")
         assertEquals(1L, ready.ignored.single().id)
     }
 
     // ============================================================================
-    // Test 4 — onUnignore flips isIgnored=false on the contact and emits a
-    // "Restored {Name} · Undo" snackbar event.
+    // Test 4: onUnignore flips isIgnored=false on the contact and emits an
+    // "Unignored {Name} · Undo" snackbar event.
     // ============================================================================
 
     @Test
-    fun `onUnignore flips contact and emits Restored snackbar`() = runTest {
+    fun `onUnignore flips contact and emits Unignored snackbar`() = runTest {
         val ignored = contactFixture(id = 42L, isIgnored = true)
             .copy(displayName = "Alex Chen", ignoredAt = T0)
         val (vm, contactRepo, undoStack) = fixture(initial = listOf(ignored))
@@ -169,8 +196,9 @@ class SettingsIgnoredViewModelTest {
         vm.snackbarEvents.test(timeout = 2.seconds) {
             vm.onUnignore(42L, "Alex Chen")
             val event = awaitItem()
-            // "Restored Alex Chen" / "Undo" (SnackbarCopyTest pins the English).
-            assertEquals(UiText.res(R.string.components_snackbar_restored, "Alex Chen"), event.message)
+            // "Unignored Alex Chen" / "Undo": one word for the inverse of Ignore
+            // (voice.md glossary; the picker's row says the same).
+            assertEquals(UiText.res(R.string.components_snackbar_unignored, "Alex Chen"), event.message)
             assertEquals(UiText.res(R.string.components_action_undo), event.actionLabel)
             cancelAndIgnoreRemainingEvents()
         }
@@ -180,11 +208,56 @@ class SettingsIgnoredViewModelTest {
         assertEquals(42L, unsetCall.contactId)
         assertEquals(false, unsetCall.isIgnored)
 
-        // UndoStack carries an inverse closure — peek (do not consume).
+        // UndoStack carries an inverse closure: peek (do not consume).
         val pending = undoStack.peek()
         assertTrue(pending != null, "Undo closure must be queued for snackbar Undo tap")
         // Its inverse re-ignores (the words are on the event above).
         pending.inverse()
         assertEquals(true, contactRepo.markIgnoredCalls.last().isIgnored)
+    }
+
+    // ============================================================================
+    // Test 5: the snackbar's Undo tap (onUndo) replays the inverse: the person
+    // is ignored again and the stack is empty.
+    // ============================================================================
+
+    @Test
+    fun `onUndo re-ignores the person and consumes the undo`() = runTest {
+        val ignored = contactFixture(id = 42L, isIgnored = true)
+            .copy(displayName = "Alex Chen", ignoredAt = T0)
+        val (vm, contactRepo, undoStack) = fixture(initial = listOf(ignored))
+        vm.uiState.filterIsInstance<SettingsIgnoredUiState.Ready>().first()
+
+        vm.onUnignore(42L, "Alex Chen")
+        assertEquals(false, contactRepo.markIgnoredCalls.last().isIgnored, "un-ignore lands first")
+
+        vm.onUndo()
+
+        val reIgnore = contactRepo.markIgnoredCalls.last()
+        assertEquals(42L, reIgnore.contactId)
+        assertEquals(true, reIgnore.isIgnored, "Undo must re-ignore the same person")
+        assertNull(undoStack.peek(), "the undo is consumed by the tap")
+    }
+
+    // ============================================================================
+    // Test 6: a failing read shows Error (not a skeleton for ever, not a
+    // crash), and Try again re-subscribes and recovers (rubric D6).
+    // ============================================================================
+
+    @Test
+    fun `a failing source shows Error, and Retry recovers`() = runTest {
+        val ignored = contactFixture(id = 42L, isIgnored = true)
+            .copy(displayName = "Alex Chen", ignoredAt = T0)
+        val (vm, _, _) = fixture(initial = listOf(ignored), vmRepo = { FlakyIgnoredRepository(it) })
+
+        assertEquals(
+            SettingsIgnoredUiState.Error,
+            vm.uiState.filterIsInstance<SettingsIgnoredUiState.Error>().first(),
+        )
+
+        vm.onRetry()
+
+        val ready = vm.uiState.filterIsInstance<SettingsIgnoredUiState.Ready>().first()
+        assertEquals(listOf(42L), ready.ignored.map { it.id })
     }
 }
