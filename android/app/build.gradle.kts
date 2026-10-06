@@ -291,6 +291,10 @@ dependencies {
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.composable.preview.scanner)
     testImplementation(libs.androidx.junit)
+    // Navigation graph tests (nav/OrbitNavHostTest): TestNavHostController drives
+    // OrbitNavHost with stub screens, so the back-stack promises each page view
+    // makes (ONB-23, LIST-23, LOG-05, the deep-link guard) run on every push.
+    testImplementation(libs.androidx.navigation.testing)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

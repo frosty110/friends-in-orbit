@@ -75,4 +75,5 @@
 - `ContactDetailScreenTest` (added this round: arriving scrolled to a call shows that row and "Add note to this call")
 - `NotesMenuTest` (added this round), `OrphanBannerTest` and `UnpauseBannerTest` (on the JVM from this round), `RuleOverrideSectionTest`
 - Use cases: `PauseContactUseCaseTest`, `IgnoreContactUseCaseTest`, `UnignoreContactUseCaseTest`, `ArchiveContactUseCaseTest`, `RelinkContactUseCaseTest`, `AddNoteUseCaseTest`, `AddRetroactiveNoteUseCaseTest`, `EditNoteUseCaseTest`, `DeleteNoteUseCaseTest`
+- `OrbitNavHostTest` (added this round: "View all calls" opens this person's calls and back returns to the same entry, LOG-04; "Open settings" leads to Settings)
 - Gallery previews: `ContactDetailContentPreview`, `ContactDetailNewPersonPreview`, `ContactDetailNotFoundPreview`, `ContactDetailErrorPreview`, `ContactDetailCurtainPreview`, `LogConnectionSheetLightPreview`, `UnpauseBannerLightPreview`, the Orphaned and call-log-denied previews added this round, with the curtain pass

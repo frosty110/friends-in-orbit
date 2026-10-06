@@ -1,0 +1,560 @@
+package app.orbit.nav
+
+import android.app.Application
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
+import androidx.navigation.NavGraph
+import androidx.navigation.compose.ComposeNavigator
+import androidx.navigation.testing.TestNavHostController
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.orbit.data.AppPrefs
+import app.orbit.domain.FakeListRepository
+import app.orbit.domain.listFixture
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+
+/**
+ * The navigation graph's back-stack promises, on the JVM: [OrbitNavHost] over
+ * a [TestNavHostController], with [StubScreens] in every slot so no
+ * ViewModel and no Hilt graph is created. Each stub draws its route and
+ * records the callbacks the graph handed it, and a test fires those the way
+ * a tap would, then reads the stack.
+ *
+ * Until 2026-10-06 none of these were pinned: `RoutesTest` checked the path
+ * strings and `AppLinksTest` the intents, but popUpTo, the pop-or-push on
+ * Call history and the deep-link guard lived only in graph code.
+ */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [33], application = Application::class)
+class OrbitNavHostTest {
+
+    @get:Rule val compose = createComposeRule()
+
+    /**
+     * Not `tmp.newPrefs(storeScope)` (testutil/TestDataStore.kt), on purpose.
+     * The compose rule's dispatcher is unconfined, so a continuation resumes
+     * on whatever thread completes it; a real DataStore completes its reads
+     * on its own IO scope, and the Sync step's `pendingListId()` read would
+     * hand the navigate that follows it to that thread, where NavController
+     * refuses to run (an entry's lifecycle is main-thread only). In the app
+     * the Recomposer runs on AndroidUiDispatcher.Main, which is confined, so
+     * the real store is fine there. This test is about the graph and needs
+     * no persistence: a store over a StateFlow never leaves the main thread.
+     */
+    private val prefs = AppPrefs(MemoryDataStore())
+    private val lists = FakeListRepository(initialLists = listOf(listFixture(id = 5L, name = "In touch")))
+    private val screens = StubScreens()
+    private lateinit var nav: TestNavHostController
+
+    /** What MainActivity would hand the host from a nudge, widget or shortcut. */
+    private var deepLink by mutableStateOf<String?>(null)
+    private var consumed = 0
+
+    private fun start(destination: String) {
+        nav = TestNavHostController(ApplicationProvider.getApplicationContext()).apply {
+            navigatorProvider.addNavigator(ComposeNavigator())
+        }
+        compose.setContent {
+            OrbitNavHost(
+                nav = nav,
+                listRepo = lists,
+                appPrefs = prefs,
+                startDestination = destination,
+                navigateTo = deepLink,
+                onNavigateToConsumed = {
+                    consumed++
+                    deepLink = null
+                },
+                screens = screens,
+            )
+        }
+        compose.waitForIdle()
+    }
+
+    /** Runs [block] as a tap would, on the main thread, and lets the graph settle. */
+    private fun act(block: () -> Unit) {
+        compose.runOnUiThread(block)
+        compose.waitForIdle()
+    }
+
+    private fun navigate(route: String) = act { nav.navigate(route) }
+
+    private val route: String? get() = nav.currentBackStackEntry?.destination?.route
+    private val previousRoute: String? get() = nav.previousBackStackEntry?.destination?.route
+    private fun arg(name: String): String? = nav.currentBackStackEntry?.arguments?.getString(name)
+
+    /** Screens on the stack; the graph's own root entry is not a screen. */
+    private val depth: Int get() = nav.currentBackStack.value.count { it.destination !is NavGraph }
+
+    private fun awaitRoute(expected: String) {
+        compose.waitUntil(timeoutMillis = 10_000L) { route == expected }
+    }
+
+    // ONB-23
+
+    @Test
+    fun done_landsOnHome_withNothingToGoBackTo() {
+        start(Routes.OnboardWelcome)
+        navigate(Routes.OnboardPermContacts)
+        navigate(Routes.OnboardDone)
+        assertEquals(3, depth)
+
+        act { screens.doneOnFinish() }
+
+        assertEquals(Routes.Home, route)
+        assertNull(nav.previousBackStackEntry, "back from Home must leave the app, never re-enter onboarding")
+        assertEquals(1, depth)
+    }
+
+    // The resumed permission step (onb-1)
+
+    @Test
+    fun aResumedPermissionStep_hasNoBackArrow() {
+        // AppViewModel.resolveOnboardingResume makes the saved step the start
+        // destination, so it is the only entry on the stack.
+        start(Routes.OnboardPermCallLog)
+
+        assertTrue(screens.permCallLogShown)
+        assertNull(screens.permCallLogOnBack, "popBackStack() on a one-entry stack would leave the NavHost blank")
+    }
+
+    @Test
+    fun aPermissionStep_reachedFromWelcome_goesBackToWelcome() {
+        start(Routes.OnboardWelcome)
+        act { screens.welcomeOnContinue() }
+        assertEquals(Routes.OnboardPermContacts, route)
+        val back = assertNotNull(screens.permContactsOnBack)
+
+        act { back() }
+
+        assertEquals(Routes.OnboardWelcome, route)
+    }
+
+    // The sync gate and the first-list step
+
+    @Test
+    fun syncContinue_withAPendingList_opensItStraightAway_withoutPreview() {
+        runBlocking { prefs.setOnboardingListId(5L) }
+        start(Routes.OnboardSync)
+
+        act { screens.syncOnContinue() }
+        awaitRoute(Routes.OnboardFirstList)
+
+        assertEquals("5", arg("listId"))
+        assertEquals(Routes.OnboardSync, previousRoute, "no Preview between Sync and the list being built")
+        assertEquals(2, depth)
+    }
+
+    @Test
+    fun syncContinue_withNoPendingList_offersPreview_andBackFromTheFirstListLandsOnSync() {
+        start(Routes.OnboardSync)
+
+        act { screens.syncOnContinue() }
+        awaitRoute(Routes.OnboardPreview)
+        act { screens.previewOnSkip() }
+        awaitRoute(Routes.OnboardFirstList)
+
+        assertEquals(Routes.OnboardSync, previousRoute, "Preview is popped so back does not offer it twice")
+        act { nav.popBackStack() }
+        assertEquals(Routes.OnboardSync, route)
+    }
+
+    @Test
+    fun startAgain_fromTheFirstListStep_returnsToSync() {
+        start(Routes.OnboardSync)
+        navigate(Routes.firstList("5"))
+
+        act { screens.firstListOnStartAgain() }
+
+        assertEquals(Routes.OnboardSync, route)
+        assertEquals(1, depth)
+    }
+
+    // LOG-05: Call history's denied state hands off to Settings
+
+    @Test
+    fun callHistoryOpenSettings_popsBack_whenItCameFromSettings() {
+        start(Routes.Home)
+        navigate(Routes.Settings)
+        navigate(Routes.CallLog)
+
+        act { screens.callLogOnOpenSettings() }
+
+        assertEquals(Routes.Settings, route)
+        assertEquals(Routes.Home, previousRoute, "no second Settings stacked on the first")
+        assertEquals(2, depth)
+    }
+
+    @Test
+    fun callHistoryOpenSettings_pushesSettings_whenItCameFromAPerson() {
+        start(Routes.Home)
+        navigate(Routes.contact("c-7"))
+        act { screens.contactOnViewAllCalls() }
+        assertEquals(Routes.CallLogPattern, route)
+
+        act { screens.callLogOnOpenSettings() }
+
+        assertEquals(Routes.Settings, route)
+        assertEquals(Routes.CallLogPattern, previousRoute)
+    }
+
+    // LOG-04: "View all calls" means this person's calls, and back returns to them
+
+    @Test
+    fun viewAllCalls_thenBack_landsOnTheSameContactEntry() {
+        start(Routes.Home)
+        navigate(Routes.contact("c-7"))
+        val person = assertNotNull(nav.currentBackStackEntry)
+
+        act { screens.contactOnViewAllCalls() }
+        assertEquals(Routes.CallLogPattern, route)
+        assertEquals("c-7", arg("contactId"))
+
+        act { nav.popBackStack() }
+        assertSame(person, nav.currentBackStackEntry, "the same entry, so the same ViewModel and scroll position")
+    }
+
+    // LIST-23
+
+    @Test
+    fun lists_rowTapOpensTheDeck_andListSettingsOpensListSettings() {
+        start(Routes.Home)
+        navigate(Routes.lists())
+
+        act { screens.listsOnOpenList("5") }
+        assertEquals(Routes.Card, route)
+        assertEquals("5", arg("listId"))
+
+        act { nav.popBackStack() }
+        act { screens.listsOnOpenListSettings("5") }
+        assertEquals(Routes.ListConfig, route)
+        assertEquals("5", arg("listId"))
+    }
+
+    // CARD-03 / NOTE-02
+
+    @Test
+    fun cardAddANote_opensThePerson_withTheNoteFieldFocused() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+
+        act { screens.cardOnAddNote("c-7") }
+
+        assertEquals(Routes.Contact, route)
+        assertEquals("c-7", arg("contactId"))
+        assertEquals("1", arg("focusNote"))
+    }
+
+    @Test
+    fun cardOpenDetails_opensThePerson_atTheTop() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+
+        act { screens.cardOnOpenContact("c-7") }
+
+        assertEquals(Routes.Contact, route)
+        assertEquals("c-7", arg("contactId"))
+        assertNull(arg("focusNote"))
+    }
+
+    // Open settings from the call-log notices
+
+    @Test
+    fun openSettings_fromBrowseSearchAndAPerson_leadsToSettings() {
+        start(Routes.Home)
+        navigate(Routes.browse("3"))
+        act { screens.browseOnOpenSettings() }
+        assertEquals(Routes.Settings, route)
+
+        act { nav.popBackStack() }
+        navigate(Routes.GlobalSearch)
+        act { screens.searchOnOpenSettings() }
+        assertEquals(Routes.Settings, route)
+
+        act { nav.popBackStack() }
+        navigate(Routes.contact("c-7"))
+        act { screens.contactOnOpenSettings() }
+        assertEquals(Routes.Settings, route)
+    }
+
+    // Routes from outside (D-17, T-10-21)
+
+    @Test
+    fun anUnknownDeepLink_leavesTheStackAlone_andIsConsumed() {
+        start(Routes.Home)
+
+        act { deepLink = "nope/1" }
+
+        assertEquals(Routes.Home, route)
+        assertEquals(1, depth)
+        assertEquals(1, consumed)
+        assertNull(deepLink)
+    }
+
+    @Test
+    fun aDeepLinkForTheDeckAlreadyOnTop_doesNotStackASecondCopy() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+        assertEquals(2, depth)
+
+        act { deepLink = Routes.card("3") }
+
+        assertEquals(2, depth)
+        assertEquals(Routes.Card, route)
+        assertEquals("3", arg("listId"))
+        assertEquals(1, consumed)
+    }
+
+    @Test
+    fun aDeepLinkForAnotherList_getsItsOwnEntry() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+
+        act { deepLink = Routes.card("4") }
+
+        assertEquals(3, depth)
+        assertEquals("4", arg("listId"))
+        assertEquals("3", nav.previousBackStackEntry?.arguments?.getString("listId"))
+        assertEquals(1, consumed)
+    }
+
+    @Test
+    fun aDeepLinkToSearch_whileSearchIsOpen_doesNotStackASecondCopy() {
+        start(Routes.Home)
+        navigate(Routes.GlobalSearch)
+
+        act { deepLink = Routes.GlobalSearch }
+
+        assertEquals(2, depth)
+        assertEquals(Routes.GlobalSearch, route)
+    }
+}
+
+/** A DataStore<Preferences> over a StateFlow; see [OrbitNavHostTest.prefs]. */
+private class MemoryDataStore : DataStore<Preferences> {
+    private val state = MutableStateFlow(emptyPreferences())
+    override val data: Flow<Preferences> get() = state
+    override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences {
+        val next = transform(state.value)
+        state.value = next
+        return next
+    }
+}
+
+/**
+ * One labelled box per route. Each slot keeps the callbacks the graph passed
+ * so a test can fire them; nothing here has a ViewModel.
+ */
+private class StubScreens : OrbitNavScreens {
+
+    lateinit var welcomeOnContinue: () -> Unit
+    var permContactsOnBack: (() -> Unit)? = null
+    var permCallLogShown = false
+    var permCallLogOnBack: (() -> Unit)? = null
+    lateinit var syncOnContinue: () -> Unit
+    lateinit var previewOnSkip: () -> Unit
+    lateinit var firstListOnStartAgain: () -> Unit
+    lateinit var doneOnFinish: () -> Unit
+    lateinit var cardOnOpenContact: (String) -> Unit
+    lateinit var cardOnAddNote: (String) -> Unit
+    lateinit var browseOnOpenSettings: () -> Unit
+    lateinit var searchOnOpenSettings: () -> Unit
+    lateinit var contactOnViewAllCalls: () -> Unit
+    lateinit var contactOnOpenSettings: () -> Unit
+    lateinit var listsOnOpenList: (String) -> Unit
+    lateinit var listsOnOpenListSettings: (String) -> Unit
+    lateinit var callLogOnOpenSettings: () -> Unit
+
+    @Composable
+    private fun Stub(route: String) {
+        BasicText(text = route, modifier = Modifier.testTag(route))
+    }
+
+    @Composable
+    override fun Home(
+        onOpenList: (listId: String) -> Unit,
+        onOpenSearch: () -> Unit,
+        onOpenSettings: () -> Unit,
+        onOpenLists: () -> Unit,
+        onCreateList: () -> Unit,
+        onAddPeopleToList: (listId: String) -> Unit,
+        onOpenListSettings: (listId: String) -> Unit,
+        onOpenContactWithFocus: (contactId: String, focusNote: Boolean) -> Unit,
+    ) = Stub(Routes.Home)
+
+    @Composable
+    override fun Card(
+        listId: String,
+        onBack: () -> Unit,
+        onOpenContact: (contactId: String) -> Unit,
+        onAddNote: (contactId: String) -> Unit,
+        onBrowse: (listId: String) -> Unit,
+        onEditList: (listId: String) -> Unit,
+        onAddContacts: (listId: String) -> Unit,
+        onOpenSettings: () -> Unit,
+    ) {
+        cardOnOpenContact = onOpenContact
+        cardOnAddNote = onAddNote
+        Stub(Routes.card(listId))
+    }
+
+    @Composable
+    override fun Browse(
+        listId: String,
+        onBack: () -> Unit,
+        onOpenContact: (contactId: String) -> Unit,
+        onAddContacts: (listId: String) -> Unit,
+        onOpenSettings: () -> Unit,
+    ) {
+        browseOnOpenSettings = onOpenSettings
+        Stub(Routes.browse(listId))
+    }
+
+    @Composable
+    override fun Search(
+        onBack: () -> Unit,
+        onOpenContact: (contactId: String) -> Unit,
+        onAddToLists: (contactId: String) -> Unit,
+        onOpenSettings: () -> Unit,
+    ) {
+        searchOnOpenSettings = onOpenSettings
+        Stub(Routes.GlobalSearch)
+    }
+
+    @Composable
+    override fun Contact(
+        contactId: String,
+        onBack: () -> Unit,
+        onAddToLists: (contactId: String) -> Unit,
+        onRelink: (contactId: Long) -> Unit,
+        onViewAllCalls: () -> Unit,
+        onOpenSettings: () -> Unit,
+    ) {
+        contactOnViewAllCalls = onViewAllCalls
+        contactOnOpenSettings = onOpenSettings
+        Stub(Routes.contact(contactId))
+    }
+
+    @Composable
+    override fun Lists(
+        onBack: () -> Unit,
+        onOpenList: (listId: String) -> Unit,
+        onOpenListSettings: (listId: String) -> Unit,
+        onAddContacts: (listId: String) -> Unit,
+        openCreateOnLaunch: Boolean,
+    ) {
+        listsOnOpenList = onOpenList
+        listsOnOpenListSettings = onOpenListSettings
+        Stub(Routes.lists(openCreateOnLaunch))
+    }
+
+    @Composable
+    override fun ListConfig(
+        listId: String,
+        onBack: () -> Unit,
+        onSave: () -> Unit,
+        onAddContacts: (listId: String) -> Unit,
+    ) = Stub(Routes.listConfig(listId))
+
+    @Composable
+    override fun Settings(onBack: () -> Unit, onOpenIgnored: () -> Unit, onOpenCallHistory: () -> Unit) =
+        Stub(Routes.Settings)
+
+    @Composable
+    override fun SettingsIgnored(onBack: () -> Unit) = Stub(Routes.SettingsIgnored)
+
+    @Composable
+    override fun CallLog(
+        onBack: () -> Unit,
+        onOpenContact: (contactId: Long, callEventId: Long) -> Unit,
+        onOpenSettings: () -> Unit,
+    ) {
+        callLogOnOpenSettings = onOpenSettings
+        Stub(Routes.CallLog)
+    }
+
+    @Composable
+    override fun OnboardWelcome(onContinue: () -> Unit) {
+        welcomeOnContinue = onContinue
+        Stub(Routes.OnboardWelcome)
+    }
+
+    @Composable
+    override fun OnboardPermContacts(onBack: (() -> Unit)?, onContinue: () -> Unit) {
+        permContactsOnBack = onBack
+        Stub(Routes.OnboardPermContacts)
+    }
+
+    @Composable
+    override fun OnboardPermCallLog(onBack: (() -> Unit)?, onContinue: () -> Unit) {
+        permCallLogShown = true
+        permCallLogOnBack = onBack
+        Stub(Routes.OnboardPermCallLog)
+    }
+
+    @Composable
+    override fun OnboardPermNotifications(onBack: (() -> Unit)?, onContinue: () -> Unit) =
+        Stub(Routes.OnboardPermNotifs)
+
+    @Composable
+    override fun OnboardSync(onContinue: () -> Unit) {
+        syncOnContinue = onContinue
+        Stub(Routes.OnboardSync)
+    }
+
+    @Composable
+    override fun OnboardPreview(
+        onAccept: (defaultName: String, contactIds: List<Long>) -> Unit,
+        onSkip: () -> Unit,
+    ) {
+        previewOnSkip = onSkip
+        Stub(Routes.OnboardPreview)
+    }
+
+    @Composable
+    override fun OnboardFirstList(
+        listId: String,
+        onDone: () -> Unit,
+        onAddAnother: () -> Unit,
+        onAddContacts: () -> Unit,
+        onStartAgain: () -> Unit,
+    ) {
+        firstListOnStartAgain = onStartAgain
+        Stub(Routes.firstList(listId))
+    }
+
+    @Composable
+    override fun OnboardDone(onFinish: () -> Unit) {
+        doneOnFinish = onFinish
+        Stub(Routes.OnboardDone)
+    }
+
+    @Composable
+    override fun PickContacts(onBack: () -> Unit, onCommit: () -> Unit) = Stub("pick/contacts")
+
+    @Composable
+    override fun PickLists(onBack: () -> Unit, onCommit: () -> Unit) = Stub("pick/lists")
+
+    @Composable
+    override fun CommitSnackbarHost(modifier: Modifier) = Unit
+}

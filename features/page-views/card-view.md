@@ -64,4 +64,5 @@
 - `CardViewViewModelInteractionTest` (Later and Sooner with their undo, failure snackbars, the Called acknowledgement and what cancels it, the rhythm sentence)
 - `CardListMenuTest` (added this round: menu order, Add people absent on smart lists)
 - `CardViewScreenTest` (added this round: the face opens details and never dials; Call is on screen in landscape)
+- `OrbitNavHostTest` (added this round: "Add a note" opens the person with the note field focused, NOTE-02; a nudge for the deck already open does not stack a second deck, while another list gets its own)
 - Gallery previews: `CardViewContentPreview`, `CardViewContentAheadOfTodayPreview`, `CardViewContentLongNamesPreview`, `CardViewContentNoMembersPreview`, `CardViewContentNothingEligiblePreview`, `CardViewContentCallLogDeniedPreview`, and the Loading and Error previews added this round, with the curtain pass

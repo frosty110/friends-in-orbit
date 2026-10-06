@@ -48,4 +48,5 @@
 - `OnboardingSyncViewModelTest` (rewritten this round: no permission reads as Skipped, success with and without calls, failure and retry, a thrown read, the initial state)
 - `OnboardingListStarterTest` (the list under way is reused, never duplicated)
 - `CallLogSyncWorkerTest`, `ContactsIngestWorkerTest`
+- `OrbitNavHostTest` (added this round: Continue with a list under way goes straight into it with no Preview between; without one, Preview, and back from the first-list step lands here)
 - Gallery previews: `OnboardingSyncScreenPreview`, and the Empty, Succeeded, Skipped and both Failed previews added this round

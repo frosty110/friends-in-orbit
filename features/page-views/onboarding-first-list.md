@@ -50,4 +50,5 @@
 - `OnboardingFirstListGateTest` (Done needs a name and three people; the fallback branch always offers an action)
 - `OnboardingListStarterTest` (resume, not duplicate; add another)
 - `ListConfigViewModelTest` (the shared body)
+- `OrbitNavHostTest` (added this round: back lands on the Sync step, never Preview; "Start again" returns to Sync)
 - Gallery previews: `OnboardingFirstListScreenPreview`, `OnboardingFirstListLoadingPreview`, `OnboardingFirstListContactsDeniedPreview`, `OnboardingNudgeSummaryLightPreview`, the Error and Not found previews added this round, with the curtain pass

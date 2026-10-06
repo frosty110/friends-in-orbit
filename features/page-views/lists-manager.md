@@ -51,4 +51,5 @@
 - `ListRowMenuOrderTest` (menu order, and the same pause and resume words as Home)
 - `ListsManagerScreenTest` (added this round: a row tap, "List settings" and create go to different places)
 - `CreateListTemplateCatalogTest` (each template makes the rhythm its subtitle names)
+- `OrbitNavHostTest` (added this round: a row tap opens the deck and "List settings" opens List settings, LIST-23)
 - Gallery previews: `ListsManagerContentPreview`, `ListRowPreviewLightStatic`, `ListRowPreviewDarkSmart`, `ArchivedListRowPreviewLight`, `CreateListBottomSheetLightPreview`, `RenameListDialogLightPreview`, `DeleteListDialogLightPreview`, the Loading, Error and archived-expanded previews added this round, with the curtain pass

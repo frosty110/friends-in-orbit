@@ -55,4 +55,5 @@
 - `CallLogViewModelTest` (day grouping, one-person mode, the Logged and Attempted kinds with no length, the filters, ignored rows, denied and unknown permission, Error and recovery, paging)
 - `CallLogRowMenuTest` (added this round: "Call again", "Open details", neither destructive)
 - `CallEventDaoLogTest`
+- `OrbitNavHostTest` (added this round: "Open settings" pops back when Call history came from Settings and pushes Settings otherwise, LOG-05; "View all calls" and back return to the same person, LOG-04)
 - Gallery previews: `CallLogContentPreview`, `CallLogPersonPreview`, `CallLogLoadingPreview`, `CallLogEmptyPreview`, `CallLogPermissionDeniedPreview`, `CallLogDeniedWithHistoryPreview`, `CallLogErrorPreview`, the filtered-empty, ignored-row and one-person-error previews added this round, with the curtain pass
