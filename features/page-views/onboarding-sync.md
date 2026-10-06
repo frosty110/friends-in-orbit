@@ -46,6 +46,7 @@
 ## Tests that pin it
 
 - `OnboardingSyncViewModelTest` (rewritten this round: no permission reads as Skipped, success with and without calls, failure and retry, a thrown read with and without the permission, the initial state)
+- `OnboardingSyncChipsSemanticsTest` (the range chips are one radio group of four with the current window selected, and a tap reports its window)
 - `OnboardingListStarterTest` (the list under way is reused, never duplicated)
 - `CallLogSyncWorkerTest`, `ContactsIngestWorkerTest`
 - `OrbitNavHostTest` (added this round: Continue with a list under way goes straight into it with no Preview between; without one, Preview, and back from the first-list step lands here)

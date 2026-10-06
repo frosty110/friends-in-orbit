@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -64,8 +65,10 @@ fun OnboardingSyncScreen(
     )
 }
 
+// Internal, not private: OnboardingSyncChipsSemanticsTest renders this
+// stateless layer to read the chip row's semantics.
 @Composable
-private fun OnboardingSyncContent(
+internal fun OnboardingSyncContent(
     state: OnboardingSyncUiState,
     onContinue: () -> Unit,
     onRetry: () -> Unit,
@@ -233,12 +236,17 @@ private fun FriendlyCount(callCount: Int, contactCount: Int) {
  * Look-back window selector: Orbit's one chip ([OrbitFilterChip], RadioButton
  * semantics since exactly one window is chosen) over the list and the words
  * Settings' import range row uses (`ui/util/ImportRange.kt`), so the same
- * setting looks and reads the same on both screens. Before 2026-10-06 this
- * was a Material FilterChip with a colour override that offered three windows
- * and said "90 days" where Settings offered four and said "3 months" (onb-9).
+ * setting says the same four things on both screens. (Only the words are
+ * shared: Settings still draws a Material FilterChip with checkbox semantics.)
+ * Before 2026-10-06 this was a Material FilterChip with a colour override that
+ * offered three windows and said "90 days" where Settings offered four and
+ * said "3 months" (onb-9).
  *
  * A FlowRow, not a Row: at 200% text a fixed row crushed the last chip to a
- * sliver (gate G3); wrapping keeps every label whole.
+ * sliver (gate G3); wrapping keeps every label whole. One `selectableGroup`
+ * over the chips, as CallLogScreen's direction row and the rhythm rows do, so
+ * TalkBack counts them ("3 months, radio button, 2 of 4") instead of
+ * announcing four lone radio buttons.
  *
  * Selecting a chip persists `callLogImportDays` and re-runs the import for the
  * new window (VM.onImportDaysSelected); the default (90) is pre-selected and
@@ -256,7 +264,7 @@ private fun ImportRangeChips(
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
         )
         FlowRow(
-            modifier = Modifier.padding(top = OrbitTheme.spacing.x2),
+            modifier = Modifier.padding(top = OrbitTheme.spacing.x2).selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
         ) {
             IMPORT_DAY_OPTIONS.forEach { days ->
