@@ -41,8 +41,8 @@ import kotlinx.coroutines.launch
  *   - `@HiltViewModel` with constructor-injected dependencies.
  *   - Reads `contactId` from [SavedStateHandle] (Hilt cannot bind plain
  *     `String` types).
- *   - `combine(...).stateIn(WhileSubscribed(5_000L))` exposes a [UiState]
- *     (ARCH-02 invariant).
+ *   - `combine(...).stateIn(WhileSubscribed(5_000L))` exposes a
+ *     [ListPickerUiState] (ARCH-02 invariant).
  *   - Commit dispatches via [ListMembershipDao] directly (no
  *     `ListMembershipRepository` interface yet — same precedent the
  *     forward picker uses; widening the repo is deferred to the
@@ -88,7 +88,7 @@ class ListPickerViewModel @Inject constructor(
     // ─── Nav arg ────────────────────────────────────────────────────────────
     //
     // C6: parse defensively — `toLongOrNull()` over `toLong()` so a malformed
-    // or missing arg routes to the [UiState.Phase.NotFound] empty state instead
+    // or missing arg routes to the [ListPickerUiState.Phase.NotFound] state instead
     // of crashing the VM at construction (Hilt creation failure → black screen).
     private val contactId: Long? =
         savedStateHandle.get<String>("contactId")?.removePrefix("c-")?.toLongOrNull()
@@ -115,33 +115,16 @@ class ListPickerViewModel @Inject constructor(
     }
 
     // ─── UiState ────────────────────────────────────────────────────────────
-    data class UiState(
-        val phase: Phase,
-        val contactName: String,
-        val lists: List<ListRow>,
-        val selectedListIds: Set<Long>,
-    ) {
-        // Error (PICK-09): a data stream failed; the screen offers Retry.
-        enum class Phase { Loading, Ready, Committing, NotFound, Error }
+    // The contract lives in ListPickerUiState.kt, beside the other screens'.
 
-        data class ListRow(
-            val listId: Long,
-            val name: String,
-            val isMember: Boolean,
-        )
-
-        val canCommit: Boolean get() = selectedListIds.isNotEmpty() && phase != Phase.Committing
-        val selectionCount: Int get() = selectedListIds.size
-    }
-
-    val uiState: StateFlow<UiState> =
+    val uiState: StateFlow<ListPickerUiState> =
         if (contactId == null) {
             // Terminal NotFound for a missing or malformed id: the combine
             // pipeline never starts; emit a single static state. The screen
             // says the person is not in Orbit anymore and offers Go back.
             kotlinx.coroutines.flow.flowOf(
-                UiState(
-                    phase = UiState.Phase.NotFound,
+                ListPickerUiState(
+                    phase = ListPickerUiState.Phase.NotFound,
                     contactName = "",
                     lists = emptyList(),
                     selectedListIds = emptySet(),
@@ -149,8 +132,8 @@ class ListPickerViewModel @Inject constructor(
             ).stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = UiState(
-                    phase = UiState.Phase.NotFound,
+                initialValue = ListPickerUiState(
+                    phase = ListPickerUiState.Phase.NotFound,
                     contactName = "",
                     lists = emptyList(),
                     selectedListIds = emptySet(),
@@ -160,8 +143,8 @@ class ListPickerViewModel @Inject constructor(
             retryCount.flatMapLatest { listPickerState(contactId) }.stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = UiState(
-                    phase = UiState.Phase.Loading,
+                initialValue = ListPickerUiState(
+                    phase = ListPickerUiState.Phase.Loading,
                     contactName = "",
                     lists = emptyList(),
                     selectedListIds = emptySet(),
@@ -170,11 +153,11 @@ class ListPickerViewModel @Inject constructor(
         }
 
     /**
-     * PICK-09: a failure in any source becomes [UiState.Phase.Error] with
+     * PICK-09: a failure in any source becomes [ListPickerUiState.Phase.Error] with
      * Retry instead of an uncaught exception in viewModelScope, which crashed
      * the app. No logging here (rules.md Code 4).
      */
-    private fun listPickerState(contactId: Long): Flow<UiState> =
+    private fun listPickerState(contactId: Long): Flow<ListPickerUiState> =
         combine(
             listRepo.observeAll(),
             contactRepo.observeById(contactId),
@@ -189,23 +172,23 @@ class ListPickerViewModel @Inject constructor(
                 // read, so this is terminal. Until 2026-10-06 the picker sat
                 // Ready with a blank title and the commit failed late on the
                 // membership's foreign key.
-                UiState(
-                    phase = UiState.Phase.NotFound,
+                ListPickerUiState(
+                    phase = ListPickerUiState.Phase.NotFound,
                     contactName = "",
                     lists = emptyList(),
                     selectedListIds = emptySet(),
                 )
             } else {
-                UiState(
+                ListPickerUiState(
                     phase = when {
-                        committing -> UiState.Phase.Committing
-                        else -> UiState.Phase.Ready
+                        committing -> ListPickerUiState.Phase.Committing
+                        else -> ListPickerUiState.Phase.Ready
                     },
                     contactName = contact.displayName,
                     lists = lists
                         .filter { !it.isArchived && it.type != ListType.SMART }
                         .map {
-                            UiState.ListRow(
+                            ListPickerUiState.ListRow(
                                 listId = it.id,
                                 name = it.name,
                                 isMember = it.id in memberListIds,
@@ -219,8 +202,8 @@ class ListPickerViewModel @Inject constructor(
             }
         }.catch {
             emit(
-                UiState(
-                    phase = UiState.Phase.Error,
+                ListPickerUiState(
+                    phase = ListPickerUiState.Phase.Error,
                     contactName = "",
                     lists = emptyList(),
                     selectedListIds = _selectedListIds.value,

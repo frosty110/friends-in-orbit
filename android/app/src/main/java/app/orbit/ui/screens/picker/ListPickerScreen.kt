@@ -66,7 +66,7 @@ import app.orbit.ui.theme.OrbitTheme
  *
  * Layout ("list of lists is small, < 20 typically"):
  *   - AppBar: "Add to lists" (or "Add {contactName} to lists" once loaded)
- *   - LazyColumn of [ListPickerViewModel.UiState.ListRow] (name + [OrbitCheckbox];
+ *   - LazyColumn of [ListPickerUiState.ListRow] (name + [OrbitCheckbox];
  *     the row is the checkbox for TalkBack); a list the person is already on
  *     says "Already added" and is disabled, so it cannot be picked
  *   - The shared [BatchCounter] docked under the list (PICK-06) with the CTA
@@ -112,7 +112,7 @@ fun ListPickerScreen(
 
 @Composable
 private fun ListPickerContent(
-    state: ListPickerViewModel.UiState,
+    state: ListPickerUiState,
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onToggleListSelect: (Long) -> Unit,
@@ -156,21 +156,21 @@ private fun ListPickerContent(
                 .imePadding(),
         ) {
             when (state.phase) {
-                ListPickerViewModel.UiState.Phase.Loading ->
+                ListPickerUiState.Phase.Loading ->
                     // The first combine waits on four Room reads; the shared
                     // skeleton says "loading", never a blank or a false page.
                     OrbitListSkeleton()
                 // The route's person is not there: a missing or malformed id,
                 // or a row that is gone (observeById emitted null). The words
                 // Contact detail uses, with Go back as the one thing to do.
-                ListPickerViewModel.UiState.Phase.NotFound -> OrbitScreenMessage(
+                ListPickerUiState.Phase.NotFound -> OrbitScreenMessage(
                     title = stringResource(R.string.picker_person_not_found),
                     body = stringResource(R.string.picker_person_not_found_body),
                     actionLabel = stringResource(R.string.components_action_go_back),
                     onAction = onBack,
                     actionVariant = OrbitButtonVariant.Primary,
                 )
-                ListPickerViewModel.UiState.Phase.Error -> OrbitScreenMessage(
+                ListPickerUiState.Phase.Error -> OrbitScreenMessage(
                     icon = "warning-circle",
                     title = stringResource(R.string.picker_lists_error_title),
                     // The shared error words (rubric D6).
@@ -179,8 +179,8 @@ private fun ListPickerContent(
                     onAction = onRetry,
                     actionVariant = OrbitButtonVariant.Primary,
                 )
-                ListPickerViewModel.UiState.Phase.Ready,
-                ListPickerViewModel.UiState.Phase.Committing -> ReadyContent(
+                ListPickerUiState.Phase.Ready,
+                ListPickerUiState.Phase.Committing -> ReadyContent(
                     state = state,
                     onToggleListSelect = onToggleListSelect,
                     onClearSelection = onClearSelection,
@@ -194,7 +194,7 @@ private fun ListPickerContent(
 
 @Composable
 private fun ReadyContent(
-    state: ListPickerViewModel.UiState,
+    state: ListPickerUiState,
     onToggleListSelect: (Long) -> Unit,
     onClearSelection: () -> Unit,
     onNewList: () -> Unit,
@@ -249,7 +249,7 @@ private fun ReadyContent(
         BatchCounter(
             selectionCount = state.selectionCount,
             ctaLabel = pluralStringResource(R.plurals.picker_lists_commit, state.selectionCount, state.selectionCount),
-            isCommitting = state.phase == ListPickerViewModel.UiState.Phase.Committing,
+            isCommitting = state.phase == ListPickerUiState.Phase.Committing,
             onClear = onClearSelection,
             onCommit = onCommit,
         )
@@ -464,20 +464,20 @@ private fun ListPickerReadyPreviewDark() {
     }
 }
 
-private fun previewState(selectionCount: Int): ListPickerViewModel.UiState {
+private fun previewState(selectionCount: Int): ListPickerUiState {
     val rows = listOf(
-        ListPickerViewModel.UiState.ListRow(listId = 1L, name = "Inner orbit", isMember = false),
-        ListPickerViewModel.UiState.ListRow(listId = 2L, name = "Late night", isMember = true),
-        ListPickerViewModel.UiState.ListRow(listId = 3L, name = "People who ground me", isMember = false),
-        ListPickerViewModel.UiState.ListRow(listId = 4L, name = "Family", isMember = true),
+        ListPickerUiState.ListRow(listId = 1L, name = "Inner orbit", isMember = false),
+        ListPickerUiState.ListRow(listId = 2L, name = "Late night", isMember = true),
+        ListPickerUiState.ListRow(listId = 3L, name = "People who ground me", isMember = false),
+        ListPickerUiState.ListRow(listId = 4L, name = "Family", isMember = true),
     )
     val selected: Set<Long> = when (selectionCount) {
         0 -> emptySet()
         1 -> setOf(1L)
         else -> setOf(1L, 3L)
     }
-    return ListPickerViewModel.UiState(
-        phase = ListPickerViewModel.UiState.Phase.Ready,
+    return ListPickerUiState(
+        phase = ListPickerUiState.Phase.Ready,
         contactName = "Sarah Levin",
         lists = rows,
         selectedListIds = selected,
@@ -506,7 +506,7 @@ private fun ListPickerContentPreview() {
 // One per state, so each renders in the screenshot gallery and its audits.
 
 @Composable
-private fun ListPickerPreviewHost(state: ListPickerViewModel.UiState) {
+private fun ListPickerPreviewHost(state: ListPickerUiState) {
     OrbitTheme {
         ListPickerContent(
             state = state,
@@ -523,15 +523,17 @@ private fun ListPickerPreviewHost(state: ListPickerViewModel.UiState) {
 @PreviewLightDark
 @Composable
 private fun ListPickerLoadingPreview() {
-    ListPickerPreviewHost(previewState(selectionCount = 0).copy(phase = ListPickerViewModel.UiState.Phase.Loading))
+    ListPickerPreviewHost(
+        previewState(selectionCount = 0).copy(phase = ListPickerUiState.Phase.Loading),
+    )
 }
 
 @PreviewLightDark
 @Composable
 private fun ListPickerNotFoundPreview() {
     ListPickerPreviewHost(
-        ListPickerViewModel.UiState(
-            phase = ListPickerViewModel.UiState.Phase.NotFound,
+        ListPickerUiState(
+            phase = ListPickerUiState.Phase.NotFound,
             contactName = "",
             lists = emptyList(),
             selectedListIds = emptySet(),
@@ -542,7 +544,9 @@ private fun ListPickerNotFoundPreview() {
 @PreviewLightDark
 @Composable
 private fun ListPickerErrorPreview() {
-    ListPickerPreviewHost(previewState(selectionCount = 0).copy(phase = ListPickerViewModel.UiState.Phase.Error))
+    ListPickerPreviewHost(
+        previewState(selectionCount = 0).copy(phase = ListPickerUiState.Phase.Error),
+    )
 }
 
 @PreviewLightDark
