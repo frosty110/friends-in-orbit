@@ -35,6 +35,12 @@ import org.robolectric.annotation.Config
  * The rows are now keyed by call-event id and the index comes from the same
  * key list that builds the LazyColumn. Robolectric's default window is
  * 320x470dp, so twenty calls are well past the fold.
+ *
+ * The pane-title tests cover every state: the person's name while there is
+ * one, and the message's heading when there is not (NotFound, Error), so
+ * TalkBack announces the screen either way. Until 2026-10-06 the two
+ * person-less states set no pane title at all, and the app bar has no title
+ * here to fall back on.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [33], application = Application::class)
@@ -97,6 +103,30 @@ class ContactDetailScreenTest {
         ).assertExists()
         compose.onNodeWithText(CURTAIN_FIXTURE_NAME, useUnmergedTree = true)
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
+    }
+
+    @Test
+    fun a_person_who_is_gone_is_announced_by_the_message_heading() {
+        compose.setContent { ContactDetailPreviewHost(ContactDetailUiState.NotFound) }
+        compose.onNode(
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.PaneTitle,
+                "This person isn't in Orbit anymore"
+            ),
+            useUnmergedTree = true
+        ).assertExists()
+    }
+
+    @Test
+    fun a_failed_read_is_announced_by_the_message_heading() {
+        compose.setContent { ContactDetailPreviewHost(ContactDetailUiState.Error) }
+        compose.onNode(
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.PaneTitle,
+                "Couldn't load this person"
+            ),
+            useUnmergedTree = true
+        ).assertExists()
     }
 
     @Test
