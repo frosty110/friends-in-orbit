@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -46,6 +47,12 @@ import app.orbit.ui.util.asString
  *   |                                                +-- overflow ([listRowMenuActions])
  *   +-- drag handle (own touch region)
  *
+ * The second line is the list's rhythm ("Every 14 days") or, for a smart
+ * list, its rule; the ViewModel decides which. [onConfigure] is the menu's
+ * "List settings" and opens List settings, while [onClick] on the row opens
+ * the list's deck (LIST-23): two destinations, so the screen wires them to
+ * two callbacks.
+ *
  * The drag handle owns its own [Box] with
  * [dragHandleModifier] (caller passes `Modifier.draggableHandle()` from the
  * sh.calvin.reorderable scope). The handle's clickable surface does NOT
@@ -65,6 +72,7 @@ fun ListRow(
     onRename: () -> Unit,
     onArchive: () -> Unit,
     onConfigure: () -> Unit,
+    onToggleNudges: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onAddContacts: (() -> Unit)? = null,
@@ -99,6 +107,13 @@ fun ListRow(
             )
         }
         Spacer(Modifier.width(OrbitTheme.spacing.x2))
+        // At large font scales the "Smart list" chip stacks under the name
+        // instead of sitting beside it: side by side, the chip and the
+        // trailing controls left the name a column so narrow it broke
+        // mid-word at 200% (rubric gate G3; Home and Card view stack at the
+        // same threshold).
+        val largeText = LocalDensity.current.fontScale > 1.3f
+        val stackChip = largeText && tile.type == ListType.SMART
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = shownName,
@@ -111,8 +126,15 @@ fun ListRow(
                     modifier = Modifier.padding(top = OrbitTheme.spacing.x1 / 2),
                 )
             }
+            if (stackChip) {
+                OrbitChip(
+                    label = stringResource(R.string.lists_row_smart_chip),
+                    tone = ChipTone.Terracotta,
+                    modifier = Modifier.padding(top = OrbitTheme.spacing.x2),
+                )
+            }
         }
-        if (tile.type == ListType.SMART) {
+        if (tile.type == ListType.SMART && !stackChip) {
             Spacer(Modifier.width(OrbitTheme.spacing.x2))
             OrbitChip(label = stringResource(R.string.lists_row_smart_chip), tone = ChipTone.Terracotta)
         }
@@ -159,8 +181,10 @@ fun ListRow(
                 actions = listRowMenuActions(
                     resources = LocalContext.current.resources,
                     listName = shownName,
+                    notificationsEnabled = tile.notificationsEnabled,
                     onRename = onRename,
                     onConfigure = onConfigure,
+                    onToggleNudges = onToggleNudges,
                     onMoveUp = onMoveUp,
                     onMoveDown = onMoveDown,
                     onArchive = onArchive,
@@ -177,20 +201,33 @@ fun ListRow(
  *
  * 2026-08-15 UAT — "Archive" used to sit second from the top in plain fg,
  * one slip away from a tap meant for "List settings". Everyday actions now
- * lead (rename → settings → the a11y reorder fallbacks) and Archive sinks
- * below the divider in danger, per the [OrbitMenuTone] contract.
+ * lead (rename → settings → nudges → the a11y reorder fallbacks) and Archive
+ * sinks below the divider in danger, per the [OrbitMenuTone] contract.
+ *
+ * "Pause nudges" / "Resume nudges" and the Archive line use Home's strings on
+ * purpose: Lists is the full manager and Home the convenience surface for the
+ * same list, and the spec holds the two menus to the same labels (LIST-23).
+ * Pausing a list's nudges used to be possible from Home but not from here.
  */
 internal fun listRowMenuActions(
     resources: Resources,
     listName: String,
+    notificationsEnabled: Boolean,
     onRename: () -> Unit,
     onConfigure: () -> Unit,
+    onToggleNudges: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onArchive: () -> Unit,
 ): List<OrbitMenuAction> = listOf(
     OrbitMenuAction(label = resources.getString(R.string.lists_menu_rename), onClick = onRename),
     OrbitMenuAction(label = resources.getString(R.string.lists_menu_list_settings), onClick = onConfigure),
+    OrbitMenuAction(
+        label = resources.getString(
+            if (notificationsEnabled) R.string.home_menu_pause_nudges else R.string.home_menu_resume_nudges,
+        ),
+        onClick = onToggleNudges,
+    ),
     // Accessibility fallback for keyboard / TalkBack reorder (UI-SPEC).
     OrbitMenuAction(label = resources.getString(R.string.lists_menu_move_up), onClick = onMoveUp),
     OrbitMenuAction(label = resources.getString(R.string.lists_menu_move_down), onClick = onMoveDown),
@@ -198,7 +235,7 @@ internal fun listRowMenuActions(
         label = resources.getString(R.string.components_action_archive),
         onClick = onArchive,
         tone = OrbitMenuTone.Destructive,
-        supporting = resources.getString(R.string.lists_menu_archive_supporting, listName),
+        supporting = resources.getString(R.string.components_menu_archive_supporting, listName),
     ),
 )
 
@@ -212,13 +249,14 @@ private fun ListRowPreviewLightStatic() {
                 name = "Inner orbit",
                 memberCount = 12,
                 type = ListType.STATIC,
-                ruleSummary = null,
+                ruleSummary = UiText.plural(R.plurals.lists_interval_every_days, 7, 7),
             ),
             isDragging = false,
             onClick = {},
             onRename = {},
             onArchive = {},
             onConfigure = {},
+            onToggleNudges = {},
             onMoveUp = {},
             onMoveDown = {},
         )
@@ -236,12 +274,14 @@ private fun ListRowPreviewDarkSmart() {
                 memberCount = 0,
                 type = ListType.SMART,
                 ruleSummary = UiText.plural(R.plurals.lists_rule_summary_recently_added, 30, 30),
+                notificationsEnabled = false,
             ),
             isDragging = false,
             onClick = {},
             onRename = {},
             onArchive = {},
             onConfigure = {},
+            onToggleNudges = {},
             onMoveUp = {},
             onMoveDown = {},
         )

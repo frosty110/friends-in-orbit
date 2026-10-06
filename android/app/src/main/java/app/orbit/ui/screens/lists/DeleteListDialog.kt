@@ -14,14 +14,21 @@ import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
 
 /**
- * D-25 — destructive confirmation for hard-deleting an archived list.
+ * D-25: the confirmation before a list is deleted.
  *
- * Reachable only from `ArchivedListRow` (PRD: Delete sits behind an
- * explicit prior archive step — the two-step gesture is the warm/unhurried
- * "beat to reconsider").
+ * Reachable from two places, which must behave the same
+ * (features/orbit-lists/README.md, "the same delete-with-Undo behavior"):
+ * the delete control on `ArchivedListRow` in the Lists manager, and Delete in
+ * Home's long-press menu, which needs no prior archive step. Either way the
+ * confirm stages a deferred delete: the row hides, "List deleted." offers
+ * Undo, and the purge runs only when that snackbar goes
+ * (features/home/README.md).
  *
- * Copy is verbatim from `features/orbit-lists/README.md` and is locked
- * (lowercase body is intentional — do NOT capitalize).
+ * Copy is `lists_delete_title` / `lists_delete_body`, in sentence case per
+ * voice.md (UX rubric decision 8, 2026-10-05). An earlier PRD line pinned a
+ * lowercase body and this header told editors not to capitalise it; that
+ * line was updated with the decision, so the header no longer argues with
+ * the code below.
  *
  * Pattern precedent: ConvertToStaticDialog — same Material3
  * AlertDialog shell, Destructive confirm button, Ghost dismiss button.

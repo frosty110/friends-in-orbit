@@ -1,5 +1,7 @@
 package app.orbit.ui.screens.lists
 
+import androidx.annotation.PluralsRes
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -19,12 +22,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -44,9 +50,18 @@ import app.orbit.ui.theme.OrbitTheme
  *  - [SmartListRule.RarelyCalled] → percent slider, 10..50 (default 50)
  *  - [SmartListRule.NeverCalled] → no-params placeholder
  *
- * Save-on-change semantics — sliders use `onValueChangeFinished` (not
- * `onValueChange`). Numeric input commits on
- * focus loss (the consumer can drive that via the value parameter).
+ * Each rule reads as one sentence over its control, with the current setting
+ * as the sentence's argument ("Added in the last 30 days", "The top 20% of
+ * the people you call"). Until 2026-10-06 the words were split around the
+ * control (a label on the left, "30 days" on the right, "days" after a
+ * number field), which fixed the word order for every language (voice.md:
+ * keep a sentence whole). The slider's TalkBack value stays its own words.
+ *
+ * Save-on-change semantics: sliders commit on `onValueChangeFinished` (not
+ * `onValueChange`). The number field commits on focus loss or IME Done, from
+ * a local typing buffer it alone owns (rules.md Code 7); it used to commit on
+ * every keystroke while also re-seeding its buffer from the saved value,
+ * which made two writers of the same text.
  *
  * Token-clean — no inline color hex literals, no RoundedCornerShape, no fontSize literals.
  *
@@ -61,23 +76,23 @@ fun SmartRuleEditor(
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4)) {
         when (rule) {
             is SmartListRule.RecentlyAddedNotCalled -> DaysSlider(
-                label = stringResource(R.string.lists_smart_added_within),
+                sentenceRes = R.plurals.lists_smart_added_within,
                 value = rule.daysWindow,
                 range = 7..180,
                 onCommit = { onChange(rule.copy(daysWindow = it)) },
             )
             is SmartListRule.LongGap -> DaysNumberInput(
-                label = stringResource(R.string.lists_smart_no_call_in),
+                sentenceRes = R.plurals.lists_smart_no_call_in,
                 value = rule.daysThreshold,
                 onCommit = { onChange(rule.copy(daysThreshold = it)) },
             )
             is SmartListRule.CommonlyCalled -> PercentSlider(
-                label = stringResource(R.string.lists_smart_top),
+                sentenceRes = R.string.lists_smart_top,
                 value = rule.topPercent,
                 onCommit = { onChange(rule.copy(topPercent = it)) },
             )
             is SmartListRule.RarelyCalled -> PercentSlider(
-                label = stringResource(R.string.lists_smart_bottom),
+                sentenceRes = R.string.lists_smart_bottom,
                 value = rule.bottomPercent,
                 onCommit = { onChange(rule.copy(bottomPercent = it)) },
             )
@@ -88,34 +103,29 @@ fun SmartRuleEditor(
 
 @Composable
 private fun DaysSlider(
-    label: String,
+    @PluralsRes sentenceRes: Int,
     value: Int,
     range: IntRange,
     onCommit: (Int) -> Unit,
 ) {
     var current by remember(value) { mutableFloatStateOf(value.toFloat()) }
+    val days = current.toInt()
+    // The sentence follows the thumb, so the words always say the setting
+    // the slider shows.
+    val sentence = pluralStringResource(sentenceRes, days, days)
     Column(Modifier.fillMaxWidth()) {
-        Row(
-            verticalAlignment = Alignment.Bottom,
+        Text(
+            text = sentence,
+            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                text = label,
-                style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = pluralStringResource(R.plurals.lists_smart_days, current.toInt(), current.toInt()),
-                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
-            )
-        }
+        )
         OrbitSlider(
             value = current,
             onValueChange = { current = it },
             onValueChangeFinished = { onCommit(current.toInt()) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
-            label = label,
-            valueDescription = pluralStringResource(R.plurals.lists_smart_days, current.toInt(), current.toInt()),
+            label = sentence,
+            valueDescription = pluralStringResource(R.plurals.lists_smart_days, days, days),
             modifier = Modifier.padding(top = OrbitTheme.spacing.x1),
         )
         Row(
@@ -136,33 +146,26 @@ private fun DaysSlider(
 
 @Composable
 private fun PercentSlider(
-    label: String,
+    @StringRes sentenceRes: Int,
     value: Int,
     onCommit: (Int) -> Unit,
 ) {
     var current by remember(value) { mutableFloatStateOf(value.toFloat()) }
+    val percent = current.toInt()
+    val sentence = stringResource(sentenceRes, percent)
     Column(Modifier.fillMaxWidth()) {
-        Row(
-            verticalAlignment = Alignment.Bottom,
+        Text(
+            text = sentence,
+            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                text = label,
-                style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = stringResource(R.string.lists_smart_percent, current.toInt()),
-                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
-            )
-        }
+        )
         OrbitSlider(
             value = current,
             onValueChange = { current = it },
             onValueChangeFinished = { onCommit(current.toInt()) },
             valueRange = 10f..50f,
-            label = label,
-            valueDescription = stringResource(R.string.lists_smart_percent_a11y, current.toInt()),
+            label = sentence,
+            valueDescription = stringResource(R.string.lists_smart_percent_a11y, percent),
             modifier = Modifier.padding(top = OrbitTheme.spacing.x1),
         )
         Row(
@@ -180,57 +183,78 @@ private fun PercentSlider(
         }
         Spacer(Modifier.height(OrbitTheme.spacing.x1))
         Text(
-            text = stringResource(R.string.lists_smart_percent_of_called, current.toInt()),
+            text = stringResource(R.string.lists_smart_percent_of_called, percent),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
         )
     }
 }
 
+/**
+ * A whole number of days, typed. The buffer is the field's alone: seeded once
+ * from the saved [value], never re-seeded by it, so the saved value flows one
+ * way and nothing overwrites what the user is typing (rules.md Code 7). It
+ * commits on focus loss and IME Done when it parses to 1 or more and differs
+ * from [value]; otherwise it reverts to the saved number, so a cleared field
+ * never writes and never stays blank.
+ */
 @Composable
 private fun DaysNumberInput(
-    label: String,
+    @PluralsRes sentenceRes: Int,
     value: Int,
     onCommit: (Int) -> Unit,
 ) {
-    var text by remember(value) { mutableStateOf(value.toString()) }
+    var text by rememberSaveable { mutableStateOf(value.toString()) }
+    // Guards the focus-loss commit: onFocusChanged reports unfocused once as
+    // the field enters composition, which must not count as a blur.
+    var hasFocused by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    // The sentence shows what is typed while it is a valid number, else the
+    // saved setting, so it never reads "No call in the last  days".
+    val shown = text.toIntOrNull()?.takeIf { it >= 1 } ?: value
+
+    fun commit() {
+        val parsed = text.toIntOrNull()
+        if (parsed != null && parsed >= 1) {
+            if (parsed != value) onCommit(parsed)
+        } else {
+            text = value.toString()
+        }
+    }
+
     Column(Modifier.fillMaxWidth()) {
         Text(
-            text = label,
+            text = pluralStringResource(sentenceRes, shown, shown),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
-        ) {
-            TextField(
-                value = text,
-                onValueChange = { input ->
-                    val digits = input.filter { it.isDigit() }.take(3)
-                    text = digits
-                    val parsed = digits.toIntOrNull()
-                    if (parsed != null && parsed >= 1) {
-                        onCommit(parsed)
+        TextField(
+            value = text,
+            onValueChange = { input -> text = input.filter { it.isDigit() }.take(3) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = {
+                commit()
+                focusManager.clearFocus()
+            }),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = OrbitTheme.colors.bgSubtle,
+                unfocusedContainerColor = OrbitTheme.colors.bgSubtle,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                focusedTextColor = OrbitTheme.colors.fg,
+                unfocusedTextColor = OrbitTheme.colors.fg,
+            ),
+            modifier = Modifier
+                .width(96.dp)
+                .onFocusChanged { focusState ->
+                    if (focusState.isFocused) {
+                        hasFocused = true
+                    } else if (hasFocused) {
+                        hasFocused = false
+                        commit()
                     }
                 },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = OrbitTheme.colors.bgSubtle,
-                    unfocusedContainerColor = OrbitTheme.colors.bgSubtle,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    focusedTextColor = OrbitTheme.colors.fg,
-                    unfocusedTextColor = OrbitTheme.colors.fg,
-                ),
-                modifier = Modifier.width(96.dp),
-            )
-            Text(
-                // The unit agrees with the number in the field (1 day, 2 days).
-                text = pluralStringResource(R.plurals.lists_smart_days_unit, value, value),
-                style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
-            )
-        }
+        )
     }
 }
 
@@ -257,6 +281,36 @@ private fun SmartRuleEditorRecentlyAddedLightPreview() {
         ) {
             SmartRuleEditor(
                 rule = SmartListRule.RecentlyAddedNotCalled(daysWindow = 30),
+                onChange = {},
+            )
+        }
+    }
+}
+
+@Preview(name = "SmartRuleEditor: LongGap, light", showBackground = true)
+@Composable
+private fun SmartRuleEditorLongGapLightPreview() {
+    OrbitTheme(darkTheme = false) {
+        Box(
+            modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2),
+        ) {
+            SmartRuleEditor(
+                rule = SmartListRule.LongGap(daysThreshold = 90),
+                onChange = {},
+            )
+        }
+    }
+}
+
+@Preview(name = "SmartRuleEditor: CommonlyCalled, dark", showBackground = true)
+@Composable
+private fun SmartRuleEditorCommonlyCalledDarkPreview() {
+    OrbitTheme(darkTheme = true) {
+        Box(
+            modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2),
+        ) {
+            SmartRuleEditor(
+                rule = SmartListRule.CommonlyCalled(topPercent = 20),
                 onChange = {},
             )
         }

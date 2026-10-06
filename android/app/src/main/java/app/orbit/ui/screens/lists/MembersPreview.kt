@@ -142,7 +142,9 @@ private fun ShowAllRow(
             .semantics { contentDescription = showAllDescription },
     ) {
         Text(
-            text = stringResource(R.string.lists_members_showing, visibleCount, totalCount),
+            // A plural keyed on the total (voice.md: plurals wherever a count
+            // appears, even where English does not change).
+            text = pluralStringResource(R.plurals.lists_members_showing, totalCount, visibleCount, totalCount),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgSubtle),
             modifier = Modifier.weight(1f),
         )

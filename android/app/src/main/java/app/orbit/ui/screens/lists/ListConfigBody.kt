@@ -29,7 +29,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -60,8 +59,6 @@ import app.orbit.ui.components.OrbitSlider
 import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import java.time.LocalTime
 
 /**
@@ -86,14 +83,17 @@ import java.time.LocalTime
  *     The onboarding branch instead uses `fillMaxWidth().imePadding()` and
  *     lets the OnboardingScaffold scroll container be the only scroll parent.
  *   - An [OutlinedTextField] for the list name renders at the top of the
- *     body (BLOCKER 1 / ONB-11). Production path skips the field — the
- *     production list name is set inline by `CreateListBottomSheet` before
- *     navigation to ListConfig.
+ *     body (BLOCKER 1 / ONB-11). The production path renders the name as an
+ *     inline rename row instead (F-12, [ListNameRenameRow]: static text with
+ *     a pencil, a field while editing); both commit through `onNameChange`.
  *
  * Save-on-change semantics — every control commits via a VM setter (LIST-04);
- * the body never holds editable form state of its own. The name field's value
- * mirrors `state.name` and emits to the `onNameChange` setter on every
- * keystroke (the VM coalesces inside `runMutation`; v1 ships with no debounce).
+ * the body never holds editable form state of its own beyond a typing buffer.
+ * The onboarding name field emits to `onNameChange` on every keystroke (the VM
+ * coalesces inside `runMutation`; v1 ships with no debounce); the rename row
+ * commits once, on IME Done, focus loss or the check. Confirmations ("This is
+ * now a regular list.") come from the ViewModel through the screen's one
+ * snackbar collector, so they say only what was saved.
  */
 @Composable
 internal fun ListConfigBody(
@@ -119,8 +119,6 @@ internal fun ListConfigBody(
     onAddContacts: () -> Unit = {}
 ) {
     var showConvertDialog by rememberSaveable { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val convertedMessage = stringResource(R.string.lists_converted_snackbar)
 
     if (isOnboarding) {
         // F-1 fix (2026-04-30 hot-fix-260430-hs4): drop the inner
@@ -194,12 +192,10 @@ internal fun ListConfigBody(
             firstNames = state.members.map { it.displayName },
             onConfirm = {
                 showConvertDialog = false
-                triggerConvertExtracted(
-                    onConfirmConvert = onConfirmConvert,
-                    scope = scope,
-                    snackbarHostState = snackbarHostState,
-                    message = convertedMessage
-                )
+                // The VM confirms with "This is now a regular list." once the
+                // write is in; the body announced it here, before and
+                // regardless of the write, until 2026-10-06.
+                onConfirmConvert()
             },
             onDismiss = { showConvertDialog = false }
         )
@@ -232,8 +228,9 @@ private fun ColumnScope.ListConfigBodySections(
     if (isOnboarding) {
         // BLOCKER 1 fix — name editor is required so onboarding
         // can satisfy ONB-11 ("no empty/unnamed lists can leave
-        // onboarding"). Production path skips this — the production
-        // list name is set by CreateListBottomSheet before nav.
+        // onboarding"). The production branch below renders the name as
+        // an inline rename row instead (F-12), since a list arrives there
+        // already named by the create sheet.
         SettingGroup(title = stringResource(R.string.lists_section_name)) {
             // Local typing buffer prevents the async VM round-trip
             // from racing the IME — without it, fast typing drops the
@@ -276,7 +273,8 @@ private fun ColumnScope.ListConfigBodySections(
     // which left a smart list with no way to get one.
     run {
         // LIST-21: "Rhythm", not "Cadence" (voice.md glossary); no accent spent
-        // on settings in this body, only on the app bar's "Done".
+        // on settings in this body. The app bar's "Done" is the screen's one
+        // accent; the foot-of-form Done below is Secondary for that reason.
         SettingGroup(title = stringResource(R.string.lists_section_rhythm)) {
             RuleTemplatePicker(
                 currentKind = state.ruleKind,
@@ -400,33 +398,17 @@ private fun ColumnScope.ListConfigBodySections(
     // 2026-08-15 UAT — the create flow ended here with no way to say "done",
     // only a back arrow. Everything above is already saved, so this closes the
     // screen and returns to wherever the list was opened from (Lists Manager,
-    // for a list that was just created).
+    // for a list that was just created). Secondary, not Primary: the app bar's
+    // Done is the screen's one accent (LIST-21, rules.md §Design 5), and two
+    // accent Dones on one screen said neither was the primary action.
     if (onDone != null) {
         Spacer(Modifier.height(OrbitTheme.spacing.x6))
         OrbitButton(
             text = stringResource(R.string.components_action_done),
             onClick = onDone,
+            variant = OrbitButtonVariant.Secondary,
             modifier = Modifier.fillMaxWidth()
         )
-    }
-}
-
-/**
- * Local copy of the convert side-effect — kept private to ListConfigBody.kt
- * so visibility on the production helper stays unchanged. Atomicity is
- * owned by `ListRepository.convertSmartToStatic` (`db.withTransaction`); the
- * upstream Flow re-emission flips `Ready.type` → STATIC and the body
- * re-renders without the Smart-rule and Convert sections.
- */
-private fun triggerConvertExtracted(
-    onConfirmConvert: () -> Unit,
-    scope: CoroutineScope,
-    snackbarHostState: SnackbarHostState,
-    message: String
-) {
-    onConfirmConvert()
-    scope.launch {
-        snackbarHostState.showSnackbar(message)
     }
 }
 
@@ -434,24 +416,27 @@ private fun triggerConvertExtracted(
  * Local interval slider — moved from `ListConfigScreen.kt` along with the
  * Cadence body. Identical behavior; the production path imports it via
  * `ListConfigBody` rather than directly.
+ *
+ * One sentence over the slider ("Aim for every 14 days"), with the interval
+ * as its argument, rather than a label on the left and the value on the
+ * right: a translator can then put the words in their language's order
+ * (voice.md, "keep a sentence whole"). Contact detail's custom schedule uses
+ * the same sentence.
  */
 @Composable
 private fun IntervalSliderLocal(currentHours: Int, onCommit: (Int) -> Unit) {
     val initialDays = (currentHours / 24f).coerceAtLeast(1f)
     var days by remember(currentHours) { mutableFloatStateOf(initialDays) }
     Column(Modifier.padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4)) {
-        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = stringResource(R.string.lists_interval_aim),
-                style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                modifier = Modifier.weight(1f)
-            )
-            val rounded = days.toInt().coerceAtLeast(1)
-            Text(
-                text = pluralStringResource(R.plurals.lists_interval_days, rounded, rounded),
-                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg)
-            )
-        }
+        val rounded = days.toInt().coerceAtLeast(1)
+        Text(
+            text = stringResource(
+                R.string.lists_interval_aim,
+                pluralStringResource(R.plurals.lists_interval_days, rounded, rounded),
+            ),
+            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
+            modifier = Modifier.fillMaxWidth()
+        )
         OrbitSlider(
             value = days,
             onValueChange = { days = it },

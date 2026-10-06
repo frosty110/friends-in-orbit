@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
@@ -22,7 +21,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
@@ -41,6 +39,7 @@ import app.orbit.notify.NudgeSchedule
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitAppBarTextAction
+import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
@@ -61,8 +60,9 @@ import java.time.LocalTime
  * [MembersPreview].
  *
  * Save-on-change semantics — every control commits via a VM setter. There is
- * no app-bar commit chip and no destructive deletion affordance (archive lives
- * in Lists Manager; hard delete is deferred to v1.1).
+ * no app-bar commit chip and no archive or delete here: both live on the list's
+ * menus (Lists Manager's row menu and archived section, Home's long-press),
+ * each with Undo, so this screen only edits.
  *
  * SMART vs STATIC sectioning:
  *  - STATIC: Cadence (RuleTemplatePicker) → Interval (slider, KeepInTouch
@@ -94,16 +94,18 @@ fun ListConfigScreen(
     // recomposition.
     val state by vm.uiState.collectAsStateWithLifecycle()
 
-    // H4 fix — host state is hoisted to the outer composable so the failure
-    // collector below and the convert-success snackbar inside
-    // [ListConfigContent] share one queue. The inner composable receives the
-    // host instance via parameter; the convert flow keeps using it.
+    // H4 fix: host state is hoisted to the outer composable and handed to
+    // [ListConfigContent], so every snackbar on this screen (a failed save, a
+    // removed member's Undo, "This is now a regular list.") goes through the
+    // one collector below. The VM emits all of them; the convert success used
+    // to be shown by the body before the write resolved, whether or not it
+    // succeeded.
     val snackbarHostState = remember { SnackbarHostState() }
     // Wrap the SharedFlow collector in repeatOnLifecycle(STARTED)
     // so the collector stops while the screen is backgrounded. SnackbarEvent
     // is a tryEmit/replay=0 SharedFlow; events emitted while STOPPED are
-    // dropped deliberately (the convert success message is local UI feedback,
-    // not a critical journal). lifecycleOwner is captured once here and the
+    // dropped deliberately (a confirmation is local UI feedback, not a
+    // critical journal). lifecycleOwner is captured once here and the
     // LaunchedEffect re-keys on it so a host swap re-establishes the
     // collector.
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -114,7 +116,7 @@ fun ListConfigScreen(
             vm.snackbarEvents.collect { event ->
                 // F-6 — when an event carries an action label (today only the
                 // member-remove "Undo" path), wire the action tap to the VM's
-                // UndoStack pop. Other emitters (failure surface, convert
+                // UndoStack pop. Other emitters (the failure surface, convert
                 // success) emit without an action label and short-circuit.
                 val result = snackbarHostState.showSnackbar(
                     message = event.message.asString(context),
@@ -197,33 +199,33 @@ private fun ListConfigContent(
                 OrbitIconButton("arrow-left", onBack, contentDescription = stringResource(R.string.components_action_back))
             },
             // Only offered once there is a list to be done with — Loading and
-            // NotFound have nothing to finish.
+            // NotFound have nothing to finish. TalkBack reads the visible
+            // "Done": an override used to say "back to your lists", which was
+            // wrong from Home's and Card view's way in (Done pops to wherever
+            // the screen was opened from).
             trailing = if (state is ListConfigUiState.Ready) {
                 {
                     OrbitAppBarTextAction(
                         text = stringResource(R.string.components_action_done),
                         onClick = onDone,
-                        contentDescription = stringResource(R.string.lists_config_done_a11y),
                     )
                 }
             } else null,
         )
 
-        // Review follow-up #3 — show centred copy in NotFound, mirroring the
-        // picker's NotFoundEmpty (ContactPickerScreen). Previously the NotFound
-        // surface short-circuited to an AppBar-only screen with no body.
+        // A list that is gone (deleted elsewhere, a stale link) says so and
+        // offers the way out, as Contact detail's NotFound does, instead of
+        // one centred line under a bare back arrow (rubric G4: no dead ends).
+        // Go back is the only thing to do here, so it takes the accent.
         if (state is ListConfigUiState.NotFound) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(horizontal = OrbitTheme.spacing.x6),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stringResource(R.string.lists_config_not_found),
-                    style = OrbitTheme.type.h3,
-                    color = OrbitTheme.colors.fg,
-                    textAlign = TextAlign.Center,
-                )
-            }
+            OrbitScreenMessage(
+                icon = "list-bullets",
+                title = stringResource(R.string.lists_config_not_found),
+                body = stringResource(R.string.lists_config_not_found_body),
+                actionLabel = stringResource(R.string.lists_config_go_back),
+                onAction = onBack,
+                actionVariant = OrbitButtonVariant.Primary,
+            )
             return@OrbitScreen
         }
 
@@ -243,10 +245,10 @@ private fun ListConfigContent(
         // ONB-20 — body is delegated to the shared ListConfigBody so
         // both the production path (this screen) and the onboarding wrapper
         // (OnboardingFirstListScreen) render the same controls. The
-        // production path passes `isOnboarding = false`; the onNameChange
-        // lambda is wired via `vm::setName` from the outer entry point but
-        // is never invoked because production hides the name field
-        // (see ListConfigBody — name editor only renders when isOnboarding).
+        // production path passes `isOnboarding = false`, which renders the
+        // name as an inline rename row (F-12, ListNameRenameRow) instead of
+        // onboarding's always-open field; both commit through onNameChange,
+        // wired to `vm::setName` at the entry point above.
         ListConfigBody(
             state = state,
             isOnboarding = false,
@@ -464,40 +466,85 @@ private fun ListConfigScreenSmartReadyDarkPreview() {
 @PreviewFontScale
 @Composable
 private fun ListConfigContentPreview() {
-    OrbitTheme {
-        ListConfigContent(
-            state = ListConfigUiState.Ready(
-                id = 1L,
-                name = "Inner orbit",
-                type = ListType.STATIC,
-                ruleKind = RuleKind.KEEP_IN_TOUCH,
-                ruleParams = RuleParams.KeepInTouch(),
-                smartRule = null,
-                activeHoursStart = null,
-                activeHoursEnd = null,
-                notificationsEnabled = true,
-                nudgeSchedule = null,
-                members = listOf(
-                    ListConfigContactSnapshot(1L, "Alex Rivera", null),
-                    ListConfigContactSnapshot(2L, "Sam Patel", null),
-                ),
+    ListConfigPreviewHost(
+        ListConfigUiState.Ready(
+            id = 1L,
+            name = "Inner orbit",
+            type = ListType.STATIC,
+            ruleKind = RuleKind.KEEP_IN_TOUCH,
+            ruleParams = RuleParams.KeepInTouch(),
+            smartRule = null,
+            activeHoursStart = null,
+            activeHoursEnd = null,
+            notificationsEnabled = true,
+            nudgeSchedule = null,
+            members = listOf(
+                ListConfigContactSnapshot(1L, "Alex Rivera", null),
+                ListConfigContactSnapshot(2L, "Sam Patel", null),
             ),
-            snackbarHostState = remember { SnackbarHostState() },
-            onBack = {},
-            onDone = {},
-            onNameChange = {},
-            onRuleTemplateChange = {},
-            onRuleParamsChange = {},
-            onActiveHoursChange = { _, _ -> },
-            onAlwaysActiveToggled = {},
-            onNotificationsToggle = {},
-            onNudgeScheduleChange = {},
-            onSmartRuleChange = {},
-            onConfirmConvert = {},
-            onRemoveMember = { _, _ -> },
-            onAddContacts = {},
-        )
+        ),
+    )
+}
+
+// One preview per remaining state (gallery convention: each state is a cell
+// the a11y and curtain audits can see). Error, NotFound and a list with
+// active hours set had no preview until 2026-10-06, so the accent count with
+// the hours bar on screen (LIST-21) had never been looked at.
+@Composable
+private fun ListConfigPreviewHost(state: ListConfigUiState) {
+    OrbitTheme {
+        Box(modifier = Modifier.background(OrbitTheme.colors.bg)) {
+            ListConfigContent(
+                state = state,
+                snackbarHostState = remember { SnackbarHostState() },
+                onBack = {},
+                onDone = {},
+                onNameChange = {},
+                onRuleTemplateChange = {},
+                onRuleParamsChange = {},
+                onActiveHoursChange = { _, _ -> },
+                onAlwaysActiveToggled = {},
+                onNotificationsToggle = {},
+                onNudgeScheduleChange = {},
+                onSmartRuleChange = {},
+                onConfirmConvert = {},
+                onRemoveMember = { _, _ -> },
+                onAddContacts = {},
+            )
+        }
     }
+}
+
+@PreviewLightDark
+@Composable
+private fun ListConfigActiveHoursSetPreview() {
+    ListConfigPreviewHost(
+        ListConfigUiState.Ready(
+            id = 4L,
+            name = "People who ground me",
+            type = ListType.STATIC,
+            ruleKind = RuleKind.KEEP_IN_TOUCH,
+            ruleParams = RuleParams.KeepInTouch().withIntervalHours(14 * 24),
+            smartRule = null,
+            activeHoursStart = LocalTime.of(21, 0),
+            activeHoursEnd = LocalTime.of(2, 0),
+            notificationsEnabled = false,
+            nudgeSchedule = null,
+            members = listOf(ListConfigContactSnapshot(3L, "Jordan Lee", null)),
+        ),
+    )
+}
+
+@PreviewLightDark
+@Composable
+private fun ListConfigErrorPreview() {
+    ListConfigPreviewHost(ListConfigUiState.Error)
+}
+
+@PreviewLightDark
+@Composable
+private fun ListConfigNotFoundPreview() {
+    ListConfigPreviewHost(ListConfigUiState.NotFound)
 }
 
 // endregion

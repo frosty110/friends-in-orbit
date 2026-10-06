@@ -22,8 +22,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import app.orbit.R
+import app.orbit.ui.components.CurtainMask
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -77,9 +80,16 @@ fun RenameListDialog(
             )
         },
         text = {
+            // PRIV-03: under the curtain the field draws "List" over the
+            // buffer, as List settings' rename row does (CurtainMask leaves
+            // the buffer alone, so Save still gets the real text). Until
+            // 2026-10-06 this dialog was the one name field without the mask,
+            // so a list name stayed readable in the app switcher.
+            val curtainList = stringResource(R.string.components_curtain_list)
             OutlinedTextField(
                 value = nameText,
                 onValueChange = { nameText = it },
+                visualTransformation = if (LocalPrivacyCurtain.current) CurtainMask(curtainList) else VisualTransformation.None,
                 singleLine = true,
                 textStyle = LocalTextStyle.current.merge(OrbitTheme.type.body),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),

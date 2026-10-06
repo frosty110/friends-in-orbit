@@ -3,7 +3,6 @@ package app.orbit.ui.screens.lists
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.orbit.R
@@ -27,11 +29,15 @@ import app.orbit.data.entity.RuleTemplateEntity
 import app.orbit.ui.theme.OrbitTheme
 
 /**
- * Cadence picker for List Configuration.
+ * Rhythm picker for List settings.
  *
- * Renders the three [RuleKind] options as a stack of radio rows. The
- * `templates` parameter is plumbed through for v1.1 per-template subtitle
- * resolution; v1 only uses [currentKind] to show the selected dot.
+ * Renders the three [RuleKind] options as a stack of radio rows: one
+ * `selectableGroup`, each row `selectable` with `Role.RadioButton` and its
+ * selected state, so TalkBack says "Keep in touch, selected, radio button, 1
+ * of 3" and not just the label (WCAG 4.1.2; the drawn dot was the only cue
+ * until 2026-10-06). The `templates` parameter is plumbed through for v1.1
+ * per-template subtitle resolution; v1 only uses [currentKind] to show the
+ * selected dot.
  *
  * Token-clean — no inline color hex literals, no RoundedCornerShape, no fontSize literals.
  * Layout-local `dp` literals are acceptable per the project's design token conventions.
@@ -46,7 +52,7 @@ fun RuleTemplatePicker(
     modifier: Modifier = Modifier,
 ) {
     @Suppress("UNUSED_PARAMETER") val unused = templates // v1.1 — per-template subtitle resolution
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth().selectableGroup()) {
         RuleKind.entries.forEachIndexed { index, kind ->
             if (index > 0) RuleRowDivider()
             RuleRow(
@@ -105,7 +111,7 @@ private fun RuleRow(
         horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         Column(Modifier.weight(1f)) {
