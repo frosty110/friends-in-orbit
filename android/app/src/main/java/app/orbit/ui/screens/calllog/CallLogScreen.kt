@@ -2,6 +2,7 @@ package app.orbit.ui.screens.calllog
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.Resources
 import androidx.annotation.StringRes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -36,11 +37,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
@@ -56,6 +58,7 @@ import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitFilterChip
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitInlineNotice
 import app.orbit.ui.components.OrbitListSkeleton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitScreen
@@ -86,12 +89,16 @@ import app.orbit.ui.util.formatDuration
  *   - **Direction filter row**: All / Incoming / Outgoing as
  *     [OrbitFilterChip]s with radio semantics, in a scrolling row so a label
  *     is never broken mid-word at 200% font scale ("Outgoin g" before).
- *     MANUAL "Logged" events stay visible under All and Outgoing.
- *   - **Long-press quick actions** — "Call again" (`ACTION_DIAL` via
- *     [dialPhoneNumber]) and "Open contact" (existing nav callback).
+ *     MANUAL "Logged" and ATTEMPT "Attempted" events stay visible under All
+ *     and Outgoing.
+ *   - **Row menu**: "Call again" (`ACTION_DIAL` via [dialPhoneNumber]) and
+ *     "Open details" (the row's tap), built by [callLogRowActions]. It opens
+ *     from a visible "More actions for {name}" button on every row and from
+ *     a long-press with a haptic, as Home, Browse and the picker do: a
+ *     long-press-only action is one most people never find (rubric D5).
  *     "Add note" is intentionally absent: tapping the row already routes to
  *     ContactDetail focused on this call, where the inline "Add note to this
- *     call" affordance lives — a third menu item would duplicate the tap.
+ *     call" affordance lives; a third menu item would duplicate the tap.
  *   - **Honest pagination footer** — "Show n more" where n is the real next
  *     increment (`min(remaining, PAGE_SIZE)`); hidden once everything is
  *     rendered.
@@ -156,10 +163,11 @@ fun CallLogScreen(
 /**
  * Stateless inner extracted so `@PreviewLightDark` +
  * `@PreviewFontScale` (D-06) can render without `hiltViewModel()` at preview
- * time.
+ * time. `internal` so `CallLogContentTest` can read its semantics tree (the
+ * title in every state, the rows' TalkBack names) on the JVM.
  */
 @Composable
-private fun CallLogContent(
+internal fun CallLogContent(
     state: CallLogUiState,
     onBack: () -> Unit,
     onOpenContact: (contactId: Long, callEventId: Long) -> Unit,
@@ -181,8 +189,15 @@ private fun CallLogContent(
         OrbitAppBar(
             title = when {
                 person == null -> stringResource(R.string.calllog_title)
-                personName.isBlank() -> ""
-                else -> stringResource(R.string.calllog_title_person, personName)
+                personName.isNotBlank() -> stringResource(R.string.calllog_title_person, personName)
+                // Blank only for the moment the person's row loads, rather
+                // than briefly claiming "Call history" for everyone. Error,
+                // PermissionDenied and Empty are not momentary: a read that
+                // failed before its first emission (the case Retry exists
+                // for) would otherwise leave the screen with no pane title,
+                // so TalkBack announces no screen at all.
+                state is CallLogUiState.Loading -> ""
+                else -> stringResource(R.string.calllog_title)
             },
             leading = {
                 OrbitIconButton(
@@ -213,7 +228,7 @@ private fun CallLogContent(
                 icon = "phone-slash",
                 title = stringResource(R.string.calllog_denied_title),
                 body = stringResource(R.string.calllog_denied_body),
-                actionLabel = stringResource(R.string.calllog_open_settings),
+                actionLabel = stringResource(R.string.components_action_open_settings),
                 onAction = onOpenSettings,
                 // The only thing to do on this screen, so it takes the accent.
                 actionVariant = OrbitButtonVariant.Primary,
@@ -221,14 +236,22 @@ private fun CallLogContent(
             is CallLogUiState.Error -> OrbitScreenMessage(
                 icon = "warning-circle",
                 title = stringResource(R.string.calllog_error_title),
-                body = stringResource(R.string.calllog_error_body),
-                actionLabel = stringResource(R.string.calllog_try_again),
+                body = stringResource(R.string.components_error_body),
+                actionLabel = stringResource(R.string.components_error_retry),
                 onAction = onRetry,
                 actionVariant = OrbitButtonVariant.Primary,
             )
             is CallLogUiState.Ready -> Column(modifier = Modifier.fillMaxSize()) {
+                // Orbit has history but can no longer read the call log. The
+                // rows are still true; what is missing is anything newer. The
+                // shared strip (Card view's notice is the same component), so
+                // the two never drift apart again.
                 if (state.callLogDenied) {
-                    CallLogDeniedNotice(onOpenSettings = onOpenSettings)
+                    OrbitInlineNotice(
+                        text = stringResource(R.string.calllog_denied_notice),
+                        actionLabel = stringResource(R.string.components_action_open_settings),
+                        onAction = onOpenSettings,
+                    )
                 }
                 DirectionFilterRow(
                     selected = state.filter,
@@ -252,48 +275,6 @@ private fun CallLogContent(
 }
 
 private fun firstName(name: String): String = name.substringBefore(' ').ifBlank { name }
-
-/**
- * Shown above the rows when Orbit has history but can no longer read the call
- * log. The rows are still true; what is missing is anything newer. Inline and
- * dismiss-free, like Card view's notice: an honest state stays visible until
- * it is fixed.
- */
-@Composable
-private fun CallLogDeniedNotice(onOpenSettings: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x1)
-            .clip(OrbitTheme.shapes.md)
-            .background(OrbitTheme.colors.bgSubtle)
-            .padding(start = OrbitTheme.spacing.x3),
-    ) {
-        Text(
-            text = stringResource(R.string.calllog_denied_notice),
-            style = OrbitTheme.type.meta,
-            color = OrbitTheme.colors.fgMuted,
-            modifier = Modifier
-                .weight(1f)
-                .padding(vertical = OrbitTheme.spacing.x2),
-        )
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .defaultMinSize(minWidth = OrbitTheme.spacing.tapMin, minHeight = OrbitTheme.spacing.tapMin)
-                .clip(OrbitTheme.shapes.md)
-                .clickable(role = Role.Button, onClick = onOpenSettings)
-                .padding(horizontal = OrbitTheme.spacing.x3),
-        ) {
-            Text(
-                text = stringResource(R.string.calllog_open_settings),
-                style = OrbitTheme.type.button,
-                color = OrbitTheme.colors.fg,
-            )
-        }
-    }
-}
 
 /**
  * All / Incoming / Outgoing, one of which is always chosen: radio semantics in
@@ -326,8 +307,10 @@ private fun DirectionFilterRow(
 }
 
 /**
- * Quiet one-liner when the direction filter matches nothing.
- * The filter row above stays visible so the user can step back to All.
+ * The one line shown when a narrowing direction filter matches nothing, in
+ * the shared state layout ([OrbitScreenMessage], rubric D4) rather than a
+ * bare Text. The filter row above stays visible so the user can step back to
+ * All, which is why this has no action of its own.
  */
 @Composable
 private fun FilteredEmptyState(filter: CallLogDirectionFilter) {
@@ -335,17 +318,15 @@ private fun FilteredEmptyState(filter: CallLogDirectionFilter) {
         when (filter) {
             CallLogDirectionFilter.INCOMING -> R.string.calllog_filtered_empty_incoming
             CallLogDirectionFilter.OUTGOING -> R.string.calllog_filtered_empty_outgoing
-            CallLogDirectionFilter.ALL -> R.string.calllog_filtered_empty_all
+            // Under All the filtered set is the whole set, and the VM turns an
+            // empty whole set into Empty or PermissionDenied before it gets
+            // here (CallLogViewModel.buildState). A loud guard, not a dead
+            // string (rules.md Code 3).
+            CallLogDirectionFilter.ALL ->
+                error("Ready with no sections under ALL is unreachable: buildState returns Empty")
         },
     )
-    Text(
-        text = line,
-        style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
-        textAlign = TextAlign.Center,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x8),
-    )
+    OrbitScreenMessage(title = line)
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -453,13 +434,15 @@ private fun CallLogRowComposable(
     val curtain = LocalPrivacyCurtain.current
     val baseName = if (curtain) stringResource(R.string.components_curtain_contact) else row.name
     val nameWithSuffix = if (row.isIgnored) stringResource(R.string.calllog_name_ignored, baseName) else baseName
-    val openDetailsLabel = stringResource(R.string.calllog_open_details)
+    val openDetailsLabel = stringResource(R.string.components_action_open_details)
     val nameColor = if (row.isIgnored) OrbitTheme.colors.fgSubtle else OrbitTheme.colors.fg
     val subtitleColor = if (row.isIgnored) OrbitTheme.colors.fgSubtle else OrbitTheme.colors.fgMuted
     val avatarAlpha = if (row.isIgnored) 0.5f else 1.0f
     val onePerson = personName != null
+    val haptic = LocalHapticFeedback.current
 
-    // Long-press quick actions anchored to the row.
+    // The row menu, anchored to the row. One owner for its visibility
+    // (rules.md Code 7): the trailing button and the long-press both set it.
     var menuOpen by remember { mutableStateOf(false) }
 
     Box {
@@ -470,7 +453,12 @@ private fun CallLogRowComposable(
                 .combinedClickable(
                     onClick = onOpen,
                     onClickLabel = openDetailsLabel,
-                    onLongClick = { menuOpen = true },
+                    onLongClick = {
+                        // The same commit-moment haptic as Home, Browse and
+                        // the picker give when a long press opens a menu.
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        menuOpen = true
+                    },
                     onLongClickLabel = stringResource(R.string.calllog_show_quick_actions),
                 )
                 .padding(
@@ -551,17 +539,47 @@ private fun CallLogRowComposable(
                     style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
                 )
             }
+            // The visible way into the row menu (the picker row's precedent).
+            // Long-press still opens it, but a long-press-only action is one
+            // most people never find. Muted: maintenance, not the screen's
+            // action, and the dial lives in the menu so no row repeats the
+            // phone icon (rules.md §Design 6). Named for the person it acts
+            // on, under the curtain as "More actions for Contact".
+            OrbitIconButton(
+                icon = "dots-three-vertical",
+                onClick = { menuOpen = true },
+                tint = OrbitTheme.colors.fgMuted,
+                contentDescription = stringResource(R.string.calllog_more_actions_for, baseName),
+            )
         }
         OrbitDropdownMenu(
             expanded = menuOpen,
             onDismissRequest = { menuOpen = false },
-            actions = listOf(
-                OrbitMenuAction(label = stringResource(R.string.calllog_call_again), onClick = onCallAgain),
-                OrbitMenuAction(label = openDetailsLabel, onClick = onOpen),
+            actions = callLogRowActions(
+                resources = LocalContext.current.resources,
+                onCallAgain = onCallAgain,
+                onOpen = onOpen,
             ),
         )
     }
 }
+
+/**
+ * The row menu's actions, in the order the README fixes: "Call again"
+ * (`ACTION_DIAL`), then "Open details" (the same thing the row's tap does).
+ * Neither is destructive, so nothing sinks below a divider. `internal` so the
+ * labels and order are unit-tested against real resources
+ * (CallLogRowMenuTest); takes [Resources] because [OrbitMenuAction] carries
+ * resolved text, as `browseRowMenuActions` and `listRowMenuActions` do.
+ */
+internal fun callLogRowActions(
+    resources: Resources,
+    onCallAgain: () -> Unit,
+    onOpen: () -> Unit,
+): List<OrbitMenuAction> = listOf(
+    OrbitMenuAction(label = resources.getString(R.string.calllog_call_again), onClick = onCallAgain),
+    OrbitMenuAction(label = resources.getString(R.string.components_action_open_details), onClick = onOpen),
+)
 
 /** Row avatar, shared with Browse and Search rows (no spacing token is 44dp). */
 private val RowAvatarSize = 44.dp
@@ -577,6 +595,7 @@ private fun previewRow(
     durationMinutes: Int?,
     kind: CallLogKind,
     timeLabel: String,
+    isIgnored: Boolean = false,
 ): CallLogRow = CallLogRow(
     callEventId = id,
     contactId = id,
@@ -592,7 +611,7 @@ private fun previewRow(
         CallLogKind.Attempted -> "phone-slash"
     },
     timeLabel = timeLabel,
-    isIgnored = false,
+    isIgnored = isIgnored,
     kind = kind,
 )
 
@@ -608,7 +627,12 @@ private val previewSections: List<CallLogDaySection> = listOf(
     CallLogDaySection(
         epochDay = 20_499L,
         label = UiText.res(R.string.time_day_yesterday),
-        rows = listOf(previewRow(2L, "Jordan Lee", "", 3, CallLogKind.Incoming, "8:05pm")),
+        rows = listOf(
+            // Someone the user ignores: greyed, "(ignored)", still a row
+            // (IGNORE-09), so the gallery renders that state too.
+            previewRow(2L, "Jordan Lee", "", 3, CallLogKind.Incoming, "8:05pm", isIgnored = true),
+            previewRow(7L, "Priya Anand", "Inner orbit", null, CallLogKind.Attempted, "6:40pm"),
+        ),
     ),
     CallLogDaySection(
         epochDay = 20_497L,
@@ -690,6 +714,21 @@ private fun CallLogEmptyPreview() {
 }
 
 @PreviewLightDark
+@Composable
+private fun CallLogEmptyEveryonePreview() {
+    CallLogPreviewHost(CallLogUiState.Empty())
+}
+
+@PreviewLightDark
+@PreviewFontScale
+@Composable
+private fun CallLogFilteredEmptyPreview() {
+    CallLogPreviewHost(
+        CallLogUiState.Ready(sections = emptyList(), filter = CallLogDirectionFilter.INCOMING),
+    )
+}
+
+@PreviewLightDark
 @PreviewFontScale
 @Composable
 private fun CallLogPermissionDeniedPreview() {
@@ -708,4 +747,10 @@ private fun CallLogDeniedWithHistoryPreview() {
 @Composable
 private fun CallLogErrorPreview() {
     CallLogPreviewHost(CallLogUiState.Error())
+}
+
+@PreviewLightDark
+@Composable
+private fun CallLogPersonErrorPreview() {
+    CallLogPreviewHost(CallLogUiState.Error(scope = previewPerson))
 }

@@ -19,20 +19,21 @@
     <!-- No access to the phone's call log and nothing recorded yet. -->
     <string name="calllog_denied_title">Orbit can\'t see your calls</string>
     <string name="calllog_denied_body">Call history comes from your phone\'s call log, and Orbit doesn\'t have access to it. Turn it on in Settings and your calls will appear here. They stay on this device.</string>
-    <string name="calllog_open_settings">Open settings</string>
-    <!-- No access, but some calls recorded earlier: shown above them. -->
-    <string name="calllog_denied_notice">Orbit can\'t see new calls, so this list may be missing some.</string>
+    <!-- Its action is the shared components_action_open_settings ("Open settings"). -->
+    <!-- No access, but some calls recorded earlier: shown above them. Not "this list":
+         on this screen that word would read as an Orbit list (voice.md glossary). -->
+    <string name="calllog_denied_notice">Orbit can\'t see new calls, so some may be missing here.</string>
 
+    <!-- The body and the Try again action are the shared components_error_body and
+         components_error_retry. -->
     <string name="calllog_error_title">Couldn\'t load your calls</string>
-    <string name="calllog_error_body">Something went wrong reading them. Try again in a moment.</string>
-    <string name="calllog_try_again">Try again</string>
 
     <!-- Direction filter chips. -->
     <string name="calllog_filter_all">All</string>
     <string name="calllog_filter_incoming">Incoming</string>
     <string name="calllog_filter_outgoing">Outgoing</string>
-    <!-- When the chosen filter matches nothing. -->
-    <string name="calllog_filtered_empty_all">No calls yet.</string>
+    <!-- When a narrowing filter matches nothing. There is no "All" line: with no calls at
+         all the screen shows calllog_empty_title instead. -->
     <string name="calllog_filtered_empty_incoming">No incoming calls yet.</string>
     <string name="calllog_filtered_empty_outgoing">No outgoing calls yet.</string>
 
@@ -59,9 +60,13 @@
     <string name="calllog_person_logged">You logged a connection</string>
     <string name="calllog_person_attempted">You tried to reach them</string>
 
-    <!-- Row actions: a tap opens the person, a long-press offers quick actions. -->
-    <string name="calllog_open_details">Open details</string>
-    <string name="calllog_show_quick_actions">Show quick actions</string>
+    <!-- Row actions. A tap opens the person (the shared components_action_open_details,
+         "Open details"); the row's three-dots button and a long-press open the same menu.
+         The long-press is "Quick actions" and the button "More actions for {name}" to
+         TalkBack, the glossary's words for the two triggers (voice.md).
+         %1$s: the person's name, masked under the privacy curtain. -->
+    <string name="calllog_show_quick_actions">Quick actions</string>
+    <string name="calllog_more_actions_for">More actions for %1$s</string>
     <string name="calllog_call_again">Call again</string>
 
 </resources>

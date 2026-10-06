@@ -89,8 +89,12 @@ sealed interface CallLogScope {
 
     /**
      * @property name The person's display name; blank until their contact row
-     *                has loaded (the app bar stays blank for that moment rather
-     *                than briefly claiming "Call history" for everyone).
+     *                has loaded (while Loading, the app bar stays blank for
+     *                that moment rather than briefly claiming "Call history"
+     *                for everyone). A settled state with no name, such as an
+     *                Error from a read that failed before its first emission,
+     *                is titled "Call history" by the screen so TalkBack still
+     *                gets a pane title.
      */
     @Immutable
     data class Person(
