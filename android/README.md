@@ -1,7 +1,8 @@
 # Orbit — Android
 
 Native Kotlin + Jetpack Compose implementation of the Orbit app, per
-`../features/INDEX.md` (per-feature spec) and the design system in `../design/ui_kits/mobile_app/`.
+`../features/INDEX.md` (per-feature spec) and the design system map in `../DESIGN.md`
+(the UI kit under `../design/ui_kits/` is the pre-redesign reference).
 
 ## Requirements
 
@@ -19,30 +20,29 @@ run `gradle wrapper` once inside `android/` to generate `gradle-wrapper.jar`.
 3. Run configuration is auto-created. Pick an emulator (Pixel 7 / API 34+
    recommended for edge-to-edge) and hit **Run**.
 
-## What's implemented (v0.1)
+## Screens (as of 2026-10-05)
 
-Cosmetic-first pass — the navigation, theme, and every Tier-1 + Tier-2 screen
-from `UI Kit Inventory` in the PRD render against a seeded in-memory repo.
-**No real Android integrations yet**: CALL_LOG reader, ContactsContract ingest,
-widgets, notifications, BiometricPrompt, and encrypted export are declared in
-the manifest but not wired. That's deliberate — it lets the UI run on any
-emulator without granting permissions and matches the design system's
-"cosmetic-only" stance for this milestone.
+Every screen below is real: Room over SQLCipher, the call log and contacts
+readers, nudges, widgets and the encrypted export are wired. The canonical
+description of each is its feature README (`../features/INDEX.md`) and page
+view (`../features/PAGE_VIEWS.md`); `../vision/flows/flows.md` lists the same
+screens with stable review IDs. Routes are the constants in `nav/Routes.kt`.
 
-**Screens wired in the nav graph:**
-
-| Route                        | Source                                     | State |
-| ---                          | ---                                        | ---   |
-| `home`                       | `HomeScreen.kt`                            | Lists + due counts + Surprise me |
-| `card/{listId}`              | `CardViewScreen.kt`                        | Drag-to-swipe with tilt, live heat strip, call CTA |
-| `browse/{listId}`            | `BrowseListScreen.kt`                      | Search + due dots + chevron |
-| `contact/{contactId}`        | `ContactDetailScreen.kt`                   | Hero, stats card, history, notes, Pause |
-| `lists`                      | `ListsManagerScreen.kt`                    | List rows + "New list" dashed CTA |
-| `lists/{listId}/config`      | `ListConfigScreen.kt`                      | Rule picker, interval slider, active hours, notify toggle |
-| `settings`                   | `SettingsScreen.kt`                        | Privacy / Notifications / Data / About |
-| `onboard/permissions`        | `OnboardingPermissionsScreen.kt`           | Call log + Contacts, plain-language copy |
-| `onboard/create-list`        | `OnboardingCreateListScreen.kt`            | Template picker |
-| `onboard/bulk-add`           | `OnboardingBulkAddScreen.kt`               | Multi-select from candidate list |
+| Route | Source (under `ui/screens/`) | What it shows |
+| --- | --- | --- |
+| `home` | `home/HomeScreen.kt` | One card per list: who is next up, a Call button, the last 7 days |
+| `card/{listId}` | `card/CardViewScreen.kt` | One person at a time; Call, Later, Sooner; swipe with tilt |
+| `browse/{listId}` | `browse/BrowseListScreen.kt` | The list as a queue ("Next up", "Everyone else"), search, filters, multi-select |
+| `search` | `browse/GlobalSearchScreen.kt` | Everyone, by name or number |
+| `contact/{contactId}` | `contact/ContactDetailScreen.kt` | Hero, stats, lists, notes, history, Pause, Log a connection |
+| `lists` | `lists/ListsManagerScreen.kt` | Reorder, rename, archive; one New list control |
+| `lists/{listId}/config` | `lists/ListConfigScreen.kt` | Name, Rhythm, How often, Active hours, Nudges, members |
+| `pick/contacts` | `picker/ContactPickerScreen.kt` | Add, Move, Copy or Re-link people |
+| `pick/lists` | `picker/ListPickerScreen.kt` | Add one person to lists |
+| `settings` | `settings/SettingsScreen.kt` | Appearance, Permissions, Contacts, Call history, Data, About |
+| `settings/ignored` | `settings/SettingsIgnoredScreen.kt` | Ignored people; Unignore with Undo |
+| `call-log` (`?contactId=`) | `calllog/CallLogScreen.kt` | Everyone's calls, or one person's |
+| `onboard/welcome` to `onboard/done` | `onboarding/` | Welcome, Contacts and Call log permissions, Sync, Preview, First list, Done; `onboard/permissions/notifications` is kept only so a saved resume step still lands (ONB-30) |
 
 ## Design system
 
@@ -60,26 +60,19 @@ OrbitTheme.spacing.x5            // 20dp — inside-card padding
 The Material3 `ColorScheme` slots are aligned so stock M3 widgets (Slider,
 Switch if used, TextField) pick up the warm palette without extra wiring.
 
-**Fonts.** The spec calls for Inter. `Type.kt` currently falls back to
-`FontFamily.SansSerif` (Roboto) — the `.woff2` files in `../design/fonts/` can't be
-used by Android directly. Drop TTF/OTF Inter files into `app/src/main/res/font/`
-and point `OrbitFont` at them to complete the port.
+**Fonts.** Inter Regular, Medium, SemiBold and Bold ship as subset TTFs in
+`app/src/main/res/font/` (bundled 2026-10-05; SIL OFL 1.1), converted from the
+`.woff2` files in `../design/fonts/`. `Type.kt` reads them through `OrbitFont`.
 
-**Icons.** Phosphor SVGs live in `app/src/main/assets/icons/` and render via
-Coil's SVG decoder. Referenced by name in code: `PhIcon(name = "phone-call")`.
+**Icons.** Phosphor Regular, drawn by `PhIcon(name = "phone-call")` from the
+VectorDrawables in `res/drawable/ph_*.xml`, generated by
+`scripts/phosphor_to_vector.py` (rules.md Design 6).
 
-## Next work (not in v0.1)
+## Where to look next
 
-Roughly in PRD-v1 priority order. Each is a clean extension of the current scope.
-
-1. **Room persistence.** Wire entities behind `OrbitRepository` — schema
-   mirrors the data classes in `data/Model.kt`.
-2. **Call log ingestion.** `ReadCallLogPermission` + `CallLog.Calls` content
-   resolver query, 90-day window default (PRD §Call Detection).
-3. **Contacts sync.** `ContactsContract` read, phone-number-as-fallback matching.
-4. **Biometric lock.** `BiometricPrompt` gate at `MainActivity.onStart`.
-5. **Notifications.** `POST_NOTIFICATIONS` flow + daily digest + list prompts.
-6. **Widgets.** 2x2 + 4x2 Glance widgets.
-7. **Encrypted export.** Symmetric-key JSON export via `StorageAccessFramework`.
-8. **Tests.** Paparazzi screenshot tests for every Tier-1 screen against the
-   two themes.
+The per-feature READMEs under `../features/` carry each feature's status,
+requirements and open questions, and `../vision/ux-rubric.md` records what still
+separates the app from its AAA bar (device runs, a five-person test, screenshot
+goldens in CI). The items this file once listed as next work (Room, call log
+ingestion, contacts sync, notifications, widgets, encrypted export) have all
+shipped; the biometric lock was cut from v1 on 2026-04-28 (ADR 0003).

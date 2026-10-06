@@ -85,20 +85,20 @@ Status is about *sequencing and confidence*, not priority ranking. A "Later" can
 
 | # | Surface | Intent in one line | Headline move | Status |
 |---|---------|--------------------|---------------|--------|
-| 00 | [Home](./00-home/00-home.md) | The front door — always hand you someone to call | "Next up" on every card; retire the "due/caught up" framing | Now |
-| 01 | [Card View](./01-card-view/01-card-view.md) | Hand you one name with enough context to say yes | Put the last note/topic on the card face | Now |
-| 02 | [Contact Detail](./02-contact-detail/02-contact-detail.md) | The full picture of one person, and where you act + remember | Show "comes up again in ~X" | Now |
-| 03 | [Browse List](./03-browse-list/03-browse-list.md) | See a whole list as a queue; find and bulk-manage | Make the numbered queue legible | Next |
-| 04 | [Search](./04-search/04-search.md) | Jump straight to a person from anywhere | Useful empty state (people not on any list) | Next |
-| 05 | [Call Log](./05-call-log/05-call-log.md) | An honest, calm record of real calls | Inline "add a note" on a call | Next |
-| 06 | [Lists Manager](./06-lists-manager/06-lists-manager.md) | Shape your orbits; order, archive, prioritise | Remove redundant create + fix menu theming | Now |
-| 07 | [List Config](./07-list-config/07-list-config.md) | Define a list's rhythm and membership in plain terms | One plain-language rhythm summary line | Now |
-| 08 | [Create List](./08-create-list/08-create-list.md) | Start a new orbit from an intention, not a blank form | Show each template's resulting rhythm | Next |
-| 09 | [Pickers](./09-pickers/09-pickers.md) | Add the right people fast; file a person into lists | Smart "people you call but haven't filed" | Next |
-| 10 | [Settings](./10-settings/10-settings.md) | Trust and control — permissions, sync, privacy | Say the privacy promise out loud | Next |
-| 11 | [Onboarding](./11-onboarding/11-onboarding.md) | Earn trust, get permissions, leave with one real list | Carry "context" into the preview | Next |
-| 12 | [Widgets](./12-widgets/12-widgets.md) | The loop without opening the app | Act (call / later / sooner) from the widget | Next |
-| 99 | [Cross-cutting](./99-cross-cutting/99-cross-cutting.md) | System-wide moves | Warm-theme dropdowns; nickname overrides | Now |
+| 00 | [Home](./00-home/00-home.md) | The front door: always hand you someone to call | "Next up" on every card and one tap to a call: shipped (`7ba794e`, `a961e2b`). Next: the card opening into Card view as one motion | Shipped |
+| 01 | [Card View](./01-card-view/01-card-view.md) | Hand you one name with enough context to say yes | Last note on the face, named Later and Sooner, Call-only dialing: shipped (`468d68d`). Next: "Reached another way" (`CARD-4`) | Shipped; `CARD-4` Next |
+| 02 | [Contact Detail](./02-contact-detail/02-contact-detail.md) | The full picture of one person, and where you act and remember | Show "comes up again in ~X" (`CONTACT-1`) | Now |
+| 03 | [Browse List](./03-browse-list/03-browse-list.md) | See a whole list as a queue; find and bulk-manage | Legible queue and a visible Select: shipped. Next: display names (`BROWSE-4`) | Shipped; `BROWSE-4` Later |
+| 04 | [Search](./04-search/04-search.md) | Jump straight to a person from anywhere | Useful empty state, people not on any list (`SEARCH-1`) | Next |
+| 05 | [Call Log](./05-call-log/05-call-log.md) | An honest, calm record of real calls | One person's log and omitted blanks shipped; a list filter (`LOG-2`) remains | Later |
+| 06 | [Lists Manager](./06-lists-manager/06-lists-manager.md) | Shape your orbits; order, archive, prioritise | One create control, themed menu, a rhythm per row: shipped | Shipped |
+| 07 | [List Config](./07-list-config/07-list-config.md) | Define a list's rhythm and membership in plain terms | One plain-language rhythm summary line (`CONFIG-1`) | Now |
+| 08 | [Create List](./08-create-list/08-create-list.md) | Start a new orbit from an intention, not a blank form | Each template names its rhythm: shipped (`df3b41b`). Next: name auto-fill clarity (`CREATE-3`) | Shipped; `CREATE-3` Next |
+| 09 | [Pickers](./09-pickers/09-pickers.md) | Add the right people fast; file a person into lists | Smart "people you call but haven't filed" (`PICK-2`) | Next |
+| 10 | [Settings](./10-settings/10-settings.md) | Trust and control: appearance, permissions, sync, privacy | Privacy promise said out loud: done. Next: a global quiet-hours summary (`SETTINGS-2`) | Done; `SETTINGS-2` Later |
+| 11 | [Onboarding](./11-onboarding/11-onboarding.md) | Earn trust, get permissions, leave with one real list | Carry "context" into the preview (`ONB-1`) | Next |
+| 12 | [Widgets](./12-widgets/12-widgets.md) | The loop without opening the app | Context on the larger widget (`WIDGET-3`); acting from the widget declined | Later |
+| 99 | [Cross-cutting](./99-cross-cutting/99-cross-cutting.md) | System-wide moves | Warm dropdowns and one vocabulary shipped; display names (`X-3`) | Shipped; `X-3` Next |
 
 ---
 
@@ -106,8 +106,8 @@ Status is about *sequencing and confidence*, not priority ranking. A "Later" can
 
 This directory proposes *what* and *why*. The *how* is bound by the existing system. Before any of these becomes code, it must pass the same bars everything else does:
 
-- **Design tokens only.** Colours, type, spacing, radius, motion come from `android/app/src/main/java/app/orbit/ui/theme/` (warm cream `#FAF6F0`, single terracotta accent `#C8654A`, Inter, 4dp grid, 250ms base motion, ≤5% overshoot). Source of truth: `design/colors_and_type.css`. Never hardcode.
-- **The voice.** Sentence case, no exclamation marks, no gamification (no streaks/achievements/XP), no shame framing ("you haven't called X in N days" is forbidden), no emoji in product copy. Pattern language over performance language. See `README.md` → "Content fundamentals" and `features/_foundations/`.
+- **Design tokens only.** Colours, type, spacing, radius, motion come from `android/app/src/main/java/app/orbit/ui/theme/` (warm cream `#FAF6F0`, single terracotta accent `#B85338`, Inter, 4dp grid, 250ms base motion, ≤5% overshoot). Source of truth: `design/colors_and_type.css`, kept in step with the Kotlin (`DESIGN.md`). Never hardcode.
+- **The voice.** Sentence case, no exclamation marks, no gamification (no streaks/achievements/XP), no shame framing ("you haven't called X in N days" is forbidden), no emoji in product copy, no "due" as a deadline. Pattern language over performance language. See [`features/_foundations/voice.md`](../features/_foundations/voice.md), glossary included: it is canonical for wording and wins over `design/README.md`.
 - **The mission filter.** If a move doesn't serve "hand you one name with enough context to say yes" — or clearly support it — it's a distraction, no matter how nice.
 - **Accessibility floor.** 16sp minimum body, 48dp minimum touch targets, font-scale safety.
 
@@ -129,10 +129,10 @@ Keep the suggestion's ID through that journey so the lineage stays traceable (`C
 
 ## Provenance & maintenance
 
-- **Captured:** 2026-06-19 → 06-21, on the `orbit` emulator (Android 14), build `app.orbit.debug`. After the device was reseeded with synthetic personas (see below), the core screens were re-captured clean, so most images show the same cast (Kai Nakamura, Sarah Chen, …).
-- **All screens are now illustrated** — every section has a live screenshot. Two carry a noted caveat: the **Contact Picker** shot predates the reseed (kept because it shows the A–Z rail on a full address book, which the sparse seed can't), and the **Home post-call banner** retains a redacted name (the call→return state is awkward to reproduce on demand). Both are PII-free.
-- **No real data.** Every screenshot is synthetic by construction: the device is seeded with 12 fictional personas and `+1…555…` numbers via `android/scripts/seed-avd.py` (pristine wipe). A couple of pre-reseed shots were additionally pixel-edited to scrub names/numbers. Nothing here surfaces a real contact.
-- **This is a living document.** When a screen changes materially, refresh its screenshot and its **Today** section, and move any shipped suggestion out of "Where it's going" (note the commit). Stale "today" is worse than no doc.
+- **Captured:** the `actual-*` images are JVM gallery renders (`PreviewGalleryTest`, Robolectric with native graphics, light, 411dp, font scale 1.0) at commit `783a964` (2026-10-05), copied from `android/app/build/screenshots/` after `./gradlew :app:testDebugUnitTest -Pscreenshots`; they are not device captures, and each section file's caption names the preview it came from. The code packages that followed on 2026-10-05 change some screens again (Browse's heading and chip, the card's eyebrow and details row, Settings' About line), so each Today block says what differs from its render.
+- **Four images are still the June 2026 emulator captures** (2026-06-19 to 06-21, the `orbit` emulator on Android 14, seeded with the synthetic cast): Home's post-call banner, Card view's open menu, the Lists row menu, and the launcher with both widgets. No preview renders those states; each is captioned as stale where the screen has since changed.
+- **No real data.** Every image is synthetic by construction: the gallery's previews use fixture names (Avery Quinn, Sam Patel, Kai), and the June captures came from a device seeded with 12 fictional personas and `+1…555…` numbers via `android/scripts/seed-avd.py`. Nothing here surfaces a real contact.
+- **This is a living document.** When a screen changes materially, refresh its render (`-Pscreenshots`, copy the light 411dp PNG) and its **Today** section (dated "as of"), and mark any shipped suggestion as shipped in place with the commit, as the files do now. Stale "today" is worse than no doc.
 - **Relationship to other dirs:**
   - `.review/` — the dated screenshot timeline + design-compliance scoring. Operational, partly gitignored. Each page folder's `actual-*` images are a *curated, durable* subset of that, not a mirror.
   - `.planning/sketches/` — ephemeral GSD sketch scratch (gitignored). A prototype graduates out of there into the relevant `vision/<page>/prototype/` once it's worth keeping; the `design-*` screenshots are captured from it.

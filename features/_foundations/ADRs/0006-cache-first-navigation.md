@@ -1,6 +1,6 @@
 # ADR 0006 — Cache-first navigation: no loading state in steady-state local-app screens
 
-**Status:** accepted
+**Status:** accepted, amended 2026-10-05 (skeleton policy; see the amendment under Decision)
 **Date:** 2026-04-27
 **Accepted:** 2026-04-28 — rollout shipped. Verify-gate evidence: PASS-WITH-DEFERRED-UAT; 48/48 grep gates green, 2 device-bound deferrals.
 **Deciders:** the maintainer
@@ -76,13 +76,15 @@ SQLCipher first-open (native load + KDF + page-key derivation) is kicked off in 
 
 **Why:** The user's first tap is the wrong place to discover that we encrypt at rest. The launch image is the right place.
 
-### Skeleton policy
-Skeletons are permitted only for:
+### Skeleton policy (amended 2026-10-05)
 
-1. **Genuine first-install empty state** — no data exists yet (e.g., no lists created post-onboarding). In practice this is rendered as an empty state with copy + action, not a shimmer.
-2. **Explicit pull-to-refresh** — user-initiated; the user knows they asked for new data.
+The April text permitted a skeleton for two cases only (the genuine first-install empty state, and an explicit pull-to-refresh) and said that a grep for skeleton composables outside them was a review smell. By October the app followed a finer rule, decided in the UX rubric (D6: no flash of wrong content while loading) and in `features/PAGE_VIEWS.md` (never a blank screen, and never a false one while data loads). This amendment records that rule so nobody "fixes" the skeletons back out.
 
-Steady-state navigation MUST NOT show a skeleton. A grep for shimmer / skeleton composables outside these two cases is a review smell.
+1. **Quiet chrome where a cache-first feed renders real data synchronously.** Home reads `HomeFeed`'s cached value on entry (Rule 1), and Settings shows the saved values or nothing (SET-09: no flash of defaults). The app bar and background draw, nothing else, for the one frame before the cached value lands. There is nothing to wait for, so there is nothing to draw a placeholder for.
+2. **A static `OrbitListSkeleton` where the first emission waits on a cold query.** Any list of people or lists whose state starts at `Loading` over a Room query: Browse and Search (BROWSE-06 in `features/browse/README.md`), Call history (LOG-05 in `features/call-history/README.md`), Lists, Ignored, both pickers once their permission is known, and Contact detail (a placeholder shaped like the hero). The placeholder is static (rules.md Design 8: no shimmer, no motion on an idle surface) and reads "Loading" to TalkBack; `ui/components/ScreenMessage.kt` holds the one component, so no screen draws its own.
+3. **Never a false empty.** No screen says "No one here yet" or "No calls yet" before its first real emission, and a failed read is an error with Try again, never an empty list and never a crash. BROWSE-06 and LOG-05 define this for their screens; the same shape holds everywhere.
+
+The sentence "a grep for shimmer / skeleton composables outside these two cases is a review smell" is withdrawn. The review question is now which of the three a Loading state does: draw real cached data, draw a static skeleton, or say something false. Only the last is a defect. Rules 1 to 3 of the Decision stand; the amendment changes what a screen may show while a rule is honoured, not where state lives.
 
 ## Consequences
 
@@ -110,6 +112,7 @@ Steady-state navigation MUST NOT show a skeleton. A grep for shimmer / skeleton 
 
 - **`README.md`** — voice principles ("warm, quiet, unhurried") that this ADR operationalizes for perceived performance.
 - **ADR 0005** — SQLCipher production tuning. The cold-init cost this ADR commits to hide is the cost ADR 0005 pinned.
+- **BROWSE-06 and LOG-05** (`features/browse/README.md`, `features/call-history/README.md`): the per-screen requirements the 2026-10-05 amendment generalises; `vision/ux-rubric.md` D6 is the decision behind it.
 - **The perf-hotspots polish work** — owns the Home implementation under Rules 1–3.
 - **Project principle — reduce grey areas to zero**: this ADR closes the grey area around "what should we render while data loads."
 - **The project's benchmark-app list** — the competitive analysis this ADR draws from.

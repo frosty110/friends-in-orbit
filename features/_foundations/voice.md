@@ -20,7 +20,7 @@ When this doc disagrees with `README.md` §Content fundamentals, this doc wins.
 - **Sentence case.** Everywhere. No title case except brand name "Orbit."
 - **No exclamation marks.** Ever.
 - **No emoji in product copy.** (Okay in chat conversations with the builder; never in the app.)
-- **Active voice. Present tense.** "You have 3 people due" not "3 people are due for you."
+- **Active voice. Present tense.** "You spoke yesterday" not "A call was made yesterday."
 - **16sp minimum body size.** Used in emotionally loaded moments — don't make people squint.
 
 ## Never say
@@ -31,18 +31,18 @@ When this doc disagrees with `README.md` §Content fundamentals, this doc wins.
 - "Great job," "awesome," "keep it going!" — coach framing
 - Emoji, unicode glyphs, ASCII art in product copy
 - "The contact," "the user," "the entity" — clinical framing
+- "Due" as a deadline ("due today", "not due yet", "3 people due"): deadline framing. Orbit suggests; it never sets a deadline. Over a name say "Up now" or "Coming up"; for a quiet moment say who comes up next and when. (Added 2026-10-05. HOME-6 retired the word on Home in June; this makes the rule explicit for every screen, and the string audit `VoiceAuditTest` holds the resources to it.)
 
 ## Always say
 
 - "Patterns," "rhythms," "gaps" — neutral temporal framing
 - "Your people" — possessive + human
-- "All quiet for now" for the moment nobody is due. (Until 2026-10-05 this said "You're caught up". The queue is continuous by design since the tide-marker change of 2026-05-08, and Home's HOME-6 retired "caught up" and "due" language, so nothing should read as a cleared backlog.)
+- "All quiet for now" for the moment nobody comes up. (Until 2026-10-05 this said "You're caught up". The queue is continuous by design since the tide-marker change of 2026-05-08, and Home's HOME-6 retired "caught up" and "due" language, so nothing should read as a cleared backlog.)
 - "Want to..." — soft invitation, never demand
-- "Surprise me" — the lightweight serendipity affordance
 
 ## Empty states — tone reference
 
-- No one due: "All quiet for now." Then who comes up next and when, and a way to browse anyway.
+- Nobody comes up right now: "All quiet for now." Then who comes up next and when, and a way to browse anyway.
 - No lists yet: quiet instruction, no urgency
 - Permission denied: plain explanation of what's lost, offer to continue without
 
@@ -60,11 +60,22 @@ Added 2026-10-05 ([UX rubric](../../vision/ux-rubric.md) D7). The same idea had 
 | **Call** | A phone call, which Orbit sees in the call log. | Interaction, touchpoint |
 | **Connection** | A conversation Orbit couldn't see (WhatsApp, a visit), added by hand with "Log a connection". Only for those. | Using it for a phone call |
 | **Note** | Something the user wrote about a person. | Memo, comment |
-| **Pause** | Stop nudges for a person or list for a while. | Mute (for people), suspend |
+| **Pause** | Stop surfacing and nudging a person for a while. Three lengths, the same three wherever a pause is offered and in one shared sheet (`PauseDurationSheet`): "1 week", "1 month", "Until you unpause". The snackbar says the same: "Paused {name} for 1 week", "Paused {name} until you unpause". | Mute (for people), suspend, "Indefinitely" |
+| **Unpause** | End a person's pause so they surface again. The inverse of Pause has this one name in the menu ("Unpause"), the status line ("Paused until you unpause") and the snackbar ("Unpaused {name}"). | Resume (for a person), un-pause, restore |
+| **Pause nudges** / **Resume nudges** | A list's nudges are paused and resumed (Home's long-press menu). The list itself is not paused and its people still surface, so "Unpause" would say the wrong thing about a list. | Unpause (for a list), mute, mute prompts |
+| **Ignore** / **Unignore** | Hide a person from Orbit's suggestions while keeping their history; and the one word that reverses it. One spelling, no hyphen, everywhere: the menu item, the Ignored screen's button, the snackbar ("Unignored {name}"). | Un-ignore, hide, block, restore |
+| **Attempt** | A reach-out that did not connect: a voicemail, no answer. Logged by hand from "Log a connection" as "Couldn't reach them", or read from the call log; shown as "Attempted" in history ("You tried to reach them" on one person's page); kept out of Last call, Total calls and Average length, because nobody talked. | Missed call (the phone's word, and the other direction), failed call |
+| **Next up** | The person a list would surface first: on Home's cards and as the heading over Browse's numbered queue. One spelling. | Up next (Browse's heading until 2026-10-05), next due |
+| **Recently called** | The label for people with a recent call: Browse's filter chip and the picker's sort. | Called recently (Browse's chip until 2026-10-05), recent |
+| **Add to lists** | The action that files one person into lists, from Contact detail and from a Search result; the picker it opens is titled "Add {name} to lists". | Add to list, file, assign |
+| **Open settings** / **Open phone settings** | "Open settings" leads to Orbit's own Settings (a call-log notice on Card view or Call history). "Open phone settings" leads to Android's page for Orbit (a permission denied twice). Never a bare "Settings" for either. | Open Android Settings, Go to settings |
+| **Open details** | What a tap on a person's row or on the card face does, on screen and to TalkBack, everywhere a person can be opened. | View details, Open contact, Show more |
+| **Quick actions** | The long-press menu on a row or a card, as TalkBack names the gesture, on Home, Browse, Call history and the picker. | Show quick actions, More actions (for a long-press) |
+| **More actions for {x}** | The three-dots button that opens an overflow menu, named for what it acts on: "More actions for Inner orbit", "More actions for this note", or "More actions" over a selection. Under the privacy curtain the name is masked like any other. | List options, Options, Menu |
 
 **Stat labels** read the same on every screen: "Last call", "Total calls", "Average length", "Longest gap". No abbreviations ("Avg"), and "Last called" only inside a sentence ("Last called 3 weeks ago").
 
-**Time since a call** is always worded by one formatter (`ui/util/RelativeTime.kt`), the same way everywhere: "today", "yesterday", "3 days ago", "2 weeks ago", "3 months ago". Never "27 days ago" on one screen and "3 weeks" on another. Times of day follow the phone's 12 or 24 hour setting, and so do the tick labels under a 24-hour strip ("12a 6a 12p 6p" or "00 06 12 18") and the time picker's dial; the am/pm marker is the language's own.
+**Time since a call** is always worded by one formatter (`ui/util/RelativeTime.kt`), the same way everywhere: "today", "yesterday", "3 days ago", "2 weeks ago", "3 months ago". Never "27 days ago" on one screen and "3 weeks" on another. The one place minutes matter is a sync status row in Settings ("Last synced 5 minutes ago"): it uses `formatRelativeFine` from the same file ("Just now" under a minute, then minutes and hours as plurals, then the day-grained words above), so the two rows never say "today" about a sync that finished a moment ago. Times of day follow the phone's 12 or 24 hour setting, and so do the tick labels under a 24-hour strip ("12a 6a 12p 6p" or "00 06 12 18") and the time picker's dial; the am/pm marker is the language's own.
 
 **People, not contacts.** The people in Orbit are "people" ("Add people", "Ignored 3 people", "Move 1 person"). "Contacts" means only the phone's own address book ("Contacts access is off", "Open in Contacts", "Re-link to a phone contact").
 
