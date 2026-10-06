@@ -1,23 +1,67 @@
 # Card view
 
-*The group view.*
-
 **Route:** `card/{listId}`
 **Group:** Core loop
 **Status:** active
-**Last reviewed:** 2026-10-05
-**Index:** [Page views](../PAGE_VIEWS.md)
+**Last reviewed:** 2026-10-06
+**Spec:** [card-view](../card-view/README.md): CARD-01, CARD-02, CARD-03, CARD-04, CARD-05, CARD-06, CARD-07 (defined this round), CORE-04; NOTE-02 in [contact-detail](../contact-detail/README.md); PRIV-03 and PRIV-05 in [privacy-and-lock](../privacy-and-lock/README.md)
 
-What a user expects to see or do here:
+---
 
-- See one person at a time: their photo (or initials), name, and whether they are due today or not due yet
-- Know why now: how long it has been, the pair's usual rhythm once there is enough history, and the last note written about them
-- Know when they usually answer (heat strip) and key stats (last called, average length, calls)
-- Call them with the labelled Call button, the only control that dials (CARD-01)
-- Tap the card, or "View details", to open the full contact
-- Move them with Later (left swipe or button) or Sooner (right swipe or button), both labelled, and undo from a snackbar that names them and says when they come back (CARD-02)
-- After a call the log confirms, see "Called {name}" with "Add a note" (CARD-03)
-- The three-dots menu: Browse people, Add people, List settings (the same words as Home's list menu; until 2026-10-05 it said "Add contacts" and "Edit list")
-- With nobody on the list, "Add people" opens the picker
-- When nobody is due, a calm "All quiet for now." with who comes up next and when (CARD-05)
-- In landscape on a phone, the card on the left and its actions beside it; with large text, Call on its own row (CARD-06)
+## Reached from
+
+- Home: tap a list card
+- Lists: tap a row (LIST-23)
+- A nudge: tapping it opens the deck of the list it came from
+- A widget: tapping a person opens their list's deck
+- The "Call next" launcher shortcut: opens the deck whose next person it names
+
+## What the user sees
+
+- App bar: Back, the list's name as the title in every state ("List" under the curtain), and "More actions for {list}"
+- When call log access is off, a quiet notice above the card: "Orbit can't see your calls, so cards won't move on by themselves." with "Open settings"
+- One person at a time: a small label "Up now" or "Coming up" (a fact about the rhythm, never a deadline), their photo or initials, their name, and why now in human terms (CARD-04): how long it has been ("You spoke today.", "3 weeks since you last spoke."), the pair's usual rhythm once there are four calls ("You usually talk about every 2 weeks."), and the last note you wrote about them in quotation marks with "Your note, 12 days ago"
+- "Usually answers": when they tend to pick up, from past calls, with an info tip ("Based on when you usually answer or call this person."); "Not enough calls yet to see a pattern" until there is one
+- Three stats, worded as everywhere else: "Last call", "Average length", "Total calls" ("Never called" and "Not enough calls yet" where there isn't the history)
+- Below the card: "Later", the labelled "Call {first name}", and "Sooner"; then "Open details"
+- In landscape on a phone the card sits on the left and its actions in a column beside it; with large text, Call takes its own row (CARD-06)
+- The one accent element: the Call button, the only control that dials (CARD-01, rules.md Design 6)
+
+## Actions and menus
+
+- "Call {first name}": opens the dialer with the number filled in; Orbit never places the call itself (PRIV-05)
+- Tap the card face, or "Open details": opens the person's page; the face never dials (CARD-01)
+- "Later" (or a left swipe): moves them further out on this list; "{Name} will come up again {tomorrow / on Tuesday / in 2 weeks}." with Undo. "Sooner" (or a right swipe): brings them forward; "{Name} comes up {when}." with Undo. Each undo is its own, and a swipe that commits gives a haptic (CARD-02)
+- A move that could not be saved says so: "Couldn't move {name} to later. Try again.", "Couldn't move {name} sooner. Try again.", "Couldn't undo that. Try again."
+- After a call placed from the card, once the call log confirms it and the deck moves on by itself (CORE-04): "Called {first name}" with "Add a note", which opens the person with the note field focused (CARD-03, NOTE-02)
+- "More actions for {list}", in order: "Browse people" (opens Browse for this list), "Add people" (opens the Add people picker; not offered on smart lists), "List settings"
+- "Open settings" on the notice: opens Orbit's Settings, where the Call log row hosts the grant
+- "Go home" on the empty, quiet and error decks: leaves the deck the same way Back does, to the screen that opened it
+
+## States
+
+- Loading: quiet chrome (the app bar with the list's name) until the list and its people are known; never a false empty deck
+- No one on the list: "No one is in this list yet." / "Add a few people to start surfacing names." with "Add people" and "Go home". On a smart list: "No one matches this rule right now." with "List settings" and "Go home"
+- All quiet (CARD-05): "All quiet for now." and who comes up next and when ("Sam comes up in 2 weeks.", or "No one needs a call right now."), with "Browse this list" and "Go home"; never "caught up"
+- Error (CARD-07): "Something's off here." / "Nothing is lost. Try again in a moment." with Try again (the accent) and "Go home"; a malformed list id is this error, never an empty deck
+- Call log access off: the notice above the card; the deck still works, but only Later, Sooner and your own undo move it on
+- A paused person is skipped, and "All quiet for now" names when they come back; a pause until you unpause is not named
+- Privacy curtain: the name reads "Contact" and the initials come from that word, the note reads "Note hidden", the title reads "List" (PRIV-03)
+
+## Leads to
+
+- The dialer (Call)
+- Contact detail (the face, "Open details"; "Add a note", with the note field focused)
+- Browse people (menu; "Browse this list")
+- The Add people picker (menu; the empty deck); it returns here with "Added 3 people to {list}" and Undo
+- List settings (menu; the smart list's empty deck); Done or Back returns here
+- Settings ("Open settings")
+- "Go home" and Back both return to where the deck was opened from: Home, or Lists; and Home when the deck was opened by a nudge, a widget or the shortcut
+
+## Tests that pin it
+
+- `CardViewViewModelTest` (Ready before any empty state, Error on a failed read and recovery after Try again, the smart list's empty state, the pause hint, a malformed id)
+- `CardViewViewModelInteractionTest` (Later and Sooner with their undo, failure snackbars, the Called acknowledgement and what cancels it, the rhythm sentence)
+- `CardListMenuTest` (added this round: menu order, Add people absent on smart lists)
+- `CardViewScreenTest` (added this round: the face opens details and never dials; Call is on screen in landscape)
+- Gallery previews: `CardViewContentPreview`, `CardViewContentAheadOfTodayPreview`, `CardViewContentLongNamesPreview`, `CardViewContentNoMembersPreview`, `CardViewContentNothingEligiblePreview`, `CardViewContentCallLogDeniedPreview`, and the Loading and Error previews added this round, with the curtain pass
