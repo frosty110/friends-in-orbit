@@ -25,7 +25,7 @@
   - "Active hours": "Always active" ("Nudges can come at any time of day"), or a start and an end time with a bar showing the window, and "Overnight list: active across midnight." when it crosses midnight; they limit when a nudge may post, never which days
   - "Nudges": "Send nudges" ("A gentle nudge when someone here is worth a call."), and "Nudges paused" while they are off
   - "When to nudge": seven 48dp day toggles that wrap on a narrow phone rather than shrink; one or more times with "Add time", "Change time" and a remove control; the plan as one line ("Weekdays at 10am", "Every day at 9am and 6pm", "No days selected: nudges off", "No time set: tap “Add time”")
-  - "Smart rule" (smart lists): the rule as a sentence with its setting ("Added in the last 30 days", "No call in the last 90 days", "The top 20% of the people you call"), or "Nothing to set. This list shows everyone you haven't called yet."
+  - "Smart rule" (smart lists): the rule as a sentence with its setting ("Added in the last 30 days", "No call in the last 90 days", "The top 20% of the people you call"), or "Nothing to set. This list shows everyone you haven't called yet."; the day field under "No call in the last 90 days" announces that sentence to TalkBack as its name, and saves once per Done or focus loss
   - "People": who is on the list, "Showing 20 of 48" with "Show all" on long lists, a remove control per person ("Remove {name} from list"), and "Add people" (regular lists only)
   - "Make this a regular list" with the note "The people here now stay, and the list stops adding people by itself. This can't be undone." (smart lists)
   - A second "Done" at the foot
