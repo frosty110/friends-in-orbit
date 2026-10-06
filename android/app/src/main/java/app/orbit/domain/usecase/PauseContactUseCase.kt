@@ -1,6 +1,7 @@
 package app.orbit.domain.usecase
 
 import app.orbit.data.repository.ContactRepository
+import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.model.PauseDuration
 import java.time.Instant
@@ -21,6 +22,7 @@ import javax.inject.Inject
 class PauseContactUseCase @Inject constructor(
     private val contactRepo: ContactRepository,
     private val clock: Clock,
+    private val widgetRefreshTrigger: WidgetRefreshTrigger = WidgetRefreshTrigger { },
 ) {
 
     suspend operator fun invoke(contactId: Long, duration: PauseDuration) {
@@ -30,6 +32,11 @@ class PauseContactUseCase @Inject constructor(
             ?.let { clock.now().plus(it) }
             ?: INDEFINITE_PAUSE_SENTINEL
         contactRepo.setPausedUntil(contactId, pausedUntil)
+        // WIDGET-06: a paused person drops out of the cross-list surface, so the
+        // widgets must stop offering them (with a live Call button) within the
+        // 30s debounce rather than at the hourly sweep. The unpause paths write
+        // setPausedUntil from their ViewModels and fire the trigger beside it.
+        widgetRefreshTrigger.scheduleRefresh()
     }
 
     companion object {

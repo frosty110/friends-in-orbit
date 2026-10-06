@@ -8,9 +8,9 @@
 package app.orbit.widget
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
-import androidx.glance.action.Action
-import androidx.glance.appwidget.action.actionStartActivity
+import app.orbit.R
 import app.orbit.data.entity.ContactEntity
 import app.orbit.domain.usecase.WidgetSurfaceData
 import app.orbit.nav.AppLinks
@@ -25,17 +25,22 @@ import kotlinx.coroutines.withContext
 /**
  * One person on a widget.
  *
- * [name] is what the widget writes: the display name, or "Contact" in minimal
- * mode (WIDGET-04). [face] is null in minimal mode, which draws a silhouette.
- * [open] opens the deck of the list that surfaced them, with them on top
- * (WIDGET-08); [call] opens the dialer, and is null on a device without one,
- * where the widget offers no Call control rather than one that does nothing.
+ * [name] is what the widget writes: the display name, or the curtain's word
+ * ("Contact", `components_curtain_contact`) in minimal mode (WIDGET-04).
+ * [face] is null in minimal mode, which draws a silhouette. [openIntent] opens
+ * the deck of the list that surfaced them, with them on top (WIDGET-08);
+ * [dialIntent] opens the dialer, and is null on a device without one, where
+ * the widget offers no Call control rather than one that does nothing.
+ *
+ * These are plain Intents, not Glance Actions, so a test can read the route
+ * and the dial URI back; the composables in WidgetContent.kt wrap them with
+ * `actionStartActivity` where they are used.
  */
 class WidgetPerson(
     val name: String,
     val face: WidgetFace?,
-    val open: Action,
-    val call: Action?,
+    val openIntent: Intent,
+    val dialIntent: Intent?,
 )
 
 /**
@@ -63,13 +68,16 @@ suspend fun widgetPeople(
     tones: WidgetAvatarTones,
 ): List<WidgetPerson> = withContext(Dispatchers.IO) {
     val sizePx = (WidgetSizes.avatarLarge * context.resources.displayMetrics.density).toInt()
+    // WIDGET-04: the masked name is the privacy curtain's own word, from the
+    // same resource (voice.md, "Where copy lives"), resolved once per render.
+    val maskedName = context.getString(R.string.components_curtain_contact)
     (listOfNotNull(data.primary) + data.alternatives).take(max).map { contact ->
         WidgetPerson(
-            name = if (minimalMode) MINIMAL_NAME else contact.displayName,
+            name = if (minimalMode) maskedName else contact.displayName,
             face = if (minimalMode) null else face(context, contact, sizePx, tones),
-            open = actionStartActivity(openIntent(context, data.listIdByContactId[contact.id])),
-            call = dialIntent(contact).takeIf { it.resolveActivity(context.packageManager) != null }
-                ?.let { actionStartActivity(it) },
+            openIntent = openIntent(context, data.listIdByContactId[contact.id]),
+            dialIntent = dialIntent(contact)
+                .takeIf { it.resolveActivity(context.packageManager) != null },
         )
     }
 }
@@ -99,6 +107,3 @@ private fun openIntent(context: Context, listId: Long?) =
     } else {
         AppLinks.openRoute(context, Routes.card(listId.toString()))
     }
-
-/** WIDGET-04: the masked name, the same word the in-app curtain uses. */
-const val MINIMAL_NAME = "Contact"

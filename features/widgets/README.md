@@ -1,11 +1,11 @@
 # widgets
 
 **Status:** shipped
-**Last reviewed:** 2026-10-05 (platform pass: responsive sizes, previews, the app's avatar; launcher shortcuts and themed icon)
+**Last reviewed:** 2026-10-06 (refreshes follow Sooner, pause and list changes too; the widget tests pin the production path)
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/widget/`. `OrbitWidget2x2` ("Next call") and `OrbitWidget4x2` ("Call suggestions") with their receivers; `WidgetLayouts.kt` (breakpoints and arrangements), `WidgetPeople.kt` (each person's face, colours and taps, resolved before composition), `WidgetContent.kt` (the Glance composables), `WidgetUpdateScheduler` / `WidgetUpdateWorker` (when they refresh). Data: `domain/usecase/WidgetSurfaceUseCase.kt`. Theme: `ui/theme/WidgetColors.kt`, `ui/theme/WidgetTheme.kt`. The avatar: `ui/components/AvatarBitmaps.kt`, `ui/components/AvatarFace.kt`. Resources: `res/xml/widget_info_*.xml`, `res/layout/widget_preview_*.xml`, `res/layout/widget_loading.xml`, `res/drawable-nodpi/widget_preview_*.png`.
 - Launcher: `android/app/src/main/java/app/orbit/launcher/LauncherShortcuts.kt`, `nav/AppLinks.kt`, `MainActivity.routeFrom`; `res/mipmap-anydpi-v26/ic_launcher*.xml` (themed icon).
-- Tests: `OrbitWidgetLayoutTest`, `WidgetPreviewResourcesTest`, `OrbitWidget2x2Test`, `OrbitWidget4x2Test`, `MinimalModeTest`, `WidgetUpdateSchedulerTest`, `UpdateTriggersTest`, `WidgetSurfaceUseCaseTest`, `WidgetColorsTest`, `AvatarFaceTest`, `AppLinksTest`, `LauncherShortcutsTest`. Renders of both widgets at every breakpoint and typical phone sizes, the empty state and the picker previews, light and dark: `PlatformSurfacesGalleryTest` (`-Pscreenshots`, writes `build/screenshots/platform/`).
+- Tests: `OrbitWidgetLayoutTest`, `WidgetPreviewResourcesTest`, `WidgetPeopleTest` (what the widgets draw and what a tap does: masking, the face, `max`, the dial and open intents; Robolectric), `WidgetUpdateSchedulerTest`, `UpdateTriggersTest`, `WidgetSurfaceUseCaseTest`, `WidgetColorsTest`, `AvatarFaceTest`, `AppLinksTest`, `LauncherShortcutsTest`, `LauncherIconTest`. Renders of both widgets at every breakpoint and typical phone sizes, the empty state and the picker previews, light and dark: `PlatformSurfacesGalleryTest` (`-Pscreenshots`, writes `build/screenshots/platform/`).
 
 ---
 
@@ -36,7 +36,7 @@ As built 2026-10-05 (UX rubric plan item 3.2). Before: a square first initial on
 | Call suggestions at 4×2 | The lead on the left; one or two more on the right, by height |
 | Call suggestions at 4×3 and up | The lead in a row on top; two more below, each with a quiet call button; centred so a tall widget has no empty band |
 
-**Taps** (WIDGET-08). Only Call dials, as on Card view (CARD-01): the lead person's accent Call button opens the dialer with the number filled in. A tap anywhere else on a person opens that person's list's deck in Orbit, with them on top. On a 4×3 or larger "Call suggestions", the others carry a quiet, muted phone button (rules.md Design 6 allows one on each row of a people list); at 4×2 there is no room for it beside the name, so those rows open the deck, one tap from Call.
+**Taps** (WIDGET-08). Only Call dials, as on Card view (CARD-01): the lead person's accent Call button opens the dialer with the number filled in. A tap anywhere else on a person opens that person's list's deck in Orbit, with them on top. On a 4×3 or larger "Call suggestions", the others carry a quiet, muted phone button (rules.md Design 6 allows one on each row of a people list); at 4×2 there is no room for it beside the name, so those rows open the deck, one tap from Call. A tap carries the list's route, so in the seconds between archiving a list and the refresh that follows (WIDGET-05), a tap on its person still opens that list's deck: archiving leaves memberships in place, and Card view opens a list by id whether or not it is archived. A deleted list's deck opens empty, because deleting a list removes its memberships.
 
 **The app's avatar** (WIDGET-11, UX rubric decision 5). The address-book photo where there is one, otherwise the same two-letter monogram, in Inter, on the same palette colour the app gives that name. Always a circle.
 
@@ -48,7 +48,7 @@ As built 2026-10-05 (UX rubric plan item 3.2). Before: a square first initial on
 
 **Names on the home screen.** The widget shows person names and faces: the user chose to put it on the home screen, which is behind the phone's own lock. It never shows a list name. A widget-only masking flag exists (WIDGET-04) but nothing in the app turns it on today. See `features/privacy-and-lock/README.md`, "Surfaces outside the app".
 
-**Update triggers.** The widgets refresh after a call, a Later or Sooner, a membership change and a theme change (debounced 30 seconds), and once an hour for active-hours boundaries (WIDGET-05, WIDGET-06).
+**Update triggers.** The widgets refresh after a call, a Later or Sooner, a pause or unpause, a membership change, a list being archived, unarchived or deleted, and a theme change (debounced 30 seconds), and once an hour for active-hours boundaries (WIDGET-05, WIDGET-06). Until 2026-10-06 a Sooner and a pause did not refresh them, so a widget kept offering someone the user had just paused, with a live Call button, until an unrelated write or the hourly sweep.
 
 ### Launcher shortcuts and the themed icon
 
@@ -69,14 +69,14 @@ Defined 2026-10-05; WIDGET-01 to WIDGET-06 record what the code already cites, t
 - **WIDGET-03: Widgets read through one narrow door.** `WidgetEntryPoint` exposes only the cross-list surface use case and preferences to the widget process; no DAO, repository or key provider.
 - **WIDGET-04: A widget-only masking flag.** When `AppPrefs.minimalModeEnabled` is on, the widgets write "Contact" for every name and draw a silhouette for every face, in text and in TalkBack labels. Nothing in the app sets the flag today.
 - **WIDGET-05: Refreshes are debounced.** Every in-app change asks for one refresh 30 seconds later (`ExistingWorkPolicy.KEEP`), so bulk edits do not flood the launcher; `WidgetUpdateScheduler` and `WidgetUpdateWorker` are the only code that updates widgets.
-- **WIDGET-06: Refreshes follow the data.** Calls, Later, Sooner, membership and theme changes trigger a refresh; an hourly sweep catches active-hours boundaries no write announces; a data reset cancels pending refreshes and runs one more so a wiped name never lingers.
+- **WIDGET-06: Refreshes follow the data.** Every change to who can be surfaced asks for a refresh: a call, Later, Sooner, pause and unpause (single and in bulk, and their Undo), membership changes, a list archived, unarchived or deleted (and the Undo of each), and theme changes. The domain use cases fire `WidgetRefreshTrigger` beside their write; the ViewModel-level writes (unpause, list archive and delete) call it beside theirs. An hourly sweep catches active-hours boundaries no write announces; a data reset cancels pending refreshes and runs one more so a wiped name never lingers. Pinned by `UpdateTriggersTest`.
 - **WIDGET-07: Every size has an arrangement.** Both widgets resize from one row to a large card (`SizeMode.Responsive`, `WidgetBreakpoints`), each breakpoint has a deliberate arrangement (`nextCallLayout`, `suggestionsLayout`), and every breakpoint holds a full 48dp Call button.
 - **WIDGET-08: Only Call dials.** The lead person's labelled accent Call button opens the dialer (`ACTION_DIAL`, no `CALL_PHONE`); a tap on a person opens their list's deck with them on top. No surface of the widget dials on a stray tap.
 - **WIDGET-09: Real previews.** Android 12+ pickers draw `previewLayout` (live, light or dark); `previewImage` is a rendering of the same layout for launchers that only show images. Preview colours copy the Warm theme's tokens and are held to them by `WidgetPreviewResourcesTest`.
 - **WIDGET-10: "All quiet for now."** The empty state, with the Orbit glyph, opening Orbit on tap.
 - **WIDGET-11: It looks like Orbit.** Android's widget corner radius, the user's theme in light and dark, and the app's avatar (photo, else the monogram on its palette colour, a circle), from the same rules as the in-app `Avatar` (`avatarInitials`, `OrbitTones.avatarPalette`). The first frame, before Orbit has drawn, is the card with the Orbit glyph, not a spinner.
 - **LAUNCH-01: Shortcuts that name no one.** "Call next" and "Search" as dynamic shortcuts with fixed labels and an action, never a route or list id; `MainActivity` resolves them when tapped, after onboarding. No per-list or per-person shortcuts.
-- **LAUNCH-02: Themed icon.** The adaptive launcher icon and the shortcut icons carry a monochrome layer for Android 13+ themed icons.
+- **LAUNCH-02: Themed icon.** The adaptive launcher icon and the shortcut icons carry a monochrome layer for Android 13+ themed icons: `res/mipmap-anydpi-v26/ic_launcher.xml` declares `<monochrome>` beside its foreground and background, and so does each shortcut icon. Pinned by `LauncherIconTest`, which parses those resources for the element; whether the launcher tints it is a device check.
 
 ### Acceptance criteria
 
@@ -88,6 +88,7 @@ Defined 2026-10-05; WIDGET-01 to WIDGET-06 record what the code already cites, t
 - [ ] Rounded corners match the other widgets on the home screen (device check; the JVM render cannot clip to outlines).
 - [ ] The picker shows the preview, in light and dark (device check).
 - [ ] With themed icons on (Android 13+), Orbit's icon is tinted like the rest (device check).
+- [x] A shortcut's action and a widget's route resolve to the right landing, and the shortcuts wait for onboarding (`AppLinksTest.landingFor_extraWinsOverAction`, `landingFor_callNext_beforeOnboarding_isNothing`, `landingFor_search_opensGlobalSearch`, `landingFor_unrelatedAction_isNothing`).
 - [ ] Long-pressing the icon shows "Call next" and "Search"; "Call next" opens the deck of the person the widget shows (device check).
 
 ### Not in scope

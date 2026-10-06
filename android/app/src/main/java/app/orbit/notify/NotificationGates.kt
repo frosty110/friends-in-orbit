@@ -32,10 +32,8 @@ fun Context.areNotificationsEnabled(): Boolean =
  *
  * ### Semantics (D-10)
  * Only [NotificationManager.INTERRUPTION_FILTER_ALL] (interruptions fully allowed)
- * permits the nudge to fire. All other filters — PRIORITY, ALARMS, and NONE — suppress
- * the notification. The follow-up channel is IMPORTANCE_HIGH and may pierce priority DND
- * on some device configurations, but we apply the same gate uniformly for simplicity;
- * the user can configure DND exceptions in system Settings if needed.
+ * permits the nudge to fire. All other filters (PRIORITY, ALARMS and NONE) suppress
+ * the notification; the user can configure DND exceptions in system Settings if needed.
  *
  * ### Why "blocking" semantics rather than "allowing"
  * Returning `true` when DND *blocks* the call gives callers a natural guard:
