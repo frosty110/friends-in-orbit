@@ -40,10 +40,8 @@
     <!-- Snackbars several screens show after changing one person (Contact detail, Browse,
          the contact picker, Settings > Ignored), each with Undo. %1$s: the person's name. -->
     <string name="components_snackbar_ignored">Ignored %1$s</string>
-    <!-- Reverses Ignore: the person is back in their lists. Replaces "Restored", which Settings >
-         Ignored and the picker still read until they switch; both keys stay until then. -->
+    <!-- Reverses Ignore: the person is back in their lists. -->
     <string name="components_snackbar_unignored">Unignored %1$s</string>
-    <string name="components_snackbar_restored">Restored %1$s</string>
     <string name="components_snackbar_unpaused">Unpaused %1$s</string>
     <!-- After pausing one person: no nudges and no suggestions for a while. One sentence per
          length of pause. %1$s: the person's name. -->
