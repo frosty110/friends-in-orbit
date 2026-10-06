@@ -1,19 +1,24 @@
 package app.orbit.ui.screens.onboarding
 
 import android.app.Application
-import androidx.test.core.app.ApplicationProvider
 import app.orbit.data.AppPrefs
 import app.orbit.domain.FakeListRepository
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.listFixture
-import java.io.File
+import app.orbit.testutil.newPrefs
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -25,21 +30,28 @@ import org.robolectric.annotation.Config
  *
  * Real DataStore under Robolectric with `runBlocking`, the same fixture as
  * OnboardingDoneViewModelTest (DataStore writes hop to a real IO dispatcher).
+ * One store per test method (`tmp.newPrefs(storeScope)`, testutil/
+ * TestDataStore.kt), shared by every [AppPrefs] the method builds: two stores
+ * on one file would throw, and the pointer written through one must be read
+ * through the other.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = Application::class)
 class OnboardingListStarterTest {
 
-    private val context: android.content.Context get() = ApplicationProvider.getApplicationContext()
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    private val storeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val prefs: AppPrefs by lazy { tmp.newPrefs(storeScope) }
 
     @After
-    fun clearDataStore() {
-        runBlocking { AppPrefs(context).setOnboardingListId(null) }
-        File(context.filesDir.parentFile, "datastore").takeIf { it.exists() }?.deleteRecursively()
+    fun tearDown() {
+        storeScope.cancel()
     }
 
     private fun starter(listRepo: FakeListRepository) =
-        OnboardingListStarter(listRepo, AppPrefs(context), TestClock())
+        OnboardingListStarter(listRepo, prefs, TestClock())
 
     @Test
     fun `returning to Preview reuses the list instead of creating a second`() = runBlocking {
@@ -109,12 +121,12 @@ class OnboardingListStarterTest {
     @Test
     fun `a stale pointer (list deleted or reset) reads as no list`() = runBlocking {
         val repo = FakeListRepository(initialLists = listOf(listFixture(id = 1L)))
-        AppPrefs(context).setOnboardingListId(99L)
+        prefs.setOnboardingListId(99L)
         assertNull(starter(repo).pendingListId())
 
         repo.updateLists { rows -> rows.map { it.copy(isArchived = true) } }
-        AppPrefs(context).setOnboardingListId(1L)
+        prefs.setOnboardingListId(1L)
         assertNull(starter(repo).pendingListId(), "an archived list is not resumed")
-        assertEquals(1L, AppPrefs(context).onboardingListId.first())
+        assertEquals(1L, prefs.onboardingListId.first())
     }
 }

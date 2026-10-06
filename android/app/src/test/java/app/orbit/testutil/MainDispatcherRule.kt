@@ -20,10 +20,12 @@ import org.junit.runner.Description
  * - **Pure JVM + fake repositories** (e.g. `CardViewViewModelTest`, `HomeViewModelTest`):
  *   no real `Context`, no DataStore, no Room. Runs on the standard JUnit runner. Fastest.
  * - **Robolectric + real DataStore** (e.g. `AppViewModelTest`, `SettingsViewModelTest`,
- *   `OnboardingBulkAddViewModelTest`): needs `ApplicationProvider.getApplicationContext()`
- *   to construct `AppPrefs`. Pair this rule with an explicit `@After` that resets every
- *   flag the test writes (DataStore caches a process-wide singleton per Context+name; a
- *   file-only wipe is insufficient). See `AppViewModelTest.clearDataStore` for the pattern.
+ *   `OnboardingDoneViewModelTest`): builds `AppPrefs` over a DataStore of its own per test
+ *   method, `tmp.newPrefs(storeScope)` from `TestDataStore.kt`, and cancels `storeScope`
+ *   in an `@After`. That cancel runs before this rule's `finished()`, so Main is still the
+ *   test dispatcher while the store's actor drains. (Until 2026-10-06 these fixtures shared
+ *   the production singleton and reset flags by hand, which is where the suite's 30 second
+ *   timeouts came from; see `TestDataStore.kt`.)
  *
  * Source recipe: developer.android.com/kotlin/coroutines/test#main-dispatcher.
  */
