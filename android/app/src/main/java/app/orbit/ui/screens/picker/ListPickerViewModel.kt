@@ -53,10 +53,20 @@ import kotlinx.coroutines.launch
  *     shows the result on the caller (picker-commit lifecycle).
  *
  * Selection invariants:
- *   - Picker shows only non-archived lists (filtered post-collect).
- *   - Lists the contact already belongs to are NOT excluded from the row set
- *     — the user can re-tap and the DAO's `OnConflictStrategy.IGNORE` keeps
- *     the operation idempotent (the list of lists is small).
+ *   - Picker shows only non-archived, non-smart lists. A smart list's rows
+ *     are written by SmartListMembershipSync from its rule, so a row added
+ *     here would be removed on the next reconcile with no message; ListRow
+ *     hides "+" on smart lists for the same reason. A smart id that still
+ *     reaches the commit is refused loudly (rules.md Code 3).
+ *   - Lists the contact already belongs to stay in the row set, tagged
+ *     "Already added", but cannot be picked: the row is disabled, the toggle
+ *     refuses the id once the rows are known, the state drops a restored id,
+ *     and the commit snapshots the memberships and writes only the rest.
+ *     Until 2026-10-06 the DAO's `OnConflictStrategy.IGNORE` was relied on
+ *     for idempotence: it made the insert a no-op, but the snackbar still
+ *     counted the list and Undo's removeAll deleted the membership the
+ *     person already had (G1: no lost work). The count and the inverse now
+ *     come from the rows actually inserted, as CopyContactsUseCase does.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -126,9 +136,9 @@ class ListPickerViewModel @Inject constructor(
 
     val uiState: StateFlow<UiState> =
         if (contactId == null) {
-            // C6: terminal NotFound — combine pipeline never starts; emit a
-            // single static state. The screen renders a "Contact not found"
-            // empty surface in this branch.
+            // Terminal NotFound for a missing or malformed id: the combine
+            // pipeline never starts; emit a single static state. The screen
+            // says the person is not in Orbit anymore and offers Go back.
             kotlinx.coroutines.flow.flowOf(
                 UiState(
                     phase = UiState.Phase.NotFound,
@@ -173,23 +183,40 @@ class ListPickerViewModel @Inject constructor(
             _isCommitting,
         ) { lists, contact, memberships, selected, committing ->
             val memberListIds: Set<Long> = memberships.map { it.listId }.toSet()
-            UiState(
-                phase = when {
-                    committing -> UiState.Phase.Committing
-                    else -> UiState.Phase.Ready
-                },
-                contactName = contact?.displayName.orEmpty(),
-                lists = lists
-                    .filter { !it.isArchived }
-                    .map {
-                        UiState.ListRow(
-                            listId = it.id,
-                            name = it.name,
-                            isMember = it.id in memberListIds,
-                        )
+            if (contact == null) {
+                // Room emits null only for a missing row (a stale deep link, a
+                // person removed from another screen), never before the first
+                // read, so this is terminal. Until 2026-10-06 the picker sat
+                // Ready with a blank title and the commit failed late on the
+                // membership's foreign key.
+                UiState(
+                    phase = UiState.Phase.NotFound,
+                    contactName = "",
+                    lists = emptyList(),
+                    selectedListIds = emptySet(),
+                )
+            } else {
+                UiState(
+                    phase = when {
+                        committing -> UiState.Phase.Committing
+                        else -> UiState.Phase.Ready
                     },
-                selectedListIds = selected,
-            )
+                    contactName = contact.displayName,
+                    lists = lists
+                        .filter { !it.isArchived && it.type != ListType.SMART }
+                        .map {
+                            UiState.ListRow(
+                                listId = it.id,
+                                name = it.name,
+                                isMember = it.id in memberListIds,
+                            )
+                        },
+                    // A restored selection (SavedStateHandle) can carry a list
+                    // the person has since been added to; it is not pickable,
+                    // so it is not selected.
+                    selectedListIds = selected - memberListIds,
+                )
+            }
         }.catch {
             emit(
                 UiState(
@@ -209,6 +236,11 @@ class ListPickerViewModel @Inject constructor(
     }
 
     fun onToggleListSelect(id: Long) {
+        // A list the person is already on cannot be picked (its row is
+        // disabled too); refusing here covers a stale tap. The rows are known
+        // only while the screen collects uiState, so the commit re-checks
+        // against a fresh membership snapshot for the restored-selection case.
+        if (uiState.value.lists.any { it.listId == id && it.isMember }) return
         val current = _selectedListIds.value
         _selectedListIds.value = if (id in current) current - id else current + id
     }
@@ -264,10 +296,12 @@ class ListPickerViewModel @Inject constructor(
      * as [ContactPickerViewModel.onCommit]: the insert runs on [appScope], NOT
      * viewModelScope, because the caller pops this screen immediately after
      * invoking onCommit (which clears the VM and would cancel the write
-     * mid-flight). The outcome — "Added to N list[s]" with Undo, or "Couldn't
-     * save that" on failure — is published on [PickerCommitBus] so the
-     * app-level [PickerCommitSnackbarHost] shows it on the caller after the
-     * pop. [CancellationException] is rethrown per codebase convention.
+     * mid-flight). The outcome, "Added to N list[s]" with Undo where N counts
+     * the rows actually written, or "Couldn't save that" when nothing could
+     * be (a failure, or only lists the person is already on), is published on
+     * [PickerCommitBus] so the app-level [PickerCommitSnackbarHost] shows it on
+     * the caller after the pop. [CancellationException] is rethrown per
+     * codebase convention.
      */
     fun onCommit() {
         val ids = _selectedListIds.value.toList()
@@ -281,23 +315,41 @@ class ListPickerViewModel @Inject constructor(
         _selectedListIds.value = emptySet()
         appScope.launch {
             try {
-                val now = clock.now()
-                val memberships = ids.map { listId ->
-                    ListMembershipEntity(
-                        listId = listId,
-                        contactId = cId,
-                        addedAt = now,
+                // Snapshot inside the write, as CopyContactsUseCase does: only
+                // lists the person is NOT already on are inserted, so the count
+                // says what was written and Undo removes only those rows. A
+                // smart list (rule-derived rows), an archived list or one that
+                // is gone is not a target either.
+                val alreadyOn: Set<Long> =
+                    listRepo.observeMembershipsForContact(cId).first().map { it.listId }.toSet()
+                val toInsert = ids.filter { listId ->
+                    val target = listRepo.getById(listId)
+                    target != null && !target.isArchived && target.type != ListType.SMART && listId !in alreadyOn
+                }
+                if (toInsert.isEmpty()) {
+                    // rules.md Code 3: a commit that writes nothing is a failed
+                    // save, not "Added to 1 list".
+                    commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
+                } else {
+                    val now = clock.now()
+                    listMembershipDao.insertAll(
+                        toInsert.map { listId ->
+                            ListMembershipEntity(
+                                listId = listId,
+                                contactId = cId,
+                                addedAt = now,
+                            )
+                        },
                     )
-                }
-                listMembershipDao.insertAll(memberships)
-                val message = UiText.plural(R.plurals.picker_snackbar_added_to_lists, ids.size, ids.size)
-                val inverse: suspend () -> Unit = {
-                    ids.forEach { listId ->
-                        listMembershipDao.removeAll(listId, listOf(cId))
+                    val message = UiText.plural(R.plurals.picker_snackbar_added_to_lists, toInsert.size, toInsert.size)
+                    val inverse: suspend () -> Unit = {
+                        toInsert.forEach { listId ->
+                            listMembershipDao.removeAll(listId, listOf(cId))
+                        }
                     }
+                    undoStack.put(UndoStack.PendingUndo(inverse = inverse))
+                    commitBus.publish(SnackbarEvent.undoable(message))
                 }
-                undoStack.put(UndoStack.PendingUndo(inverse = inverse))
-                commitBus.publish(SnackbarEvent.undoable(message))
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
                 commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))

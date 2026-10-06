@@ -33,17 +33,18 @@ import java.time.Instant
  * is still too large to select in one tap.
  */
 /**
- * ONB-21 — picker sort mode. Default `ByName` matches the original behavior
- * (DAO emits `ORDER BY displayName COLLATE NOCASE ASC`).
- * Onboarding's first-list flow defaults to `ByRecency` so freshly-synced
- * recent callers surface first.
+ * The picker's sort mode. Alphabetical ([ByName], the DAO's `ORDER BY
+ * displayName COLLATE NOCASE ASC`) on every route; only the user changes it,
+ * from the Sort control, and the choice persists through SavedStateHandle.
+ * (Until 2026-10-06 these comments described an onboarding flow that opened
+ * on [ByRecency]; no code ever did.)
  */
 @Immutable
 sealed class PickerSort {
-    /** Alphabetical (A→Z). Matches the DAO's `ORDER BY displayName COLLATE NOCASE ASC`. */
+    /** Alphabetical (A to Z). Matches the DAO's `ORDER BY displayName COLLATE NOCASE ASC`. */
     @Immutable data object ByName : PickerSort()
 
-    /** Most recently *called* first (null lastCallAt sorts last). Onboarding default. */
+    /** Most recently *called* first (null lastCallAt sorts last): "Recently called". */
     @Immutable data object ByRecency : PickerSort()
 
     /** Most-called first — highest `callCount` at the top, name as tiebreak. */
@@ -77,16 +78,20 @@ data class ContactPickerUiState(
      */
     val availableLists: List<PickerListSummary> = emptyList(),
     /**
-     * ONB-21 — picker sort mode. Default `ByName` (DAO order);
-     * onboarding flips to `ByRecency` so most-recently-called surface first.
+     * The current sort. Alphabetical by default; the user changes it from
+     * the Sort control ([ContactPickerViewModel.setSortBy]).
      */
     val sortBy: PickerSort = PickerSort.ByName
 ) {
     /**
      * Phase enum — drives which surface [ContactPickerScreen] renders:
      *
-     * - [LoadingPermission]: initial state before [ContactPickerViewModel.refreshPermission]
-     *   completes its first read. Renders a spinner.
+     * - [LoadingPermission]: the stateIn initial value, held until the first
+     *   pipeline emission (the permission read, then the address-book read
+     *   and the Room joins). The screen draws
+     *   [app.orbit.ui.components.OrbitListSkeleton] so a large address book
+     *   never shows a blank page (it drew nothing until 2026-10-06, on the
+     *   belief that the system dialog covered it; no dialog is up then).
      * - [PermissionRationale]: READ_CONTACTS not granted; show a rationale + "Allow" CTA.
      * - [PermissionDenied]: user dismissed the system dialog or set "Don't ask again".
      *   Show a settings deep-link.
@@ -95,10 +100,10 @@ data class ContactPickerUiState(
      * - [Ready]: the list, search, filter, and bulk-action surface are all live.
      * - [Committing]: a Move/Copy/Add use case is in flight; surface a non-blocking
      *   loading indicator on the action bar but keep the list rendered.
-     * - [NotFound]: the `targetListId` nav arg was missing or not parseable as a
-     *   Long. Renders a terminal "List not found" empty state. Guards against
-     *   VM-construction crashes when a stale deep-link or programmer error
-     *   delivers a malformed id.
+     * - [NotFound]: the route's list or person is not there: the id was
+     *   missing or unparseable, or the row is gone (`observeById` emitted
+     *   null, as for a stale deep link or a list deleted from another screen).
+     *   Terminal; the screen says so and offers Go back.
      */
     enum class Phase {
         LoadingPermission,
@@ -231,6 +236,50 @@ data class ContactPickerUiState(
      */
     val ignoredCount: Int = derivedCounts.ignoredCount
 
+    /**
+     * Why the list area is empty while the phase is Ready, or null when it is
+     * not. One predicate so the screen can word every empty state honestly
+     * (rubric G4: an empty state tells the truth and offers the next step).
+     * Until 2026-10-06 the screen said "No contacts on this device" whenever
+     * [allContacts] was empty (false once everyone is on the list, or a
+     * Re-link has no one to link to) and "Try removing a filter" with no
+     * filter active (false when everyone left is ignored).
+     *
+     * Precedence: an empty candidate set is explained by the mode; then a
+     * search query; then a filter; then the ignored-default exclusion. Move
+     * and Copy are route-only (see [PickerMode]) and share Add's wording.
+     */
+    val emptyReason: EmptyReason? = when {
+        filteredContacts.isNotEmpty() -> null
+        allContacts.isEmpty() && mode == PickerMode.Relink -> EmptyReason.NoRelinkTargets
+        allContacts.isEmpty() -> EmptyReason.EveryoneOnList
+        searchQuery.isNotBlank() -> EmptyReason.NoSearchMatches
+        activeFilters.isNotEmpty() -> EmptyReason.NoFilterMatches
+        !showIgnored && ignoredCount > 0 -> EmptyReason.EveryoneIgnored
+        // Only rows with no number are left, which ingest never writes
+        // (matching is number-first): say the nearest true thing.
+        mode == PickerMode.Relink -> EmptyReason.NoRelinkTargets
+        else -> EmptyReason.EveryoneOnList
+    }
+
+    /** See [emptyReason]. */
+    enum class EmptyReason {
+        /** Add mode: every candidate is already on the target list. */
+        EveryoneOnList,
+
+        /** Re-link mode: no other live phone contact to merge into. */
+        NoRelinkTargets,
+
+        /** No query and no filter, but everyone left is ignored; offer "Show ignored". */
+        EveryoneIgnored,
+
+        /** The search query matches nobody. */
+        NoSearchMatches,
+
+        /** The active filters match nobody. */
+        NoFilterMatches
+    }
+
     val selectionCount: Int get() = selectedIds.size
 
     /**
@@ -356,6 +405,15 @@ sealed class PickerFilter {
  *   dispatches [app.orbit.domain.usecase.RelinkContactUseCase]. Selection is
  *   single (a new pick replaces the old one) and candidates are restricted to
  *   [app.orbit.domain.usecase.RelinkContactUseCase.isRelinkTarget].
+ *
+ * Note (2026-10-06): [Move] and [Copy] are route-only. Every caller opens the
+ * picker in Add mode (`Routes.pickContacts(listId)`), and moving or copying
+ * people happens from Browse's multi-select sheet (`ListSelectorSheet` with
+ * `MoveContactsUseCase` / `CopyContactsUseCase`), which took the job. The
+ * branches, strings, previews and tests stay for now: they carry the "a zero
+ * count is a failed save" behaviour (rules.md Code 3) and removing them is a
+ * change of its own. They are a removal candidate; the page view describes
+ * the picker as adding and re-linking only.
  */
 enum class PickerMode { Add, Move, Copy, Relink }
 

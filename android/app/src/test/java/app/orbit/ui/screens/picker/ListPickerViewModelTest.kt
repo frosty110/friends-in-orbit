@@ -6,6 +6,7 @@ import app.cash.turbine.test
 import app.orbit.R
 import app.orbit.data.dao.RecordingListMembershipDao
 import app.orbit.data.entity.ListMembershipEntity
+import app.orbit.data.entity.ListType
 import app.orbit.data.entity.RuleKind
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
@@ -550,6 +551,176 @@ class ListPickerViewModelTest {
             setOf(1L to listOf(12L), 2L to listOf(12L)),
             s.membershipDao.removeCalls.map { it.fromListId to it.ids }.toSet(),
         )
+    }
+
+    // ─── Lists the person is already on (G1: no lost work) ─────────────────
+    //
+    // Regression: a member list could be selected (its row had no `enabled`
+    // gate, and a restored selection can carry one), the DAO's IGNORE made the
+    // insert a no-op, the snackbar still said "Added to 2 lists", and Undo's
+    // removeAll deleted the membership the person already had.
+
+    @Test
+    fun `a list the person is already on is not inserted and the count excludes it`() = runTest {
+        val s = fixture(contactIdArg = "c-12")
+        seedReadyFor(s, contactId = 12L)
+        s.listRepo.seedMemberships(listOf(membershipFixture(contactId = 12L, listId = 1L)))
+        // Nothing collects uiState here, so the toggle guard cannot see the
+        // rows: this is the SavedStateHandle-restore path, where the commit
+        // itself has to drop the member list.
+        s.vm.onToggleListSelect(1L)
+        s.vm.onToggleListSelect(2L)
+
+        s.commitBus.events.test {
+            s.vm.onCommit()
+            val event = awaitItem()
+            assertEquals("the count is what was written, not what was ticked", addedToLists(1), event.message)
+            assertEquals(UNDO, event.actionLabel)
+        }
+        val inserted = s.membershipDao.insertCalls.single().memberships
+        assertEquals(listOf(2L), inserted.map { it.listId })
+    }
+
+    @Test
+    fun `undo after a mixed selection never removes the pre-existing membership`() = runTest {
+        val s = fixture(contactIdArg = "c-12")
+        seedReadyFor(s, contactId = 12L)
+        s.listRepo.seedMemberships(listOf(membershipFixture(contactId = 12L, listId = 1L)))
+        s.vm.onToggleListSelect(1L)
+        s.vm.onToggleListSelect(2L)
+        s.vm.onCommit()
+
+        val pending = s.undoStack.take()
+        assertNotNull("commit must record a depth-1 undo", pending)
+        pending?.inverse?.invoke()
+
+        assertEquals(
+            "Undo removes only the row this commit inserted",
+            listOf(2L to listOf(12L)),
+            s.membershipDao.removeCalls.map { it.fromListId to it.ids },
+        )
+    }
+
+    @Test
+    fun `selecting only lists the person is already on writes nothing and says so`() = runTest {
+        val s = fixture(contactIdArg = "c-12")
+        seedReadyFor(s, contactId = 12L)
+        s.listRepo.seedMemberships(listOf(membershipFixture(contactId = 12L, listId = 1L)))
+        s.vm.onToggleListSelect(1L)
+
+        s.commitBus.events.test {
+            s.vm.onCommit()
+            val event = awaitItem()
+            assertEquals(UiText.res(R.string.picker_snackbar_save_failed), event.message)
+            assertNull("nothing to undo when nothing was written", event.actionLabel)
+        }
+        assertTrue("no insert for a member-only selection", s.membershipDao.insertCalls.isEmpty())
+        assertNull(s.undoStack.peek())
+    }
+
+    @Test
+    fun `a member list cannot be selected once the rows are known`() = runTest {
+        val s = fixture(contactIdArg = "c-12")
+        seedReadyFor(s, contactId = 12L)
+        s.listRepo.seedMemberships(listOf(membershipFixture(contactId = 12L, listId = 1L)))
+
+        s.vm.uiState.test(timeout = 2.seconds) {
+            awaitReady(this)
+            s.vm.onToggleListSelect(1L)
+            s.vm.onToggleListSelect(2L)
+            while (true) {
+                val ready = awaitReady(this)
+                if (ready.selectedListIds.isNotEmpty()) {
+                    assertEquals("the member list is refused, the other is taken", setOf(2L), ready.selectedListIds)
+                    break
+                }
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a restored selection drops lists the person is already on`() = runTest {
+        val savedState = SavedStateHandle(
+            mapOf("contactId" to "c-12", "selectedListIds" to longArrayOf(1L, 2L)),
+        )
+        val listRepo = FakeListRepository()
+        val contactRepo = FakeContactRepository()
+        contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
+        listRepo.seed(listOf(listFixture(id = 1L, name = "Inner orbit"), listFixture(id = 2L, name = "Late night")))
+        listRepo.seedMemberships(listOf(membershipFixture(contactId = 12L, listId = 1L)))
+        val vm = ListPickerViewModel(
+            listRepo = listRepo,
+            contactRepo = contactRepo,
+            listMembershipDao = RecordingListMembershipDao(),
+            undoStack = UndoStack(),
+            clock = TestClock(),
+            commitBus = PickerCommitBus(),
+            ruleTemplateRepo = FakeRuleTemplateRepository(),
+            appScope = CoroutineScope(SupervisorJob() + mainDispatcherRule.testDispatcher),
+            savedStateHandle = savedState,
+        )
+        vm.uiState.test(timeout = 2.seconds) {
+            val ready = awaitReady(this)
+            assertEquals(setOf(2L), ready.selectedListIds)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ─── Smart lists are not user-curated ─────────────────────────────────
+    //
+    // SmartListMembershipSync rewrites a smart list's rows from its rule, so
+    // a membership added by hand is removed on the next reconcile with no
+    // message. ListRow hides "+" for smart lists; this picker hides them from
+    // its rows and refuses one at commit (rules.md Code 3: a loud guard).
+
+    @Test
+    fun `smart lists are not offered as rows`() = runTest {
+        val s = fixture(contactIdArg = "c-12")
+        s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
+        s.listRepo.seed(
+            listOf(
+                listFixture(id = 1L, name = "Inner orbit"),
+                listFixture(id = 2L, name = "Recently added", type = ListType.SMART),
+            ),
+        )
+        s.vm.uiState.test(timeout = 2.seconds) {
+            val ready = awaitReady(this)
+            assertEquals(listOf(1L), ready.lists.map { it.listId })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a smart list in the selection is refused at commit`() = runTest {
+        val s = fixture(contactIdArg = "c-12")
+        s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
+        s.listRepo.seed(listOf(listFixture(id = 2L, name = "Recently added", type = ListType.SMART)))
+        s.vm.onToggleListSelect(2L)
+
+        s.commitBus.events.test {
+            s.vm.onCommit()
+            val event = awaitItem()
+            assertEquals(UiText.res(R.string.picker_snackbar_save_failed), event.message)
+            assertNull(event.actionLabel)
+        }
+        assertTrue("no insert into a smart list", s.membershipDao.insertCalls.isEmpty())
+        assertNull(s.undoStack.peek())
+    }
+
+    // ─── A well-formed id whose row is gone ────────────────────────────────
+
+    @Test
+    fun `a well-formed id with no row is NotFound, not a nameless picker`() = runTest {
+        val s = fixture(contactIdArg = "c-99")
+        s.listRepo.seed(listOf(listFixture(id = 1L, name = "Inner orbit")))
+        // Contact 99 is never seeded: Room emits null for a missing row.
+        s.vm.uiState.test(timeout = 2.seconds) {
+            var item = awaitItem()
+            while (item.phase == ListPickerViewModel.UiState.Phase.Loading) item = awaitItem()
+            assertEquals(ListPickerViewModel.UiState.Phase.NotFound, item.phase)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     // Snackbar copy is UiText; SnackbarCopyTest pins its English ("Added to 1

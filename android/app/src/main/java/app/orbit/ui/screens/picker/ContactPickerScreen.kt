@@ -55,11 +55,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.orbit.R
 import app.orbit.domain.search.ContactSearch
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
-import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitListSkeleton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
@@ -85,12 +86,16 @@ import kotlinx.coroutines.launch
  *   - Inner [ContactPickerContent] is stateless — all callbacks flow in.
  *
  * State-driven branching:
- *   - LoadingPermission   → silent (system dialog covers)
+ *   - LoadingPermission   → [OrbitListSkeleton] (a quiet skeleton, never a blank page)
  *   - PermissionRationale → [RationaleCard]
  *   - PermissionDenied    → [PermissionDeniedEmpty]
- *   - EmptyDevice         → [EmptyDeviceContacts]
+ *   - EmptyDevice         → [EmptyDeviceContacts], only via the phase (the
+ *                           address-book read came back empty)
+ *   - NotFound            → the list or person is gone, with Go back
  *   - Error (PICK-09)     → the shared message with Retry
- *   - Ready / Committing  → [ReadyContent]: search + chips + select-all + list
+ *   - Ready / Committing  → [ReadyContent]: search + chips + select-all + list,
+ *                           or one honest empty state per
+ *                           [ContactPickerUiState.emptyReason]
  *
  * Pitfalls mitigated:
  *   - Search box that eats keystrokes: the typed text is screen-local state
@@ -112,10 +117,15 @@ import kotlinx.coroutines.launch
  * whatever screen the pop lands on.
  */
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun ContactPickerScreen(
     onBack: () -> Unit,
     onCommit: () -> Unit,
+    // Unused since 2026-10-06 and slated for removal once OrbitNavHost drops
+    // the argument: onboarding's first-list step owns Skip and its gating, so
+    // the picker draws no "Skip for now" footer. (The one call site always
+    // passed null, so the footer never rendered anyway.)
     onSkip: (() -> Unit)? = null,
     vm: ContactPickerViewModel = hiltViewModel()
 ) {
@@ -164,7 +174,6 @@ fun ContactPickerScreen(
             vm.onCommit()
             onCommit()
         },
-        onSkip = onSkip,
         onPermissionGrant = { permissionLauncher.launch(Manifest.permission.READ_CONTACTS) },
         onOpenSettings = {
             val intent = buildOpenAppSettingsIntent(context.packageName)
@@ -205,7 +214,6 @@ private fun ContactPickerContent(
     onUnignore: (PickerContact) -> Unit,
     onOpenInPhone: (PickerContact) -> Unit,
     onCommit: () -> Unit,
-    onSkip: (() -> Unit)?,
     onPermissionGrant: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
@@ -269,9 +277,13 @@ private fun ContactPickerContent(
                 .imePadding()
         ) {
             when (state.phase) {
-                ContactPickerUiState.Phase.LoadingPermission -> {
-                    // Silent — system dialog covers the surface.
-                }
+                ContactPickerUiState.Phase.LoadingPermission ->
+                    // The first emission waits for the address-book read and
+                    // the Room joins; a large address book showed an app bar
+                    // over nothing for that long (no system dialog is up yet:
+                    // the launcher only fires from the Grant button). The
+                    // shared skeleton, never a blank or a false empty page.
+                    OrbitListSkeleton()
                 ContactPickerUiState.Phase.PermissionRationale ->
                     RationaleCard(onGrant = onPermissionGrant, onDismiss = onBack)
                 ContactPickerUiState.Phase.PermissionDenied ->
@@ -279,12 +291,14 @@ private fun ContactPickerContent(
                 ContactPickerUiState.Phase.EmptyDevice ->
                     EmptyDeviceContacts()
                 ContactPickerUiState.Phase.NotFound ->
-                    NotFoundEmpty(state.mode)
+                    NotFoundEmpty(mode = state.mode, onBack = onBack)
                 ContactPickerUiState.Phase.Error -> OrbitScreenMessage(
                     icon = "warning-circle",
                     title = stringResource(R.string.picker_error_title),
-                    body = stringResource(R.string.picker_error_body),
-                    actionLabel = stringResource(R.string.picker_try_again),
+                    // The shared error words (rubric D6): what is true, that
+                    // nothing is lost, and Try again.
+                    body = stringResource(R.string.components_error_body),
+                    actionLabel = stringResource(R.string.components_error_retry),
                     onAction = onRetry,
                     actionVariant = OrbitButtonVariant.Primary
                 )
@@ -303,7 +317,7 @@ private fun ContactPickerContent(
                     onUnignore = onUnignore,
                     onOpenInPhone = onOpenInPhone,
                     onCommit = onCommit,
-                    onSkip = onSkip
+                    onBack = onBack
                 )
             }
         }
@@ -329,7 +343,8 @@ private fun ReadyContent(
     onUnignore: (PickerContact) -> Unit,
     onOpenInPhone: (PickerContact) -> Unit,
     onCommit: () -> Unit,
-    onSkip: (() -> Unit)?
+    // The way out of an empty state that has nothing to add.
+    onBack: () -> Unit
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -511,24 +526,13 @@ private fun ReadyContent(
         // List area takes the remaining height; the bottom bar docks below it
         // (not a floating overlay, so the last row stays reachable).
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            when {
-                state.allContacts.isEmpty() -> EmptyDeviceContacts()
-                state.filteredContacts.isEmpty() -> OrbitScreenMessage(
-                    icon = "magnifying-glass",
-                    title = if (state.searchQuery.isNotBlank()) {
-                        stringResource(R.string.picker_no_matches_query_title, state.searchQuery)
-                    } else {
-                        stringResource(R.string.picker_no_matches_filters_title)
-                    },
-                    // Plain words: "chip" and "thresholds" were developer
-                    // vocabulary on a user-facing line (rubric D7).
-                    body = if (state.searchQuery.isNotBlank()) {
-                        stringResource(R.string.picker_no_matches_query_body)
-                    } else {
-                        stringResource(R.string.picker_no_matches_filters_body)
-                    }
-                )
-                else -> LazyColumn(
+            // "No contacts on this device" belongs to the EmptyDevice phase
+            // alone (the address-book read came back empty). Until 2026-10-06
+            // an empty candidate set took the same shortcut here, so a user
+            // whose whole address book was already on the list was told the
+            // phone had no contacts; each reason now has its own true words.
+            when (val reason = state.emptyReason) {
+                null -> LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = OrbitTheme.spacing.x2)
@@ -554,6 +558,12 @@ private fun ReadyContent(
                         ) { contact -> this.pickerRow(contact) }
                     }
                 }
+                else -> PickerEmptyMessage(
+                    reason = reason,
+                    state = state,
+                    onBack = onBack,
+                    onShowIgnored = { onShowIgnoredToggle(true) }
+                )
             }
 
             // Fast-scroll rail; only with 2+ sections to jump between. Letters
@@ -573,9 +583,9 @@ private fun ReadyContent(
             }
         }
 
-        // Docked bottom bar. BatchCounter self-hides at zero selection; the
-        // onboarding "Skip for now" footer fills the slot when nothing is
-        // selected so the flow never dead-ends.
+        // Docked bottom bar (PICK-06); BatchCounter self-hides at zero
+        // selection. Nothing fills the slot for an empty selection: Back is
+        // the way out, and onboarding's first-list step owns its own Skip.
         if (state.selectionCount > 0) {
             Box(modifier = Modifier.onSizeChanged { barHeightPx = it.height }) {
                 BatchCounter(
@@ -587,14 +597,6 @@ private fun ReadyContent(
                     onCommit = onCommit
                 )
             }
-        } else if (onSkip != null) {
-            OrbitButton(
-                text = stringResource(R.string.picker_skip_for_now),
-                onClick = onSkip,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(OrbitTheme.spacing.x4)
-            )
         }
     }
 }
@@ -782,19 +784,79 @@ private fun SectionHeader(letter: String) {
 }
 
 /**
- * C6 — terminal empty state when the `targetListId` nav arg is missing or
- * unparseable. The shared message (OrbitScreenMessage), with no action: back
- * is the way out. Keeps copy terse and sentence-case per voice rules.
+ * Terminal state when the route's list or person is not there: the id was
+ * malformed, or the row is gone. The shared message with Go back as its one
+ * action (rubric G4: every empty state offers the next step; it had none and
+ * told the user to "go back" in words). A Re-link route carries a person, so
+ * it uses the words Contact detail uses for a missing person (voice.md:
+ * people, not contacts; it said "Contact not found" until 2026-10-06).
  */
 @Composable
-private fun NotFoundEmpty(mode: PickerMode) {
+private fun NotFoundEmpty(mode: PickerMode, onBack: () -> Unit) {
+    val relink = mode == PickerMode.Relink
     OrbitScreenMessage(
-        // Re-link routes carry a contact, not a list.
-        title = stringResource(
-            if (mode == PickerMode.Relink) R.string.picker_contact_not_found else R.string.picker_list_not_found
-        ),
-        body = stringResource(R.string.picker_not_found_body)
+        title = stringResource(if (relink) R.string.picker_person_not_found else R.string.picker_list_not_found),
+        body = stringResource(if (relink) R.string.picker_person_not_found_body else R.string.picker_list_not_found_body),
+        actionLabel = stringResource(R.string.picker_go_back),
+        onAction = onBack,
+        // The only thing to do on the screen, so it takes the accent.
+        actionVariant = OrbitButtonVariant.Primary
     )
+}
+
+/**
+ * One honest message per [ContactPickerUiState.EmptyReason], each with its
+ * next step (rubric G4). Secondary actions only: the commit button owns the
+ * screen's accent, and here nothing is selected.
+ */
+@Composable
+private fun PickerEmptyMessage(
+    reason: ContactPickerUiState.EmptyReason,
+    state: ContactPickerUiState,
+    onBack: () -> Unit,
+    onShowIgnored: () -> Unit
+) {
+    when (reason) {
+        ContactPickerUiState.EmptyReason.EveryoneOnList -> {
+            // PRIV-03: the list's name reads "List" under the curtain, as it
+            // does on the commit bar.
+            val listName = if (LocalPrivacyCurtain.current) {
+                stringResource(R.string.components_curtain_list)
+            } else {
+                state.targetListName
+            }
+            OrbitScreenMessage(
+                icon = "users",
+                title = stringResource(R.string.picker_everyone_on_list_title, listName),
+                actionLabel = stringResource(R.string.picker_go_back),
+                onAction = onBack
+            )
+        }
+        ContactPickerUiState.EmptyReason.NoRelinkTargets -> OrbitScreenMessage(
+            icon = "users",
+            title = stringResource(R.string.picker_relink_none_title),
+            actionLabel = stringResource(R.string.picker_go_back),
+            onAction = onBack
+        )
+        ContactPickerUiState.EmptyReason.EveryoneIgnored -> OrbitScreenMessage(
+            icon = "eye-slash",
+            title = stringResource(R.string.picker_everyone_ignored_title),
+            actionLabel = stringResource(R.string.picker_show_ignored),
+            onAction = onShowIgnored
+        )
+        // Plain words: "chip" and "thresholds" were developer vocabulary on a
+        // user-facing line (rubric D7).
+        ContactPickerUiState.EmptyReason.NoSearchMatches -> OrbitScreenMessage(
+            icon = "magnifying-glass",
+            title = stringResource(R.string.picker_no_matches_query_title, state.searchQuery),
+            body = stringResource(R.string.picker_no_matches_query_body)
+        )
+        ContactPickerUiState.EmptyReason.NoFilterMatches -> OrbitScreenMessage(
+            icon = "magnifying-glass",
+            title = stringResource(R.string.picker_no_matches_filters_title),
+            body = stringResource(R.string.picker_no_matches_filters_body)
+        )
+    }
 }
 
 // ─── Previews ──────────────────────────────────────────────────────────────────
@@ -818,7 +880,6 @@ private fun ContactPickerReadyPreviewLight() {
             onUnignore = {},
             onOpenInPhone = {},
             onCommit = {},
-            onSkip = null,
             onPermissionGrant = {},
             onOpenSettings = {}
         )
@@ -844,7 +905,6 @@ private fun ContactPickerReadyPreviewDark() {
             onUnignore = {},
             onOpenInPhone = {},
             onCommit = {},
-            onSkip = null,
             onPermissionGrant = {},
             onOpenSettings = {}
         )
@@ -872,7 +932,6 @@ private fun ContactPickerRationalePreviewLight() {
             onUnignore = {},
             onOpenInPhone = {},
             onCommit = {},
-            onSkip = null,
             onPermissionGrant = {},
             onOpenSettings = {}
         )
@@ -900,7 +959,6 @@ private fun ContactPickerDeniedPreviewLight() {
             onUnignore = {},
             onOpenInPhone = {},
             onCommit = {},
-            onSkip = null,
             onPermissionGrant = {},
             onOpenSettings = {}
         )
@@ -971,6 +1029,121 @@ private fun previewReadyState(darkSelectionDemo: Boolean = false): ContactPicker
     )
 }
 
+/** One host for the state previews, so each state renders in the gallery and its audits. */
+@Composable
+private fun ContactPickerPreviewHost(state: ContactPickerUiState) {
+    OrbitTheme {
+        ContactPickerContent(
+            state = state,
+            onBack = {},
+            onRetry = {},
+            onSearchChanged = {},
+            onToggleFilter = {},
+            onSetSort = {},
+            onToggleSelect = {},
+            onSelectAllMatching = {},
+            onClearSelection = {},
+            onShowIgnoredToggle = {},
+            onIgnore = {},
+            onUnignore = {},
+            onOpenInPhone = {},
+            onCommit = {},
+            onPermissionGrant = {},
+            onOpenSettings = {}
+        )
+    }
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerLoadingPreview() {
+    ContactPickerPreviewHost(previewReadyState().copy(phase = ContactPickerUiState.Phase.LoadingPermission))
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerErrorPreview() {
+    ContactPickerPreviewHost(previewReadyState().copy(phase = ContactPickerUiState.Phase.Error))
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerListNotFoundPreview() {
+    ContactPickerPreviewHost(previewReadyState().copy(phase = ContactPickerUiState.Phase.NotFound))
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerPersonNotFoundPreview() {
+    ContactPickerPreviewHost(
+        previewReadyState().copy(phase = ContactPickerUiState.Phase.NotFound, mode = PickerMode.Relink)
+    )
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerNoSearchMatchesPreview() {
+    ContactPickerPreviewHost(previewReadyState().copy(searchQuery = "zq", selectedIds = emptySet()))
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerNoFilterMatchesPreview() {
+    // Nobody in the fixture is starred.
+    ContactPickerPreviewHost(
+        previewReadyState().copy(activeFilters = setOf(PickerFilter.Starred), selectedIds = emptySet())
+    )
+}
+
+// Static: the bar is disabled while the write is in flight, nothing animates.
+@PreviewLightDark
+@Composable
+private fun ContactPickerCommittingPreview() {
+    ContactPickerPreviewHost(previewReadyState().copy(phase = ContactPickerUiState.Phase.Committing))
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerEveryoneOnListPreview() {
+    ContactPickerPreviewHost(previewReadyState().copy(allContacts = emptyList(), selectedIds = emptySet()))
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerEveryoneIgnoredPreview() {
+    val ready = previewReadyState()
+    ContactPickerPreviewHost(
+        ready.copy(allContacts = ready.allContacts.map { it.copy(isIgnored = true) }, selectedIds = emptySet())
+    )
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerRelinkPreview() {
+    val ready = previewReadyState()
+    ContactPickerPreviewHost(
+        ready.copy(
+            mode = PickerMode.Relink,
+            targetListName = "Sarah Levin",
+            allContacts = ready.allContacts.map { it.copy(phoneContactId = it.contactId) },
+            selectedIds = setOf(2L)
+        )
+    )
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerNoRelinkTargetsPreview() {
+    ContactPickerPreviewHost(
+        previewReadyState().copy(
+            mode = PickerMode.Relink,
+            targetListName = "Sarah Levin",
+            allContacts = emptyList(),
+            selectedIds = emptySet()
+        )
+    )
+}
+
 // Combined preview for the stateless ContactPickerContent (THEME-04 /
 // THEME-05). Reuses the existing previewReadyState fixture.
 @PreviewLightDark
@@ -993,7 +1166,6 @@ private fun ContactPickerContentPreview() {
             onUnignore = {},
             onOpenInPhone = {},
             onCommit = {},
-            onSkip = null,
             onPermissionGrant = {},
             onOpenSettings = {}
         )

@@ -66,7 +66,7 @@ class SnackbarCopyTest {
             UiText.plural(R.plurals.browse_snackbar_removed, 1, 1, "Inner orbit").text(),
         )
         assertEquals(
-            "Added 1 to In touch",
+            "Added 1 person to In touch",
             UiText.plural(R.plurals.picker_snackbar_added, 1, 1, "In touch").text(),
         )
     }

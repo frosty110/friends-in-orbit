@@ -7,7 +7,6 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
-import app.orbit.data.AppPrefs
 import app.orbit.data.android.ContactsReader
 import app.orbit.data.android.PhoneContact
 import app.orbit.data.dao.RecordingListMembershipDao
@@ -16,6 +15,7 @@ import app.orbit.data.db.OrbitDatabase
 import app.orbit.data.db.RoomTransactionRunner
 import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListMembershipEntity
+import app.orbit.data.entity.ListType
 import app.orbit.domain.FakeCallEventRepository
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
@@ -29,11 +29,17 @@ import app.orbit.domain.usecase.MoveContactsUseCase
 import app.orbit.domain.usecase.RelinkContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
 import app.orbit.testutil.MainDispatcherRule
+import app.orbit.testutil.newPrefs
 import app.orbit.ui.util.UiText
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -43,25 +49,30 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 
 /**
- * Behavioral tests for the picker's ignore/unignore flows.
+ * Behavioral tests for the contact picker's ViewModel: the ignore/unignore
+ * flows, the commits by mode and their guards, and the state pipeline's
+ * terminal phases (NotFound for a missing row, Error with Retry, PICK-09).
  *
  * Robolectric supplies the `@ApplicationContext Context` the VM reads
  * READ_CONTACTS from (granted via shadow so init lands in Ready). Fakes from
  * `FakeRepositories.kt` + a pass-through [TransactionRunner] make the use-case
  * writes synchronous on the rule's Unconfined dispatcher.
  *
- * Deliberately does NOT collect [ContactPickerViewModel.uiState] here: the
- * pipeline hops through real `Dispatchers.Default`/`IO` (flowOn), which races
- * runTest's virtual clock. List-removal semantics (ignored rows leave
- * `filteredContacts`) are covered as pure state in [ContactPickerUiStateTest];
- * these tests pin the write, the bus event, the undo entry, and the
- * selection-drop — the VM's side of the contract.
+ * [ContactPickerViewModel.uiState] is collected where a test needs a phase:
+ * the fixture passes the rule's test dispatcher for both of the pipeline's
+ * flowOn hops (the address-book read and the candidate reduction), so nothing
+ * races runTest. Until 2026-10-06 those hops were hard-wired to real
+ * `Dispatchers.IO` / `Default` and this class could not collect the state at
+ * all, which left the read-failure path, the retry generation tagging and
+ * "the selection survives the error" unverified. Filter and sort semantics
+ * stay in [ContactPickerUiStateTest] as pure state.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -70,6 +81,14 @@ class ContactPickerViewModelTest {
 
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
+
+    // One DataStore per test method, on a scope this test owns and cancels
+    // (testutil/TestDataStore.kt): the process-wide `AppPrefs(context)` store
+    // was shared by every method of a class and stranded writes across them.
+    @get:Rule
+    val tmp = TemporaryFolder()
+    private val storeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val prefs by lazy { tmp.newPrefs(storeScope) }
 
     /** Pass-through TransactionRunner — runs the block directly on the calling coroutine. */
     private val passThruTx = object : TransactionRunner {
@@ -92,13 +111,25 @@ class ContactPickerViewModelTest {
     private fun UiText?.text(): String? = this?.asString(ApplicationProvider.getApplicationContext<Context>())
 
     @After
-    fun closeDb() {
+    fun tearDown() {
+        storeScope.cancel()
         db.close()
     }
 
     /** Device address book stub — the ignore flows never touch the provider. */
     private class FakeContactsReader(context: Context) : ContactsReader(context) {
         override suspend fun readAll(): List<PhoneContact> = emptyList()
+    }
+
+    /** Address-book stub whose read can be made to fail, then recover (PICK-09). */
+    private class FlakyContactsReader(context: Context) : ContactsReader(context) {
+        var failing = false
+        override suspend fun readAll(): List<PhoneContact> {
+            if (failing) throw java.io.IOException("simulated provider failure")
+            return listOf(
+                PhoneContact(contactId = 100L, displayName = "Sarah", phone = "+15555550001", normalizedPhone = "+15555550001")
+            )
+        }
     }
 
     private data class Setup(
@@ -114,7 +145,13 @@ class ContactPickerViewModelTest {
         membershipDao: RecordingListMembershipDao = RecordingListMembershipDao(),
         mode: String = "add",
         sourceListId: String? = null,
-        relinkContactId: String? = null
+        relinkContactId: String? = null,
+        targetListId: String = "1",
+        targetType: ListType = ListType.STATIC,
+        contactsReader: ContactsReader? = null,
+        // Wraps the seeded fake (interface delegation) so one test can make a
+        // Room source fail.
+        listRepoOverride: ((FakeListRepository) -> app.orbit.data.repository.ListRepository)? = null
     ): Setup {
         val app = ApplicationProvider.getApplicationContext<Application>()
         Shadows.shadowOf(app).grantPermissions(Manifest.permission.READ_CONTACTS)
@@ -122,7 +159,7 @@ class ContactPickerViewModelTest {
         val contactRepo = FakeContactRepository()
         val listRepo = FakeListRepository()
         val lists = listOf(
-            listFixture(id = 1L, name = "Inner orbit"),
+            listFixture(id = 1L, name = "Inner orbit", type = targetType),
             listFixture(id = 2L, name = "Late night")
         )
         listRepo.seed(lists)
@@ -132,7 +169,7 @@ class ContactPickerViewModelTest {
         val commitBus = PickerCommitBus()
         val savedStateArgs = buildMap<String, Any?> {
             // A Relink route carries the orphan, not a list (Routes.relinkContact).
-            if (mode != "relink") put("targetListId", "1")
+            if (mode != "relink") put("targetListId", targetListId)
             put("mode", mode)
             if (sourceListId != null) put("sourceListId", sourceListId)
             if (relinkContactId != null) put("relinkContactId", relinkContactId)
@@ -142,10 +179,10 @@ class ContactPickerViewModelTest {
         val vm = ContactPickerViewModel(
             appContext = app,
             contactRepo = contactRepo,
-            listRepo = listRepo,
+            listRepo = listRepoOverride?.invoke(listRepo) ?: listRepo,
             listMembershipDao = membershipDao,
             callEventRepo = FakeCallEventRepository(),
-            appPrefs = AppPrefs(app),
+            appPrefs = prefs,
             moveUseCase = MoveContactsUseCase(passThruTx, membershipDao, listDao, listRepo, clock),
             copyUseCase = CopyContactsUseCase(passThruTx, membershipDao, listDao, listRepo, clock),
             relinkUseCase = RelinkContactUseCase(
@@ -171,11 +208,15 @@ class ContactPickerViewModelTest {
                 clock
             ),
             undoStack = undoStack,
-            contactsReader = FakeContactsReader(app),
+            contactsReader = contactsReader ?: FakeContactsReader(app),
             clock = clock,
             commitBus = commitBus,
             appScope = CoroutineScope(SupervisorJob() + mainDispatcherRule.testDispatcher),
-            savedStateHandle = savedState
+            savedStateHandle = savedState,
+            // Both flowOn hops on the test dispatcher, so uiState can be
+            // collected without racing real IO/Default threads.
+            ioDispatcher = mainDispatcherRule.testDispatcher,
+            defaultDispatcher = mainDispatcherRule.testDispatcher
         )
         return Setup(vm, contactRepo, membershipDao, undoStack, commitBus, savedState)
     }
@@ -515,7 +556,7 @@ class ContactPickerViewModelTest {
             s.commitBus.events.test {
                 s.vm.onCommit()
                 val event = awaitItem()
-                assertEquals("Added 2 to Inner orbit", event.message.text())
+                assertEquals("Added 2 people to Inner orbit", event.message.text())
                 assertEquals("Undo", event.actionLabel.text())
             }
 
@@ -536,7 +577,7 @@ class ContactPickerViewModelTest {
         s.commitBus.events.test {
             s.vm.onCommit()
             // The words travel on the event; UndoStack holds only the inverse.
-            assertEquals("Added 1 to Inner orbit", awaitItem().message.text())
+            assertEquals("Added 1 person to Inner orbit", awaitItem().message.text())
         }
         assertEquals(1, s.membershipDao.insertCalls.size)
 
@@ -694,10 +735,123 @@ class ContactPickerViewModelTest {
         )
     }
 
+    // ─── Smart lists are not user-curated ────────────────────
+    //
+    // SmartListMembershipSync rewrites a smart list's rows from its rule, so a
+    // membership added here would vanish on the next reconcile with no
+    // message. The surfaces hide "Add people" on smart lists; the commit
+    // refuses one loudly in case a route still reaches it (rules.md Code 3).
+
+    @Test
+    fun `onCommit into a smart list refuses loudly and inserts nothing`() = runTest {
+        val s = fixture(mode = "add", targetType = ListType.SMART)
+        s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
+        s.vm.onToggleSelect(12L)
+
+        s.commitBus.events.test {
+            s.vm.onCommit()
+            val event = awaitItem()
+            assertEquals("Couldn't save that", event.message.text())
+            assertNull(event.actionLabel.text())
+        }
+        assertTrue("no membership row for a smart list", s.membershipDao.insertCalls.isEmpty())
+        assertNull(s.undoStack.peek())
+    }
+
+    @Test
+    fun `Copy into a smart list is refused the same way`() = runTest {
+        val s = fixture(mode = "copy", targetType = ListType.SMART)
+        s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
+        s.vm.onToggleSelect(12L)
+
+        s.commitBus.events.test {
+            s.vm.onCommit()
+            assertEquals("Couldn't save that", awaitItem().message.text())
+        }
+        assertTrue(s.membershipDao.insertCalls.isEmpty())
+    }
+
+    // ─── A well-formed id whose row is gone ──────────────────
+
+    @Test
+    fun `a valid route whose list no longer exists lands on NotFound`() = runTest {
+        // List 7 is not seeded: Room emits null for a missing row, which used
+        // to leave a working-looking picker with a blank target name.
+        val s = fixture(mode = "add", targetListId = "7")
+        s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
+
+        s.vm.uiState.test {
+            var item = awaitItem()
+            while (item.phase == ContactPickerUiState.Phase.LoadingPermission) item = awaitItem()
+            assertEquals(ContactPickerUiState.Phase.NotFound, item.phase)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ─── PICK-09: a failed read is an error, not a crash ─────
+
+    @Test
+    fun `a failed address-book read is Error with the selection kept, and Retry recovers`() = runTest {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val reader = FlakyContactsReader(app).apply { failing = true }
+        val s = fixture(mode = "add", contactsReader = reader)
+        s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah", phoneContactId = 100L)))
+        s.vm.onToggleSelect(12L)
+
+        s.vm.uiState.test {
+            var item = awaitItem()
+            while (item.phase == ContactPickerUiState.Phase.LoadingPermission) item = awaitItem()
+            assertEquals(ContactPickerUiState.Phase.Error, item.phase)
+            assertEquals("the selection survives the error", setOf(12L), item.selectedIds)
+
+            reader.failing = false
+            s.vm.onRetry()
+            var next = awaitItem()
+            while (next.phase != ContactPickerUiState.Phase.Ready) next = awaitItem()
+            assertEquals(listOf(12L), next.allContacts.map { it.contactId })
+            assertEquals("Retry keeps the selection too", setOf(12L), next.selectedIds)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a failing Room source is Error, and Retry re-subscribes it`() = runTest {
+        var failing = true
+        val s = fixture(
+            mode = "add",
+            listRepoOverride = { fake ->
+                object : app.orbit.data.repository.ListRepository by fake {
+                    override fun observeAll(): Flow<List<app.orbit.data.entity.ListEntity>> = flow {
+                        if (failing) throw java.io.IOException("simulated read failure")
+                        emitAll(fake.observeAll())
+                    }
+                }
+            }
+        )
+        s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
+
+        s.vm.uiState.test {
+            var item = awaitItem()
+            while (item.phase == ContactPickerUiState.Phase.LoadingPermission) item = awaitItem()
+            assertEquals(ContactPickerUiState.Phase.Error, item.phase)
+
+            failing = false
+            s.vm.onRetry()
+            var next = awaitItem()
+            while (next.phase == ContactPickerUiState.Phase.Error) next = awaitItem()
+            // The device read is empty in this fixture but the store still has
+            // a pickable row, so recovery is Ready (resolvePickerPhase keeps
+            // call-log-only rows honest), with the lists back for the filter.
+            assertEquals(ContactPickerUiState.Phase.Ready, next.phase)
+            assertEquals(listOf("Late night"), next.availableLists.map { it.name })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     // ─── Unignore flow ───────────────────────────────────────
 
     @Test
-    fun `onUnignore publishes Restored and the undo re-ignores`() = runTest {
+    fun `onUnignore publishes Unignored and the undo re-ignores`() = runTest {
         val s = fixture()
         s.contactRepo.seed(
             listOf(
@@ -709,7 +863,8 @@ class ContactPickerViewModelTest {
         s.commitBus.events.test {
             s.vm.onUnignore(12L, "Sarah")
             val event = awaitItem()
-            assertEquals("Restored Sarah", event.message.text())
+            // The glossary's one word for the inverse of Ignore (voice.md).
+            assertEquals("Unignored Sarah", event.message.text())
             assertEquals("Undo", event.actionLabel.text())
         }
         assertEquals(false, s.contactRepo.getById(12L)?.isIgnored)

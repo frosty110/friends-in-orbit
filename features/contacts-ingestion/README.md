@@ -1,7 +1,7 @@
 # contacts-ingestion
 
 **Status:** in-progress
-**Last reviewed:** 2026-10-05
+**Last reviewed:** 2026-10-06
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/data/android/ContactsReader.kt`, `android/app/src/main/java/app/orbit/domain/usecase/IngestPhoneContactsUseCase.kt` (delta-sync), `android/app/src/main/java/app/orbit/calllog/ContactsIngestWorker.kt` (background trigger), `android/app/src/main/java/app/orbit/data/entity/ContactPhoneEntity.kt` (`contact_phones`)
 - Tests: `android/app/src/test/java/app/orbit/domain/usecase/IngestPhoneContactsUseCaseTest.kt`, `android/app/src/test/java/app/orbit/calllog/ContactsIngestWorkerTest.kt`
@@ -24,7 +24,7 @@ As a user during onboarding, I multi-select people from my phone contacts and ad
 
 **Metadata layer.** Keyed to normalized phone numbers (unique `contacts.normalizedPhone` plus the per-number `contact_phones` table); `phoneContactId` is carried for device linkage but matching is number-first.
 
-**Bulk add.** Multi-select picker with search and filter. Used during onboarding and when adding to existing lists. Shows name, photo, primary number. Filter chips AND together by default; the call-frequency triplet (Commonly called / Rarely called / Never called) behaves as a single-select toggle group because the predicates are mutually exclusive — tapping one switches groups in a single tap.
+**Bulk add.** The contact picker (`ui/screens/picker/`), specified as PICK-01 to PICK-09 under "Pickers" in [orbit-lists](../orbit-lists/README.md) and described screen by screen in [Add people](../page-views/picker-contacts.md). Multi-select with search and filters, opened from onboarding's first-list step and when adding people to an existing list. One row per person (PICK-04): avatar, name, a call line ("Last called 3 days ago · 4 calls", or "Never called"), the lists they are already on, and a check mark; the number is searched (PICK-05) but not shown. Filter chips AND together (PICK-02); the call-frequency triplet (Commonly called / Rarely called / Never called) behaves as a single-select toggle group because the predicates are mutually exclusive, so tapping one switches groups in a single tap. People already on the target list are not candidates and are hidden (resolved below). When nothing is left to show, the picker says why: everyone in your contacts is already on the list, everyone here is ignored, or nothing matches the search or the filters; "No contacts on this device" is said only when the address-book read itself came back empty.
 
 **Rename handling.** Auto-match by number; the delta-sync refreshes `displayName` (and photo/starred flag) in place, so a rename propagates on the next ingest pass. If no number matches, the Orbit contact orphans (`isOrphaned`) — surfaced in contact-detail with a manual re-link path.
 
@@ -35,7 +35,7 @@ As a user during onboarding, I multi-select people from my phone contacts and ad
 ### Acceptance criteria
 
 - [ ] Bulk-add picker scrolls smoothly with 500+ contacts (virtualized list).
-- [ ] Search matches by name and by number.
+- [x] Search matches by name and by number (the shared `ContactSearch` matcher, PICK-05; pinned by `ContactPickerUiStateTest.search_matches_phone_digits` and `search_folds_diacritics`).
 - [ ] Deleting a phone contact → Orbit shows disconnected badge, preserves all metadata.
 - [ ] Renaming a phone contact → Orbit reflects new name within one app session.
 - [ ] Data Safety form justifies `READ_CONTACTS` in terms this feature alone satisfies.
@@ -52,7 +52,7 @@ As a user during onboarding, I multi-select people from my phone contacts and ad
 
 - PRD §Open Decisions: strict vs soft contact creation. Currently strict; soft mode deferred.
 - ~~Re-link UX for orphaned contacts: manual picker, or fuzzy-match suggestions?~~ Resolved: manual picker for v1. Re-link opens the contact picker in Relink mode and merges the pick into the orphan (CONTACT-07); no fuzzy-match suggestions.
-- Should the bulk-add picker show contacts already on the target list (greyed out), or hide them? Leaning show-greyed for clarity.
+- ~~Should the bulk-add picker show contacts already on the target list (greyed out), or hide them? Leaning show-greyed for clarity.~~ Resolved 2026-10-06: hidden in Add mode, because they are not candidates to add (`pickerCandidates` in `ContactPickerViewModel.kt`, pinned by `PickerCandidatesTest`); when that leaves nobody, the picker says "Everyone in your contacts is already on {list}". The reverse picker (one person into lists) keeps such a list in its rows, tags it "Already added" and does not let it be picked.
 
 ---
 

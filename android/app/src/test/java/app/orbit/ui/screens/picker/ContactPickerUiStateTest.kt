@@ -26,6 +26,11 @@ import kotlin.test.assertTrue
  *    unselected matches.
  *  - countFor: chip count IGNORES other active filters but
  *    RESPECTS search + ignored — load-bearing for chip-badge correctness.
+ *  - PICK-01 InList: the "On a list" filter and its countFor walk.
+ *  - emptyReason: one honest reason per empty list area (everyone on the
+ *    list, no re-link targets, everyone ignored, no search or filter match).
+ *  - The sort options: alphabetical keeps the DAO's order; the other three
+ *    order by recency, call count and first sight.
  */
 class ContactPickerUiStateTest {
 
@@ -434,5 +439,135 @@ class ContactPickerUiStateTest {
         )
         val s = stateOf(all, showIgnored = true)
         assertEquals(2, PickerFilter.CommonlyCalled.countFor(s))
+    }
+
+    // ─── PICK-01: "On a list" ──────────────────────────────────────────────
+
+    @Test
+    fun InList_filter_matches_members_of_that_list_only() {
+        val all = listOf(
+            contact(1, listIds = setOf(10L)),
+            contact(2, listIds = setOf(20L)),
+            contact(3, listIds = setOf(10L, 20L)),
+            contact(4)
+        )
+        val s = stateOf(all, filters = setOf(PickerFilter.InList(10L)))
+        assertEquals(setOf(1L, 3L), s.filteredContacts.map { it.contactId }.toSet())
+    }
+
+    @Test
+    fun InList_AND_composes_with_other_filters() {
+        val all = listOf(
+            contact(1, listIds = setOf(10L), isCommonlyCalled = true),
+            contact(2, listIds = setOf(10L), isCommonlyCalled = false),
+            contact(3, listIds = setOf(20L), isCommonlyCalled = true)
+        )
+        val s = stateOf(all, filters = setOf(PickerFilter.InList(10L), PickerFilter.CommonlyCalled))
+        assertEquals(listOf(1L), s.filteredContacts.map { it.contactId }, "PICK-02: On {list} AND Commonly called")
+    }
+
+    @Test
+    fun countFor_InList_walks_the_set_respecting_search_and_ignored_but_not_other_filters() {
+        val all = listOf(
+            contact(1, name = "Alex", listIds = setOf(10L), isRecentlyAdded = false),
+            contact(2, name = "Alex", listIds = setOf(10L), isIgnored = true),
+            contact(3, name = "Sam", listIds = setOf(10L)),
+            contact(4, name = "Alex", listIds = setOf(20L))
+        )
+        val s = stateOf(all, filters = setOf(PickerFilter.RecentlyAdded), search = "alex")
+        // InList has no single-pass entry, so it falls through to the direct
+        // walk: 'alex' AND not ignored AND on list 10 = id 1 only.
+        assertEquals(1, PickerFilter.InList(10L).countFor(s))
+    }
+
+    // ─── emptyReason: one honest reason per empty list area ───────────────
+
+    @Test
+    fun emptyReason_is_null_while_anyone_is_listed() {
+        assertEquals(null, stateOf(listOf(contact(1))).emptyReason)
+    }
+
+    @Test
+    fun emptyReason_everyone_on_list_when_add_mode_has_no_candidates() {
+        // Add mode drops the target's members from allContacts, so an empty
+        // set means everyone is already on the list, not an empty phone.
+        assertEquals(ContactPickerUiState.EmptyReason.EveryoneOnList, stateOf(emptyList()).emptyReason)
+    }
+
+    @Test
+    fun emptyReason_no_relink_targets_when_relink_mode_has_no_candidates() {
+        assertEquals(
+            ContactPickerUiState.EmptyReason.NoRelinkTargets,
+            stateOf(emptyList(), mode = PickerMode.Relink).emptyReason
+        )
+    }
+
+    @Test
+    fun emptyReason_search_wins_over_filters_and_ignored() {
+        val all = listOf(contact(1, name = "Alex", isIgnored = true), contact(2, name = "Sam"))
+        val s = stateOf(all, filters = setOf(PickerFilter.Starred), search = "zq")
+        assertEquals(ContactPickerUiState.EmptyReason.NoSearchMatches, s.emptyReason)
+    }
+
+    @Test
+    fun emptyReason_filters_when_an_active_filter_matches_nobody() {
+        val all = listOf(contact(1), contact(2, isIgnored = true))
+        val s = stateOf(all, filters = setOf(PickerFilter.Starred))
+        assertEquals(ContactPickerUiState.EmptyReason.NoFilterMatches, s.emptyReason)
+    }
+
+    @Test
+    fun emptyReason_everyone_ignored_only_with_no_query_and_no_filter() {
+        // Regression: this read "Nothing matches these filters / Try removing
+        // a filter." with zero active filters.
+        val all = listOf(contact(1, isIgnored = true), contact(2, isIgnored = true))
+        assertEquals(ContactPickerUiState.EmptyReason.EveryoneIgnored, stateOf(all).emptyReason)
+        assertEquals(null, stateOf(all, showIgnored = true).emptyReason, "revealed, they are listed again")
+    }
+
+    // ─── Sort options ──────────────────────────────────────────────────────
+
+    private val t0 = Instant.parse("2026-01-01T00:00:00Z")
+
+    @Test
+    fun alphabetical_keeps_the_order_the_rows_arrived_in() {
+        // The DAO already orders by name (NOCASE); ByName must not re-sort.
+        val all = listOf(contact(1, name = "bea"), contact(2, name = "Alex"), contact(3, name = "Cory"))
+        assertEquals(listOf(1L, 2L, 3L), stateOf(all).filteredContacts.map { it.contactId })
+    }
+
+    @Test
+    fun recently_called_puts_the_latest_call_first_and_never_called_last() {
+        val all = listOf(
+            contact(1, name = "Alex", callCount = 1).copy(lastCallAt = t0.plusSeconds(100)),
+            contact(2, name = "Bea", callCount = 0),
+            contact(3, name = "Cory", callCount = 1).copy(lastCallAt = t0.plusSeconds(900))
+        )
+        val s = stateOf(all).copy(sortBy = PickerSort.ByRecency)
+        assertEquals(listOf(3L, 1L, 2L), s.filteredContacts.map { it.contactId })
+    }
+
+    @Test
+    fun most_called_orders_by_call_count_then_name() {
+        val all = listOf(
+            contact(1, name = "Cory", callCount = 2),
+            contact(2, name = "Alex", callCount = 2),
+            contact(3, name = "Bea", callCount = 9)
+        )
+        val s = stateOf(all).copy(sortBy = PickerSort.ByMostCalled)
+        assertEquals(listOf(3L, 2L, 1L), s.filteredContacts.map { it.contactId })
+    }
+
+    @Test
+    fun recently_added_uses_the_earlier_of_first_sight_and_device_update() {
+        // A pre-existing contact imported in bulk carries an older device
+        // timestamp than the import instant, so it sinks below a genuinely new one.
+        val all = listOf(
+            contact(1, name = "Imported").copy(firstSeenByAppAt = t0.plusSeconds(500), deviceUpdatedAt = t0),
+            contact(2, name = "New").copy(firstSeenByAppAt = t0.plusSeconds(500), deviceUpdatedAt = null),
+            contact(3, name = "Older").copy(firstSeenByAppAt = t0.plusSeconds(100), deviceUpdatedAt = null)
+        )
+        val s = stateOf(all).copy(sortBy = PickerSort.ByRecentlySaved)
+        assertEquals(listOf(2L, 3L, 1L), s.filteredContacts.map { it.contactId })
     }
 }
