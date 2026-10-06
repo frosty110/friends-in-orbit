@@ -158,7 +158,6 @@ private const val PRIVACY_POLICY_URL = "https://frosty110.github.io/friends-in-o
 ```
 
 Replace the placeholder URL with the actual live URL you confirmed with `curl`.
-Remove the `// PLACEHOLDER — RELEASE-05` comment once the URL is live and verified.
 
 Rebuild and verify on device:
 

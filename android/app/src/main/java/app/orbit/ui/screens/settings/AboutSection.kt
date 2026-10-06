@@ -31,6 +31,9 @@ private const val PRIVACY_POLICY_URL = "https://frosty110.github.io/friends-in-o
  * SET-06 / RELEASE-05 About rows:
  *
  *   - Version — static, from BuildConfig.
+ *   - The privacy promise (SET-13): "Everything stays on your phone: no
+ *     cloud, no tracking." Not tappable; it is the one sentence a person
+ *     checking the app's privacy reads first, in the words onboarding used.
  *   - Send feedback — `mailto:hello@bearlumen.com` via ACTION_SENDTO.
  *     Fulfills the parked follow-up from the welcome-screen mailto removal;
  *     Settings → About is its decided home.
@@ -51,6 +54,11 @@ fun AboutSection(
         AboutRow(
             primary = stringResource(R.string.app_name),
             secondary = stringResource(R.string.settings_about_version, BuildConfig.VERSION_NAME),
+            onClick = null,
+        )
+        AboutRow(
+            primary = stringResource(R.string.settings_about_privacy_promise),
+            secondary = null,
             onClick = null,
         )
         AboutRow(
@@ -95,7 +103,7 @@ fun AboutSection(
 @Composable
 private fun AboutRow(
     primary: String,
-    secondary: String,
+    secondary: String?,
     onClick: (() -> Unit)?,
 ) {
     Row(
@@ -111,11 +119,13 @@ private fun AboutRow(
                 text = primary,
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
-            Text(
-                text = secondary,
-                style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
-            )
+            if (secondary != null) {
+                Text(
+                    text = secondary,
+                    style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
+                    modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
+                )
+            }
         }
         if (onClick != null) {
             PhIcon(name = "caret-right", size = 16.dp, tint = OrbitTheme.colors.fgSubtle)

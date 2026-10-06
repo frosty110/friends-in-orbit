@@ -25,9 +25,9 @@ import java.util.concurrent.TimeUnit
  *
  * Pitfall 6 (data-wipe path): [cancelAll] is called from
  * [app.orbit.data.repository.ResetService.resetAll] BEFORE the wipe so
- * orphaned workers don't read a now-empty DB, paired with one final
- * [scheduleImmediate] AFTER the wipe so placed widgets re-render the
- * empty state instead of the wiped contact's name (review WR-06).
+ * orphaned workers don't read a now-empty DB, paired with one [refreshNow]
+ * AFTER the wipe so placed widgets re-render the empty state at once
+ * instead of the wiped person's name (WIDGET-06).
  *
  * Enforcement: ONLY this file and [WidgetUpdateWorker] may call
  * [androidx.glance.appwidget.GlanceAppWidgetManager] or `widget.update*()`.
@@ -55,6 +55,24 @@ object WidgetUpdateScheduler {
     }
 
     /**
+     * The one undebounced refresh: enqueues the same [WidgetUpdateWorker] on
+     * [UNIQUE_WORK] with no initial delay and [ExistingWorkPolicy.REPLACE].
+     *
+     * Reset-only (WIDGET-06). Everywhere else the 30 second debounce in
+     * [scheduleImmediate] is the contract (WIDGET-05), and REPLACE is normally
+     * forbidden here because it would cancel an in-flight debounce (T-11-08).
+     * It is safe in [app.orbit.data.repository.ResetService.resetAll] only
+     * because [cancelAll] ran moments before, so no debounced work exists to
+     * replace, and the wiped name must leave the home screen now, not in half
+     * a minute. Do not call it from a mutation path.
+     */
+    fun refreshNow(context: Context) {
+        val request = OneTimeWorkRequestBuilder<WidgetUpdateWorker>().build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(UNIQUE_WORK, ExistingWorkPolicy.REPLACE, request)
+    }
+
+    /**
      * Enqueues (or re-anchors, idempotent) a 1-hour periodic widget sweep.
      *
      * [ExistingPeriodicWorkPolicy.KEEP] makes re-registration on every cold start
@@ -75,8 +93,8 @@ object WidgetUpdateScheduler {
      * Called from [app.orbit.data.repository.ResetService.resetAll] (the
      * Settings "delete all data" path) so orphaned WorkManager records do not
      * fire after a full data reset (RESEARCH §Pitfall 6). ResetService pairs
-     * this with one final [scheduleImmediate] after the wipe so placed widgets
-     * immediately re-render the empty state, "All quiet for now." (review WR-06).
+     * this with one [refreshNow] after the wipe so placed widgets immediately
+     * re-render the empty state, "All quiet for now." (WIDGET-06).
      */
     fun cancelAll(context: Context) {
         val wm = WorkManager.getInstance(context)

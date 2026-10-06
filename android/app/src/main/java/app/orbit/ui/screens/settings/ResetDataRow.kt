@@ -17,18 +17,24 @@ import app.orbit.ui.theme.OrbitTheme
  * confirmation dialog [ResetConfirmDialog]. Destructive intent is signaled
  * via the `colors.danger` foreground on the primary label; subtitle stays
  * fgMuted because two danger-tinted strings on one row reads as alarmist.
+ *
+ * [enabled] is false while an export or a restore is running: a reset in the
+ * middle of either would race the file being written or the tables being
+ * replaced. The label drops to fgMuted so the row reads as waiting.
  */
 @Composable
-fun ResetDataRow(onClick: () -> Unit) {
+fun ResetDataRow(onClick: () -> Unit, enabled: Boolean = true) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         Text(
             text = stringResource(R.string.settings_reset_title),
-            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.danger),
+            style = OrbitTheme.type.body.copy(
+                color = if (enabled) OrbitTheme.colors.danger else OrbitTheme.colors.fgMuted,
+            ),
         )
         Text(
             text = stringResource(R.string.settings_reset_sub),

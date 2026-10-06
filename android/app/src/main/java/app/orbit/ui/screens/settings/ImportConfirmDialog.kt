@@ -37,7 +37,7 @@ fun ImportConfirmDialog(
         },
         text = {
             val lists = pluralStringResource(R.plurals.settings_import_confirm_lists, listCount, listCount)
-            val contacts = pluralStringResource(R.plurals.settings_import_confirm_contacts, contactCount, contactCount)
+            val contacts = pluralStringResource(R.plurals.settings_import_confirm_people, contactCount, contactCount)
             Text(
                 text = stringResource(R.string.settings_import_confirm_body, lists, contacts),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),

@@ -73,6 +73,32 @@ fun formatRelative(
     }
 }
 
+/**
+ * [formatRelative] with a finer grain for the first day: "just now" under a
+ * minute, then "5 minutes ago", then "3 hours ago", and from a calendar day
+ * on exactly what [formatRelative] says ("yesterday", "3 days ago"). For
+ * things that happen all day and are read moments later, such as the sync
+ * rows in Settings ("Last synced 5 minutes ago"); a call's age stays on the
+ * day grain, where a finer one would read as a stopwatch.
+ *
+ * Hours count elapsed time, so "23 hours ago" can cross midnight; the
+ * calendar-day fallback takes over only once a full day has passed. Lowercase
+ * like [formatRelative]'s words, because it sits after a label.
+ */
+fun formatRelativeFine(
+    occurredAt: Instant,
+    now: Instant = Instant.now(),
+    zone: ZoneId = ZoneId.systemDefault(),
+): UiText {
+    val seconds = java.time.Duration.between(occurredAt, now).seconds.coerceAtLeast(0L)
+    return when {
+        seconds < 60L -> UiText.res(R.string.time_ago_just_now)
+        seconds < 3_600L -> (seconds / 60L).toInt().let { UiText.plural(R.plurals.time_ago_minutes, it, it) }
+        seconds < 86_400L -> (seconds / 3_600L).toInt().let { UiText.plural(R.plurals.time_ago_hours, it, it) }
+        else -> formatRelative(occurredAt, now, zone)
+    }
+}
+
 /** The four units [formatSpan] and [formatRelative] count in, with their plurals. */
 private enum class SpanUnit(@PluralsRes val spanPlural: Int, @PluralsRes val agoPlural: Int) {
     Days(R.plurals.time_span_days, R.plurals.time_ago_days),

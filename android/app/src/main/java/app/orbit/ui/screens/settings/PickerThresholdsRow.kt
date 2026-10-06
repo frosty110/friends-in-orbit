@@ -21,13 +21,11 @@ import app.orbit.ui.theme.OrbitTheme
 /**
  * PICK-07 — Settings nav row that opens [PickerThresholdsDialog].
  *
- * Mirrors the existing private `NavRow` shape inside [SettingsScreen] (caret-right chevron,
- * label + sub Text pair, 16dp horizontal / 14dp vertical padding) but adds a leading
- * `sliders-horizontal` Phosphor icon as the affordance. The row's title is functional copy
- * ("Picker thresholds"), not a list name, so the privacy curtain (PRIV-*) doesn't apply to
- * the label itself.
- *
- * Copy: title "Picker thresholds" + subtitle "Edit chip-match thresholds".
+ * Same shape as the other entry rows in [SettingsScreen] (caret-right chevron,
+ * label + sub Text pair, 16dp horizontal / 14dp vertical padding) with a leading
+ * `sliders-horizontal` Phosphor icon as the affordance. The row's title is
+ * functional copy (SET-10, "Groups when adding people"), not a list name, so
+ * the privacy curtain (PRIV-03) doesn't apply to the label itself.
  */
 @Composable
 fun PickerThresholdsRow(

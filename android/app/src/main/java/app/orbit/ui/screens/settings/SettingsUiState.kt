@@ -5,6 +5,7 @@ import app.orbit.calllog.CallLogPermissionState
 import app.orbit.data.PickerThresholds
 import app.orbit.ui.theme.OrbitDarkMode
 import app.orbit.ui.theme.OrbitThemeId
+import java.time.Instant
 
 /**
  * Settings screen state contract (ARCH-02). Carries the call-log fields
@@ -17,7 +18,9 @@ import app.orbit.ui.theme.OrbitThemeId
  * per-call-site updates — a fixture-stability convention used throughout.
  * `lastCallLogSyncAtMs` carries epoch-millis of the last successful call-log
  * sync, sourced from `AppPrefs.lastCallLogSyncAt`. Sentinel `0L` means 'never
- * synced' — UI hides the line per D-08.
+ * synced'; the UI hides the line per D-08. `now` is the clock reading the sync
+ * rows word "Last synced 5 minutes ago" against (SET-04), taken when the
+ * state is built so no composable reads a clock.
  *
  * `ignoredContactCount: Int = 0` drives the "{N} ignored" subtitle on the
  * Settings → Ignored entry row. Default-valued for fixture stability.
@@ -56,6 +59,7 @@ sealed interface SettingsUiState {
         // epoch-millis of the last successful ingest (sentinel `0L` = never).
         val contactsSyncInFlight: Boolean = false,
         val lastContactsSyncAtMs: Long = 0L,
+        val now: Instant = Instant.EPOCH,
         val pickerThresholds: PickerThresholds = PickerThresholds.DEFAULT,
         // Drives Settings "Ignored" row subtitle ("{N} ignored" / "No ignored
         // contacts"). Default-valued so existing test fixtures keep compiling

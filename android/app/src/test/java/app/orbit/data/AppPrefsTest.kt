@@ -1,61 +1,45 @@
 package app.orbit.data
 
 import android.app.Application
-import androidx.test.core.app.ApplicationProvider
+import app.orbit.testutil.newPrefs
+import kotlin.test.assertEquals
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.After
-import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 /**
- * Behavioral coverage for the three call-log-sync pref
- * pairs on [AppPrefs]:
+ * Behavioral coverage for the two call-log-sync pref pairs on [AppPrefs]:
  *  - `callLogImportDays` (default 90; coerced into [1, 3650])
- *  - `lastCallLogSyncAt` (default 0L; clamped to ≥0)
- *  - `isCallLogSyncEnabled` (default false)
+ *  - `lastCallLogSyncAt` (default 0L; clamped to >= 0)
  *
- * Fixture pattern mirrors AppViewModelTest:
- *  - Robolectric's [ApplicationProvider.getApplicationContext] supplies a real
- *    [android.content.Context] so the production [AppPrefs] constructor runs unchanged.
- *  - `@Config(application = Application::class)` bypasses OrbitApp.onCreate (no Hilt
- *    graph, no WorkManager init) — we only need the DataStore to come up.
- *  - `@After` wipes the on-disk DataStore file and the process-wide cache so each
- *    @Test method sees fresh defaults.
+ * Fixture: each method gets its own DataStore file and scope through
+ * `testutil/TestDataStore.kt`, cancelled in `@After`, so no method can see
+ * another's writes or wait on another's stranded actor. Robolectric is still
+ * needed because [AppPrefs] maps `android.Manifest` permission names.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = Application::class)
 class AppPrefsTest {
 
-    private lateinit var prefs: AppPrefs
+    @get:Rule
+    val tmp = TemporaryFolder()
 
-    @Before
-    fun setUp() {
-        val ctx = ApplicationProvider.getApplicationContext<Application>()
-        prefs = AppPrefs(ctx)
-    }
+    private val storeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val prefs: AppPrefs by lazy { tmp.newPrefs(storeScope) }
 
     @After
-    fun clearDataStore() {
-        // Explicitly reset every key this test class writes, then wipe the on-disk
-        // file. DataStore caches a process-wide singleton per (Context, name), so
-        // purging the file alone is not sufficient between @Test methods within
-        // the same classloader.
-        runBlocking {
-            prefs.setCallLogImportDays(90)
-            prefs.setLastCallLogSyncAt(0L)
-            prefs.setCallLogSyncEnabled(false)
-        }
-        val ctx = ApplicationProvider.getApplicationContext<Application>()
-        val prefsDir = java.io.File(ctx.filesDir.parentFile, "datastore")
-        if (prefsDir.exists()) prefsDir.deleteRecursively()
+    fun tearDown() {
+        storeScope.cancel()
     }
 
     // ------------------------------------------------------------------
@@ -107,20 +91,5 @@ class AppPrefsTest {
     fun lastCallLogSyncAt_clamps_negative_to_zero() = runTest {
         prefs.setLastCallLogSyncAt(-42L)
         assertEquals(0L, prefs.lastCallLogSyncAt.first())
-    }
-
-    // ------------------------------------------------------------------
-    // isCallLogSyncEnabled
-    // ------------------------------------------------------------------
-
-    @Test
-    fun isCallLogSyncEnabled_defaults_to_false() = runTest {
-        assertFalse(prefs.isCallLogSyncEnabled.first())
-    }
-
-    @Test
-    fun isCallLogSyncEnabled_persists_true() = runTest {
-        prefs.setCallLogSyncEnabled(true)
-        assertTrue(prefs.isCallLogSyncEnabled.first())
     }
 }

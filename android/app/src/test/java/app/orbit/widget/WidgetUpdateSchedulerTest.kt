@@ -6,6 +6,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.testing.WorkManagerTestInitHelper
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import org.junit.Before
 import org.junit.Test
@@ -81,6 +82,29 @@ class WidgetUpdateSchedulerTest {
         val state = infos.single().state
         val registered = state == WorkInfo.State.ENQUEUED || state == WorkInfo.State.RUNNING
         assertEquals(true, registered, "periodic work state must be ENQUEUED or RUNNING (got $state)")
+    }
+
+    /**
+     * refreshNow() (WIDGET-06, the reset path) replaces a pending debounced
+     * refresh with an undelayed one on the same unique name, so the wiped
+     * name leaves the home screen at once instead of in 30 seconds. The new
+     * request has no delay, so the test executor may already have started
+     * it: it is a different request, and it is never CANCELLED.
+     */
+    @Test
+    fun refreshNow_replacesThePendingDebouncedRefreshWithAnUndelayedOne() {
+        WidgetUpdateScheduler.scheduleImmediate(context)
+        val debounced = wm.getWorkInfosForUniqueWork(WidgetUpdateScheduler.UNIQUE_WORK).get().single()
+        assertEquals(WorkInfo.State.ENQUEUED, debounced.state, "the debounced refresh waits on its delay")
+        assertEquals(30_000L, debounced.initialDelayMillis, "WIDGET-05: the debounce is 30 seconds")
+
+        WidgetUpdateScheduler.refreshNow(context)
+
+        val infos = wm.getWorkInfosForUniqueWork(WidgetUpdateScheduler.UNIQUE_WORK).get()
+        assertEquals(1, infos.size, "REPLACE leaves exactly one record on the unique name")
+        assertNotEquals(debounced.id, infos.single().id, "the pending debounced refresh must be replaced")
+        assertNotEquals(WorkInfo.State.CANCELLED, infos.single().state, "the undelayed refresh must be live")
+        assertEquals(0L, infos.single().initialDelayMillis, "refreshNow must not wait out the debounce")
     }
 
     /** cancelAll() cancels both the one-time and periodic work names. */

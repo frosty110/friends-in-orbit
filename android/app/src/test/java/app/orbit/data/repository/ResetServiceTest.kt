@@ -18,37 +18,56 @@ import app.orbit.data.db.OrbitDatabase
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.RuleKind
 import app.orbit.data.entity.RuleTemplateEntity
+import app.orbit.testutil.newPrefs
 import app.orbit.widget.WidgetUpdateScheduler
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
  * [ResetService] fulfills the full settings-spec contract: cancel scheduled
- * WorkManager jobs, stop the content observers, THEN wipe Room + DataStore.
- * These tests pin each leg.
+ * WorkManager jobs, stop the content observers, THEN wipe Room + DataStore,
+ * and run one undebounced widget refresh. These tests pin each leg.
  *
  * Work requests are enqueued with long initial delays so the synchronous
- * test executor leaves them ENQUEUED (a zero-delay request would execute —
- * and fail worker instantiation without a Hilt factory — before reset runs).
+ * test executor leaves them ENQUEUED (a zero-delay request would execute
+ * before reset runs).
+ *
+ * Prefs come from a per-test DataStore (`testutil/TestDataStore.kt`) whose
+ * scope is cancelled in `@After`, so nothing here can leak into, or wait on,
+ * another method.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = Application::class)
 class ResetServiceTest {
 
+    @get:Rule
+    val tmp = TemporaryFolder()
+
     private val context: android.content.Context get() =
         ApplicationProvider.getApplicationContext()
 
     private lateinit var db: OrbitDatabase
+    private val storeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     /**
      * Legacy unique-work name for the periodic digest (since removed, NOTIF-08).
@@ -72,8 +91,7 @@ class ResetServiceTest {
     @After
     fun tearDown() {
         db.close()
-        val prefsDir = java.io.File(context.filesDir.parentFile, "datastore")
-        if (prefsDir.exists()) prefsDir.deleteRecursively()
+        storeScope.cancel()
     }
 
     private class CountingController(ctx: android.content.Context) :
@@ -114,11 +132,11 @@ class ResetServiceTest {
         wm.getWorkInfosForUniqueWork(uniqueName).get().map { it.state }
 
     @Test
-    fun `resetAll cancels unique works, stops observer, wipes db and prefs`() = runBlocking {
+    fun `resetAll cancels unique works, stops observer, wipes db and prefs, refreshes widgets now`() = runBlocking {
         val wm = WorkManager.getInstance(context)
         enqueueAllUniqueWorks(wm)
 
-        // Sanity — all three unique works are live before reset.
+        // Sanity: all three unique works are live before reset.
         assertTrue(statesFor(wm, ContentObserverController.UNIQUE_NAME_SYNC).isNotEmpty())
         assertTrue(statesFor(wm, ContactsIngestWorker.UNIQUE_NAME).isNotEmpty())
         assertTrue(statesFor(wm, digestUniqueName).isNotEmpty())
@@ -128,7 +146,9 @@ class ResetServiceTest {
         // The 30s/1h delays keep them ENQUEUED under the synchronous executor.
         WidgetUpdateScheduler.scheduleImmediate(context)
         WidgetUpdateScheduler.schedulePeriodic(context)
-        assertTrue(statesFor(wm, WidgetUpdateScheduler.UNIQUE_WORK).isNotEmpty())
+        val debouncedRefresh = wm.getWorkInfosForUniqueWork(WidgetUpdateScheduler.UNIQUE_WORK).get().single()
+        assertEquals(WorkInfo.State.ENQUEUED, debouncedRefresh.state)
+        assertEquals(30_000L, debouncedRefresh.initialDelayMillis, "the pending refresh is the debounced one")
         assertTrue(statesFor(wm, WidgetUpdateScheduler.PERIODIC_WORK).isNotEmpty())
 
         // Seed Room + prefs with post-onboarding state.
@@ -144,7 +164,7 @@ class ResetServiceTest {
                 firstSeenByAppAt = Instant.ofEpochMilli(1_000L),
             ),
         )
-        val prefs = AppPrefs(context)
+        val prefs: AppPrefs = tmp.newPrefs(storeScope)
         prefs.setOnboardingComplete(true)
         assertEquals(true, prefs.isOnboardingComplete.first())
 
@@ -155,6 +175,10 @@ class ResetServiceTest {
             appPrefs = prefs,
             contentObserverController = controller,
         )
+
+        // Subscribe BEFORE the reset: the completion event has no replay.
+        val completed = async { withTimeout(30_000L) { service.resetCompleteEvents.first() } }
+        delay(50)
 
         service.resetAll()
 
@@ -180,13 +204,17 @@ class ResetServiceTest {
                 .all { it == WorkInfo.State.CANCELLED },
             "widget periodic sweep must be cancelled",
         )
-        // ...and ONE final refresh is re-enqueued AFTER the wipe so placed
-        // widgets re-render the empty state instead of the wiped contact's name.
-        assertTrue(
-            statesFor(wm, WidgetUpdateScheduler.UNIQUE_WORK)
-                .any { it == WorkInfo.State.ENQUEUED },
-            "a final widget refresh must be enqueued post-wipe",
-        )
+        // ...and ONE final refresh replaces the debounced one AFTER the wipe
+        // (WIDGET-06, refreshNow) so placed widgets re-render the empty state
+        // at once instead of showing the wiped person's name for 30 seconds.
+        // It has no initial delay, so the synchronous executor may already
+        // have started it: the record is live (never CANCELLED), and it is a
+        // different request from the debounced one that was pending.
+        val finalRefresh = wm.getWorkInfosForUniqueWork(WidgetUpdateScheduler.UNIQUE_WORK).get()
+        assertEquals(1, finalRefresh.size, "exactly one widget refresh record after the reset")
+        assertNotEquals(debouncedRefresh.id, finalRefresh.single().id, "the debounced refresh must be replaced")
+        assertNotEquals(WorkInfo.State.CANCELLED, finalRefresh.single().state, "the final refresh must be live")
+        assertEquals(0L, finalRefresh.single().initialDelayMillis, "the final refresh must not wait out the debounce")
 
         // 2. Observers stopped (same cleanup path as permission revocation).
         assertTrue(controller.stopCount >= 1, "ContentObserverController.stop() must run")
@@ -195,8 +223,11 @@ class ResetServiceTest {
         assertTrue(db.contactDao().getAllOnce().isEmpty(), "contacts must be wiped")
         assertEquals(null, db.ruleTemplateDao().get(1L))
 
-        // 4. Prefs wiped — onboarding flag back to false, so the task
+        // 4. Prefs wiped: the onboarding flag back to false, so the task
         //    restart lands on the welcome screen.
         assertEquals(false, prefs.isOnboardingComplete.first())
+
+        // 5. The completion event the Settings screen restarts the task on.
+        completed.await()
     }
 }

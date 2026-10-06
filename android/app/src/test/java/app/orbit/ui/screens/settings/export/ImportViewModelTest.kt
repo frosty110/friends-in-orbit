@@ -13,8 +13,14 @@ import app.orbit.domain.export.ImportSummary
 import app.orbit.domain.export.ImportVersionTooNewException
 import app.orbit.testutil.MainDispatcherRule
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -27,10 +33,13 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * [ImportViewModel] state-machine + snackbar-mapping tests.
+ * [ImportViewModel] state-machine + snackbar-mapping tests, plus the guards
+ * that keep a second tap or a late SAF result from restarting a flow that is
+ * already past that point (SET-05).
  * The domain crypto/apply behavior is pinned by
  * [app.orbit.domain.export.ImportServiceTest]; here the service is faked so
- * each UI-facing transition can be asserted in isolation.
+ * each UI-facing transition can be asserted in isolation. The app scope the
+ * apply runs on is `Dispatchers.Unconfined`, so it completes inline.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = Application::class)
@@ -43,6 +52,8 @@ class ImportViewModelTest {
         ApplicationProvider.getApplicationContext()
 
     private val uri: Uri = Uri.parse("content://test/backup.bin")
+    private val otherUri: Uri = Uri.parse("content://test/other.bin")
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
 
     private lateinit var db: OrbitDatabase
 
@@ -57,13 +68,20 @@ class ImportViewModelTest {
         notes = emptyList(),
     )
 
-    /** Fake service: scripted [read] outcome + apply-counting. */
+    /** Fake service: scripted [read] outcome (optionally held at [readGate]) + apply-counting. */
     private inner class FakeImportService(
         private val readOutcome: Result<ImportPayload>,
     ) : ImportService(context, db) {
         var applyCount: Int = 0
-        override suspend fun read(uri: Uri, passphrase: CharArray): ImportPayload =
-            readOutcome.getOrThrow()
+        var readCount: Int = 0
+        var lastReadUri: Uri? = null
+        var readGate: CompletableDeferred<Unit>? = null
+        override suspend fun read(uri: Uri, passphrase: CharArray): ImportPayload {
+            readGate?.await()
+            readCount++
+            lastReadUri = uri
+            return readOutcome.getOrThrow()
+        }
         override suspend fun apply(payload: ImportPayload): ImportSummary {
             applyCount++
             return ImportSummary(0, 0, 0, 0)
@@ -75,12 +93,13 @@ class ImportViewModelTest {
             .allowMainThreadQueries()
             .build()
         val service = FakeImportService(readOutcome)
-        return ImportViewModel(service) to service
+        return ImportViewModel(service, appScope) to service
     }
 
     @After
     fun tearDown() {
         if (this::db.isInitialized) db.close()
+        appScope.cancel()
     }
 
     @Test
@@ -160,6 +179,47 @@ class ImportViewModelTest {
         assertEquals(ImportSnackbar.VersionTooNew, snackbar.await())
         assertEquals(ImportUiState.Idle, vm.uiState.value)
         assertEquals(0, service.applyCount)
+    }
+
+    @Test
+    fun `a second file pick while waiting for the password is ignored`() = runBlocking {
+        val (vm, service) = buildVm(Result.success(emptyPayload()))
+        vm.onImportSourcePicked(uri)
+        assertEquals(ImportUiState.AwaitingPassphrase, vm.uiState.value)
+
+        // A late SAF result (the picker fired twice, or a result replayed after
+        // a config change) must not swap the file under the open sheet.
+        vm.onImportSourcePicked(otherUri)
+        assertEquals(ImportUiState.AwaitingPassphrase, vm.uiState.value)
+
+        vm.onPassphraseSubmitted("pass".toCharArray())
+        assertEquals(uri, service.lastReadUri, "the first file is the one read")
+    }
+
+    @Test
+    fun `while the file is being checked, a repeat submit, a row tap and a pick are all ignored`() = runBlocking {
+        val (vm, service) = buildVm(Result.success(emptyPayload()))
+        service.readGate = CompletableDeferred()
+        vm.onImportSourcePicked(uri)
+        vm.onPassphraseSubmitted("pass".toCharArray())
+        assertEquals(ImportUiState.Validating, vm.uiState.value)
+
+        val openRequest = async { vm.safOpenRequests.first() }
+        delay(50)
+        val again = "again".toCharArray()
+        vm.onPassphraseSubmitted(again)
+        vm.onImportRequested()
+        vm.onImportSourcePicked(otherUri)
+        delay(50)
+
+        assertEquals(ImportUiState.Validating, vm.uiState.value, "nothing restarts the flow mid-check")
+        assertFalse(openRequest.isCompleted, "the picker must not open again mid-check")
+        openRequest.cancel()
+        assertTrue(again.all { it == 0.toChar() }, "a refused passphrase is still wiped")
+
+        service.readGate!!.complete(Unit)
+        assertEquals(1, service.readCount, "the file is read exactly once")
+        assertTrue(vm.uiState.value is ImportUiState.AwaitingConfirm, "the one read still reaches confirmation")
     }
 
     @Test

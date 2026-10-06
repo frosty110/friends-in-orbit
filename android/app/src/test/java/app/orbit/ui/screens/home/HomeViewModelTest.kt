@@ -79,7 +79,7 @@ class HomeViewModelTest {
     ) : HomeFeed(
         listRepo = FakeListRepository(),
         clock = TestClock(),
-        appPrefs = AppPrefs(ApplicationProvider.getApplicationContext()),
+        appPrefs = AppPrefs(ApplicationProvider.getApplicationContext<Application>()),
         // Enrichment (Next up + rhythm) is never exercised in these tiles-only
         // tests — the FakeListRepository is empty, so the enrichment flow
         // short-circuits to emptyMap and these throwaway deps are never invoked.
