@@ -205,8 +205,9 @@ class OnboardingSyncViewModelTest {
         assertEquals(0, ready.callCount)
         assertEquals(0, ready.contactCount)
 
-        // onRetry is a no-op too: the retry CTA is unreachable from Skipped,
-        // but the guard must hold regardless.
+        // onRetry enqueues nothing either: the retry CTA is unreachable from
+        // Skipped, but the guard must hold regardless (it still re-subscribes
+        // the pipeline, see 6c).
         vm.onRetry()
         assertTrue(controller.syncRequests.isEmpty())
     }
@@ -323,6 +324,61 @@ class OnboardingSyncViewModelTest {
         assertEquals(SyncState.Succeeded, recovered.syncState)
         assertEquals(1, recovered.callCount)
         assertEquals(0, repo.failuresLeft)
+    }
+
+    // ============================================================================
+    // (6b) The same thrown read WITHOUT the permission is Skipped, not Failed:
+    // the five flows are subscribed either way, and a Failed here would show a
+    // Try again that enqueues nothing and a Continue that waits for a retry
+    // count the guard never advanced (no back arrow on this step: a dead end,
+    // ONB-18 and rules.md Code 3). Fails without the permission check in the
+    // catch branch.
+    // ============================================================================
+
+    @Test
+    fun `a thrown read without call-log permission is Skipped, not Failed`() = runBlocking {
+        val controller = SyncController(context, Succeeds::class.java)
+        val repo = FlakyAggregates(FakeCallEventRepository())
+
+        val vm = buildVm(controller, repo)
+        val ready = vm.uiState.awaitReady()
+
+        assertEquals(SyncState.Skipped, ready.syncState)
+        assertEquals(0, repo.failuresLeft, "the read did throw; the catch classified it")
+        assertEquals(0, ready.callCount)
+        assertTrue(controller.syncRequests.isEmpty(), "nothing to import without the permission")
+    }
+
+    // ============================================================================
+    // (6c) Try again without the permission still re-subscribes: the counter
+    // is the flatMapLatest key, so it must advance before the permission
+    // guard; only the sync enqueue is gated. The recovered read carries one
+    // call, so the second Ready differs from the catch's (a StateFlow drops an
+    // equal value) and is the observable proof of a new subscription. Fails
+    // with the bump below the guard: the catch emission is final and the
+    // counted state never arrives.
+    // ============================================================================
+
+    @Test
+    fun `Try again without call-log permission re-subscribes but enqueues nothing`() = runBlocking {
+        val controller = SyncController(context, Succeeds::class.java)
+        val repo = FlakyAggregates(
+            FakeCallEventRepository(
+                listOf(callEventFixture(id = 1L, contactId = 1L, occurredAt = Instant.parse("2026-10-01T10:00:00Z"))),
+            ),
+        )
+        val vm = buildVm(controller, repo)
+        val first = vm.uiState.awaitReady()
+        assertEquals(SyncState.Skipped, first.syncState)
+        assertEquals(0, first.callCount, "the catch has no counts to give")
+        assertEquals(0, repo.failuresLeft)
+
+        vm.onRetry()
+
+        val recovered = vm.uiState.awaitReady { it.callCount == 1 }
+        assertEquals(SyncState.Skipped, recovered.syncState)
+        assertTrue(controller.syncRequests.isEmpty(), "the retry must not enqueue a sync without permission")
+        assertTrue(syncWorkStates().isEmpty())
     }
 
     // ============================================================================
