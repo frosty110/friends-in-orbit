@@ -113,7 +113,7 @@ This design system was built from the written product brief provided in-chat (pr
 
 **Primary.** Terracotta (`#B85338`, deepened on 2026-10-05 from `#C8654A` so a white label clears 4.5:1) is spent once per screen, on the one accent call action (rules.md Design 5 and Design 6). It should feel like the one warm thing on the page, not a default.
 
-**Type.** Inter, all sizes. Body is 16px minimum (non-negotiable). Contact names are 28px SemiBold on the card face and 32px on Contact detail and the Welcome wordmark, with slight negative tracking. Metadata is 14px Stone. No serifs. No display faces. The typography carries no novelty — the warmth comes from color, spacing, and photography.
+**Type.** Inter, all sizes. Body is 16px minimum (non-negotiable). Contact names are 28px SemiBold on the card face and 32px on Contact detail and the Welcome wordmark, with slight negative tracking. Metadata is 14px Stone. No serifs. No display faces. The typography carries no novelty: the warmth comes from color, spacing, and photography.
 
 **Shape language.** Soft but structural.
 - 16px radius for cards (primary container)
