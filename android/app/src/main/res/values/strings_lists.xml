@@ -203,7 +203,7 @@
     <string name="lists_smart_percent_of_called">%1$d%% of contacts with call history</string>
     <!-- Screen-reader value of the percentage slider. -->
     <string name="lists_smart_percent_a11y">%1$d percent of contacts with call history</string>
-    <string name="lists_smart_no_params">Nothing to set. This list shows everyone you haven\'t called yet.</string>
+    <string name="lists_smart_no_params">Nothing to set. This list shows everyone you have never called.</string>
 
     <!-- Members preview. -->
     <plurals name="lists_members_count">
