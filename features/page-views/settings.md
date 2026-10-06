@@ -30,7 +30,7 @@
 
 - Theme, light and dark, and the accent apply live and persist as you change them; the widgets follow
 - "Allow" asks the phone for the permission. "Open phone settings" opens Orbit's page in the phone's settings (for notifications switched off on Android 12, the phone's notification settings for Orbit). Granting Contacts or Call log, here or in the phone's settings, starts a sync at once
-- "Sync now" reads "Syncing…" while it runs; the row then says when it last synced ("Just now", "5 minutes ago", "2 hours ago", then days)
+- "Sync now" reads "Syncing…" while it runs; the row then says when it last synced ("Last synced just now", "5 minutes ago", "2 hours ago", then days)
 - An import range chip persists at once; choosing a longer range re-reads the call log that far back. If the choice cannot be saved, "Couldn't save your change" and the range stays as it was
 - "Groups when adding people" opens a dialog: "Groups when adding people" / "When you add people to a list, Orbit sorts your contacts into these groups. Choose where each one begins.", a stepper per group worded as a sentence ("Commonly called: the top 20%", "Rarely called: the bottom 30%", "Recently added: the last 30 days", and the long gap in days), "These two groups overlap: together they can't be more than 100%." when they do, and "Save" or "Cancel"; Save commits, Cancel discards, and rotation keeps the dialog open
 - "Ignored" opens the Ignored screen; "Call history" opens Call history
