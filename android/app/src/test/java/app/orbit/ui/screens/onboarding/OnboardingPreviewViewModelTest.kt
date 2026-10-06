@@ -2,9 +2,12 @@ package app.orbit.ui.screens.onboarding
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import app.orbit.data.repository.CallAgg
+import app.orbit.data.repository.CallEventRepository
 import app.orbit.domain.FakeCallEventRepository
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.callEventFixture
+import app.orbit.domain.clock.TestClock
 import app.orbit.domain.contactFixture
 import app.orbit.testutil.MainDispatcherRule
 import java.time.Instant
@@ -14,8 +17,10 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -31,13 +36,13 @@ import org.robolectric.annotation.Config
  *   score = count + max(0, 30 − daysSinceLastCall) / 30.0
  *
  * and emits [OnboardingPreviewUiState.Ready] with the top ≤10 candidates,
- * or an EMPTY candidate list when fewer than 3 contacts score > 0.
+ * or an EMPTY candidate list when fewer than 3 contacts score > 0. A failed
+ * read is [OnboardingPreviewUiState.Error], and `onRetry` re-subscribes.
  *
- * Robolectric is required because the VM formats the row meta line with
- * [android.text.format.DateUtils.getRelativeTimeSpanString] (an Android API)
- * and reads wall-clock time via [Instant.now]. To keep the scoring assertions
- * deterministic against the live `Instant.now()` the fixtures anchor every
- * event time at a fixed offset BEFORE `now`, computed at construction time.
+ * The row meta line is `UiText` built on `formatRelative` (the glossary's one
+ * "time since" formatter), resolved here against Robolectric's resources.
+ * Time comes from an injected [TestClock], so every fixture event sits at a
+ * whole-day offset before a fixed `now` and the scoring is reproducible.
  *
  * Fixture pattern mirrors [OnboardingPermissionsViewModelTest] /
  * SettingsViewModelTest:
@@ -55,10 +60,9 @@ class OnboardingPreviewViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    // Anchor every fixture event at a whole-day offset before "now" so the
-    // recency arm is stable regardless of the sub-second drift between fixture
-    // construction and the VM's internal Instant.now().
-    private val now: Instant = Instant.now()
+    // The VM's clock. Fixture events sit at whole-day offsets before it.
+    private val clock = TestClock(Instant.parse("2026-10-06T12:00:00Z"))
+    private val now: Instant get() = clock.now()
 
     // Copy is UiText (strings_onboarding.xml); resolve it against real resources.
     private val context = ApplicationProvider.getApplicationContext<Application>()
@@ -67,12 +71,25 @@ class OnboardingPreviewViewModelTest {
 
     private fun buildVm(
         contactRepo: FakeContactRepository,
-        callEventRepo: FakeCallEventRepository,
+        callEventRepo: CallEventRepository,
     ): OnboardingPreviewViewModel =
         OnboardingPreviewViewModel(
             contactRepo = contactRepo,
             callEventRepo = callEventRepo,
+            clock = clock,
         )
+
+    /** The aggregates read fails on its first subscription, then passes. */
+    private class FlakyAggregates(private val inner: CallEventRepository) : CallEventRepository by inner {
+        var failuresLeft: Int = 1
+        override fun observeAggregatesAll(): Flow<Map<Long, CallAgg>> = flow {
+            if (failuresLeft > 0) {
+                failuresLeft--
+                throw IllegalStateException("disk")
+            }
+            emitAll(inner.observeAggregatesAll())
+        }
+    }
 
     private suspend fun StateFlow<OnboardingPreviewUiState>.awaitReady(): OnboardingPreviewUiState.Ready =
         (this as Flow<OnboardingPreviewUiState>)
@@ -323,5 +340,36 @@ class OnboardingPreviewViewModelTest {
 
         val ready = vm.uiState.awaitReady()
         assertEquals("In touch", ready.defaultName.asString(context))
+    }
+
+    // ============================================================================
+    // Test 10: a failing read is Error, not a crash, and Try again
+    // re-subscribes so the next read can succeed. Fails without the
+    // `retryCount.flatMapLatest { ... .catch { } }` shape in the VM: a bare
+    // `catch` terminates the pipeline and a retry could never recover.
+    // ============================================================================
+
+    @Test
+    fun `a failing source shows Error, and Try again recovers`() = runTest {
+        val contacts = FakeContactRepository(
+            (1L..3L).map { contactFixture(id = it) },
+        )
+        val events = FlakyAggregates(
+            FakeCallEventRepository(
+                (1L..3L).map { callEventFixture(id = it, contactId = it, occurredAt = daysAgo(1)) },
+            ),
+        )
+        val vm = buildVm(contacts, events)
+
+        val first = (vm.uiState as Flow<OnboardingPreviewUiState>)
+            .filterIsInstance<OnboardingPreviewUiState.Error>()
+            .first()
+        assertEquals(OnboardingPreviewUiState.Error, first)
+
+        vm.onRetry()
+
+        val ready = vm.uiState.awaitReady()
+        assertEquals(3, ready.candidates.size)
+        assertEquals(0, events.failuresLeft)
     }
 }

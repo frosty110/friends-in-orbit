@@ -14,8 +14,14 @@ import app.orbit.R
 import app.orbit.ui.theme.OrbitTheme
 
 /**
- * Onboarding step 3 (post-2026-04-28 reorder): rationale + system prompt
- * for `POST_NOTIFICATIONS` (Android 13+).
+ * Legacy route: the notifications ask left the counted flow with ONB-30 (Done
+ * asks instead, after the first list exists). Nothing navigates here any more;
+ * it survives only so an install that saved this step as its resume point
+ * still lands on a real screen, and it continues to Sync. Rationale + system
+ * prompt for `POST_NOTIFICATIONS` (Android 13+).
+ *
+ * `onBack` is null when this is the resumed start destination, which on this
+ * route is the only way to arrive.
  *
  * On API ≤32 there's no runtime permission for notifications — the
  * implicit grant from manifest declaration suffices. We auto-skip in that
@@ -27,7 +33,7 @@ import app.orbit.ui.theme.OrbitTheme
  */
 @Composable
 fun OnboardingPermNotificationsScreen(
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     onContinue: () -> Unit,
     vm: OnboardingPermissionsViewModel = hiltViewModel(),
 ) {

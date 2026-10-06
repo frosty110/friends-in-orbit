@@ -5,19 +5,22 @@ import androidx.compose.runtime.Immutable
 /**
  * Single source of truth for the onboarding flow's counted steps.
  *
- * 5 counted steps. Welcome and Done are framing screens that bracket the flow
- * but are NOT counted — `OnboardingScaffold(step = null)` skips the dot row on
- * those.
+ * Four counted steps. Welcome and Done are framing screens that bracket the
+ * flow but are NOT counted: `OnboardingScaffold(step = null)` skips the
+ * counter on those.
  *
  * Order puts the most-impactful permission first, so a half-bail still leaves
  * Orbit functional:
- *   1. Permissions · Contacts
- *   2. Permissions · Call log
- *   3. Permissions · Notifications  (auto-skipped on API <33; see
- *      OnboardingPermNotificationsScreen)
- *   4. Reading your call history    (blocking sync gate, ONB-16/17/18)
- *   5. Make your first list         (production List Configuration screen
- *      reused via shared ListConfigBody, ONB-20)
+ *   1. Permissions: Contacts
+ *   2. Permissions: Call log
+ *   3. Reading your call history    (blocking sync gate, ONB-16/17/18)
+ *   4. Make your first list         (production List Configuration screen
+ *      reused via shared ListConfigBody, ONB-20); Preview shows the same
+ *      "4 of 4" since it leads straight into this step
+ *
+ * [PermNotifications] was step 3 until ONB-30 moved the notifications ask to
+ * the Done screen. It stays in the enum, uncounted, so a resume step saved by
+ * an older install still parses (`AppViewModel.resolveOnboardingResume`).
  *
  * Adding/removing a step here updates every progress indicator without
  * touching individual screens. Total advances in lockstep.

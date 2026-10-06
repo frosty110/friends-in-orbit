@@ -15,6 +15,9 @@ import app.orbit.ui.theme.OrbitTheme
  * Onboarding step 1 (post-2026-04-28 reorder): rationale + system prompt
  * for `READ_CONTACTS`.
  *
+ * `onBack` is null when this is the resumed start destination (nothing to pop
+ * to); the nav graph decides from `previousBackStackEntry`.
+ *
  * Most-impactful permission — landed first so a half-bail still leaves Orbit
  * functional.
  *
@@ -24,7 +27,7 @@ import app.orbit.ui.theme.OrbitTheme
  */
 @Composable
 fun OnboardingPermContactsScreen(
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     onContinue: () -> Unit,
     vm: OnboardingPermissionsViewModel = hiltViewModel(),
 ) {

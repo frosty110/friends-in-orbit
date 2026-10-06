@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.onboarding
 
+import android.Manifest
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.orbit.data.AppPrefs
@@ -16,14 +17,19 @@ import kotlinx.coroutines.launch
  * requires this be transactional and exactly-once.
  *
  * The write fires from `init` so just reaching the Done route flips the
- * flag. The screen renders a brief confirmation and surfaces a "Take me
- * home" CTA that's only enabled after the flag write completes
+ * flag. The screen renders a brief confirmation and surfaces an "Open Orbit"
+ * CTA that's only enabled after the flag write completes
  * ([completed] flips true). If the user kills the app between the
  * route landing and the write completing, the next cold start re-enters
- * onboarding at Welcome — annoying but recoverable.
+ * onboarding at Welcome: annoying but recoverable.
  *
  * The duplicate write that lived in OrbitNavHost's BulkAdd onContinue
  * handler is removed in the same commit that wires this screen.
+ *
+ * Also records that the notifications permission has been asked for
+ * ([onNudgeLauncherFired], ONB-30): the Done screen is the one place
+ * onboarding asks, and Settings relies on the per-permission "asked once"
+ * flag to tell never-asked from turned-off (SET-12).
  */
 @HiltViewModel
 class OnboardingDoneViewModel @Inject constructor(
@@ -45,5 +51,16 @@ class OnboardingDoneViewModel @Inject constructor(
             appPrefs.setOnboardingListId(null)
             _completed.value = true
         }
+    }
+
+    /**
+     * The nudge ask's launcher resolved (granted or not): flip the
+     * `POST_NOTIFICATIONS` "asked once" flag, the same flag the permission
+     * screens flip through `OnboardingPermissionsViewModel.onLauncherFired`.
+     * Before 2026-10-06 the Done screen asked without recording it, so a
+     * decline here still read as "never asked" in Settings.
+     */
+    fun onNudgeLauncherFired() {
+        viewModelScope.launch { appPrefs.setHasAsked(Manifest.permission.POST_NOTIFICATIONS) }
     }
 }

@@ -33,6 +33,7 @@ import app.orbit.data.entity.RuleKind
 import app.orbit.domain.JsonProvider
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
+import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.screens.lists.ListConfigBody
 import app.orbit.ui.screens.lists.ListConfigContactSnapshot
 import app.orbit.ui.screens.lists.ListConfigUiState
@@ -43,9 +44,17 @@ import app.orbit.ui.util.asString
 import java.time.LocalTime
 
 /**
- * ONB-20 — first-list creation reusing the production List
+ * ONB-20: first-list creation reusing the production List
  * Configuration screen. Wraps [ListConfigBody] inside [OnboardingScaffold]
  * so the user lands directly in the same UI they'll use forever.
+ *
+ * Non-Ready states (see [firstListFallback]): Loading keeps the skeleton;
+ * Error says the list could not be read and offers Try again; NotFound (the
+ * list was deleted or archived between steps) offers "Start again", which
+ * [onStartAgain] routes back to the Sync step, whose Continue reads a missing
+ * list as no list and sets up a fresh one (README, Mid-flow resume). Until
+ * 2026-10-06 both rendered the loading skeleton under two disabled CTAs with
+ * no back arrow: a screen that said "loading" for ever (G4).
  *
  * Activation gate (E5 / ONB-24): with contacts
  * access granted, the primary "Done" CTA is enabled only when the list has
@@ -74,6 +83,9 @@ fun OnboardingFirstListScreen(
     onDone: () -> Unit,
     onAddAnother: () -> Unit,
     onAddContacts: () -> Unit,
+    // NotFound's "Start again": pop back to the Sync step. Defaulted so the
+    // nav graph can wire it in its own change.
+    onStartAgain: () -> Unit = {},
     vm: ListConfigViewModel = hiltViewModel(),
     permVm: OnboardingPermissionsViewModel = hiltViewModel()
 ) {
@@ -135,7 +147,20 @@ fun OnboardingFirstListScreen(
         }
     }
 
+    val fallback = firstListFallback(state)
+    if (fallback != null) {
+        FirstListFallbackContent(
+            fallback = fallback,
+            onAction = when (fallback.action) {
+                FirstListFallbackAction.Retry -> vm::onRetry
+                FirstListFallbackAction.StartAgain -> onStartAgain
+            }
+        )
+        return
+    }
+
     OnboardingScaffold(
+        title = stringResource(R.string.onb_first_list_title),
         step = OnboardingStep.FirstList,
         onBack = null, // first list is required (E1)
         primary = OnboardingAction(
@@ -229,6 +254,65 @@ internal fun firstListCanFinish(
     hasContactsPermission: Boolean
 ): Boolean = name.isNotBlank() && (!hasContactsPermission || memberCount >= 3)
 
+/** What a non-Ready, non-Loading first-list state offers the user. */
+internal enum class FirstListFallbackAction { Retry, StartAgain }
+
+/**
+ * The message and the one action for a state that cannot show the list:
+ * [ListConfigUiState.Error] and [ListConfigUiState.NotFound]. Null for Loading
+ * (the skeleton) and Ready (the body). Pure, so `OnboardingFirstListGateTest`
+ * can pin that no fallback branch leaves the user without a visible action,
+ * the dead end this screen had until 2026-10-06.
+ */
+internal fun firstListFallback(state: ListConfigUiState): FirstListFallback? = when (state) {
+    ListConfigUiState.Error -> FirstListFallback(
+        titleRes = R.string.onb_first_list_error_title,
+        bodyRes = R.string.components_error_body,
+        actionLabelRes = R.string.components_error_retry,
+        action = FirstListFallbackAction.Retry
+    )
+    ListConfigUiState.NotFound -> FirstListFallback(
+        titleRes = R.string.onb_first_list_not_found_title,
+        bodyRes = R.string.onb_first_list_not_found_body,
+        actionLabelRes = R.string.onb_first_list_start_again,
+        action = FirstListFallbackAction.StartAgain
+    )
+    ListConfigUiState.Loading, is ListConfigUiState.Ready -> null
+}
+
+internal data class FirstListFallback(
+    @StringRes val titleRes: Int,
+    @StringRes val bodyRes: Int,
+    @StringRes val actionLabelRes: Int,
+    val action: FirstListFallbackAction
+)
+
+/**
+ * Error and NotFound: the footer's Primary is the fallback's one action (the
+ * screen's single accent); the message carries the words. Not scrollable:
+ * OrbitScreenMessage scrolls itself at large text, and a scroll nested in the
+ * scaffold's scroll is the F-1 hazard below.
+ */
+@Composable
+private fun FirstListFallbackContent(fallback: FirstListFallback, onAction: () -> Unit) {
+    OnboardingScaffold(
+        title = stringResource(fallback.titleRes),
+        step = OnboardingStep.FirstList,
+        onBack = null,
+        primary = OnboardingAction(
+            label = stringResource(fallback.actionLabelRes),
+            onClick = onAction
+        ),
+        scrollable = false
+    ) {
+        OrbitScreenMessage(
+            icon = "warning-circle",
+            title = stringResource(fallback.titleRes),
+            body = stringResource(fallback.bodyRes)
+        )
+    }
+}
+
 /**
  * Helper line rendered above the list-config body, as a string resource id.
  * Null = nothing to say (gate satisfied, contacts granted). In the denied
@@ -295,6 +379,7 @@ private fun OnboardingFirstListScreenPreviewBody(
         hasContactsPermission = hasContactsPermission
     )
     OnboardingScaffold(
+        title = stringResource(R.string.onb_first_list_title),
         step = OnboardingStep.FirstList,
         onBack = null,
         primary = OnboardingAction(
@@ -342,6 +427,7 @@ private fun OnboardingFirstListScreenPreviewBody(
 private fun OnboardingFirstListLoadingPreview() {
     OrbitTheme {
         OnboardingScaffold(
+            title = stringResource(R.string.onb_first_list_title),
             step = OnboardingStep.FirstList,
             onBack = null,
             primary = OnboardingAction(
@@ -409,5 +495,23 @@ private fun OnboardingFirstListContactsDeniedPreview() {
             ),
             hasContactsPermission = false
         )
+    }
+}
+
+// The list could not be read: Try again is the footer's one accent.
+@PreviewLightDark
+@Composable
+private fun OnboardingFirstListErrorPreview() {
+    OrbitTheme {
+        FirstListFallbackContent(fallback = firstListFallback(ListConfigUiState.Error)!!, onAction = {})
+    }
+}
+
+// The list is gone: "Start again" returns to the Sync step for a fresh one.
+@PreviewLightDark
+@Composable
+private fun OnboardingFirstListNotFoundPreview() {
+    OrbitTheme {
+        FirstListFallbackContent(fallback = firstListFallback(ListConfigUiState.NotFound)!!, onAction = {})
     }
 }

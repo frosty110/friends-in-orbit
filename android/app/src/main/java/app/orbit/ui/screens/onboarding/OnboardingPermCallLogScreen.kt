@@ -15,13 +15,16 @@ import app.orbit.ui.theme.OrbitTheme
  * Onboarding step 2 (post-2026-04-28 reorder): rationale + system prompt
  * for `READ_CALL_LOG`.
  *
+ * `onBack` is null when this is the resumed start destination (nothing to pop
+ * to); the nav graph decides from `previousBackStackEntry`.
+ *
  * Denial degrades to manual log mode (per ONB-04). The user can still create
  * lists and add contacts; only auto-detection of recent calls is lost. Skip
  * taps open OnboardingSkipDialog with SkipPermission.CallLog before advancing.
  */
 @Composable
 fun OnboardingPermCallLogScreen(
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     onContinue: () -> Unit,
     vm: OnboardingPermissionsViewModel = hiltViewModel(),
 ) {
