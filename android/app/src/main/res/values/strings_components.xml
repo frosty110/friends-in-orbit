@@ -16,6 +16,17 @@
     <string name="components_action_undo">Undo</string>
     <string name="components_action_archive">Archive</string>
     <string name="components_action_delete">Delete</string>
+    <!-- Opens Orbit's own Settings screen (Card view's and Call history's "can't see your
+         calls" notices). -->
+    <string name="components_action_open_settings">Open settings</string>
+    <!-- Opens the phone's settings page for Orbit, where a permission is granted (onboarding,
+         the picker's denied state, Settings' permission rows). -->
+    <string name="components_action_open_phone_settings">Open phone settings</string>
+    <!-- Goes to a person's page. The TalkBack action on Browse and Search rows and on the card. -->
+    <string name="components_action_open_details">Open details</string>
+
+    <!-- Second line under Archive in a list's menu (Home, Lists). %1$s: the list's name. -->
+    <string name="components_menu_archive_supporting">Hides %1$s from home. You can restore it.</string>
 
     <!-- Shown when a change could not be written. Rules: a failed write always tells the user. -->
     <string name="components_snackbar_save_failed">Couldn\'t save your change</string>
@@ -23,13 +34,17 @@
     <!-- Snackbars several screens show after changing one person (Contact detail, Browse,
          the contact picker, Settings > Ignored), each with Undo. %1$s: the person's name. -->
     <string name="components_snackbar_ignored">Ignored %1$s</string>
+    <!-- Reverses Ignore: the person is back in their lists. Replaces "Restored", which Settings >
+         Ignored and the picker still read until they switch; both keys stay until then. -->
+    <string name="components_snackbar_unignored">Unignored %1$s</string>
     <string name="components_snackbar_restored">Restored %1$s</string>
     <string name="components_snackbar_unpaused">Unpaused %1$s</string>
     <!-- After pausing one person: no nudges and no suggestions for a while. One sentence per
          length of pause. %1$s: the person's name. -->
     <string name="components_snackbar_paused_week">Paused %1$s for 1 week</string>
     <string name="components_snackbar_paused_month">Paused %1$s for 1 month</string>
-    <string name="components_snackbar_paused_indefinitely">Paused %1$s indefinitely</string>
+    <!-- The same words as the option the user just chose ("Until you unpause"). -->
+    <string name="components_snackbar_paused_indefinitely">Paused %1$s until you unpause</string>
     <!-- The same after pausing several people at once (Browse). %1$d: how many. -->
     <plurals name="components_snackbar_paused_people_week">
         <item quantity="one">Paused %1$d person for 1 week</item>
@@ -40,19 +55,31 @@
         <item quantity="other">Paused %1$d people for 1 month</item>
     </plurals>
     <plurals name="components_snackbar_paused_people_indefinitely">
-        <item quantity="one">Paused %1$d person indefinitely</item>
-        <item quantity="other">Paused %1$d people indefinitely</item>
+        <item quantity="one">Paused %1$d person until you unpause</item>
+        <item quantity="other">Paused %1$d people until you unpause</item>
     </plurals>
     <!-- After moving or copying people into another list (Browse, the contact picker).
-         %1$d: how many people, %2$s: the list's name. -->
+         %1$d: how many people, %2$s: the list's name. The noun is said ("1 person",
+         "3 people"), as in "Ignored 3 people". -->
     <plurals name="components_snackbar_moved">
-        <item quantity="one">Moved %1$d to %2$s</item>
-        <item quantity="other">Moved %1$d to %2$s</item>
+        <item quantity="one">Moved 1 person to %2$s</item>
+        <item quantity="other">Moved %1$d people to %2$s</item>
     </plurals>
     <plurals name="components_snackbar_copied">
-        <item quantity="one">Copied %1$d to %2$s</item>
-        <item quantity="other">Copied %1$d to %2$s</item>
+        <item quantity="one">Copied 1 person to %2$s</item>
+        <item quantity="other">Copied %1$d people to %2$s</item>
     </plurals>
+
+    <!-- The one "Pause for how long?" sheet (Contact detail, Browse). -->
+    <string name="components_pause_title">Pause for how long?</string>
+    <string name="components_pause_week">1 week</string>
+    <string name="components_pause_month">1 month</string>
+    <!-- The open-ended choice. The status line and the snackbar use the same words. -->
+    <string name="components_pause_until_unpause">Until you unpause</string>
+
+    <!-- A stat that has no value yet (Card view, Contact detail). Words, never a dash. -->
+    <string name="components_stat_never_called">Never called</string>
+    <string name="components_stat_not_enough_calls">Not enough calls yet</string>
 
     <!-- Privacy curtain: stands in for a person's or list's real name while the app is
          covered (app switcher, someone looking over a shoulder). -->
@@ -72,9 +99,9 @@
 
     <!-- A person row in Browse and Search. %1$s: the person's first name. -->
     <string name="components_browse_row_call">Call %1$s</string>
-    <string name="components_browse_row_open_details">Open details</string>
-    <!-- Screen-reader word for the small dot that marks someone worth a call now. -->
-    <string name="components_browse_row_due">Due</string>
+    <!-- Screen-reader words for the small dot that marks someone worth a call now. Not "Due":
+         the app says nothing that reads as a deadline (voice.md). -->
+    <string name="components_browse_row_due">Worth a call now</string>
     <string name="components_browse_row_never_called">Never called</string>
     <!-- %1$s: how long ago, for example "3 days ago". -->
     <string name="components_browse_row_last_call">Last call: %1$s</string>

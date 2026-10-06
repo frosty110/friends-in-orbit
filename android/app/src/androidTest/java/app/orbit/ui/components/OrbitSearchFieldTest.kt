@@ -1,9 +1,14 @@
 package app.orbit.ui.components
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -37,6 +42,11 @@ import org.junit.runner.RunWith
  * The field is located by [hasSetTextAction], the editable node itself. The
  * placeholder is drawn in the field's decoration, so it merges into that node
  * as its TalkBack label while the query is empty.
+ *
+ * The last case is PRIV-03 (browse-8): under the privacy curtain a typed
+ * query, which is a name as often as not, reads "Contact" while the buffer
+ * the consumer holds is left alone. OrbitSearchFieldCurtainTest under test/
+ * is its JVM twin, so the check also runs on every push.
  */
 @RunWith(AndroidJUnit4::class)
 class OrbitSearchFieldTest {
@@ -119,6 +129,42 @@ class OrbitSearchFieldTest {
         composeTestRule.onNode(hasSetTextAction()).performTextInput("Sarah")
 
         composeTestRule.onNodeWithText("Sarah").assertDoesNotExist()
+        composeTestRule.onNodeWithText(PLACEHOLDER).assertIsDisplayed()
+    }
+
+    @Test
+    fun under_the_curtain_the_query_reads_as_Contact_and_the_buffer_is_kept() {
+        val reported = mutableListOf<String>()
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalPrivacyCurtain provides true) {
+                OrbitTheme {
+                    var query by remember { mutableStateOf("Maya") }
+                    OrbitSearchField(
+                        query = query,
+                        onQueryChange = {
+                            reported += it
+                            query = it
+                        },
+                        placeholder = PLACEHOLDER,
+                    )
+                }
+            }
+        }
+
+        // EditableText is what is drawn and what TalkBack reads; the field's
+        // InputText stays the real query for autofill, by design (CurtainMaskTest).
+        composeTestRule.onNode(hasSetTextAction()).assert(
+            SemanticsMatcher("editable text is \"Contact\"") { node ->
+                node.config.getOrNull(SemanticsProperties.EditableText)?.text == "Contact"
+            },
+        )
+
+        // The clear control still acts on the real buffer, not the mask.
+        composeTestRule.onNodeWithContentDescription("Clear search").performClick()
+
+        composeTestRule.runOnIdle {
+            assertEquals("", reported.last())
+        }
         composeTestRule.onNodeWithText(PLACEHOLDER).assertIsDisplayed()
     }
 

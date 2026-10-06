@@ -43,6 +43,13 @@ import app.orbit.ui.theme.OrbitTheme
  * accent (rules.md §Design 5) unless it is the only thing to do there, as on
  * an error or permission state.
  *
+ * A second way forward, when a state honestly has two (Card view's empty
+ * shell offers "Add people" and a way to browse), is [secondaryLabel] and
+ * [onSecondary]: a Ghost button under the first, so it reads as the quieter
+ * option and never competes with it. Added 2026-10-06 so the two-action
+ * states could stop keeping their own layouts; the single-action call is
+ * unchanged.
+ *
  * It scrolls rather than clips: at 200% font scale on a short window the body
  * can be taller than the space left under the app bar (rubric gate G3).
  */
@@ -55,6 +62,8 @@ fun OrbitScreenMessage(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
     actionVariant: OrbitButtonVariant = OrbitButtonVariant.Secondary,
+    secondaryLabel: String? = null,
+    onSecondary: (() -> Unit)? = null,
 ) {
     Box(
         contentAlignment = Alignment.Center,
@@ -99,6 +108,14 @@ fun OrbitScreenMessage(
                     text = actionLabel,
                     onClick = onAction,
                     variant = actionVariant,
+                )
+            }
+            if (secondaryLabel != null && onSecondary != null) {
+                Box(Modifier.size(OrbitTheme.spacing.x2))
+                OrbitButton(
+                    text = secondaryLabel,
+                    onClick = onSecondary,
+                    variant = OrbitButtonVariant.Ghost,
                 )
             }
         }
@@ -196,6 +213,24 @@ private fun OrbitScreenMessagePreview() {
                 actionLabel = "Open settings",
                 onAction = {},
                 actionVariant = OrbitButtonVariant.Primary,
+            )
+        }
+    }
+}
+
+@PreviewLightDark
+@Composable
+private fun OrbitScreenMessageTwoActionsPreview() {
+    OrbitTheme {
+        Box(Modifier.background(OrbitTheme.colors.bg)) {
+            OrbitScreenMessage(
+                icon = "users",
+                title = "No one on this list yet",
+                body = "Add the people you want to keep in touch with, or browse everyone you know.",
+                actionLabel = "Add people",
+                onAction = {},
+                secondaryLabel = "Browse people",
+                onSecondary = {},
             )
         }
     }

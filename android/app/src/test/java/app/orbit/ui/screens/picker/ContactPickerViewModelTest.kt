@@ -278,7 +278,7 @@ class ContactPickerViewModelTest {
         s.commitBus.events.test {
             s.vm.onCommit()
             val event = awaitItem()
-            assertEquals("Moved 2 to Inner orbit", event.message.text())
+            assertEquals("Moved 2 people to Inner orbit", event.message.text())
             assertEquals("Undo", event.actionLabel.text())
         }
 
@@ -597,7 +597,7 @@ class ContactPickerViewModelTest {
         s.commitBus.events.test {
             s.vm.onCommit()
             val event = awaitItem()
-            assertEquals("Copied 2 to Inner orbit", event.message.text())
+            assertEquals("Copied 2 people to Inner orbit", event.message.text())
             assertEquals("Undo", event.actionLabel.text())
         }
 

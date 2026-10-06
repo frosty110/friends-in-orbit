@@ -95,7 +95,9 @@ fun BrowseRow(
     val firstName = displayName.substringBefore(' ').ifBlank { displayName }
     // Resolved here: the semantics blocks below are not composable.
     val callLabel = stringResource(R.string.components_browse_row_call, firstName)
-    val openDetailsLabel = stringResource(R.string.components_browse_row_open_details)
+    // Shared with Card view's face, so TalkBack hears one phrase for one
+    // destination (voice.md glossary, one word for one idea).
+    val openDetailsLabel = stringResource(R.string.components_action_open_details)
     val dueDescription = stringResource(R.string.components_browse_row_due)
 
     Row(
@@ -156,7 +158,9 @@ fun BrowseRow(
                     style = OrbitTheme.type.h3
                 )
                 if (due && statusLabel == null) {
-                    // Quiet due dot — accent token per features/browse/README.md:34.
+                    // Quiet due dot (accent token per features/browse/README.md:34).
+                    // TalkBack hears "Worth a call now", not "Due": the app
+                    // retired deadline words with HOME-6 (voice.md).
                     Box(
                         modifier = Modifier
                             .size(8.dp)
