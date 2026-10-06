@@ -202,10 +202,19 @@ kover {
 // extra test wall-time, which is worth deterministic green.
 tasks.withType<Test>().configureEach {
     forkEvery = 1
-    // WorkManager-in-Robolectric init (ForceStopRunnable -> Room) and the
-    // DataStore singleton occasionally hang across methods even with per-class
-    // JVM forking. Retry the rare flaky failure rather than red the build; a
-    // genuinely broken test fails all attempts, so this masks nothing real.
+    // The retry covers WorkManager-in-Robolectric init (ForceStopRunnable ->
+    // Room), which can still hang a method. The other historic cause is gone:
+    // AppPrefs read one process-wide DataStore (preferencesDataStore) per
+    // class, so every method shared its actor, cache and lock and a write
+    // stranded across a method boundary blocked every later edit; since
+    // 2026-10-06 each test builds its own store on a scope it cancels
+    // (testutil/TestDataStore.kt), and the one race left is inside DataStore
+    // 1.1.x itself (a collector subscribing mid-write can miss that write;
+    // tests poll with awaitValue instead). failOnPassedAfterRetry stays false
+    // so the WorkManager flake does not red the build, and CI's "Retried
+    // tests" step lists every test that passed only on a retry, so a
+    // recurrence is visible rather than silent. A genuinely broken test
+    // fails all attempts.
     retry {
         maxRetries.set(2)
         failOnPassedAfterRetry.set(false)
@@ -291,6 +300,10 @@ dependencies {
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.composable.preview.scanner)
     testImplementation(libs.androidx.junit)
+    // Navigation graph tests (nav/OrbitNavHostTest): TestNavHostController drives
+    // OrbitNavHost with stub screens, so the back-stack promises each page view
+    // makes (ONB-23, LIST-23, LOG-05, the deep-link guard) run on every push.
+    testImplementation(libs.androidx.navigation.testing)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

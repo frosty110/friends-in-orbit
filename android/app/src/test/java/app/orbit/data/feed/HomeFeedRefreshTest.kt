@@ -1,7 +1,6 @@
 package app.orbit.data.feed
 
 import android.app.Application
-import androidx.test.core.app.ApplicationProvider
 import app.orbit.data.AppPrefs
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListType
@@ -12,19 +11,24 @@ import app.orbit.domain.FakeRuleTemplateRepository
 import app.orbit.domain.JsonProvider
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.usecase.SurfaceNextUseCase
+import app.orbit.testutil.newPrefs
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -38,9 +42,10 @@ import org.robolectric.annotation.Config
  * switches, and brief backgrounding all fire ON_START — recomputing on every
  * one would be a DoS on the user's DB.
  *
- * Robolectric supplies a real [android.content.Context] so the production
- * [AppPrefs] runs unchanged (its DataStore extension property is
- * Context-coupled). Same pattern as [app.orbit.data.AppPrefsTest].
+ * [AppPrefs] runs over a real DataStore built per test method
+ * (`tmp.newPrefs(storeScope)`, testutil/TestDataStore.kt) and cancelled in
+ * `@After`, so the TTL anchor one method writes never reaches the next. Same
+ * pattern as [app.orbit.data.AppPrefsTest].
  *
  * `recomputeDueCountForActiveCalls` on [FakeListRepository] is the assertion
  * target — tests verify the bulk recompute fires (or doesn't) per the gate's
@@ -52,16 +57,19 @@ import org.robolectric.annotation.Config
 @Config(sdk = [33], application = Application::class)
 class HomeFeedRefreshTest {
 
+    @get:Rule
+    val tmp = TemporaryFolder()
+
     private val T0: Instant = Instant.parse("2026-01-01T12:00:00Z")
 
+    private val storeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private lateinit var appPrefs: AppPrefs
     private lateinit var listRepo: FakeListRepository
     private lateinit var clock: TestClock
 
     @Before
     fun setUp() {
-        val ctx = ApplicationProvider.getApplicationContext<Application>()
-        appPrefs = AppPrefs(ctx)
+        appPrefs = tmp.newPrefs(storeScope)
         clock = TestClock(T0)
         // Three active lists + one archived. Active set drives the recompute
         // count; archived must not appear in the dispatched recompute calls.
@@ -76,15 +84,8 @@ class HomeFeedRefreshTest {
     }
 
     @After
-    fun clearDataStore() {
-        runBlocking {
-            // Reset every key this class writes so subsequent classes in the
-            // same JVM see fresh defaults.
-            appPrefs.setLastDueCountRecomputeAt(0L)
-        }
-        val ctx = ApplicationProvider.getApplicationContext<Application>()
-        val prefsDir = java.io.File(ctx.filesDir.parentFile, "datastore")
-        if (prefsDir.exists()) prefsDir.deleteRecursively()
+    fun tearDown() {
+        storeScope.cancel()
     }
 
     private fun feed(): HomeFeed = HomeFeed(

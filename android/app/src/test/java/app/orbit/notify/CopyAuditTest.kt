@@ -3,9 +3,11 @@ package app.orbit.notify
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import app.orbit.R
+import app.orbit.testutil.VoiceRules
 import app.orbit.ui.util.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -86,35 +88,25 @@ class CopyAuditTest {
             NotificationCopy.CHANNEL_LABEL_LIST_PROMPTS.text(),
             NotificationCopy.CHANNEL_DESC_LIST_PROMPTS.text(),
             // The nudge schedule editor's words, which lived on NotificationCopy
-            // until 2026-10-05 and are audited with the rest.
+            // until 2026-10-05 and are audited with the rest, and the per-list
+            // "Send nudges" switch's subtitle, which said "notification" until
+            // 2026-10-06 (the glossary's word for it is nudge).
             context.getString(R.string.lists_nudge_add_time),
             context.getString(R.string.lists_nudge_paused_badge),
             context.getString(R.string.lists_nudge_summary_no_days),
             context.getString(R.string.lists_nudge_summary_no_time),
+            context.getString(R.string.lists_send_nudges_sub),
         )
-        val forbiddenPatterns = listOf(
-            "haven't called",
-            "days since",
-            "overdue",
-            "it's been",
-            "streak",
-            "level",
-            "achievement",
-            "you missed",
-            "due",
-            "caught up",
-        )
+        // The never-say list, exclamation marks and dashes are one shared
+        // rule set (testutil/VoiceRules.kt); VoiceAuditTest holds every string
+        // resource to the same list.
         allCopyStrings.forEach { copy ->
-            forbiddenPatterns.forEach { pattern ->
-                assertFalse(
-                    "Copy '$copy' must not contain forbidden pattern '$pattern'",
-                    copy.contains(pattern, ignoreCase = true),
-                )
-            }
-            assertFalse("No exclamation marks in: '$copy'", copy.contains("!"))
-            // voice.md: no em dash in product copy. Three of the editor strings
-            // carried one until 2026-10-05.
-            assertFalse("No em dash in: '$copy'", copy.contains('\u2014'))
+            val broken = VoiceRules.violations(copy)
+            assertTrue("Copy '$copy' breaks the voice rules: $broken", broken.isEmpty())
+        }
+        // The glossary's word for the notification is nudge, in UI copy.
+        allCopyStrings.filter { it != NotificationCopy.nudgeTitle(listName = "Late night") }.forEach { copy ->
+            assertFalse("Copy '$copy' says notification; the word is nudge", copy.contains("notification", ignoreCase = true))
         }
     }
 }

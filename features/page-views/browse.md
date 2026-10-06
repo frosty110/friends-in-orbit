@@ -67,4 +67,5 @@
 - `BrowseRowMenuTest` (quick-action order); `MultiSelectOverflowMenuTest` (added this round: Select all, Pause all, Ignore all)
 - `MoveContactsUseCaseTest`, `CopyContactsUseCaseTest`, `BulkPauseUseCaseTest`, `BulkIgnoreUseCaseTest`
 - `BrowseRowGestureTest` (instrumented: tap and long-press stay separate)
+- `OrbitNavHostTest` (added this round: "Open settings" leads to Settings)
 - Gallery previews: `BrowseContentPreview`, `BrowseMultiSelectPreview`, `BrowseLoadingPreview`, `BrowseEmptyPreview`, `BrowseFilteredEmptyPreview`, `BrowseErrorPreview`, the no-matches and call-log-denied previews added this round, `ListSelectorSheetLightPreview`, `MultiSelectActionBarPreview`, with the curtain pass

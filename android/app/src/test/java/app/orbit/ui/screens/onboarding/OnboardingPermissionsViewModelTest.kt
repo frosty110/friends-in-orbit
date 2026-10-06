@@ -6,10 +6,15 @@ import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import app.orbit.data.AppPrefs
 import app.orbit.testutil.MainDispatcherRule
+import app.orbit.testutil.newPrefs
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
@@ -19,6 +24,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -41,6 +47,9 @@ import org.robolectric.annotation.Config
  *   - `ApplicationProvider.getApplicationContext()` supplies the
  *     `@ApplicationContext`-scoped [android.content.Context] directly (no Hilt
  *     in unit tests).
+ *   - A real DataStore per test method (`tmp.newPrefs(storeScope)`, testutil/
+ *     TestDataStore.kt), cancelled in `@After`, so the hasAsked flag test 3
+ *     writes never reaches another method.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -50,17 +59,28 @@ class OnboardingPermissionsViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    private val storeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val prefs: AppPrefs by lazy { tmp.newPrefs(storeScope) }
+
     private fun buildVm(): OnboardingPermissionsViewModel {
         val context: Application = ApplicationProvider.getApplicationContext()
         return OnboardingPermissionsViewModel(
             context = context,
-            // F-2 fix (2026-04-30 hot-fix-260430-hs4) — VM now combines
+            // F-2 fix (2026-04-30 hot-fix-260430-hs4): the VM combines
             // permission state with AppPrefs.hasAsked* flows so
             // isPermanentlyDenied can disambiguate first-launch from
-            // don't-ask-again. Tests use a real AppPrefs over the
-            // Robolectric DataStore (same pattern as SettingsViewModelTest).
-            appPrefs = AppPrefs(context),
+            // don't-ask-again. Tests use a real AppPrefs over this method's
+            // own DataStore (same pattern as SettingsViewModelTest).
+            appPrefs = prefs,
         )
+    }
+
+    @After
+    fun tearDown() {
+        storeScope.cancel()
     }
 
     // ============================================================================
@@ -119,8 +139,7 @@ class OnboardingPermissionsViewModelTest {
 
     @Test
     fun `onLauncherFired flips hasAsked flag in Ready state`() = runBlocking {
-        val context: Application = ApplicationProvider.getApplicationContext()
-        val vm = OnboardingPermissionsViewModel(context = context, appPrefs = AppPrefs(context))
+        val vm = buildVm()
 
         // Fresh prefs: the contacts asked flag starts false.
         val before = withTimeout(30_000L) {
@@ -140,15 +159,5 @@ class OnboardingPermissionsViewModelTest {
         // The other permission flags are untouched by a contacts-only launch.
         assertFalse(after.hasAskedCallLog, "call-log asked flag must remain false")
         assertFalse(after.hasAskedNotifications, "notifications asked flag must remain false")
-    }
-
-    @After
-    fun clearDataStore() {
-        // Test 3 writes the hasAskedContacts flag to the process-wide DataStore
-        // singleton; wipe it so neighbouring test classes see fresh defaults
-        // regardless of runner ordering (same pattern as SettingsViewModelTest).
-        val context: Application = ApplicationProvider.getApplicationContext()
-        val prefsDir = java.io.File(context.filesDir.parentFile, "datastore")
-        if (prefsDir.exists()) prefsDir.deleteRecursively()
     }
 }

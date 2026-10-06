@@ -56,6 +56,47 @@ class AppLinksTest {
         assertTrue(intent.flags and Intent.FLAG_ACTIVITY_CLEAR_TOP != 0)
     }
 
+    /** The shortcuts build on the same intent, so a warm tap reaches onNewIntent too. */
+    @Test
+    fun launch_carriesTheSharedFlags_andNoRoute() {
+        val intent = AppLinks.launch(context)
+        assertEquals(MainActivity::class.java.name, intent.component?.className)
+        assertTrue(intent.flags and Intent.FLAG_ACTIVITY_SINGLE_TOP != 0)
+        assertTrue(intent.flags and Intent.FLAG_ACTIVITY_CLEAR_TOP != 0)
+        assertNull(intent.getStringExtra(AppLinks.EXTRA_NAVIGATE_TO))
+    }
+
+    // Where a launch lands (the pure half of MainActivity.routeFrom).
+
+    @Test
+    fun landingFor_extraWinsOverAction() {
+        val intent = AppLinks.openRoute(context, Routes.card("3")).setAction(AppLinks.ACTION_SEARCH)
+        // A nudge's route is opened as is, and never waits on the onboarding read.
+        assertEquals(AppLinks.Landing.Open(Routes.card("3")), AppLinks.landingFor(intent, onboardingComplete = true))
+        assertEquals(AppLinks.Landing.Open(Routes.card("3")), AppLinks.landingFor(intent, onboardingComplete = false))
+    }
+
+    @Test
+    fun landingFor_callNext_beforeOnboarding_isNothing() {
+        val intent = AppLinks.launch(context).setAction(AppLinks.ACTION_CALL_NEXT)
+        assertEquals(AppLinks.Landing.Nothing, AppLinks.landingFor(intent, onboardingComplete = false))
+        assertEquals(AppLinks.Landing.CallNext, AppLinks.landingFor(intent, onboardingComplete = true))
+    }
+
+    @Test
+    fun landingFor_search_opensGlobalSearch() {
+        val intent = AppLinks.launch(context).setAction(AppLinks.ACTION_SEARCH)
+        assertEquals(AppLinks.Landing.Search, AppLinks.landingFor(intent, onboardingComplete = true))
+        assertEquals(AppLinks.Landing.Nothing, AppLinks.landingFor(intent, onboardingComplete = false))
+    }
+
+    @Test
+    fun landingFor_unrelatedAction_isNothing() {
+        val icon = AppLinks.launch(context).setAction(Intent.ACTION_MAIN)
+        assertEquals(AppLinks.Landing.Nothing, AppLinks.landingFor(icon, onboardingComplete = true))
+        assertEquals(AppLinks.Landing.Nothing, AppLinks.landingFor(null, onboardingComplete = true))
+    }
+
     /**
      * Android compares PendingIntents without extras. Two people on one widget
      * opening two lists must not collapse into one PendingIntent.

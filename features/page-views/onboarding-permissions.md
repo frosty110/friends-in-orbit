@@ -45,4 +45,5 @@
 ## Tests that pin it
 
 - `OnboardingPermissionsViewModelTest` (the permission states)
+- `OrbitNavHostTest` (added this round: a resumed step has no back arrow; one reached from Welcome goes back to Welcome)
 - Gallery previews: `OnboardingPermContactsScreenPreview`, `OnboardingPermCallLogScreenPreview`, `OnboardingPermScreenPreview`, `OnboardingSkipDialogPreview`, and the granted preview added this round

@@ -3,7 +3,6 @@ package app.orbit.data.keystore
 import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import java.io.File
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -35,10 +34,15 @@ import org.junit.runner.RunWith
  *      same passphrase, proving persistence survives the in-memory object and
  *      exercises the `unwrap()` (decrypt) branch rather than re-generation.
  *
- * The on-disk DataStore file (`orbit_keymat`) is wiped in [setUp] so the first
- * call in each test deterministically takes the generate-and-wrap branch,
- * independent of prior runs on the device. The Keystore key itself is left in
- * place (the provider reuses it via `getOrCreateKeystoreKey`).
+ * Nothing is wiped between tests. Until 2026-10-06 [setUp] deleted
+ * `<dataDir>/datastore/orbit_keymat.preferences_pb`, a path that never exists
+ * (`preferencesDataStore` writes under `<filesDir>/datastore/`), and even the
+ * right path would not have reset anything, because the production store is a
+ * process-wide singleton whose cache serves every later read. So the first
+ * test on a fresh install takes the generate-and-wrap branch and every later
+ * one the unwrap branch; the invariants above hold the same way on both, which
+ * is what makes them worth asserting. The Keystore key itself is left in place
+ * (the provider reuses it via `getOrCreateKeystoreKey`).
  */
 @RunWith(AndroidJUnit4::class)
 class DatabaseKeyProviderTest {
@@ -48,11 +52,6 @@ class DatabaseKeyProviderTest {
     @Before
     fun setUp() {
         context = InstrumentationRegistry.getInstrumentation().targetContext
-        // Wipe the wrapped-passphrase DataStore so each test starts from a known
-        // "no stored passphrase yet" state. preferencesDataStore persists under
-        // <filesDir>/../datastore/<name>.preferences_pb.
-        val datastoreDir = File(context.filesDir.parentFile, "datastore")
-        File(datastoreDir, "orbit_keymat.preferences_pb").delete()
     }
 
     @Test

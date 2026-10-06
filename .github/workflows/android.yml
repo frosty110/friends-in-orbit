@@ -63,6 +63,34 @@ jobs:
       - name: Unit tests + coverage
         run: ./gradlew :app:koverXmlReportDebug :app:koverHtmlReportDebug --no-daemon
 
+      # Retried tests. The test-retry plugin reruns a failed method up to twice
+      # and, with failOnPassedAfterRetry false, a pass on retry counts as a
+      # pass, so the build cannot go red for the WorkManager-in-Robolectric
+      # init flake it exists for. That must not make a flake invisible: every
+      # execution of a retried method is in the JUnit XML, so a method that
+      # appears more than once in a class report ran again after failing.
+      # This lists them (and says "none" otherwise) in the log and the job
+      # summary; a recurring name is a test to look at, not a number to ignore.
+      - name: Retried tests
+        if: always()
+        shell: python
+        run: |
+          import glob, os, xml.etree.ElementTree as ET
+          from collections import Counter
+          retried = []
+          for path in sorted(glob.glob("app/build/test-results/testDebugUnitTest/*.xml")):
+              suite = ET.parse(path).getroot()
+              runs = Counter((case.get("classname"), case.get("name")) for case in suite.iter("testcase"))
+              retried += [f"{cls}.{name} ({n} executions)" for (cls, name), n in sorted(runs.items()) if n > 1]
+          lines = ["## Retried tests", ""] + (retried or ["none"])
+          print("\n".join(lines))
+          for line in retried:
+              print(f"::warning::test passed only on retry: {line}")
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as out:
+                  out.write("\n".join(lines) + "\n")
+
       - name: Upload coverage report
         uses: actions/upload-artifact@v6
         if: always()
@@ -119,6 +147,55 @@ jobs:
           name: orbit-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  # The preview gallery's audits as a gate (UX rubric G2 and G6). Every
+  # @Preview is rendered on the JVM in light and dark and at font scales 0.85
+  # to 2.0, and audited as it goes: -Porbit.a11y.strict fails a preview on an
+  # enabled control without a TalkBack label or under 48dp (rules.md Design 3
+  # and 7); -Porbit.screenshots.curtain renders everything with the privacy
+  # curtain down and fails on a fixture name that still reaches text, a field
+  # or a label (PRIV-03). Its own job because -Pscreenshots replaces the unit
+  # test filter (app/build.gradle.kts), and because several hundred previews
+  # in every mode take a while on a hosted runner. It records, it does not
+  # compare: approving goldens is the rubric's remaining item 4.1.
+  screenshots:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platforms;android-35 build-tools;35.0.0
+
+      - name: Preview gallery, strict a11y and curtain audits
+        run: ./gradlew :app:testDebugUnitTest -Pscreenshots -Porbit.a11y.strict -Porbit.screenshots.curtain --no-daemon
+
+      # The two reports are the evidence either way: "None" on a green run,
+      # the offending previews on a red one.
+      - name: Upload audit reports
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: orbit-gallery-audits
+          path: |
+            android/app/build/screenshots/a11y-report.md
+            android/app/build/screenshots/curtain-report.md
+          if-no-files-found: warn
 
   # Instrumented (androidTest) tests on an emulator, reporting their on-device
   # coverage via AGP's native JaCoCo report (Kover does not consume AGP

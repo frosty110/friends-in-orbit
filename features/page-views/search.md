@@ -49,4 +49,5 @@
 
 - `GlobalSearchViewModelTest` (ranking, states, the call-log-denied flag added this round)
 - `ContactSearchTest` (the matcher: phone digits, folded accents)
+- `OrbitNavHostTest` (added this round: "Open settings" leads to Settings)
 - Gallery previews: `GlobalSearchContentPreview`, `GlobalSearchResultsPreview`, `GlobalSearchLoadingPreview`, `GlobalSearchNoMatchesPreview`, `GlobalSearchErrorPreview`, with the curtain pass

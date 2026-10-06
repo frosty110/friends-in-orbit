@@ -1,7 +1,6 @@
 package app.orbit
 
 import android.app.Application
-import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import app.orbit.data.AppPrefs
 import app.orbit.domain.FakeCallEventRepository
@@ -11,13 +10,19 @@ import app.orbit.domain.clock.TestClock
 import app.orbit.domain.contactFixture
 import app.orbit.nav.Routes
 import app.orbit.testutil.MainDispatcherRule
+import app.orbit.testutil.awaitValue
+import app.orbit.testutil.newPrefs
 import app.orbit.ui.screens.onboarding.OnboardingStep
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -25,6 +30,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -34,11 +40,12 @@ import org.robolectric.annotation.Config
  * the NOTE-02 post-call prompt, and the auto privacy curtain.
  *
  * Fixture pattern (mirrors OnboardingDoneViewModelTest / SettingsViewModelTest):
- *   - Robolectric + real DataStore via `ApplicationProvider.getApplicationContext()`.
+ *   - Robolectric for the Context; a real DataStore per test method, built by
+ *     `tmp.newPrefs(storeScope)` (testutil/TestDataStore.kt) on a scope the
+ *     `@After` cancels, so no state and no stranded write reaches the next method.
  *   - `@Config(application = Application::class)` bypasses `OrbitApp.onCreate`.
  *   - `MainDispatcherRule` (UnconfinedTestDispatcher) so the VM's init/launch
  *     bodies run eagerly under `runBlocking`.
- *   - `@After` wipes the persisted DataStore so neighbouring classes see defaults.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -48,12 +55,15 @@ class AppViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
+    @get:Rule
+    val tmp = TemporaryFolder()
+
     private val now: Instant = Instant.parse("2026-01-01T12:00:00Z")
 
-    private val context: android.content.Context get() =
-        ApplicationProvider.getApplicationContext()
+    private val storeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val prefs: AppPrefs by lazy { tmp.newPrefs(storeScope) }
 
-    private fun buildAppPrefs(): AppPrefs = AppPrefs(context)
+    private fun buildAppPrefs(): AppPrefs = prefs
 
     private fun buildVm(
         prefs: AppPrefs,
@@ -62,14 +72,8 @@ class AppViewModelTest {
     ) = AppViewModel(prefs, callEventRepo, contactRepo, TestClock(now))
 
     @After
-    fun clearDataStore() {
-        runBlocking {
-            val prefs = buildAppPrefs()
-            prefs.setOnboardingComplete(false)
-            prefs.setLastOnboardingStep(null)
-        }
-        val prefsDir = java.io.File(context.filesDir.parentFile, "datastore")
-        if (prefsDir.exists()) prefsDir.deleteRecursively()
+    fun tearDown() {
+        storeScope.cancel()
     }
 
     private suspend fun startDestinationOf(prefs: AppPrefs): String? =
@@ -81,7 +85,7 @@ class AppViewModelTest {
     fun `start destination is Home when onboarding is complete`() = runBlocking {
         val prefs = buildAppPrefs()
         prefs.setOnboardingComplete(true)
-        withTimeout(30_000L) { prefs.isOnboardingComplete.filter { it }.first() }
+        awaitValue(true) { prefs.isOnboardingComplete.first() }
 
         assertEquals(Routes.Home, startDestinationOf(prefs))
     }
@@ -91,7 +95,7 @@ class AppViewModelTest {
         val prefs = buildAppPrefs()
         prefs.setOnboardingComplete(false)
         prefs.setLastOnboardingStep(OnboardingStep.PermCallLog.name)
-        withTimeout(30_000L) { prefs.lastOnboardingStep.filter { it != null }.first() }
+        awaitValue(OnboardingStep.PermCallLog.name) { prefs.lastOnboardingStep.first() }
 
         assertEquals(Routes.OnboardPermCallLog, startDestinationOf(prefs))
     }
@@ -101,7 +105,7 @@ class AppViewModelTest {
         val prefs = buildAppPrefs()
         prefs.setOnboardingComplete(false)
         prefs.setLastOnboardingStep(OnboardingStep.FirstList.name)
-        withTimeout(30_000L) { prefs.lastOnboardingStep.filter { it != null }.first() }
+        awaitValue(OnboardingStep.FirstList.name) { prefs.lastOnboardingStep.first() }
 
         assertEquals(Routes.OnboardSync, startDestinationOf(prefs))
     }

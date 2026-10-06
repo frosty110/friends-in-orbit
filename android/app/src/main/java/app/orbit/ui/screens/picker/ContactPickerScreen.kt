@@ -117,16 +117,10 @@ import kotlinx.coroutines.launch
  * whatever screen the pop lands on.
  */
 @OptIn(ExperimentalMaterial3Api::class)
-@Suppress("UNUSED_PARAMETER")
 @Composable
 fun ContactPickerScreen(
     onBack: () -> Unit,
     onCommit: () -> Unit,
-    // Unused since 2026-10-06 and slated for removal once OrbitNavHost drops
-    // the argument: onboarding's first-list step owns Skip and its gating, so
-    // the picker draws no "Skip for now" footer. (The one call site always
-    // passed null, so the footer never rendered anyway.)
-    onSkip: (() -> Unit)? = null,
     vm: ContactPickerViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()

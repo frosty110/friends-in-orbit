@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Enforce the documentation and code conventions in features/_foundations/rules.md.
 
-Four checks. Three are hard gates that pass today and must keep passing; the
-fourth is a ratchet over pre-existing debt, so the build goes red only if the
+Six checks. Five are hard gates that pass today and must keep passing; the
+sixth is a ratchet over pre-existing debt, so the build goes red only if the
 debt grows.
 
   A. rules.md citations resolve   (hard)  — `rules.md §Design 3` names a real rule
   B. PII-free layers              (hard)  — no logging in ui/domain/data/nav
   C. Markdown links resolve       (hard)  — no dangling relative doc links
+  E. Page views follow the schema (hard)  : the header fields and section headings
+                                            PAGE_VIEWS.md declares, once each, in order
+  F. Green text reads positiveText (hard) : `colors.positive` is never passed as a
+                                            `color =` outside ui/theme/ (rules.md Design 4)
   D. Undocumented requirement IDs (ratchet) — count may fall, never rise
 
 Usage:
@@ -28,6 +32,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RULES_DOC = ROOT / "features" / "_foundations" / "rules.md"
+PAGE_VIEWS_INDEX = ROOT / "features" / "PAGE_VIEWS.md"
+PAGE_VIEWS_DIR = ROOT / "features" / "page-views"
 BASELINE = Path(__file__).resolve().parent / "conventions-baseline.json"
 
 KOTLIN_ROOTS = [ROOT / "android" / "app" / "src"]
@@ -55,6 +61,12 @@ REQUIREMENT_ID = re.compile(r"\b([A-Z][A-Z0-9]{2,9})-(\d{2})\b")
 
 # Relative markdown links, minus anchors/external schemes.
 MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+
+# rules.md Design 4: green status text is `positiveText`; `positive` is a fill.
+# A `color =` argument is how Text, Icon and the like take their colour, so
+# `colors.positive` handed to one outside the theme layer is the smell. (A
+# `positive` background on a badge is fine and is not matched.)
+POSITIVE_AS_TEXT_COLOUR = re.compile(r"\bcolor\s*=\s*(?:OrbitTheme\.)?colors\.positive\b(?!Text)")
 
 
 def kotlin_files() -> list[Path]:
@@ -153,6 +165,64 @@ def check_doc_links() -> list[str]:
     return failures
 
 
+# ── E. Page views follow the schema ────────────────────────────────────────────
+
+def page_view_schema() -> tuple[list[str], list[str]]:
+    """The header fields and `##` headings from PAGE_VIEWS.md's fenced schema block.
+
+    The schema is read from the doc rather than repeated here, so there is one
+    place to change it, and a page view is held to exactly what the index says.
+    """
+    text = PAGE_VIEWS_INDEX.read_text(encoding="utf-8")
+    marker = text.find("## Page view schema")
+    block = re.search(r"```\n(.*?)```", text[marker:], re.DOTALL) if marker != -1 else None
+    if not block:
+        return [], []
+    fields = re.findall(r"^\*\*([^*]+):\*\*", block.group(1), re.MULTILINE)
+    headings = re.findall(r"^## (.+)$", block.group(1), re.MULTILINE)
+    return fields, headings
+
+
+def check_page_views() -> list[str]:
+    fields, headings = page_view_schema()
+    if not fields or not headings:
+        return [f"{rel(PAGE_VIEWS_INDEX)} has no `## Page view schema` block to check page views against"]
+
+    failures = []
+    for path in sorted(PAGE_VIEWS_DIR.glob("*.md")):
+        body = path.read_text(encoding="utf-8")
+        for field in fields:
+            if len(re.findall(rf"^\*\*{re.escape(field)}:\*\*", body, re.MULTILINE)) != 1:
+                failures.append(f"{rel(path)}: header field `**{field}:**` must appear exactly once")
+        found = re.findall(r"^## (.+)$", body, re.MULTILINE)
+        if found != headings:
+            failures.append(
+                f"{rel(path)}: `##` headings are {found}; the schema is {headings} "
+                f"(each once, in this order; see {rel(PAGE_VIEWS_INDEX)})"
+            )
+    return failures
+
+
+# ── F. Green text reads positiveText ───────────────────────────────────────────
+
+def check_positive_text_colour() -> list[str]:
+    failures = []
+    base = ROOT / "android" / "app" / "src" / "main" / "java" / "app" / "orbit"
+    theme = base / "ui" / "theme"
+    for path in sorted(base.rglob("*.kt")):
+        if theme in path.parents:
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            if line.strip().startswith(("*", "//", "/*")):
+                continue
+            if POSITIVE_AS_TEXT_COLOUR.search(line):
+                failures.append(
+                    f"{rel(path)}:{lineno}: colors.positive as a colour argument; green text reads "
+                    f"colors.positiveText (rules.md Design 4): {line.strip()[:70]}"
+                )
+    return failures
+
+
 # ── D. Undocumented requirement IDs (ratchet) ──────────────────────────────────
 
 def collect_requirement_ids() -> tuple[set[str], set[str]]:
@@ -233,6 +303,8 @@ def main() -> int:
         ("rules.md citations resolve", check_citations()),
         ("PII-free layers (Code 4)", check_pii_layers()),
         ("markdown links resolve", check_doc_links()),
+        ("page views follow the schema", check_page_views()),
+        ("green text reads positiveText (Design 4)", check_positive_text_colour()),
     ]
 
     failed = False
