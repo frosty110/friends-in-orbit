@@ -68,7 +68,7 @@ fun OrbitAppBar(
 }
 
 /**
- * Text action for the app bar's trailing slot — "Done", "Save", "Skip".
+ * Text action for the app bar's trailing slot: "Done" on List settings.
  *
  * Screens that save on every change still need a way out that reads as
  * finished: the back arrow works, but it says "go back", not "I'm done here"

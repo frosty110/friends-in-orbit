@@ -88,10 +88,13 @@ class HomeTileMenuTest {
         assertEquals("Hides Inner orbit from home. You can restore it.", archive.supporting)
     }
 
-    // PRIV-03: the caller passes the name as shown, so the curtain's "List"
-    // reaches the supporting line and the real name does not.
+    // The builder interpolates whatever name it is given. Whether Home hands
+    // it the curtain's "List" rather than the real name (PRIV-03) is the
+    // screen's doing, pinned by HomeContentTest
+    // `under_the_curtain_the_menu_names_the_list_as_List`; until 2026-10-06
+    // this case claimed to cover the curtain while never touching it.
     @Test
-    fun `under the curtain the supporting line carries the masked name`() {
+    fun `the supporting line names the list it is given`() {
         val archive = actions(listName = "List").first { it.label == "Archive" }
         assertEquals("Hides List from home. You can restore it.", archive.supporting)
     }

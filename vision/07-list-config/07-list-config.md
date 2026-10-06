@@ -6,22 +6,22 @@
 
 ---
 
-## Today (as of 2026-10-05)
+## Today (as of 2026-10-06)
 
 <img src="./actual-list-config-cadence.png" width="300" alt="List settings for Inner orbit, top: a back arrow, the list name and Done in the accent; a Name field with a pencil; Rhythm with three radio rows, Keep in touch (selected), Late night, Energize, each with a one-line description; How often with Aim for every 2 days, a slider and ticks 1 day, 2 weeks, 1 month, 2 months; Active hours with an Always active switch; the start of Nudges." />
 <img src="./actual-list-config-schedule.png" width="300" alt="List settings, nudge schedule: seven tinted day circles S M T W T F S, a 10am time row with a remove control, an Add time row, and the summary Every day at 10am." />
 <img src="./actual-list-config-members.png" width="300" alt="List settings, members preview: 3 people, Alex Rivera, Sam Patel and Jordan Lee, each with an initial circle and a remove control, then Add people." />
 
-*JVM gallery render (`PreviewGalleryTest`, Robolectric, light, 411dp, font scale 1.0) at `783a964`, 2026-10-05, not a device capture (`ListConfigScreen.ListConfigContentPreview`, cropped in three).*
+*JVM gallery render (`PreviewGalleryTest`, Robolectric, light, 411dp, font scale 1.0) at `783a964`, 2026-10-05, not a device capture (`ListConfigScreen.ListConfigContentPreview`, cropped in three). The 2026-10-06 lists package reworded three lines after this render ("Aim for every 2 days" as one sentence, "A gentle nudge", "People" over the members); the bullets describe the merged build, and the [List settings page view](../../features/page-views/list-config.md) is canonical.*
 
 - App bar: the list's name and **Done**, the screen's one accent (LIST-21). Changes save as you go; Done only closes.
 - **Name**: an inline field with a pencil.
 - **Rhythm**: Keep in touch / Late night / Energize as radio rows in ink, each with a plain description.
-- **How often**: "Aim for every · 2 days" on a slider whose ticks read 1 day, 2 weeks, 1 month, 2 months, and which tells TalkBack "Every 2 days". The scale is linear, so the 1 to 7 day end still sits in the first tenth of the track (see `CONFIG-5`).
+- **How often**: "Aim for every 2 days" (one sentence, the value its argument) on a slider whose ticks read 1 day, 2 weeks, 1 month, 2 months, and which tells TalkBack "Every 2 days". The scale is linear, so the 1 to 7 day end still sits in the first tenth of the track (see `CONFIG-5`).
 - **Active hours**: an "Always active" switch, else from/to pickers and a day bar whose ticks follow the phone's 12 or 24 hour setting.
-- **Nudges**: a **Send nudges** switch ("A gentle notification when someone here is worth a call."), then **When to nudge**: seven day chips (tinted when selected, ink, never the accent), one or more times with Change time and remove, **Add time**, and a one-line summary ("Every day at 10am", "No days selected: nudges off"). A "Nudges paused" badge shows while nudges are off.
+- **Nudges**: a **Send nudges** switch ("A gentle nudge when someone here is worth a call."), then **When to nudge**: seven day chips (tinted when selected, ink, never the accent), one or more times with Change time and remove, **Add time**, and a one-line summary ("Every day at 10am", "No days selected: nudges off"). A "Nudges paused" badge shows while nudges are off.
 - For a smart list, a **Smart rule** editor and **Make this a regular list** with a confirmation that names how many people stay.
-- **Members preview** with the count, remove (Undo) and **Add people**.
+- **People** (it was "Members preview": the section adds and removes people) with the count, remove (Undo) and **Add people**.
 - "Orbit couldn't load this list" with Try again if reading fails (LIST-22).
 
 Powerful and well built, and far calmer than in June (one accent, plain words). It still asks the user to assemble the rhythm in their head from several controls.

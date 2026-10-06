@@ -36,7 +36,6 @@ class SnackbarCopyTest {
     fun `one person`() {
         assertEquals("Ignored Alex Chen", UiText.res(R.string.components_snackbar_ignored, "Alex Chen").text())
         assertEquals("Unignored Alex Chen", UiText.res(R.string.components_snackbar_unignored, "Alex Chen").text())
-        assertEquals("Restored Alex Chen", UiText.res(R.string.components_snackbar_restored, "Alex Chen").text())
         assertEquals("Unpaused Kai", UiText.res(R.string.components_snackbar_unpaused, "Kai").text())
         assertEquals("Archived Alex", UiText.res(R.string.contact_snackbar_archived, "Alex").text())
         assertEquals("Re-linked to Mum", UiText.res(R.string.picker_snackbar_relinked, "Mum").text())

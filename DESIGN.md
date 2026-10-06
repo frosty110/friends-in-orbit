@@ -75,6 +75,11 @@ Material You's dynamic schemes repaint every surface. Orbit's calm comes from it
 
 Reach for these before building a one-off; each exists because one-offs drifted. The table is the inventory: a component in `ui/components` that is not here is not yet a rule-bearer, and a screen-local layout that does the job of one of these is the drift this table exists to stop.
 
+Two requirements sit above the table because every screen meets them, and they are what lets the preview gallery audit the components below in place (defined here on 2026-10-06; seven preview comments cited them and no spec defined them):
+
+- **THEME-04: Every screen has a stateless `*Content` composable.** It takes the screen's UiState and its callbacks and nothing else, so a preview renders it without a ViewModel, a Hilt graph or a database; the `*Screen` composable only resolves the ViewModel, collects the state and hands over.
+- **THEME-05: One preview per state.** Loading, Ready, empty, Error, NotFound and each sheet or dialog get their own `@Preview` over the `*Content` composable, so `PreviewGalleryTest`'s accessibility and curtain audits see every state a user can reach, not only the one the fixture happens to show.
+
 | Component | Use it for | The rule it carries |
 |---|---|---|
 | `Avatar(name, size, photoUri)` | Every person, everywhere | Photo with initials fallback, always a circle, hidden from TalkBack (the name is beside it), initials sized in dp so they fit at 200% |
@@ -97,7 +102,7 @@ Reach for these before building a one-off; each exists because one-offs drifted.
 | `PostCallBanner` | Right after a call: "You just called Sam", with "Add a note" | Stateless, the screen owns its visibility; under the curtain the heading is the generic one |
 | `ContactStatsPanel` | A person's stats on Contact detail | The glossary's labels only ("Last call", "Total calls", "Average length", "Longest gap", "Usually"); a stat with nothing to say says so in words ("Not enough calls yet", "Never called"), never a dash |
 | `PhIcon` | Every icon | Phosphor Regular only, from the generated VectorDrawables in `res/drawable/ph_*.xml`; decorative, the control that owns it carries the label (Design 7); an unknown name fails loudly instead of drawing a blank |
-| `OrbitAppBarTextAction` | "Done", "Skip" in the app bar's trailing slot | A 48dp `Role.Button` in the accent; Done exits a screen that has already saved on every change, it never saves |
+| `OrbitAppBarTextAction` | Done in the app bar's trailing slot (List settings) | A 48dp `Role.Button` in the accent; Done exits a screen that has already saved on every change, it never saves |
 | `SectionLabel` | The small label over a group | A heading for TalkBack navigation |
 | `InfoTip` | "What does this mean?" | Tappable (not long-press only), 48dp, Phosphor "info" |
 | `OrbitMark` | Brand moments | Drawn from tokens, settles once, static with animations off |

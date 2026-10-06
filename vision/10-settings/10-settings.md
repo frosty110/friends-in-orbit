@@ -6,21 +6,21 @@
 
 ---
 
-## Today (as of 2026-10-05)
+## Today (as of 2026-10-06)
 
 <img src="./actual-settings.png" width="300" alt="Settings, top: a back arrow and the title; Appearance with Theme, Pick a color that feels like you, six swatches labelled Warm (selected), Cool, Forest, Plum, Mono and Wallpaper, a Light & dark segmented choice (System, Light, Dark) and an Accent slider reading Using the Warm accent; Permissions with Contacts, Call log and Notifications each Not allowed with an Allow action; the start of the Contacts section, Never synced., Sync now." />
 
-*JVM gallery render (`PreviewGalleryTest`, Robolectric, light, 411dp, font scale 1.0) at `783a964`, 2026-10-05, not a device capture (`SettingsScreen.SettingsContentPreview`, top of the scroll).*
+*JVM gallery render (`PreviewGalleryTest`, Robolectric, light, 411dp, font scale 1.0) at `783a964`, 2026-10-05, not a device capture (`SettingsScreen.SettingsContentPreview`, top of the scroll). The 2026-10-06 settings package regrouped the page and reworded three lines after this render (a People group; "Open phone settings", "Export your data", "No one ignored"); the bullets describe the merged build, and the [Settings page view](../../features/page-views/settings.md) is canonical.*
 
-Six sections, in this order:
+Seven groups, in this order:
 
 - **Appearance**: **Theme** (Warm, Cool, Forest, Plum, Mono, and Wallpaper, which takes the phone's wallpaper hue through the same contrast-safe generator), **Light & dark** (System / Light / Dark) and an **Accent** dial ("Using the Warm accent", or a custom hue that can never fail contrast). Nothing draws until the saved values have loaded (SET-09).
-- **Permissions**: Contacts, Call log, Notifications, each **Allowed**, **Not allowed** with an Allow action, or "Off in your phone's settings" with Open Android Settings.
+- **Permissions**: Contacts, Call log, Notifications, each **Allowed**, **Not allowed** with an Allow action, or "Off in your phone's settings" with **Open phone settings** (the glossary's name for Android's page for Orbit).
 - **Contacts**: "Last synced 5 minutes ago" or "Never synced." and **Sync now**.
-- **Call history**: last synced and Sync now; **Import range** (1 month / 3 months / 6 months / 1 year); **Call history** (opens the log); **Groups when adding people** (where Commonly called, Rarely called, Recently added and Long gap begin; SET-10. It said "Picker thresholds · Edit chip-match thresholds" until 2026-10-05).
-- **Data**: Export my data (encrypted JSON, password protected), Import backup (password, then a confirmation that counts what it replaces), Reset Orbit (with confirmation).
+- **Call history**: last synced and Sync now; **Import range** (1 month / 3 months / 6 months / 1 year); **Call history** (opens the log).
+- **People**: **Groups when adding people** (where Commonly called, Rarely called, Recently added and Long gap begin; SET-10. It said "Picker thresholds · Edit chip-match thresholds" until 2026-10-05, and sat under Call history until 2026-10-06) and **Ignored**: "3 ignored" (or "No one ignored") opens a screen listing everyone hidden, each with **Unignore** and Undo, and the reassurance that history is kept.
+- **Data**: Export your data (an encrypted file, protected by a password), Import backup (password, then a confirmation that counts what it replaces), Reset Orbit (with confirmation).
 - **About**: a plain privacy line, "Everything stays on your phone: no cloud, no tracking." (SETTINGS-1, this round), the version, Send feedback, Privacy policy, Source code, Open source licenses.
-- **Ignored** sits in the Call history group: "3 ignored" (or "No ignored contacts") opens a screen listing everyone hidden, each with **Unignore** and Undo, and the reassurance that history is kept.
 - "Orbit couldn't load your settings" with Try again if reading fails.
 
 Clean, honest and well scoped. In June the app's biggest selling point, privacy, was implied here but never stated; it now is.

@@ -300,8 +300,9 @@ class OrbitNavHostTest {
     // Routes from outside (D-17, T-10-21)
 
     @Test
-    fun anUnknownDeepLink_leavesTheStackAlone_andIsConsumed() {
+    fun anUnknownDeepLink_leavesTheStackAlone_isConsumed_andIsReported() {
         start(Routes.Home)
+        assertEquals(0, screens.unknownRoutesReported, "nothing to report before a route arrives")
 
         act { deepLink = "nope/1" }
 
@@ -309,6 +310,8 @@ class OrbitNavHostTest {
         assertEquals(1, depth)
         assertEquals(1, consumed)
         assertNull(deepLink)
+        // rules.md Code 3: the route is ignored for navigation, never silently.
+        assertEquals(1, screens.unknownRoutesReported, "the user is told it could not be opened")
     }
 
     @Test
@@ -336,6 +339,7 @@ class OrbitNavHostTest {
         assertEquals("4", arg("listId"))
         assertEquals("3", nav.previousBackStackEntry?.arguments?.getString("listId"))
         assertEquals(1, consumed)
+        assertEquals(0, screens.unknownRoutesReported, "a route the graph opened is not reported")
     }
 
     @Test
@@ -384,6 +388,9 @@ private class StubScreens : OrbitNavScreens {
     lateinit var listsOnOpenList: (String) -> Unit
     lateinit var listsOnOpenListSettings: (String) -> Unit
     lateinit var callLogOnOpenSettings: () -> Unit
+
+    /** The count the host last composed [UnknownRouteNotice] with; -1 until it has. */
+    var unknownRoutesReported = -1
 
     @Composable
     private fun Stub(route: String) {
@@ -557,4 +564,9 @@ private class StubScreens : OrbitNavScreens {
 
     @Composable
     override fun CommitSnackbarHost(modifier: Modifier) = Unit
+
+    @Composable
+    override fun UnknownRouteNotice(occurrences: Int) {
+        unknownRoutesReported = occurrences
+    }
 }

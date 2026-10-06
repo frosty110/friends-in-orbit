@@ -7,8 +7,11 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavBackStackEntry
@@ -57,11 +60,15 @@ import kotlinx.coroutines.launch
  *   fully-formed path ("card/{listId}", "search") built from [Routes].
  *
  *   Security: nav.navigate only resolves against declared Routes. It throws for an
- *   unknown or malformed string, so the effect below ignores that case (T-10-21).
- *   Orbit's own PendingIntents are FLAG_IMMUTABLE (T-10-20), but MainActivity is
- *   exported, so another app can still start it with any extra; this guard is
- *   what makes that harmless. (Until 2026-10-05 this said "a no-op", which was
- *   wrong: an unknown route crashed the app.)
+ *   unknown or malformed string; the effect below catches that, leaves the stack
+ *   where it is and tells the user "Couldn't open that." through
+ *   [OrbitNavScreens.UnknownRouteNotice] (T-10-21; rules.md Code 3). Orbit's own
+ *   PendingIntents are FLAG_IMMUTABLE (T-10-20), but MainActivity is exported, so
+ *   another app can still start it with any extra; the catch is what makes that
+ *   harmless, and the notice is what keeps a broken route of Orbit's own (a widget,
+ *   a nudge, a shortcut) from being an invisible no-op. (Until 2026-10-05 this said
+ *   "a no-op", which was wrong: an unknown route crashed the app. Until 2026-10-06
+ *   the catch was silent.)
  * @param onNavigateToConsumed Callback invoked after navigation so the Activity
  *   clears the navigateTo state and prevents re-navigation on recomposition.
  * @param screens The screen for each route. Defaults to the app's own.
@@ -81,6 +88,12 @@ fun OrbitNavHost(
     // arrives (cold start or warm onNewIntent). After navigation, call
     // onNavigateToConsumed so the Activity clears the value, which prevents
     // re-navigation on config changes or recompositions.
+    // Routes the graph refused, counted so the notice below can report each
+    // one. `remember`, not rememberSaveable: MainActivity is recreated on
+    // rotation, and a restored count would make the notice's keyed effect
+    // announce the same failure again, while the route itself was consumed.
+    var unknownRoutes by remember { mutableIntStateOf(0) }
+
     LaunchedEffect(navigateTo) {
         if (!navigateTo.isNullOrBlank()) {
             // A route for the screen already on top is left alone: a nudge for
@@ -92,15 +105,20 @@ fun OrbitNavHost(
             // from SavedStateHandle, so reusing the entry would keep showing
             // the old list.
             if (nav.currentBackStackEntry?.shownRoute() != navigateTo) {
-                // MainActivity is exported, so any app can hand it a route.
+                // MainActivity is exported, so any app can hand it a route, and
+                // Orbit's own widgets, nudges and shortcuts hand it theirs.
                 // Navigation throws IllegalArgumentException for a route outside
-                // the graph; an unknown route from outside is ignored (the app
-                // simply opens where it is) rather than crashing. Only that
-                // exception: anything else is a real bug and must surface.
+                // the graph; its matcher is the one source of truth for what the
+                // graph accepts, so there is no second check here. The catch
+                // keeps the app where it is instead of crashing, and counts the
+                // miss so UnknownRouteNotice tells the user (rules.md Code 3: a
+                // dispatch that short-circuits surfaces, it never exits
+                // quietly). Only that exception: anything else is a real bug
+                // and must surface.
                 try {
                     nav.navigate(navigateTo)
                 } catch (_: IllegalArgumentException) {
-                    // Not a destination in this graph: nothing to open.
+                    unknownRoutes++
                 }
             }
             onNavigateToConsumed()
@@ -110,8 +128,9 @@ fun OrbitNavHost(
     // Picker-commit lifecycle: the pickers pop on commit, so their
     // result snackbar ("Added N · Undo" / "Couldn't save that") must outlive
     // the picker's own composition. The host collects the app-lifetime
-    // PickerCommitBus and renders above whatever screen the pop lands on.
-    // The graph itself is split into [OrbitNavGraph] so the overlay Box
+    // PickerCommitBus and renders above whatever screen the pop lands on;
+    // the unknown-route notice publishes "Couldn't open that." on the same
+    // bus. The graph itself is split into [OrbitNavGraph] so the overlay Box
     // doesn't re-indent every route.
     Box(modifier = Modifier.fillMaxSize()) {
         OrbitNavGraph(
@@ -127,6 +146,7 @@ fun OrbitNavHost(
                 .navigationBarsPadding()
                 .imePadding()
         )
+        screens.UnknownRouteNotice(occurrences = unknownRoutes)
     }
 }
 
