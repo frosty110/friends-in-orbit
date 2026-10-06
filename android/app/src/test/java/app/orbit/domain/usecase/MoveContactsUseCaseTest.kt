@@ -5,6 +5,7 @@ import app.orbit.data.dao.TestListDaoStub
 import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListMembershipEntity
+import app.orbit.data.entity.ListType
 import app.orbit.domain.FakeListRepository
 import app.orbit.domain.clock.Clock
 import java.time.Instant
@@ -25,7 +26,8 @@ import org.junit.Test
  * The use case short-circuits to `Result(inverse = {}, count = 0)` when
  *   - `contactIds` is empty, or
  *   - `fromListId == toListId`, or
- *   - the destination list is missing or archived.
+ *   - the destination list is missing or archived, or
+ *   - the destination is a smart list (browse-1: the sync owns its rows).
  */
 class MoveContactsUseCaseTest {
 
@@ -155,6 +157,30 @@ class MoveContactsUseCaseTest {
         val result = useCase(10L, 20L, listOf(1L))
 
         assertTrue(dao.moveCalls.isEmpty())
+        assertEquals(0, result.count)
+    }
+
+    @Test
+    fun smart_destination_short_circuits_no_dao_call() = runTest {
+        // Regression (browse-1): a smart list's rows are written by
+        // SmartListMembershipSync. Moving people into one took them off the
+        // source list and reported "Moved 3 to Late night" with Undo; the
+        // sync's next reconcile then removed them from the smart list too, so
+        // after the Undo window they were on neither. A count of 0 makes the
+        // caller say "Couldn't save your change" instead.
+        val dao = RecordingListMembershipDao()
+        dao.seed(ListMembershipEntity(contactId = 1L, listId = 10L, addedAt = pre))
+        val listDaoSmartTarget = TestListDaoStub(
+            listOf(
+                ListEntity(id = 10L, name = "Source", sortOrder = 0),
+                ListEntity(id = 20L, name = "Late night", sortOrder = 1, type = ListType.SMART),
+            ),
+        )
+        val useCase = MoveContactsUseCase(passThruTx, dao, listDaoSmartTarget, FakeListRepository(), fixedClock)
+
+        val result = useCase(10L, 20L, listOf(1L))
+
+        assertTrue(dao.moveCalls.isEmpty(), "nothing leaves the source list")
         assertEquals(0, result.count)
     }
 }

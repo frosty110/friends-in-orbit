@@ -5,6 +5,7 @@ import app.orbit.data.dao.TestListDaoStub
 import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListMembershipEntity
+import app.orbit.data.entity.ListType
 import app.orbit.domain.FakeListRepository
 import app.orbit.domain.clock.Clock
 import java.time.Instant
@@ -24,7 +25,8 @@ import org.junit.Test
  *
  * The use case short-circuits to `Result(inverse = {}, count = 0)` when
  *   - `contactIds` is empty, or
- *   - the destination list is missing or archived.
+ *   - the destination list is missing or archived, or
+ *   - the destination is a smart list (browse-1: the sync owns its rows).
  */
 class CopyContactsUseCaseTest {
 
@@ -166,6 +168,23 @@ class CopyContactsUseCaseTest {
         val dao = RecordingListMembershipDao()
         val listDaoEmpty = TestListDaoStub(emptyList())
         val useCase = CopyContactsUseCase(passThruTx, dao, listDaoEmpty, FakeListRepository(), fixedClock)
+
+        val result = useCase(20L, listOf(1L))
+
+        assertTrue(dao.insertCalls.isEmpty())
+        assertEquals(0, result.count)
+    }
+
+    @Test
+    fun smart_destination_short_circuits_no_dao_call() = runTest {
+        // Regression (browse-1): a copy into a smart list is a write the
+        // sync's next reconcile quietly reverts. The use case refuses it so the
+        // caller says "Couldn't save your change" instead of "Copied 1 to ...".
+        val dao = RecordingListMembershipDao()
+        val listDaoSmartTarget = TestListDaoStub(
+            listOf(ListEntity(id = 20L, name = "Late night", sortOrder = 0, type = ListType.SMART)),
+        )
+        val useCase = CopyContactsUseCase(passThruTx, dao, listDaoSmartTarget, FakeListRepository(), fixedClock)
 
         val result = useCase(20L, listOf(1L))
 
