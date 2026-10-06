@@ -22,13 +22,14 @@
 
 ## Actions and menus
 
-- "Allow nudges": the phone's notification permission dialog; the card then reads on or declined
+- "Allow nudges": the phone's notification permission dialog; the card then reads on or declined. If Orbit cannot record that it asked, "Couldn't save your change" shows over the content
 - "Open Orbit": opens Home
 
 ## States
 
 - Saving: "Open Orbit" is disabled until the completion is written, so a relaunch never lands back in onboarding half-done
 - The nudge card: asked, on, or declined
+- Save failed: "Couldn't save your change", over the content and above "Open Orbit", when the asked-once flag could not be written; the card still shows the answer
 - Privacy curtain: nothing personal is on this screen
 
 ## Leads to
@@ -37,7 +38,7 @@
 
 ## Tests that pin it
 
-- `OnboardingDoneViewModelTest` (the single completion write; the nudge flag)
-- `OnboardingDoneScreenTest` (added this round: with notifications denied the ask shows, and Open Orbit waits for the save)
+- `OnboardingDoneViewModelTest` (the single completion write; the nudge flag and its failed write)
+- `OnboardingDoneScreenTest` (added this round: with notifications denied the ask shows, Open Orbit waits for the save, and a snackbar has a place over the content)
 - `OrbitNavHostTest` (added this round: Done lands on Home with an empty stack)
 - Gallery previews: `OnboardingDoneContentPreview`, `OnboardingDoneNudgesOnPreview`

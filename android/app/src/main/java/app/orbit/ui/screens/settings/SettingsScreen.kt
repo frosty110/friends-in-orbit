@@ -208,7 +208,7 @@ fun SettingsScreen(
             }
         }
     }
-    // The Settings VM's own messages (none today; the host stays for them).
+    // The Settings VM's own messages (today: a failed import-range write).
     // The reset's outcome is not collected here: the reset outlives this
     // screen, so MainActivity reads it from ResetService through AppViewModel
     // and restarts the task or shows the failure wherever the user is (SET-06).

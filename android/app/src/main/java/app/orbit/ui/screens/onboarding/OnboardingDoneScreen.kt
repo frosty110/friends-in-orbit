@@ -15,10 +15,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -36,12 +39,16 @@ import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.asString
 
 /**
  * Onboarding-done confirmation. The `OnboardingDoneViewModel.init`
@@ -59,6 +66,18 @@ fun OnboardingDoneScreen(
 ) {
     val completed by vm.completed.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // The VM's one-off messages (a failed "asked once" write) show over the
+    // content through the scaffold's host; repeatOnLifecycle(STARTED) so a
+    // backgrounded screen does not queue them.
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            vm.snackbarEvents.collect { event ->
+                snackbarHostState.showSnackbar(event.message.asString(context))
+            }
+        }
+    }
     // ONB-30: the notifications ask lives here, after the first list exists,
     // instead of as a third permission screen before the user saw anyone.
     // Screen-local, one owner (rules.md Code 7).
@@ -86,6 +105,7 @@ fun OnboardingDoneScreen(
         onFinish = onFinish,
         nudges = nudges,
         onAllowNudges = { launcher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+        snackbarHostState = snackbarHostState,
     )
 }
 
@@ -105,6 +125,7 @@ internal fun OnboardingDoneContent(
     onFinish: () -> Unit,
     nudges: NudgeAsk = NudgeAsk.Ask,
     onAllowNudges: () -> Unit = {},
+    snackbarHostState: SnackbarHostState? = null,
 ) {
     OnboardingScaffold(
         title = stringResource(R.string.onb_done_title),
@@ -115,6 +136,7 @@ internal fun OnboardingDoneContent(
             onClick = onFinish,
             enabled = completed,
         ),
+        snackbarHostState = snackbarHostState,
     ) {
         Spacer(Modifier.height(OrbitTheme.spacing.x10))
 

@@ -26,6 +26,7 @@ import app.orbit.domain.clock.TestClock
 import app.orbit.domain.contactFixture
 import app.orbit.testutil.MainDispatcherRule
 import app.orbit.testutil.awaitValue
+import app.orbit.testutil.newFailingStore
 import app.orbit.testutil.newPrefs
 import app.orbit.ui.theme.OrbitDarkMode
 import app.orbit.ui.theme.OrbitThemeId
@@ -515,6 +516,27 @@ class SettingsViewModelTest {
         val request = withTimeout(30_000L) { controller.syncRequests.receive() }
         assertEquals(true, request, "widening must run a FULL resync")
         assertTrue(controller.syncRequests.tryReceive().isFailure, "narrowing must not have enqueued anything")
+    }
+
+    // rules.md Code 3: a failed DataStore write tells the user and schedules
+    // nothing. The resync sits inside the guarded block, after the write, so a
+    // window that was not saved is never imported; the saved value is unchanged.
+    @Test
+    fun `a failed import-window write tells the user and runs no resync`() = runBlocking {
+        grant(android.Manifest.permission.READ_CALL_LOG)
+        val failingPrefs = AppPrefs(tmp.newFailingStore(storeScope))
+        val controller = CountingController(context)
+        val vm = buildVm(prefs = failingPrefs, controller = controller)
+        vm.uiState.awaitReady()
+        val snackbar = async { withTimeout(30_000L) { vm.snackbarEvents.first() } }
+        delay(50)
+
+        vm.onImportDaysChanged(365)
+
+        assertEquals(UiText.res(R.string.components_snackbar_save_failed), snackbar.await())
+        delay(100)
+        assertTrue(controller.syncRequests.tryReceive().isFailure, "no resync, nothing was saved")
+        assertEquals(90, failingPrefs.callLogImportDays.first(), "the saved window is unchanged")
     }
 
     @Test

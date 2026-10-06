@@ -558,13 +558,24 @@ class SettingsViewModel @Inject constructor(
      * sync, so without this a user who moved from 3 months to 1 year saw nothing
      * new until "Sync now". Narrowing changes nothing on screen (the log keeps
      * what it already has), so it stays a plain write.
+     *
+     * A failed write tells the user ("Couldn't save your change", rules.md
+     * Code 3) and schedules nothing: the resync stays inside the guarded block,
+     * after the write, so a window that was not saved is never imported.
+     * Cancellation passes through (Code 5).
      */
     fun onImportDaysChanged(days: Int) {
         viewModelScope.launch {
-            val previous = appPrefs.callLogImportDays.first()
-            appPrefs.setCallLogImportDays(days)
-            if (days > previous && _permissionState.value is CallLogPermissionState.Granted) {
-                contentObserverController.enqueueImmediateSync(fullResync = true)
+            try {
+                val previous = appPrefs.callLogImportDays.first()
+                appPrefs.setCallLogImportDays(days)
+                if (days > previous && _permissionState.value is CallLogPermissionState.Granted) {
+                    contentObserverController.enqueueImmediateSync(fullResync = true)
+                }
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                _snackbarEvents.tryEmit(UiText.res(R.string.components_snackbar_save_failed))
             }
         }
     }
@@ -586,7 +597,7 @@ class SettingsViewModel @Inject constructor(
 
     /**
      * One-off messages for the screen's snackbar, as [UiText] (voice.md: ViewModels
-     * hold no Context). Nothing emits here today. The reset's
+     * hold no Context). Today only a failed import-window write. The reset's
      * failure is not here: it is reported through [ResetService.outcome], which
      * MainActivity shows wherever the user is, because this flow has no
      * collector once Settings is popped.
