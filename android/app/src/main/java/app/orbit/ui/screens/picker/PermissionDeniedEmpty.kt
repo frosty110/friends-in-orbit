@@ -35,14 +35,15 @@ fun PermissionDeniedEmpty(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // The shared people-screen message (2026-10-05). Sentence case on the
-    // button ("Open Settings" was title case, against voice.md), and it says
-    // which settings: the phone's, not Orbit's.
+    // The shared people-screen message (2026-10-05). The button is the shared
+    // "Open phone settings" (strings_components.xml, 2026-10-06): one wording
+    // for the phone's page for Orbit everywhere (voice.md glossary; five
+    // screens had five), and it says which settings: the phone's, not Orbit's.
     OrbitScreenMessage(
         icon = "shield-check",
         title = stringResource(R.string.picker_denied_title),
         body = stringResource(R.string.picker_denied_body),
-        actionLabel = stringResource(R.string.picker_denied_open_settings),
+        actionLabel = stringResource(R.string.components_action_open_phone_settings),
         onAction = onOpenSettings,
         // The only way forward from here, so it takes the screen's accent.
         actionVariant = OrbitButtonVariant.Primary,

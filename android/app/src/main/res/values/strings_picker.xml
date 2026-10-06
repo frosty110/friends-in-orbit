@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The two pickers: people into a list (contact picker, also used to move, copy and
-    re-link), and lists for one person (list picker). Their commit snackbars show
-    on whatever screen the picker returns to.
+    The two pickers: people into a list (contact picker, also used to re-link a
+    person whose phone contact vanished; its move and copy modes are route-only
+    with no caller), and lists for one person (list picker). Their commit
+    snackbars show on whatever screen the picker returns to.
     Keys are area_what (features/_foundations/voice.md, "Where copy lives").
     "Contacts" only for the phone's own address book; people in Orbit are people.
+    The words every screen shares (Try again, "Nothing is lost. Try again in a
+    moment.", Open phone settings, "Unignored {name}") live in
+    strings_components.xml, not here.
 -->
 <resources>
 
@@ -21,9 +25,8 @@
     <!-- Linking a person whose phone contact was deleted to another phone contact. -->
     <string name="picker_title_relink">Re-link contact</string>
 
+    <!-- The error state's title; its body and "Try again" are the shared components keys. -->
     <string name="picker_error_title">Couldn\'t load your contacts</string>
-    <string name="picker_error_body">Something went wrong reading them. Try again in a moment.</string>
-    <string name="picker_try_again">Try again</string>
 
     <string name="picker_search_hint">Search name or number</string>
     <!-- Under the filter chips when some are greyed out. -->
@@ -38,12 +41,21 @@
         <item quantity="one">Select the %1$d match</item>
         <item quantity="other">Select all %1$d matches</item>
     </plurals>
+
+    <!-- The list area is empty, and why. Each state says what is true and offers the
+         next step. -->
     <!-- %1$s: what the user typed. Use your language's quotation marks. -->
     <string name="picker_no_matches_query_title">Nothing matches “%1$s”</string>
     <string name="picker_no_matches_filters_title">Nothing matches these filters</string>
     <string name="picker_no_matches_query_body">Try a shorter name, part of a number, or one filter fewer.</string>
     <string name="picker_no_matches_filters_body">Try removing a filter.</string>
-    <string name="picker_skip_for_now">Skip for now</string>
+    <!-- Add mode: every phone contact is already on the target list. %1$s: the list's
+         name ("List" under the privacy curtain). -->
+    <string name="picker_everyone_on_list_title">Everyone in your contacts is already on %1$s</string>
+    <!-- No filter is active, but everyone left is ignored; the action is "Show ignored". -->
+    <string name="picker_everyone_ignored_title">Everyone here is ignored</string>
+    <!-- Re-link mode: no other phone contact the person could be linked to. -->
+    <string name="picker_relink_none_title">No other phone contacts to link to</string>
 
     <!-- Sort menu. %1$s: the current order, one of the options below. -->
     <string name="picker_sort_label">Sort: %1$s</string>
@@ -55,22 +67,27 @@
     <string name="picker_show_ignored">Show ignored</string>
     <string name="picker_hide_ignored">Hide ignored</string>
 
-    <!-- The list or person the picker was opened for no longer exists. -->
+    <!-- The list or person the picker was opened for is not there: the id was malformed,
+         or the row is gone. The person wording is the one Contact detail uses. -->
     <string name="picker_list_not_found">List not found</string>
-    <string name="picker_contact_not_found">Contact not found</string>
-    <string name="picker_not_found_body">It may have been removed. Go back and try again.</string>
+    <string name="picker_list_not_found_body">It may have been removed.</string>
+    <string name="picker_person_not_found">This person isn\'t in Orbit anymore</string>
+    <string name="picker_person_not_found_body">They may have been removed.</string>
+    <!-- The one action on a not-found or nothing-to-add state. The same words as
+         Contact detail's "Go back". -->
+    <string name="picker_go_back">Go back</string>
 
     <string name="picker_no_device_contacts_title">No contacts on this device</string>
     <string name="picker_no_device_contacts_body">Add people to your phone\'s contacts, then come back here.</string>
 
-    <!-- Asking for the contacts permission. -->
+    <!-- Asking for the contacts permission. The denied state's button is the shared
+         "Open phone settings" (strings_components.xml). -->
     <string name="picker_rationale_title">Allow access to your contacts</string>
     <string name="picker_rationale_body">Orbit reads your phone contacts so you can add them to lists. Nothing is uploaded: your contacts stay on this device.</string>
     <string name="picker_rationale_grant">Grant access</string>
     <string name="picker_rationale_not_now">Not now</string>
     <string name="picker_denied_title">Contacts access is off</string>
     <string name="picker_denied_body">Turn it on in your phone\'s settings to add people to your lists. Your contacts stay on this device.</string>
-    <string name="picker_denied_open_settings">Open phone settings</string>
 
     <!-- Filter chips. -->
     <string name="picker_filter_starred">Starred</string>
@@ -106,8 +123,10 @@
         <item quantity="other">On %1$d lists</item>
     </plurals>
     <string name="picker_row_ignored">Ignored</string>
-    <string name="picker_row_more_actions">More actions</string>
-    <!-- %1$s: the person's name. -->
+    <!-- TalkBack's name for the long-press on a row: the glossary's one word for that
+         gesture on Home, Browse, Call history and here (voice.md). -->
+    <string name="picker_row_more_actions">Quick actions</string>
+    <!-- The three-dots button. %1$s: the person's name. -->
     <string name="picker_row_more_actions_for">More actions for %1$s</string>
     <string name="picker_row_open_in_contacts">Open in Contacts</string>
     <string name="picker_row_open_in_contacts_supporting">See their call and message history in your phone\'s contacts app.</string>
@@ -115,22 +134,23 @@
     <string name="picker_row_ignore_supporting">Hide %1$s from Orbit. They stay in your phone\'s contacts.</string>
     <string name="picker_row_unignore">Unignore</string>
 
-    <!-- The commit bar. %1$d: how many, %2$s: the list. -->
+    <!-- The commit bar. %1$d: how many, %2$s: the list. The noun is said ("1 person",
+         "3 people"), as the snackbars and the title do. -->
     <plurals name="picker_selected_count">
         <item quantity="one">%1$d selected</item>
         <item quantity="other">%1$d selected</item>
     </plurals>
     <plurals name="picker_commit_add">
-        <item quantity="one">Add %1$d to %2$s</item>
-        <item quantity="other">Add %1$d to %2$s</item>
+        <item quantity="one">Add 1 person to %2$s</item>
+        <item quantity="other">Add %1$d people to %2$s</item>
     </plurals>
     <plurals name="picker_commit_move">
-        <item quantity="one">Move %1$d to %2$s</item>
-        <item quantity="other">Move %1$d to %2$s</item>
+        <item quantity="one">Move 1 person to %2$s</item>
+        <item quantity="other">Move %1$d people to %2$s</item>
     </plurals>
     <plurals name="picker_commit_copy">
-        <item quantity="one">Copy %1$d to %2$s</item>
-        <item quantity="other">Copy %1$d to %2$s</item>
+        <item quantity="one">Copy 1 person to %2$s</item>
+        <item quantity="other">Copy %1$d people to %2$s</item>
     </plurals>
     <!-- %1$s: the person being re-linked. -->
     <string name="picker_commit_relink">Re-link %1$s</string>
@@ -140,11 +160,11 @@
     <!-- List picker: the lists to put one person on. %1$s: the person's name. -->
     <string name="picker_lists_title_named">Add %1$s to lists</string>
     <string name="picker_lists_title">Add to lists</string>
-    <string name="picker_lists_contact_not_found_body">They may have been removed. Go back and try again.</string>
     <string name="picker_lists_error_title">Couldn\'t load your lists</string>
     <string name="picker_lists_empty_title">No lists yet</string>
     <string name="picker_lists_empty_body">Make one here and add this person in one more tap.</string>
     <string name="picker_lists_new_list">New list</string>
+    <!-- On a list the person is already on; the row cannot be picked. -->
     <string name="picker_lists_already_added">Already added</string>
     <plurals name="picker_lists_commit">
         <item quantity="one">Add to %1$d list</item>
@@ -156,10 +176,10 @@
     <!-- Snackbars on the screen the picker returns to, with Undo. %1$d: how many people,
          %2$s: the list. -->
     <plurals name="picker_snackbar_added">
-        <item quantity="one">Added %1$d to %2$s</item>
-        <item quantity="other">Added %1$d to %2$s</item>
+        <item quantity="one">Added 1 person to %2$s</item>
+        <item quantity="other">Added %1$d people to %2$s</item>
     </plurals>
-    <!-- After the list picker. %1$d: how many lists. -->
+    <!-- After the list picker. %1$d: how many lists were actually written. -->
     <plurals name="picker_snackbar_added_to_lists">
         <item quantity="one">Added to %1$d list</item>
         <item quantity="other">Added to %1$d lists</item>
