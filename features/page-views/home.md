@@ -12,13 +12,12 @@
 
 - The start destination once onboarding is complete: every cold launch lands here, and Done clears the way back so Back from Home leaves the app
 - Card view: "Go home" or Back, when the deck was opened from Home or by a nudge, a widget or the "Call next" shortcut
-- A widget tap for a person whose list has since been archived opens Home rather than a deck that no longer exists
 
 ## What the user sees
 
 - App bar: no back arrow; the Search, Lists and Settings icons
 - "Today" and the date ("Wednesday 3 June"), with no count of people "due" and nothing that reads as a cleared backlog (HOME-6)
-- One full-width card per list, in the order set on Lists: the list's name and size ("4 people", "No one yet"), a glyph on lists that fill themselves (TalkBack: "Smart list"), then "Next up": the person this list would suggest first, with their face, their name, a warm line on how long it has been ("You spoke today", "You spoke yesterday", "3 weeks since you last spoke", "You haven't spoken yet") and a quiet, muted, labelled call button ("Call Kai", HOME-9). A card with nobody to suggest reads "All quiet for now"
+- One full-width card per list, in the order set on Lists: the list's name and size ("4 people", "No one yet"), a glyph on lists that fill themselves (TalkBack: "Smart list"), then "Next up": the person this list would suggest first, with their face, their name, a warm line on when you last spoke ("You spoke today", "You spoke yesterday", "You spoke 3 weeks ago", "You haven't spoken yet") and a quiet, muted, labelled call button ("Call Kai", HOME-9). A card with nobody to suggest reads "All quiet for now"
 - Under each card the "Last 7 days" rhythm strip (HOME-7): one bar per call of three minutes or more, its outline showing who called ("You" / "Them"); today's letter is in ink; a day with calls can be tapped (HOME-8)
 - "New list" after the last card
 - A short, calm reflection line at the foot of the screen (the ReflectionFooter in vision/00-home)
@@ -63,7 +62,8 @@
 
 ## Tests that pin it
 
-- `HomeViewModelTest` (states, the menu's snackbars, archive and delete with undo, the nudge toggle, the failure path, nudges cancelled on archive and delete)
+- `HomeViewModelTest` (states, the menu's snackbars, archive and delete with undo, the nudge toggle, the failure path, nudges cancelled on archive and delete, the why line's four forms)
+- `WhyLineVoiceTest` (added this round: the rendered why line, for one gap in every bucket, breaks no voice rule)
 - `HomeTileMenuTest` (added this round: menu order for paused and unpaused nudges, Add people absent on smart lists, Archive's supporting line, Archive and Delete the only destructive items)
 - `HomeContentTest` (added this round: menu labels in order, "Call Kai" and "Call Someone" under the curtain, the full weekday in a day column's label, a quiet day announces "No calls")
 - `RhythmDaySheetTest`, `HomeFeedRhythmTest`

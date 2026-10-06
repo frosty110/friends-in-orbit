@@ -681,8 +681,12 @@ const RHYTHM = {
 };
 
 const rel = (d) => d == null ? null : d === 0 ? 'today' : d === 1 ? 'yesterday' : d < 30 ? `${d} days ago` : d < 60 ? '1 month ago' : `${Math.floor(d / 30)} months ago`;
-const spoke = (d) => d == null ? "you haven't spoken yet" : d === 0 ? 'you spoke today' : d === 1 ? '1 day since you last spoke' : d < 7 ? `${d} days since you last spoke` : d < 14 ? '1 week since you last spoke' : d < 30 ? `${Math.floor(d / 7)} weeks since you last spoke` : d < 60 ? '1 month since you last spoke' : `${Math.floor(d / 30)} months since you last spoke`;
-const whyNow = (d) => d == null ? '' : d === 0 ? 'You talked today.' : d === 1 ? 'You talked yesterday.' : d < 14 ? `It's been ${d} days.` : d < 60 ? `It's been ${Math.floor(d / 7)} weeks.` : `It's been ${Math.floor(d / 30)} months.`;
+/* strings_time.xml via RelativeTime.formatAgo: days below 14, weeks below 60 days, months below a year. */
+const ago = (d) => d === 0 ? 'today' : d === 1 ? 'yesterday' : d < 14 ? `${d} days ago` : d < 60 ? `${Math.floor(d / 7)} week${Math.floor(d / 7) === 1 ? '' : 's'} ago` : d < 365 ? `${Math.floor(d / 30)} month${Math.floor(d / 30) === 1 ? '' : 's'} ago` : `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? '' : 's'} ago`;
+/* strings_home.xml home_why_never / home_why_today / home_why_yesterday / home_why_ago. */
+const spoke = (d) => d == null ? "You haven't spoken yet" : d === 0 ? 'You spoke today' : d === 1 ? 'You spoke yesterday' : `You spoke ${ago(d)}`;
+/* strings_card.xml card_why_today / card_why_yesterday / card_why_ago. */
+const whyNow = (d) => d == null ? '' : d === 0 ? 'You spoke today.' : d === 1 ? 'You spoke yesterday.' : `You spoke ${ago(d)}.`;
 const NOW_HOUR = 9; // the status bar says 9:41
 
 /* ───────── Mutable demo state (what taps change) ───────── */
