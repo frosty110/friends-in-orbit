@@ -16,7 +16,7 @@
 ## What the user sees
 
 - App bar: Back, and "Add {name} to lists" ("Add to lists" under the curtain)
-- One row per list, with a checkbox; a list the person is already on says "Already added" and cannot be picked
+- One row per regular list, with a checkbox (a smart list fills itself from its rule, so it is not offered as a row); a list the person is already on says "Already added" and cannot be picked
 - A bar docked under the list once anything is selected: "2 selected", "Clear", and "Add to 2 lists" (the one accent; PICK-06)
 
 ## Actions and menus
