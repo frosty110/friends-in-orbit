@@ -30,6 +30,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -188,9 +190,20 @@ private fun PercentSlider(
  * A whole number of days, typed. The buffer is the field's alone: seeded once
  * from the saved [value], never re-seeded by it, so the saved value flows one
  * way and nothing overwrites what the user is typing (rules.md Code 7). It
- * commits on focus loss and IME Done when it parses to 1 or more and differs
- * from [value]; otherwise it reverts to the saved number, so a cleared field
- * never writes and never stays blank.
+ * commits once per gesture, whichever path ends it: IME Done, or focus
+ * leaving the field without Done. A commit happens when the text parses to
+ * 1 or more and differs from [value]; otherwise the field reverts to the
+ * saved number, so a cleared field never writes and never stays blank.
+ *
+ * The `parsed != value` guard does not make a second commit harmless: the
+ * saved value changes only after the write round-trips through Room, so a
+ * repeat within the same gesture sees the same [value] and writes again
+ * (two identical writes, and two failure snackbars when the write fails).
+ * That is why Done disarms the focus-loss branch before it clears focus.
+ *
+ * The field's TalkBack name is the sentence over it: the sentence is a
+ * sibling node, so without this the field announced only its digits
+ * (rules.md Design 7; the passphrase sheets' precedent).
  */
 @Composable
 private fun DaysNumberInput(
@@ -200,12 +213,14 @@ private fun DaysNumberInput(
 ) {
     var text by rememberSaveable { mutableStateOf(value.toString()) }
     // Guards the focus-loss commit: onFocusChanged reports unfocused once as
-    // the field enters composition, which must not count as a blur.
+    // the field enters composition, which must not count as a blur, and Done
+    // sets it false before clearing focus so that blur does not commit twice.
     var hasFocused by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     // The sentence shows what is typed while it is a valid number, else the
     // saved setting, so it never reads "No call in the last  days".
     val shown = text.toIntOrNull()?.takeIf { it >= 1 } ?: value
+    val sentence = pluralStringResource(sentenceRes, shown, shown)
 
     fun commit() {
         val parsed = text.toIntOrNull()
@@ -218,7 +233,7 @@ private fun DaysNumberInput(
 
     Column(Modifier.fillMaxWidth()) {
         Text(
-            text = pluralStringResource(sentenceRes, shown, shown),
+            text = sentence,
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
@@ -228,6 +243,10 @@ private fun DaysNumberInput(
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = {
+                // Done owns this gesture's commit. clearFocus() fires the
+                // blur branch synchronously, so it is disarmed first; the
+                // commit itself does not wait on focus actually clearing.
+                hasFocused = false
                 commit()
                 focusManager.clearFocus()
             }),
@@ -241,6 +260,7 @@ private fun DaysNumberInput(
             ),
             modifier = Modifier
                 .width(96.dp)
+                .semantics { contentDescription = sentence }
                 .onFocusChanged { focusState ->
                     if (focusState.isFocused) {
                         hasFocused = true

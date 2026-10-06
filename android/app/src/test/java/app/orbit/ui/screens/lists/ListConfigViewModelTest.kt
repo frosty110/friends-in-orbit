@@ -624,6 +624,31 @@ class ListConfigViewModelTest {
         }
     }
 
+    @Test
+    fun `a params override that cannot be read gives no params and no crash`() = runTest {
+        // The resolver shared with the Lists row reports Unreadable; this
+        // screen maps it to null params (How often has nothing honest to
+        // show) rather than Error, while the Lists row names the case. The
+        // domain's resolveParamsFor throws on the same blob. Pinned so the
+        // two resolvers stay one shape.
+        val list = listFixture(
+            id = 1L,
+            name = "Inner orbit",
+            type = ListType.STATIC,
+            ruleTemplateId = 1L,
+            ruleParamsOverrideJson = "{not json"
+        )
+        val (vm, _, _, _) = fixture(list = list)
+        vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state is ListConfigUiState.Loading) state = awaitItem()
+            assertTrue(state is ListConfigUiState.Ready, "expected Ready, got $state")
+            assertNull(state.ruleParams, "an unreadable override resolves to no params")
+            assertEquals(RuleKind.KEEP_IN_TOUCH, state.ruleKind, "the template is still known")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     // ────────────────────────────────────────────────────────────────────────
     // The 20-member projection cap is gone: the count must be the true total
     // and every member must be reachable for removal (rows 21+ were unremovable

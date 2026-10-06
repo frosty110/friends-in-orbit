@@ -399,10 +399,11 @@ class ListsManagerViewModel @Inject constructor(
 
     /**
      * H4 fix — wraps a mutation block with a uniform try/catch + snackbar
-     * surface. Without this, an exception inside `viewModelScope.launch` is
-     * silently dropped (the coroutine's uncaught handler on a viewModelScope
-     * is a no-op for non-Throwable types) and the UI shows stale optimistic
-     * state. `CancellationException` is rethrown so structured concurrency
+     * surface. Without it an exception inside `viewModelScope.launch` is not
+     * dropped: viewModelScope installs no CoroutineExceptionHandler, so the
+     * exception reaches the thread's uncaught handler and crashes the app.
+     * The wrapper exists so a failed write tells the user instead (rules.md
+     * Code 3). `CancellationException` is rethrown so structured concurrency
      * cancellation still propagates correctly.
      *
      * Returns true when [block] completed, false when it threw and the failure
@@ -469,16 +470,28 @@ class ListsManagerViewModel @Inject constructor(
     /**
      * A regular list's rhythm as its row subtitle: "Every 14 days" for Keep
      * in touch (the slider's own words, `lists_interval_every_days`), or the
-     * name of a rhythm that has nothing to set. The parameters resolve the way
-     * List settings resolves them (`ListConfigViewModel.resolveRuleParams`):
-     * the per-list override wins, else the template's defaults. A "Start from
-     * blank" list has no override, so its rhythm lives only in the seeded
+     * name of a rhythm that has nothing to set. The parameters resolve through
+     * the resolver List settings shares ([resolveRuleParams]): the per-list
+     * override wins, else the template's defaults. A "Start from blank" list
+     * has no override, so its rhythm lives only in the seeded
      * `RuleTemplateEntity`, which is why this takes the template lookup and
      * not the override JSON alone. Null when neither exists (a partially
-     * configured row) or either decodes badly: no subtitle, never a crash.
+     * configured row). A blob that does not decode says so
+     * (`lists_rhythm_unreadable`) instead of passing for a list with no
+     * rhythm: both are Orbit's own writes, so a failed decode is a bug the
+     * user should see where the deck fails on the same data (rules.md Code
+     * 3). Until 2026-10-06 both cases rendered the same empty line.
      */
     private suspend fun rhythmSummary(entity: ListEntity): UiText? {
-        val params = resolveRuleParams(entity) ?: return null
+        // One cached lookup per row per emission: the template table holds
+        // three immutable rows, so this never reaches the database.
+        val template = entity.ruleTemplateId?.let { ruleTemplateRepo.getById(it) }
+        val resolved = resolveRuleParams(entity.ruleParamsOverrideJson, template?.paramsJson, json)
+        val params = when (resolved) {
+            RuleParamsResolution.None -> return null
+            RuleParamsResolution.Unreadable -> return UiText.res(R.string.lists_rhythm_unreadable)
+            is RuleParamsResolution.Decoded -> resolved.params
+        }
         return when (params) {
             is RuleParams.KeepInTouch -> {
                 // Whole days, as the interval slider shows them (48h reads "Every 2 days").
@@ -488,16 +501,6 @@ class ListsManagerViewModel @Inject constructor(
             is RuleParams.LateNight -> UiText.res(R.string.lists_rhythm_late_night)
             is RuleParams.Energize -> UiText.res(R.string.lists_rhythm_energize)
         }
-    }
-
-    private suspend fun resolveRuleParams(entity: ListEntity): RuleParams? {
-        entity.ruleParamsOverrideJson?.let { override ->
-            return runCatching { json.decodeFromString(RuleParams.serializer(), override) }.getOrNull()
-        }
-        // One cached lookup per row per emission: the template table holds
-        // three immutable rows, so this never reaches the database.
-        val template = entity.ruleTemplateId?.let { ruleTemplateRepo.getById(it) } ?: return null
-        return runCatching { json.decodeFromString(RuleParams.serializer(), template.paramsJson) }.getOrNull()
     }
 
     private companion object {

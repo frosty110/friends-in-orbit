@@ -6,6 +6,7 @@ import app.cash.turbine.test
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListType
 import app.orbit.data.entity.RuleKind
+import app.orbit.data.entity.RuleTemplateEntity
 import app.orbit.data.repository.ListRepository
 import app.orbit.domain.FakeListRepository
 import app.orbit.domain.FakeRuleTemplateRepository
@@ -336,6 +337,44 @@ class ListsManagerViewModelTest {
     fun regular_list_with_no_template_and_no_override_has_no_subtitle() = runTest {
         val partial = listFixture(id = 15L, ruleTemplateId = null, ruleParamsOverrideJson = null)
         assertNull(singleTileSubtitle(partial, FakeRuleTemplateRepository()))
+    }
+
+    @Test
+    fun regular_list_whose_stored_rhythm_cannot_be_read_says_so() = runTest {
+        // Orbit wrote both blobs itself, so a decode failure is a bug, not a
+        // list with no rhythm; the row says what is true instead of nothing
+        // (rules.md Code 3). The deck and the queue fail on the same blob,
+        // since the domain's resolveParamsFor decodes it without a catch.
+        // Until 2026-10-06 this rendered the same empty line as "nothing
+        // configured".
+        val unreadable = "Couldn't read this list's rhythm"
+        val corruptOverride = listFixture(
+            id = 16L,
+            ruleTemplateId = 1L,
+            ruleParamsOverrideJson = "{not json"
+        )
+        assertEquals(unreadable, singleTileSubtitle(corruptOverride, seededTemplates))
+
+        // The same when the override is absent and the template's own blob
+        // is the broken one.
+        val corruptTemplates = FakeRuleTemplateRepository().apply {
+            seed(
+                listOf(
+                    RuleTemplateEntity(
+                        id = 9L,
+                        name = "Broken",
+                        kind = RuleKind.KEEP_IN_TOUCH,
+                        paramsJson = "{not json"
+                    )
+                )
+            )
+        }
+        val onCorruptTemplate = listFixture(
+            id = 17L,
+            ruleTemplateId = 9L,
+            ruleParamsOverrideJson = null
+        )
+        assertEquals(unreadable, singleTileSubtitle(onCorruptTemplate, corruptTemplates))
     }
 
     // ============================================================================

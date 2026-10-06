@@ -16,7 +16,7 @@
 ## What the user sees
 
 - App bar: Back and "Lists"
-- One row per list, in Home's order: a drag handle ("Reorder list"), the name, a "Smart list" chip where the list fills itself, a second line with its rhythm ("Every 14 days", "Late night rhythm", "Energize rhythm") or its rule ("Recently added · 30 days", "Never called"), a count badge (left out at zero), "+" ("Add people to {list}"; regular lists only) and "More actions for {list}"
+- One row per list, in Home's order: a drag handle ("Reorder list"), the name, a "Smart list" chip where the list fills itself, a second line with its rhythm ("Every 14 days", "Late night rhythm", "Energize rhythm") or its rule ("Recently added · 30 days", "Never called"), or "Couldn't read this list's rhythm" when the stored rhythm cannot be decoded (the deck fails on the same data), a count badge (left out at zero), "+" ("Add people to {list}"; regular lists only) and "More actions for {list}"
 - A foot note: "Drag to reorder. Lists higher up show first on home."
 - "Archived (2)", which expands to the archived lists, each with "Restore", a delete control ("Delete {list}") and a settings control ("List settings for {list}")
 - A floating "New list" button when lists exist (the one accent; LIST-20), centred in the body when there are none
@@ -47,7 +47,7 @@
 
 ## Tests that pin it
 
-- `ListsManagerViewModelTest` (archive, restore, delete with undo, reorder, the nudge toggle, the failure path, the rhythm line)
+- `ListsManagerViewModelTest` (archive, restore, delete with undo, reorder, the nudge toggle, the failure path, the rhythm line and its unreadable case), `RuleParamsResolutionTest` (the resolver shared with List settings)
 - `ListRowMenuOrderTest` (menu order, and the same pause and resume words as Home)
 - `ListsManagerScreenTest` (added this round: a row tap, "List settings" and create go to different places)
 - `CreateListTemplateCatalogTest` (each template makes the rhythm its subtitle names)
