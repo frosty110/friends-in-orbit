@@ -20,13 +20,17 @@ import timber.log.Timber
 /**
  * Moves [IngestPhoneContactsUseCase] off the cold-start critical path.
  *
- * Triggers (both enqueue with [ExistingWorkPolicy.KEEP] under the same
- * [UNIQUE_NAME] — concurrent grant/observer events do not stack):
- * 1. `READ_CONTACTS` permission grant — observed by
- *    [app.orbit.ui.screens.onboarding.OnboardingPermissionsViewModel]
- *    on the false → true transition.
- * 2. `ContactsContract.Contacts.CONTENT_URI` change — observed by
+ * Triggers (all enqueue under the same [UNIQUE_NAME], so concurrent
+ * grant/observer events do not stack):
+ * 1. `READ_CONTACTS` permission grant, observed by
+ *    [app.orbit.ui.screens.onboarding.OnboardingPermissionsViewModel] and
+ *    Settings on the false to true transition ([ExistingWorkPolicy.KEEP]).
+ * 2. `ContactsContract.Contacts.CONTENT_URI` change, observed by
  *    [ContentObserverController] (registered when permission is held).
+ * 3. A `READ_CONTACTS` grant made from the contact picker
+ *    ([app.orbit.ui.screens.picker.ContactPickerViewModel]), which takes the
+ *    forced, expedited path so the picker never shows a false empty state
+ *    before the address book has been read (features/contacts-ingestion).
  *
  * Re-run gating: a 24h TTL persisted in [AppPrefs.lastContactsIngestedAt]
  * skips work when the address book was recently ingested. The use case
