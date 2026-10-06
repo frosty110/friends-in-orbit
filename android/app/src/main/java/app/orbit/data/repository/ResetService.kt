@@ -11,11 +11,23 @@ import app.orbit.widget.WidgetUpdateScheduler
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+
+/**
+ * How a [ResetService.resetAll] ended. Held in [ResetService.outcome] until
+ * whoever acts on it calls [ResetService.clearOutcome]: the restart into
+ * onboarding for [Completed], the "Couldn't finish the reset" snackbar for
+ * [Failed].
+ */
+sealed interface ResetOutcome {
+    data object Completed : ResetOutcome
+    data object Failed : ResetOutcome
+}
 
 /**
  * SET-06 — destructive reset implementing the full settings spec
@@ -40,13 +52,23 @@ import kotlinx.coroutines.withContext
  *      empty state ("All quiet for now.") instead of showing the wiped
  *      person's name until the next cold start.
  *
- * After this returns the caller is responsible for landing the user
- * somewhere honest: [resetCompleteEvents] fires, the Settings screen
- * collects it (through [app.orbit.ui.screens.settings.SettingsViewModel])
- * and restarts the task, so the next cold start re-enters onboarding (the
- * flag was just cleared). The event lives here, on the app-scoped service,
- * because the reset itself runs on the application scope and must finish
- * even if the ViewModel that started it is gone (rules.md Code 6).
+ * After this returns someone must land the user somewhere honest. The
+ * result is [outcome], sticky state rather than a one-shot event:
+ * [MainActivity][app.orbit.MainActivity] reads it through
+ * [app.orbit.AppViewModel] while resumed, restarts the task on
+ * [ResetOutcome.Completed] (the onboarding flag was just cleared, so the
+ * relaunch lands on Welcome) and shows the failure snackbar on
+ * [ResetOutcome.Failed], then calls [clearOutcome]. It lives here, on the
+ * app-scoped service, because the reset runs on the application scope and
+ * must finish even if the ViewModel that started it is gone (rules.md
+ * Code 6); until 2026-10-06 it was a `SharedFlow` without replay that only
+ * the Settings screen collected, so a user who backed out or backgrounded
+ * the app during the wipe stayed in a live app over an empty database with
+ * the onboarding flag cleared, and a failure in that window reached no one
+ * (rules.md Code 3). A `StateFlow` and not `replay = 1`: the process
+ * survives the task restart, so a replayed completion would be delivered to
+ * the next subscriber and restart the app a second time; the collector
+ * clears the state before it acts.
  *
  * Caveats:
  *   - Phone contacts and call log are NOT touched; only Orbit's mirror
@@ -75,22 +97,38 @@ open class ResetService @Inject constructor(
     private val appPrefs: AppPrefs,
     private val contentObserverController: ContentObserverController,
 ) {
-    private val _resetCompleteEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val _outcome = MutableStateFlow<ResetOutcome?>(null)
 
-    /** Fires once per completed [resetAll]; no replay, so subscribe before confirming. */
-    val resetCompleteEvents: SharedFlow<Unit> = _resetCompleteEvents.asSharedFlow()
+    /**
+     * The last [resetAll]'s result, or null once it has been acted on. Sticky,
+     * so a collector that subscribes after the reset finished still sees it.
+     */
+    val outcome: StateFlow<ResetOutcome?> = _outcome.asStateFlow()
 
-    /** For subclasses that replace [resetAll] (test doubles) and still want the event. */
-    protected fun signalResetComplete() {
-        _resetCompleteEvents.tryEmit(Unit)
+    /** Called by the collector once it has restarted the task or shown the failure. */
+    fun clearOutcome() {
+        _outcome.value = null
     }
 
-    open suspend fun resetAll() {
-        performReset()
-        signalResetComplete()
+    /**
+     * Runs the reset and records its [outcome]. Does not throw: the outcome is
+     * the report, read wherever the user is when it lands. Cancellation is the
+     * one exception that passes through (rules.md Code 5). Not `open`: a test
+     * double replaces [performReset] and keeps this bookkeeping.
+     */
+    suspend fun resetAll() {
+        try {
+            performReset()
+            _outcome.value = ResetOutcome.Completed
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (t: Throwable) {
+            _outcome.value = ResetOutcome.Failed
+        }
     }
 
-    private suspend fun performReset() = withContext(Dispatchers.IO) {
+    /** The wipe itself, in the order the class KDoc gives. Test doubles override this. */
+    protected open suspend fun performReset(): Unit = withContext(Dispatchers.IO) {
         // 1. Cancel scheduled work BEFORE the wipe so nothing fires against
         //    an empty DB (features/settings/README.md §Known gotchas).
         val workManager = WorkManager.getInstance(context)

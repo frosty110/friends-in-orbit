@@ -1,8 +1,15 @@
 package app.orbit
 
 import android.app.Application
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
+import app.orbit.calllog.ContentObserverController
 import app.orbit.data.AppPrefs
+import app.orbit.data.db.OrbitDatabase
+import app.orbit.data.repository.ResetOutcome
+import app.orbit.data.repository.ResetService
 import app.orbit.domain.FakeCallEventRepository
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.callEventFixture
@@ -28,6 +35,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -37,7 +45,8 @@ import org.robolectric.annotation.Config
 
 /**
  * Behavioral tests for [AppViewModel] — boot-time start-destination resolution,
- * the NOTE-02 post-call prompt, and the auto privacy curtain.
+ * the NOTE-02 post-call prompt, the auto privacy curtain, and the reset outcome
+ * it hands MainActivity (SET-06).
  *
  * Fixture pattern (mirrors OnboardingDoneViewModelTest / SettingsViewModelTest):
  *   - Robolectric for the Context; a real DataStore per test method, built by
@@ -65,14 +74,40 @@ class AppViewModelTest {
 
     private fun buildAppPrefs(): AppPrefs = prefs
 
+    private val context: Context get() = ApplicationProvider.getApplicationContext()
+    private lateinit var db: OrbitDatabase
+
+    /**
+     * The wipe itself is pinned by `ResetServiceTest`; here the service only
+     * needs to record an outcome, so the no-op `performReset` keeps WorkManager
+     * and Room out of the picture.
+     */
+    private class NoWipeResetService(
+        ctx: Context,
+        db: OrbitDatabase,
+        prefs: AppPrefs,
+    ) : ResetService(ctx, db, prefs, ContentObserverController(ctx)) {
+        override suspend fun performReset() = Unit
+    }
+
+    private val resetService: NoWipeResetService by lazy { NoWipeResetService(context, db, prefs) }
+
     private fun buildVm(
         prefs: AppPrefs,
         callEventRepo: FakeCallEventRepository = FakeCallEventRepository(),
         contactRepo: FakeContactRepository = FakeContactRepository(),
-    ) = AppViewModel(prefs, callEventRepo, contactRepo, TestClock(now))
+    ) = AppViewModel(prefs, callEventRepo, contactRepo, TestClock(now), resetService)
+
+    @Before
+    fun openDb() {
+        db = Room.inMemoryDatabaseBuilder(context, OrbitDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+    }
 
     @After
     fun tearDown() {
+        db.close()
         storeScope.cancel()
     }
 
@@ -165,6 +200,24 @@ class AppViewModelTest {
         // The same call must not re-surface on a later resume.
         vm.checkPostCallPrompt()
         assertNull(vm.postCallPrompt.first(), "a dismissed call is suppressed on re-check")
+    }
+
+    // ── reset outcome (SET-06) ──────────────────────────────────────────────
+
+    // The outcome is the service's sticky state, mirrored for MainActivity,
+    // which reads it after Settings is gone and clears it before it restarts
+    // the task, so the same process never acts on it twice.
+    @Test
+    fun `resetOutcome mirrors the service and is cleared once handled`() = runBlocking {
+        val vm = buildVm(buildAppPrefs())
+        assertNull(vm.resetOutcome.value)
+
+        resetService.resetAll()
+
+        assertEquals(ResetOutcome.Completed, vm.resetOutcome.value, "readable after the fact")
+        vm.onResetOutcomeHandled()
+        assertNull(vm.resetOutcome.value)
+        assertNull(resetService.outcome.value, "cleared on the service itself")
     }
 
     // ── privacy curtain ──────────────────────────────────────────────────────

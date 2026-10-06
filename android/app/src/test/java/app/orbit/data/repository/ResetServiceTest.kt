@@ -28,12 +28,9 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -46,7 +43,10 @@ import org.robolectric.annotation.Config
 /**
  * [ResetService] fulfills the full settings-spec contract: cancel scheduled
  * WorkManager jobs, stop the content observers, THEN wipe Room + DataStore,
- * and run one undebounced widget refresh. These tests pin each leg.
+ * and run one undebounced widget refresh. These tests pin each leg, and the
+ * outcome contract (SET-06): [ResetService.outcome] is sticky state, so a
+ * collector that subscribes after the reset finished still sees Completed or
+ * Failed, and a failing step becomes Failed rather than an exception.
  *
  * Work requests are enqueued with long initial delays so the synchronous
  * test executor leaves them ENQUEUED (a zero-delay request would execute
@@ -99,6 +99,13 @@ class ResetServiceTest {
         var stopCount: Int = 0
         override fun start() = Unit
         override fun stop() { stopCount++ }
+    }
+
+    /** Step 2 of the wipe throws, so the reset fails before Room is touched. */
+    private class FailingController(ctx: android.content.Context) :
+        ContentObserverController(ctx) {
+        override fun start() = Unit
+        override fun stop() { throw IllegalStateException("observer registry gone") }
     }
 
     private fun enqueueAllUniqueWorks(wm: WorkManager) {
@@ -176,9 +183,9 @@ class ResetServiceTest {
             contentObserverController = controller,
         )
 
-        // Subscribe BEFORE the reset: the completion event has no replay.
-        val completed = async { withTimeout(30_000L) { service.resetCompleteEvents.first() } }
-        delay(50)
+        // Nobody collects the outcome yet: the Settings screen that confirmed
+        // the reset may be gone by the time it lands.
+        assertEquals(null, service.outcome.value)
 
         service.resetAll()
 
@@ -227,7 +234,41 @@ class ResetServiceTest {
         //    restart lands on the welcome screen.
         assertEquals(false, prefs.isOnboardingComplete.first())
 
-        // 5. The completion event the Settings screen restarts the task on.
-        completed.await()
+        // 5. The outcome MainActivity restarts the task on, readable by a
+        //    collector that subscribes after the fact, then cleared once acted
+        //    on so the restarted process (the same one) does not act again.
+        assertEquals(ResetOutcome.Completed, service.outcome.first())
+        service.clearOutcome()
+        assertEquals(null, service.outcome.value)
+    }
+
+    @Test
+    fun `a failing step yields Failed, nothing escapes, and the outcome waits to be read`() =
+        runBlocking {
+        db.contactDao().insert(
+            ContactEntity(
+                id = 1L,
+                phoneNumber = "+15551234567",
+                normalizedPhone = "+15551234567",
+                displayName = "Sam",
+                firstSeenByAppAt = Instant.ofEpochMilli(1_000L),
+            ),
+        )
+        val prefs: AppPrefs = tmp.newPrefs(storeScope)
+        val service = ResetService(
+            context = context,
+            database = db,
+            appPrefs = prefs,
+            contentObserverController = FailingController(context),
+        )
+
+        // Returns normally: the outcome is the report (rules.md Code 3), and a
+        // throw here would have crashed the application scope it runs on.
+        service.resetAll()
+
+        assertEquals(ResetOutcome.Failed, service.outcome.first(), "readable by a late collector")
+        assertEquals(1, db.contactDao().getAllOnce().size, "the wipe stopped before Room")
+        service.clearOutcome()
+        assertEquals(null, service.outcome.value)
     }
 }

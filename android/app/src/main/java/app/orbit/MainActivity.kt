@@ -22,24 +22,31 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.compose.rememberNavController
 import app.orbit.calllog.ContentObserverController
 import app.orbit.data.AppPrefs
 import app.orbit.data.feed.HomeFeed
 import app.orbit.data.repository.ListRepository
+import app.orbit.data.repository.ResetOutcome
 import app.orbit.domain.usecase.WidgetSurfaceUseCase
 import app.orbit.nav.AppLinks
 import app.orbit.nav.OrbitNavHost
 import app.orbit.nav.Routes
 import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.screens.picker.PickerCommitBus
+import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.theme.OrbitDarkMode
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.OrbitThemes
 import app.orbit.ui.theme.ThemeSettings
 import app.orbit.ui.util.TimeStyle
+import app.orbit.ui.util.UiText
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -89,6 +96,14 @@ class MainActivity : ComponentActivity() {
      * show first, read once at the moment of the tap.
      */
     @Inject lateinit var nextPeople: WidgetSurfaceUseCase
+
+    /**
+     * SET-06: where a failed reset is told to the user. The app-level host
+     * mounted in [OrbitNavHost] collects this bus and renders on whatever
+     * screen is up, which is the point: the reset runs on the application
+     * scope and its failure may land after Settings has been popped.
+     */
+    @Inject lateinit var commitBus: PickerCommitBus
 
     /**
      * D-17: the NAVIGATE_TO route string from a notification, widget or
@@ -162,6 +177,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * SET-06: once ResetService has finished (works cancelled, observers
+     * stopped, Room + DataStore wiped) the user must land somewhere honest.
+     * Restarting the task is the simplest reliable mechanism: the relaunched
+     * MainActivity re-resolves its start destination from the now-cleared
+     * onboarding flag and lands on the welcome screen. An in-place
+     * nav.navigate would leave stale back-stack entries and ViewModels
+     * holding pre-reset state; Activity.recreate() keeps the nav back stack.
+     * The outcome is cleared before this runs: the process survives the
+     * restart, and the new activity's collector must not restart it again.
+     */
+    private fun restartTaskIntoOnboarding() {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        if (launchIntent != null) {
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            startActivity(launchIntent)
+        }
+        finish()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // The Splash API keeps the themed launcher screen visible until the
         // boot ViewModel resolves a start destination. No runBlocking, no
@@ -230,6 +265,46 @@ class MainActivity : ComponentActivity() {
                 }
             }
         )
+
+        // SET-06: act on the reset's outcome here, not in Settings. The reset
+        // runs on the application scope (rules.md Code 6) and the outcome is
+        // sticky state on ResetService, so it is still there if the user
+        // backed out of Settings or backgrounded the app during the wipe; a
+        // SharedFlow collected by the Settings screen dropped both the
+        // completion and the failure in that window, leaving a live app over
+        // an empty database with the onboarding flag cleared.
+        //
+        // RESUMED, and the failure published through a dispatch: the snackbar
+        // host in OrbitNavHost restarts its own collector on ON_START, but that
+        // launch goes through the composition's dispatcher and has not run when
+        // ON_START is delivered here, so a failure already waiting when the app
+        // comes back would be published into a bus with no subscriber and
+        // dropped (PickerCommitBus keeps no replay). Publishing from ON_RESUME,
+        // and after a dispatch of our own, lands behind the host's launch. The
+        // outcome is cleared only after the message is on the bus, so a resume
+        // cut short still re-publishes it next time; nothing fires while the
+        // activity is stopped, so a restart waits for the user to return.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                appViewModel.resetOutcome.collect { outcome ->
+                    when (outcome) {
+                        null -> Unit
+                        ResetOutcome.Completed -> {
+                            appViewModel.onResetOutcomeHandled()
+                            restartTaskIntoOnboarding()
+                        }
+                        ResetOutcome.Failed -> {
+                            withContext(Dispatchers.Main) {
+                                commitBus.publish(
+                                    SnackbarEvent(UiText.res(R.string.settings_reset_failed)),
+                                )
+                            }
+                            appViewModel.onResetOutcomeHandled()
+                        }
+                    }
+                }
+            }
+        }
 
         setContent {
             val start by appViewModel.startDestination.collectAsStateWithLifecycle()

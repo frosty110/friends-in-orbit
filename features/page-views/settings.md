@@ -36,8 +36,8 @@
 - "Ignored" opens the Ignored screen; "Call history" opens Call history
 - "Export your data" opens a sheet: "Export your data" / "We'll save an encrypted file of your lists, people, call history, notes, and custom schedules. Pick a strong password: we don't store it, and we can't recover it.", "Password" ("At least 8 characters."), "Type it again", "Export"; then the phone's save dialog; "Saved your encrypted backup." or "Couldn't save the file." (the row is the retry)
 - "Import backup" opens the phone's file picker, then "Open your backup" / "Enter the password you chose when you exported this file.", then asks "Restore this backup?" / "This replaces everything in Orbit with the backup: 4 lists and 52 people. What's on this phone now will be erased." with "Replace" and "Cancel". Outcomes: "Backup restored.", "That file couldn't be read. Check it's an Orbit backup.", "This backup was made by a newer version of Orbit. Update Orbit first.", "Couldn't restore the backup. Nothing was changed."
-- While an export or import runs the rows read "Saving…", "Checking the file…" or "Restoring…", and Export, Import and Reset are disabled
-- "Reset Orbit" asks "Reset Orbit?" / "Every list, person, note, and call record on this phone will be erased. Your phone's own contacts and call log are not touched." with "Reset" and "Cancel". A reset finishes even if you leave the screen, clears the widgets at once, and restarts Orbit into onboarding; "Couldn't finish the reset. Try again." if it could not
+- While an export, an import or a reset runs, Export, Import and Reset are disabled: the busy row reads "Saving…", "Checking the file…", "Restoring…" or "Resetting…", and the other two read "Waiting for the other backup step to finish"
+- "Reset Orbit" asks "Reset Orbit?" / "Every list, person, note, and call record on this phone will be erased. Your phone's own contacts and call log are not touched." with "Reset" and "Cancel". While it runs the row reads "Resetting…" and Back is held. A reset finishes even if you leave the screen, clears the widgets at once, and restarts Orbit into onboarding, even if you had left Settings or Orbit was in the background when it finished; "Couldn't finish the reset. Try again." shows wherever you are if it could not
 - "Send feedback" opens your mail app; "Privacy policy" and "Source code" open the browser; "Open source licenses" opens the list, with "Close"
 
 ## States
@@ -57,7 +57,8 @@
 
 ## Tests that pin it
 
-- `SettingsViewModelTest` (permission states, including never asked and granted while away; a sync on grant; the import range and its re-read; Error and recovery; the reset path and its failure; appearance writes)
+- `SettingsViewModelTest` (permission states, including never asked and granted while away; a sync on grant; the import range and its re-read; Error and recovery; the reset as in flight, outliving the screen, and its failure staying off the screen's snackbar; appearance writes)
+- `SettingsDataRowsTest` (what the disabled Data rows say during an export, an import and a reset)
 - `PermissionRowActionTest`, `PickerThresholdsValidationTest`
-- `ExportViewModelTest` (added this round), `ImportViewModelTest`, `ImportServiceTest`, `ResetServiceTest`, `AppPrefsTest`, `PassphraseEncryptorTest`, `RelativeTimeTest` (the sync rows' wording)
-- Gallery previews: `SettingsContentPreview`, `AppearanceSectionPreview`, `PermissionsRowPreview`, `PickerThresholdsRowLightPreview`, `PickerThresholdsDialogLightPreview`, `ExportPassphraseSheetLightPreview`, `ImportPassphraseSheetLightPreview`, `ImportConfirmDialogPreview`, `AboutSectionPreview`, `LicensesDialogPreview`
+- `ExportViewModelTest` (added this round), `ImportViewModelTest`, `ImportServiceTest`, `ResetServiceTest` (the wipe's order, and its outcome read after the fact), `AppViewModelTest` (the outcome handed to the Activity), `AppPrefsTest`, `PassphraseEncryptorTest`, `RelativeTimeTest` (the sync rows' wording)
+- Gallery previews: `SettingsContentPreview`, `SettingsContentGrantedSyncingPreview`, `SettingsContentResettingPreview`, `AppearanceSectionPreview`, `PermissionsRowPreview`, `PickerThresholdsRowLightPreview`, `PickerThresholdsDialogLightPreview`, `ExportPassphraseSheetLightPreview`, `ImportPassphraseSheetLightPreview`, `ImportConfirmDialogPreview`, `AboutSectionPreview`, `LicensesDialogPreview`
