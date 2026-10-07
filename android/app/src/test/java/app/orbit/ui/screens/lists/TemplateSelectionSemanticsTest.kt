@@ -13,7 +13,11 @@ import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import app.orbit.data.entity.RuleKind
+import app.orbit.ui.screens.lists.newlist.StartWithStep
 import app.orbit.ui.theme.OrbitTheme
 import org.junit.Rule
 import org.junit.Test
@@ -22,10 +26,11 @@ import org.robolectric.annotation.Config
 
 /**
  * The rhythm rows (Contact detail's per-person rhythm; List settings shows
- * one How often slider instead since LIST-24) and the template tiles on the create sheet
- * are one choice each, so TalkBack must hear a radio button with its selected
- * state (WCAG 4.1.2) and not "Keep in touch, button". Until 2026-10-06 both
- * were plain clickables whose only selection cue was drawn: a dot, a tint.
+ * one How often slider instead since LIST-24) and the template tiles on New
+ * list's first step (LIST-29; the create sheet's until 2026-10-07) are one
+ * choice each, so TalkBack must hear a radio button with its selected state
+ * (WCAG 4.1.2) and not "Keep in touch, button". Until 2026-10-06 both were
+ * plain clickables whose only selection cue was drawn: a dot, a tint.
  * The gallery's a11y audit checks labels and 48dp, not roles, so this test
  * reads the semantics tree directly.
  */
@@ -61,19 +66,35 @@ class TemplateSelectionSemanticsTest {
 
     @Test
     fun template_tiles_are_one_radio_group_and_say_which_is_picked() {
+        var picked by mutableStateOf<TemplateChoice?>(null)
+        var pickedName: String? = null
         compose.setContent {
             OrbitTheme {
-                CreateListContent(onCreate = { _, _ -> }, onDismiss = {})
+                StartWithStep(
+                    selected = picked,
+                    onSelect = { template, defaultName ->
+                        picked = template
+                        pickedName = defaultName
+                    },
+                )
             }
         }
 
+        // All five, the smart one under its label included, are one group.
         compose.onNode(group).assertExists()
         compose.onAllNodes(isSelectable()).assertCountEquals(TemplateChoice.Catalog.size)
         compose.onNode(isSelectable() and hasText("Family")).assert(radio).assertIsNotSelected()
+        compose.onNode(isSelectable() and hasText("Recently added, not called")).assert(radio)
 
         compose.onNode(isSelectable() and hasText("Family")).performClick()
 
         compose.onNode(isSelectable() and hasText("Family")).assertIsSelected()
         compose.onNode(isSelectable() and hasText("Inner orbit")).assertIsNotSelected()
+        // The tile hands over its name, the new list's starting name.
+        compose.runOnIdle { kotlin.test.assertEquals("Family", pickedName) }
+
+        compose.onNode(isSelectable() and hasText("Start from blank")).performClick()
+        compose.onNode(isSelectable() and hasText("Start from blank")).assertIsSelected()
+        compose.runOnIdle { kotlin.test.assertEquals("", pickedName, "blank starts with no name") }
     }
 }

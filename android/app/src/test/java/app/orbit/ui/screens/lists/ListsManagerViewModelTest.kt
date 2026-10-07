@@ -29,7 +29,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -477,82 +476,6 @@ class ListsManagerViewModelTest {
         val before = repo.updateNameCalls.size
         vm.renameList(listId = 7L, name = "")
         assertEquals(before, repo.updateNameCalls.size, "empty input must not dispatch updateName")
-    }
-
-    // ============================================================================
-    // 2026-06-09 #26 — create must hand the new id to the screen so it can
-    // navigate to the new list's configuration instead of stranding the user.
-    // ============================================================================
-
-    @Test
-    fun createList_emits_new_id_for_navigation() = runTest {
-        val repo = FakeListRepository(initialLists = listOf(listFixture(id = 3L, sortOrder = 0)))
-        val vm =
-            ListsManagerViewModel(
-                listRepo = repo,
-                ruleTemplateRepo = FakeRuleTemplateRepository(),
-                nudgeScheduler = ListsManagerFakeNudgeScheduler()
-            )
-        val blank = TemplateChoice.Catalog.first { it.id == "blank" }
-
-        vm.createdListEvents.test(timeout = 2.seconds) {
-            vm.createList(blank, "Night owls")
-            // FakeListRepository.create assigns max(id) + 1.
-            assertEquals(4L, awaitItem())
-            cancelAndIgnoreRemainingEvents()
-        }
-        assertEquals("Night owls", repo.createCalls.single().name)
-    }
-
-    @Test
-    fun createList_writes_the_templates_own_interval() = runTest {
-        // Regression: every template made the same 2-day list (the Keep in
-        // touch default), whatever its subtitle promised.
-        val repo = FakeListRepository()
-        val vm =
-            ListsManagerViewModel(
-                listRepo = repo,
-                ruleTemplateRepo = FakeRuleTemplateRepository(),
-                nudgeScheduler = ListsManagerFakeNudgeScheduler()
-            )
-        val family = TemplateChoice.Catalog.first { it.id == "family" }
-        val blank = TemplateChoice.Catalog.first { it.id == "blank" }
-
-        vm.createdListEvents.test(timeout = 2.seconds) {
-            vm.createList(family, "Family")
-            awaitItem()
-            vm.createList(blank, "Night owls")
-            awaitItem()
-            cancelAndIgnoreRemainingEvents()
-        }
-
-        val familyJson =
-            assertNotNull(repo.createCalls.first { it.name == "Family" }.ruleParamsOverrideJson)
-        val params = JsonProvider.json.decodeFromString(RuleParams.serializer(), familyJson)
-        assertEquals(RuleParams.KeepInTouch().withIntervalHours(14 * 24), params)
-        assertNull(
-            repo.createCalls.first { it.name == "Night owls" }.ruleParamsOverrideJson,
-            "Start from blank keeps the template default"
-        )
-    }
-
-    @Test
-    fun createList_blank_name_emits_no_navigation_event() = runTest {
-        val repo = FakeListRepository()
-        val vm =
-            ListsManagerViewModel(
-                listRepo = repo,
-                ruleTemplateRepo = FakeRuleTemplateRepository(),
-                nudgeScheduler = ListsManagerFakeNudgeScheduler()
-            )
-        val blank = TemplateChoice.Catalog.first { it.id == "blank" }
-
-        vm.createdListEvents.test(timeout = 2.seconds) {
-            vm.createList(blank, "   ")
-            expectNoEvents()
-            cancelAndIgnoreRemainingEvents()
-        }
-        assertTrue(repo.createCalls.isEmpty(), "blank name must not create a list")
     }
 
     // ============================================================================

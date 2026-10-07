@@ -83,22 +83,58 @@
 
     <string name="lists_rename_title">Rename list</string>
 
-    <!-- ===== Create a list ===== -->
-    <string name="lists_create_choose_template">Choose a template</string>
-    <string name="lists_create_name_label">Name your list</string>
-    <!-- Placeholder in the empty name field. -->
-    <string name="lists_create_name_placeholder">e.g. Inner orbit</string>
-    <!-- Create stays disabled until a template and a name are chosen; the "Name your list"
-         heading is the prompt, so there is no error line. -->
-    <string name="lists_create_cta">Create</string>
+    <!-- ===== New list (LIST-28, LIST-29): a full-screen flow, one decision per step ===== -->
+    <!-- The flow's app bar title. -->
+    <string name="lists_new_title">New list</string>
+    <!-- Progress in the app bar. %1$d: this step, %2$d: how many steps there are (4, or 3
+         for a list that fills itself). A plural on the total, because other languages
+         inflect "of N". -->
+    <plurals name="lists_new_progress">
+        <item quantity="one">Step %1$d of %2$d</item>
+        <item quantity="other">Step %1$d of %2$d</item>
+    </plurals>
+    <!-- Screen-reader name of the X that leaves the flow (asking first when something is
+         entered). -->
+    <string name="lists_new_close">Close</string>
+    <!-- Moves to the next step. -->
+    <string name="lists_new_next">Next</string>
+    <!-- The last step's button: makes the list, its rhythm and its people. -->
+    <string name="lists_new_create">Create list</string>
 
-    <!-- List templates. The name also becomes the new list's starting name. -->
+    <!-- Step 1, Start with: one choice among the tiles below. -->
+    <string name="lists_new_start_heading">How do you want to start?</string>
+    <!-- The small label over the one template whose people come from a rule: the name the
+         Lists screen's chip gives such a list (lists_row_smart_chip). -->
+    <string name="lists_new_smart_label">Smart list</string>
+
+    <!-- Step 2, the list's name. -->
+    <string name="lists_new_name_heading">Name your list</string>
+
+    <!-- Step 3, the list's rhythm (the How often slider List settings uses). -->
+    <string name="lists_new_how_often_heading">How often</string>
+    <string name="lists_new_how_often_hint">You can change this any time in the list\'s settings.</string>
+
+    <!-- Step 4, the people. -->
+    <string name="lists_new_people_heading">Add people</string>
+    <string name="lists_new_people_hint">Choose the people you want to keep in touch with on this list.</string>
+    <!-- Opens the contact picker while nobody is chosen yet. -->
+    <string name="lists_new_add_people">Add people</string>
+    <!-- Makes the list with nobody on it; add people later from its settings. -->
+    <string name="lists_new_create_empty">Create without people</string>
+
+    <!-- Leaving the flow with something entered. -->
+    <string name="lists_new_discard_title">Discard this list?</string>
+    <string name="lists_new_discard_keep">Keep going</string>
+    <string name="lists_new_discard_confirm">Discard</string>
+
+    <!-- On the screen the flow returns to, once the list is made. %1$s: the list's name. -->
+    <string name="lists_snackbar_created">Created %1$s.</string>
+
+    <!-- List templates, step 1. The name also becomes the new list's starting name. -->
     <string name="lists_template_inner_orbit">Inner orbit</string>
     <string name="lists_template_inner_orbit_subtitle">Closest people, about weekly.</string>
     <string name="lists_template_family">Family</string>
     <string name="lists_template_family_subtitle">Steady, every couple of weeks.</string>
-    <string name="lists_template_mentors">Mentors</string>
-    <string name="lists_template_mentors_subtitle">Every couple of months.</string>
     <!-- People the user has drifted apart from. -->
     <string name="lists_template_drifted">Drifted</string>
     <string name="lists_template_drifted_subtitle">Reconnect about once a month.</string>

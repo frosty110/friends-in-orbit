@@ -29,6 +29,16 @@ interface ListDao {
     @Query("SELECT * FROM lists ORDER BY sortOrder ASC")
     fun observeAll(): Flow<List<ListEntity>>
 
+    /**
+     * LIST-02 / LIST-28: the highest `sortOrder` across every list, archived
+     * included, or null with no lists. A new list takes this plus one, read
+     * inside the create transaction (`CreateListUseCase`), so it lands at the
+     * bottom and never shares a position with an archived list that comes
+     * back. A suspend snapshot for the same reason as [getActive].
+     */
+    @Query("SELECT MAX(sortOrder) FROM lists")
+    suspend fun maxSortOrder(): Int?
+
     @Query("SELECT * FROM lists WHERE id = :id")
     fun observeById(id: Long): Flow<ListEntity?>
 

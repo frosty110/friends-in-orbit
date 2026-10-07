@@ -483,8 +483,8 @@ class ListConfigViewModel @Inject constructor(
      * update round trip; and List settings' title, which renames in place and
      * commits once, on "Save list name" or the keyboard's Done (LIST-26). A
      * blank name keeps the old one; a failed write says "Couldn't save your
-     * change" through [runMutation]. The create sheet also names a list, but
-     * through `createList`, before this screen opens.
+     * change" through [runMutation]. New list also names a list, but
+     * through `CreateListUseCase`, before this screen ever opens (LIST-28).
      */
     fun setName(name: String) {
         val id = listId ?: return

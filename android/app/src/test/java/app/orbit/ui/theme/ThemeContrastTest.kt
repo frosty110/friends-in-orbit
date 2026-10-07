@@ -18,6 +18,9 @@
 //     every Wallpaper hue and every accent-dial hue (home-5). Until 2026-10-06
 //     only the neutral surfaces were checked and a 72% alpha member count on
 //     the tinted band fell under 4.5:1 unnoticed until someone looked.
+//   - New list's tinted template tiles (LIST-29, rhythmTemplateTints): the
+//     tile's name (fg) and its subtitle and icon (fgMuted) on each of the
+//     three tints, >= 4.5:1, in the same themes, modes and hues.
 // Until 2026-10-05 button labels were held only to 3.0, which let Warm's
 // white-on-terracotta ship at 3.88:1, and fgSubtle was never checked.
 package app.orbit.ui.theme
@@ -99,6 +102,26 @@ class ThemeContrastTest {
         }
     }
 
+    /**
+     * LIST-29: New list's three rhythm tiles, tinted along one ramp from the
+     * accent tint toward the surface. Each carries its name in fg and its
+     * subtitle and icon in fgMuted. The three must also be three: if the
+     * search for a legible warmest stop ran all the way to the surface, the
+     * colour coding the owner asked for would be gone. (The stops are not
+     * compared by contrast with the surface: a tint can differ from it in hue
+     * at nearly its luminance, as the dial's blues do in dark mode.)
+     */
+    private fun checkTemplateTints(name: String, c: OrbitColors) {
+        val tints = rhythmTemplateTints(c)
+        tints.forEachIndexed { i, tint ->
+            assertContrast("$name template tint $i fg", c.fg, tint, bodyAA)
+            assertContrast("$name template tint $i fgMuted", c.fgMuted, tint, bodyAA)
+        }
+        if (tints.toSet().size != tints.size || c.surface in tints) {
+            failures += "$name template tints are not three steps off the surface: $tints"
+        }
+    }
+
     /** A snackbar is the other mode's background with the other mode's accent action. */
     private fun checkInverse(name: String, settings: ThemeSettings, deviceHue: Float? = null) {
         for (dark in listOf(false, true)) {
@@ -116,6 +139,31 @@ class ThemeContrastTest {
             checkPalette("${def.id.name} dark", def.dark)
             checkTones("${def.id.name} light", OrbitThemes.resolve(ThemeSettings(themeId = def.id), isDark = false))
             checkTones("${def.id.name} dark", OrbitThemes.resolve(ThemeSettings(themeId = def.id), isDark = true))
+        }
+        assertNoFailures()
+    }
+
+    @Test
+    fun `New list's template tints carry their text in every theme, mode and hue`() {
+        for (def in OrbitThemes.all) {
+            for (isDark in listOf(false, true)) {
+                val mode = if (isDark) "dark" else "light"
+                checkTemplateTints("${def.id.name} $mode", OrbitThemes.resolve(ThemeSettings(themeId = def.id), isDark).colors)
+                var hue = 0
+                while (hue < 360) {
+                    val dial = OrbitThemes.resolve(ThemeSettings(themeId = def.id, accentHue = hue), isDark).colors
+                    checkTemplateTints("${def.id.name} dial hue=$hue $mode", dial)
+                    hue += 15
+                }
+            }
+        }
+        var hue = 0
+        while (hue < 360) {
+            for (isDark in listOf(false, true)) {
+                val wallpaper = OrbitThemes.resolve(ThemeSettings(themeId = OrbitThemeId.DEVICE), isDark, deviceHue = hue.toFloat())
+                checkTemplateTints("Wallpaper hue=$hue ${if (isDark) "dark" else "light"}", wallpaper.colors)
+            }
+            hue += 15
         }
         assertNoFailures()
     }

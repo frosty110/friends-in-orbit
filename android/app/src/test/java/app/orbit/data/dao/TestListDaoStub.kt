@@ -28,6 +28,8 @@ open class TestListDaoStub(
 
     override fun observeAll(): Flow<List<ListEntity>> = flowOf(lists)
 
+    override suspend fun maxSortOrder(): Int? = lists.maxOfOrNull { it.sortOrder }
+
     override fun observeById(id: Long): Flow<ListEntity?> =
         flowOf(lists.firstOrNull { it.id == id })
 

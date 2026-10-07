@@ -211,6 +211,7 @@ class ContactPickerViewModel(
             "move" -> PickerMode.Move
             "copy" -> PickerMode.Copy
             "relink" -> PickerMode.Relink
+            "collect" -> PickerMode.Collect
             else -> PickerMode.Add
         }
 
@@ -258,6 +259,18 @@ class ContactPickerViewModel(
                 initialValue = savedStateHandle.get<Array<String>>(KEY_ACTIVE_FILTERS)
                     ?.mapNotNull(::decodePickerFilter)?.toSet().orEmpty()
             )
+
+    // LIST-28: Collect opens with the people New list has already chosen
+    // ticked (the route's comma-separated `selected`), so going back to the
+    // picker shows the selection the user made. Seeded once, before the
+    // selection flow below reads the handle; after that the handle is the
+    // selection's only store, and a process death restores whatever the user
+    // changed rather than the route's original list.
+    init {
+        if (mode == PickerMode.Collect && !savedStateHandle.contains(KEY_SELECTED_IDS)) {
+            savedStateHandle[KEY_SELECTED_IDS] = parseSelected(savedStateHandle.get<String>(ARG_SELECTED))
+        }
+    }
 
     private val selectedIdsFlow: StateFlow<Set<Long>> =
         savedStateHandle.getStateFlow<LongArray?>(KEY_SELECTED_IDS, null)
@@ -310,6 +323,8 @@ class ContactPickerViewModel(
             PickerMode.Relink -> relinkContactId != null
             PickerMode.Move -> targetListId != null && sourceListId != null
             PickerMode.Add, PickerMode.Copy -> targetListId != null
+            // LIST-28: the list does not exist yet; there is nothing to find.
+            PickerMode.Collect -> true
         }
         if (!routeIsValid) {
             _permissionPhase.value = ContactPickerUiState.Phase.NotFound
@@ -489,6 +504,11 @@ class ContactPickerViewModel(
      * rethrown per codebase convention (HomeViewModel.runMutation).
      */
     fun onCommit() {
+        // LIST-28: Collect writes nothing; the screen hands the selection to
+        // New list instead of calling this (ContactPickerScreen's onCollect).
+        // Reaching here would commit to no list, so it fails loudly rather
+        // than doing nothing (rules.md Code 3).
+        check(mode != PickerMode.Collect) { "Collect hands its selection back; it never commits" }
         val ids = selectedIdsFlow.value.toList()
         if (ids.isEmpty()) return
         if (mode == PickerMode.Relink) {
@@ -821,12 +841,16 @@ class ContactPickerViewModel(
     // working-looking picker whose bar read "Add 3 to " and failed at commit.
     // A malformed route (null id) is NotFound from init already.
     private val targetNameFlow: Flow<String?> =
-        if (mode == PickerMode.Relink) {
-            relinkContactId?.let { id -> contactRepo.observeById(id).map { it?.displayName } }
-                ?: flowOf<String?>(null)
-        } else {
-            targetListId?.let { id -> listRepo.observeById(id).map { it?.name } }
-                ?: flowOf<String?>(null)
+        when (mode) {
+            PickerMode.Relink ->
+                relinkContactId?.let { id -> contactRepo.observeById(id).map { it?.displayName } }
+                    ?: flowOf<String?>(null)
+            // LIST-28: no list yet, so no name, and never NotFound; the bar
+            // says "Add 3 people" without one.
+            PickerMode.Collect -> flowOf("")
+            else ->
+                targetListId?.let { id -> listRepo.observeById(id).map { it?.name } }
+                    ?: flowOf<String?>(null)
         }
 
     /**
@@ -1071,6 +1095,10 @@ class ContactPickerViewModel(
         // a process death mid-flow doesn't drop the user's selection.
         const val KEY_SELECTED_IDS = "selectedIds"
         const val KEY_SEARCH_QUERY = "searchQuery"
+
+        // LIST-28: Collect's route argument, the chosen ids joined by commas
+        // (Routes.collectPeople).
+        const val ARG_SELECTED = "selected"
         const val KEY_ACTIVE_FILTERS = "activeFilters"
 
         // Sort-mode persistence key + tokens. Round-trip through
@@ -1138,6 +1166,14 @@ class ContactPickerViewModel(
         val ingesting: Boolean
     )
 }
+
+/**
+ * LIST-28: Collect's `selected` route argument ("3,7,12") as ids. Anything
+ * that is not a number is dropped rather than failing the picker: the worst
+ * a malformed argument does is open with fewer people ticked.
+ */
+internal fun parseSelected(arg: String?): LongArray =
+    arg.orEmpty().split(',').mapNotNull { it.trim().toLongOrNull() }.distinct().toLongArray()
 
 /**
  * Resolves the surface phase from the permission/commit base

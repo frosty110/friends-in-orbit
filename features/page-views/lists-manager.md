@@ -1,17 +1,17 @@
 # Lists
 
-**Route:** `lists`; `lists?openCreate=true` opens with the create sheet already up
+**Route:** `lists`; `lists?openCreate=true` opens New list over it, once (an older route; nothing in the app builds it since LIST-28)
 **Group:** Lists
 **Status:** active
 **Last reviewed:** 2026-10-07
-**Spec:** [orbit-lists](../orbit-lists/README.md): LIST-20, LIST-22, LIST-23, LIST-24, BULK-05; PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
+**Spec:** [orbit-lists](../orbit-lists/README.md): LIST-20, LIST-22, LIST-23, LIST-24, LIST-28, BULK-05; PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
 
 ## Reached from
 
 - Home: the Lists icon in the app bar
-- Home: "New list", or "Create your first list" on a fresh install (the create sheet opens at once)
+- New list, when it was opened from here: after Create, or on leaving it
 
 ## What the user sees
 
@@ -27,7 +27,7 @@
 - Drag the handle to reorder; the order is Home's order
 - "More actions for {list}", in order: "Rename" (a dialog, "Rename list", with "Save" and "Cancel"; the name is masked under the curtain), "List settings", "Pause nudges" (or "Resume nudges" while they are paused; "Nudges paused." / "Nudges on."), "Move up", "Move down", then after a divider "Archive" with the line "Hides {list} from home. You can restore it.": "List archived." with Undo
 - "+": opens the Add people picker for that list
-- "New list" opens the create sheet: "Choose a template" ("Inner orbit" "Closest people, about weekly.", "Family" "Steady, every couple of weeks.", "Mentors" "Every couple of months.", "Drifted" "Reconnect about once a month.", "Recently added, not called" "Auto-updates as you add people.", "Start from blank" "Choose your own rhythm."), "Name your list", then "Cancel" or "Create" (available once a template and a name are chosen). Each template creates the rhythm its subtitle names, and Create opens the new list's List settings
+- "New list" opens New list, step by step (LIST-28): how to start, the name, how often, the people, then "Create list". Create returns here with "Created {name}." and the new list last in the order. Until 2026-10-07 it opened a create sheet here, and Create opened the new list's List settings
 - Archived lists: "Restore" ("List restored."); the delete control asks "Delete this list?" / "This removes the list. People stay in your contacts." with "Delete" and "Keep", then "List deleted." with Undo, the delete held until the snackbar goes; the settings control opens List settings
 - A change that could not be saved says "Couldn't save your change" and shows no success message
 
@@ -42,14 +42,14 @@
 
 - Card view (tap a row); Back returns here
 - The Add people picker ("+"); it returns here with "Added 3 people to {list}" and Undo
-- List settings (the menu, an archived row, and after "Create"); Done or Back returns here
+- List settings (the menu, an archived row); Done or Back returns here
+- New list ("New list"); Create, or leaving it, returns here
 - Back returns to Home
 
 ## Tests that pin it
 
 - `ListsManagerViewModelTest` (archive, restore, delete with undo, reorder, the nudge toggle, the failure path, the rhythm line for every rule type and its unreadable case), `RuleParamsResolutionTest` (the resolver shared with List settings)
 - `ListRowMenuOrderTest` (menu order, and the same pause and resume words as Home)
-- `ListsManagerScreenTest` (added this round: a row tap, "List settings" and create go to different places)
-- `CreateListTemplateCatalogTest` (each template makes the rhythm its subtitle names)
-- `OrbitNavHostTest` (added this round: a row tap opens the deck and "List settings" opens List settings, LIST-23)
-- Gallery previews: `ListsManagerContentPreview`, `ListRowPreviewLightStatic`, `ListRowPreviewDarkSmart`, `ArchivedListRowPreviewLight`, `CreateListBottomSheetLightPreview`, `RenameListDialogLightPreview`, `DeleteListDialogLightPreview`, the Loading, Error and archived-expanded previews added this round, with the curtain pass
+- `ListsManagerScreenTest` (a row tap, "List settings" and "New list" go to different places; "New list" is handed to the caller, which opens New list)
+- `OrbitNavHostTest` (a row tap opens the deck and "List settings" opens List settings, LIST-23; "New list" opens New list and leaving it returns here, and `lists?openCreate=true` opens it once, LIST-28)
+- Gallery previews: `ListsManagerContentPreview`, `ListsManagerReadyPreview`, `ListRowPreviewLightStatic`, `ListRowPreviewDarkSmart`, `ArchivedListRowPreviewLight`, `RenameListDialogLightPreview`, `DeleteListDialogLightPreview`, the Loading, Error and archived-expanded previews, with the curtain pass

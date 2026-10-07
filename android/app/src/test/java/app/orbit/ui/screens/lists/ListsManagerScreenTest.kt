@@ -26,11 +26,12 @@ import org.robolectric.annotation.Config
 
 /**
  * LIST-23 wiring (lists-1): the Lists screen leaves for two places. A tap on
- * a row opens the list's deck; the row menu's "List settings", the archived
- * row's settings control and a successful Create open List settings. Until
- * 2026-10-06 the screen had one callback and all three opened the deck, so a
- * brand-new list opened as an empty deck. The regression shipped with "nav
- * tests pass" because nothing asserted where each control went; this does.
+ * a row opens the list's deck; the row menu's "List settings" and the
+ * archived row's settings control open List settings. Until 2026-10-06 the
+ * screen had one callback and all of them opened the deck. The regression
+ * shipped with "nav tests pass" because nothing asserted where each control
+ * went; this does. "New list" opens the New list flow (LIST-28), a screen of
+ * its own since 2026-10-07; where that flow returns is OrbitNavHostTest's.
  *
  * Runs on the JVM under Robolectric: it reads the semantics tree and fires
  * click actions, which needs no emulator (development-cycle.md, Verify).
@@ -117,7 +118,7 @@ class ListsManagerScreenTest {
     }
 
     @Test
-    fun new_list_opens_the_create_sheet() {
+    fun new_list_opens_the_new_list_flow() {
         setReadyContent()
 
         compose.onNodeWithText("New list").performClick()
@@ -125,16 +126,10 @@ class ListsManagerScreenTest {
         compose.runOnIdle { assertEquals(listOf("create"), fired) }
     }
 
-    /**
-     * The create flow's destination lives in the stateful screen, which
-     * collects the VM's `createdListEvents`; a real VM over the fakes drives
-     * it, as the `vm` parameter allows.
-     */
     @Test
-    fun a_created_list_opens_its_settings() {
-        val repo = FakeListRepository(initialLists = listOf(listFixture(id = 1L, sortOrder = 0)))
+    fun the_stateful_screen_hands_new_list_to_its_caller() {
         val vm = ListsManagerViewModel(
-            listRepo = repo,
+            listRepo = FakeListRepository(initialLists = listOf(listFixture(id = 1L, sortOrder = 0))),
             ruleTemplateRepo = FakeRuleTemplateRepository(),
             nudgeScheduler = ScreenTestNudgeScheduler(),
         )
@@ -144,17 +139,17 @@ class ListsManagerScreenTest {
                     onBack = {},
                     onOpenList = { fired += "deck:$it" },
                     onOpenListSettings = { fired += "settings:$it" },
+                    onCreateList = { fired += "new list" },
                     vm = vm,
                 )
             }
         }
-        compose.waitForIdle()
 
-        val blank = TemplateChoice.Catalog.first { it.id == "blank" }
-        compose.runOnIdle { vm.createList(blank, "Night owls") }
+        compose.onNodeWithText("New list").performClick()
 
-        // FakeListRepository.create assigns max(id) + 1.
-        compose.runOnIdle { assertEquals(listOf("settings:2"), fired) }
+        // The sheet is gone (LIST-28): nothing opens on this screen, the
+        // caller (the nav graph) opens the flow.
+        compose.runOnIdle { assertEquals(listOf("new list"), fired) }
     }
 }
 

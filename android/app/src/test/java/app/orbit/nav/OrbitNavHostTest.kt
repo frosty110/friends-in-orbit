@@ -251,6 +251,105 @@ class OrbitNavHostTest {
         assertEquals("5", arg("listId"))
     }
 
+    // LIST-28: New list is a screen of its own, opened from Home and Lists,
+    // and Create (or leaving) returns to whichever opened it.
+
+    @Test
+    fun homeNewList_opensTheFlow_andLeavingReturnsHome() {
+        start(Routes.Home)
+
+        act { screens.homeOnCreateList() }
+
+        assertEquals(Routes.NewList, route)
+        assertEquals(Routes.Home, previousRoute)
+
+        act { screens.newListOnLeave() }
+        assertEquals(Routes.Home, route)
+        assertEquals(1, depth)
+    }
+
+    @Test
+    fun listsNewList_opensTheFlow_andLeavingReturnsToLists() {
+        start(Routes.Home)
+        navigate(Routes.lists())
+
+        act { screens.listsOnCreateList() }
+
+        assertEquals(Routes.NewList, route)
+        assertEquals(Routes.Lists, previousRoute)
+
+        act { screens.newListOnLeave() }
+        assertEquals(Routes.Lists, route)
+    }
+
+    @Test
+    fun theFlow_leavesOnce_evenWhenAskedTwice() {
+        start(Routes.Home)
+        navigate(Routes.lists())
+        navigate(Routes.NewList)
+
+        // Create landing as Back is pressed: the second must not pop Lists.
+        act {
+            screens.newListOnLeave()
+            screens.newListOnLeave()
+        }
+
+        assertEquals(Routes.Lists, route)
+    }
+
+    @Test
+    fun theOldOpenCreateRoute_opensTheFlowOverLists_once() {
+        start(Routes.Home)
+
+        // What a NAVIGATE_TO written before the flow existed would hand over.
+        act { deepLink = Routes.lists(openCreate = true) }
+        awaitRoute(Routes.NewList)
+
+        assertEquals(Routes.Lists, previousRoute, "the flow opens over Lists, as the sheet did")
+        assertEquals(1, consumed)
+
+        act { screens.newListOnLeave() }
+        compose.waitForIdle()
+        assertEquals(Routes.Lists, route, "coming back to Lists does not open the flow again")
+        assertEquals(2, depth)
+    }
+
+    @Test
+    fun addPeople_opensThePickerToCollect_andItsSelectionComesBackToTheFlow() {
+        start(Routes.Home)
+        navigate(Routes.NewList)
+        val flow = assertNotNull(nav.currentBackStackEntry)
+
+        act { screens.newListOnChoosePeople(listOf(3L, 7L)) }
+
+        assertEquals(Routes.PickContacts, route)
+        assertEquals("collect", arg("mode"))
+        assertEquals("3,7", arg("selected"), "the picker opens with who is already chosen")
+        assertNull(arg("targetListId"), "there is no list yet")
+
+        act { screens.pickContactsOnCollect(listOf(3L, 9L)) }
+
+        assertSame(flow, nav.currentBackStackEntry, "back on the same flow, with everything entered")
+        assertEquals(listOf(3L, 9L), screens.newListChosenPeople)
+
+        act { screens.newListOnChosenPeopleTaken() }
+        assertNull(screens.newListChosenPeople, "handed over once")
+    }
+
+    @Test
+    fun backFromTheCollectPicker_changesNothing() {
+        start(Routes.Home)
+        navigate(Routes.NewList)
+        act { screens.newListOnChoosePeople(emptyList()) }
+        assertEquals(Routes.PickContacts, route)
+        assertNull(arg("selected"))
+
+        act { nav.popBackStack() }
+
+        assertEquals(Routes.NewList, route)
+        assertNull(screens.newListChosenPeople)
+    }
+
     // BROWSE-09
 
     @Test
@@ -468,6 +567,15 @@ private class StubScreens : OrbitNavScreens {
     lateinit var contactOnOpenSettings: () -> Unit
     lateinit var listsOnOpenList: (String) -> Unit
     lateinit var listsOnOpenListSettings: (String) -> Unit
+    lateinit var listsOnCreateList: () -> Unit
+    lateinit var homeOnCreateList: () -> Unit
+    lateinit var newListOnChoosePeople: (List<Long>) -> Unit
+    lateinit var newListOnLeave: () -> Unit
+    lateinit var newListOnChosenPeopleTaken: () -> Unit
+    lateinit var pickContactsOnCollect: (List<Long>) -> Unit
+
+    /** What the graph last handed New list as the picker's result. */
+    var newListChosenPeople: List<Long>? = null
     lateinit var callLogOnOpenSettings: () -> Unit
 
     /** The count the host last composed [UnknownRouteNotice] with; -1 until it has. */
@@ -491,6 +599,7 @@ private class StubScreens : OrbitNavScreens {
         onOpenPostCallNote: (contactId: String, callEventId: Long) -> Unit,
     ) {
         homeOnOpenPostCallNote = onOpenPostCallNote
+        homeOnCreateList = onCreateList
         Stub(Routes.Home)
     }
 
@@ -554,11 +663,26 @@ private class StubScreens : OrbitNavScreens {
         onOpenList: (listId: String) -> Unit,
         onOpenListSettings: (listId: String) -> Unit,
         onAddContacts: (listId: String) -> Unit,
-        openCreateOnLaunch: Boolean,
+        onCreateList: () -> Unit,
     ) {
         listsOnOpenList = onOpenList
         listsOnOpenListSettings = onOpenListSettings
-        Stub(Routes.lists(openCreateOnLaunch))
+        listsOnCreateList = onCreateList
+        Stub(Routes.Lists)
+    }
+
+    @Composable
+    override fun NewList(
+        chosenPeople: List<Long>?,
+        onChosenPeopleTaken: () -> Unit,
+        onChoosePeople: (selectedContactIds: List<Long>) -> Unit,
+        onLeave: () -> Unit,
+    ) {
+        newListChosenPeople = chosenPeople
+        newListOnChosenPeopleTaken = onChosenPeopleTaken
+        newListOnChoosePeople = onChoosePeople
+        newListOnLeave = onLeave
+        Stub(Routes.NewList)
     }
 
     @Composable
@@ -643,7 +767,10 @@ private class StubScreens : OrbitNavScreens {
     }
 
     @Composable
-    override fun PickContacts(onBack: () -> Unit, onCommit: () -> Unit) = Stub("pick/contacts")
+    override fun PickContacts(onBack: () -> Unit, onCommit: () -> Unit, onCollect: (contactIds: List<Long>) -> Unit) {
+        pickContactsOnCollect = onCollect
+        Stub("pick/contacts")
+    }
 
     @Composable
     override fun PickLists(onBack: () -> Unit, onCommit: () -> Unit) = Stub("pick/lists")

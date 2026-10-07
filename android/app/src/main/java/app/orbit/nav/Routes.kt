@@ -20,10 +20,18 @@ object Routes {
     const val Contact = "contact/{contactId}?focusNote={focusNote}&scrollToCallEventId={scrollToCallEventId}"
 
     // `openCreate` is an optional Bool query arg (default false). When true,
-    // ListsManagerScreen initializes its create-list bottom sheet expanded —
-    // used by Home's "Create your first list" / "New list" CTAs so a single
-    // tap from Home lands the user directly in the list-creation form.
+    // the graph opens New list over Lists as soon as Lists is shown, once
+    // (LIST-28). Nothing in the app builds it any more: Home's "New list" and
+    // "Create your first list" and the Lists screen's "New list" go to
+    // [NewList] directly. It stays so a route handed in from outside (a
+    // NAVIGATE_TO extra written before the flow existed) still lands in the
+    // creation flow, as it used to land in the create sheet.
     const val Lists = "lists?openCreate={openCreate}"
+
+    // LIST-28: New list, step by step (Start with, Name, How often, Add
+    // people). Its own route rather than a sheet on Lists, so Home opens it
+    // directly and Create returns to whichever screen opened it.
+    const val NewList = "lists/new"
     const val ListConfig = "lists/{listId}/config"
     const val Settings = "settings"
 
@@ -72,6 +80,11 @@ object Routes {
     //     (the Move commit dispatches MoveContactsUseCase).
     //   - relinkContactId: REQUIRED for mode=relink (CONTACT-07), which takes no
     //     targetListId; the orphan being re-linked. Build it with [relinkContact].
+    //   - selected: mode=collect only (LIST-28), New list's People step: the
+    //     people already chosen, comma-separated, so the picker opens with them
+    //     ticked. Collect takes no targetListId (the list does not exist yet)
+    //     and writes nothing: its button hands the selection back to New
+    //     list. Build it with [collectPeople].
     //   As of 2026-10-06 nothing navigates to mode=move or mode=copy: moving and
     //   copying people between lists happen from Browse's multi-select, through
     //   its own list sheet, not through this picker. The modes stay registered
@@ -80,7 +93,7 @@ object Routes {
     // PickLists: the reverse picker: given a person, pick which lists to add them to.
     const val PickContacts =
         "pick/contacts?targetListId={targetListId}&mode={mode}" +
-            "&sourceListId={sourceListId}&relinkContactId={relinkContactId}"
+            "&sourceListId={sourceListId}&relinkContactId={relinkContactId}&selected={selected}"
     const val PickLists = "pick/lists?contactId={contactId}"
 
     fun card(listId: String) = "card/$listId"
@@ -156,4 +169,16 @@ object Routes {
      */
     fun relinkContact(orphanContactId: String) =
         "pick/contacts?mode=relink&relinkContactId=$orphanContactId"
+
+    /**
+     * LIST-28: the picker in Collect mode for New list's People step, opened
+     * with [selectedContactIds] ticked. Its own builder for the same reason
+     * as [relinkContact]: there is no list id to pass.
+     */
+    fun collectPeople(selectedContactIds: Collection<Long> = emptyList()): String =
+        if (selectedContactIds.isEmpty()) {
+            "pick/contacts?mode=collect"
+        } else {
+            "pick/contacts?mode=collect&selected=${selectedContactIds.joinToString(",")}"
+        }
 }

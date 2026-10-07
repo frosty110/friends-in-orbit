@@ -195,8 +195,8 @@ private fun ColumnScope.ListConfigBodySections(
         // BLOCKER 1 fix — name editor is required so onboarding
         // can satisfy ONB-11 ("no empty/unnamed lists can leave
         // onboarding"). List settings renames from its app bar title instead
-        // (LIST-26), since a list arrives there already named by the create
-        // sheet.
+        // (LIST-26), since a list arrives there already named by New list
+        // (LIST-28).
         SettingGroup(title = stringResource(R.string.lists_section_name)) {
             // Local typing buffer prevents the async VM round-trip
             // from racing the IME — without it, fast typing drops the

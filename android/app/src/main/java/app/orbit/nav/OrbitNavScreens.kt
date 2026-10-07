@@ -10,6 +10,7 @@ import app.orbit.ui.screens.contact.ContactDetailScreen
 import app.orbit.ui.screens.home.HomeScreen
 import app.orbit.ui.screens.lists.ListConfigScreen
 import app.orbit.ui.screens.lists.ListsManagerScreen
+import app.orbit.ui.screens.lists.newlist.NewListScreen
 import app.orbit.ui.screens.note.PostCallNoteScreen
 import app.orbit.ui.screens.onboarding.OnboardingDoneScreen
 import app.orbit.ui.screens.onboarding.OnboardingFirstListScreen
@@ -100,7 +101,23 @@ interface OrbitNavScreens {
         onOpenList: (listId: String) -> Unit,
         onOpenListSettings: (listId: String) -> Unit,
         onAddContacts: (listId: String) -> Unit,
-        openCreateOnLaunch: Boolean,
+        onCreateList: () -> Unit,
+    )
+
+    /**
+     * LIST-28: New list, step by step. [chosenPeople] is the Collect
+     * picker's result, handed over once: the screen takes it and calls
+     * [onChosenPeopleTaken] so a recomposition does not hand it over again.
+     * [onChoosePeople] opens the picker with the people already chosen.
+     * [onLeave] returns to the screen the flow was opened from, after Create
+     * or when the user leaves part way.
+     */
+    @Composable
+    fun NewList(
+        chosenPeople: List<Long>?,
+        onChosenPeopleTaken: () -> Unit,
+        onChoosePeople: (selectedContactIds: List<Long>) -> Unit,
+        onLeave: () -> Unit,
     )
 
     @Composable
@@ -162,8 +179,9 @@ interface OrbitNavScreens {
     @Composable
     fun OnboardDone(onFinish: () -> Unit)
 
+    /** [onCollect]: Collect mode's selection, for New list's People step (LIST-28). */
     @Composable
-    fun PickContacts(onBack: () -> Unit, onCommit: () -> Unit)
+    fun PickContacts(onBack: () -> Unit, onCommit: () -> Unit, onCollect: (contactIds: List<Long>) -> Unit)
 
     @Composable
     fun PickLists(onBack: () -> Unit, onCommit: () -> Unit)
@@ -300,13 +318,26 @@ interface OrbitNavScreens {
             onOpenList: (listId: String) -> Unit,
             onOpenListSettings: (listId: String) -> Unit,
             onAddContacts: (listId: String) -> Unit,
-            openCreateOnLaunch: Boolean,
+            onCreateList: () -> Unit,
         ) = ListsManagerScreen(
             onBack = onBack,
             onOpenList = onOpenList,
             onOpenListSettings = onOpenListSettings,
             onAddContacts = onAddContacts,
-            openCreateOnLaunch = openCreateOnLaunch,
+            onCreateList = onCreateList,
+        )
+
+        @Composable
+        override fun NewList(
+            chosenPeople: List<Long>?,
+            onChosenPeopleTaken: () -> Unit,
+            onChoosePeople: (selectedContactIds: List<Long>) -> Unit,
+            onLeave: () -> Unit,
+        ) = NewListScreen(
+            chosenPeople = chosenPeople,
+            onChosenPeopleTaken = onChosenPeopleTaken,
+            onChoosePeople = onChoosePeople,
+            onLeave = onLeave,
         )
 
         @Composable
@@ -390,8 +421,8 @@ interface OrbitNavScreens {
         override fun OnboardDone(onFinish: () -> Unit) = OnboardingDoneScreen(onFinish = onFinish)
 
         @Composable
-        override fun PickContacts(onBack: () -> Unit, onCommit: () -> Unit) =
-            ContactPickerScreen(onBack = onBack, onCommit = onCommit)
+        override fun PickContacts(onBack: () -> Unit, onCommit: () -> Unit, onCollect: (contactIds: List<Long>) -> Unit) =
+            ContactPickerScreen(onBack = onBack, onCommit = onCommit, onCollect = onCollect)
 
         @Composable
         override fun PickLists(onBack: () -> Unit, onCommit: () -> Unit) =
