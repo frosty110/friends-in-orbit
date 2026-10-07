@@ -9,9 +9,10 @@ import java.time.ZoneId
  * When someone next comes up, in the buckets Orbit words it by: later today,
  * tomorrow, a weekday within the week, then a span ("2 weeks"). One function
  * for the buckets, so Card view's Later and Sooner snackbars ("Sam will come
- * up again on Thursday.", the lowercase fragments in strings_card.xml) and
- * Browse's rows ("Thursday", BROWSE-07, strings_browse.xml) can never put the
- * same person in two different buckets. Each screen owns its own words: a
+ * up again on Thursday.", the lowercase fragments in strings_card.xml), the
+ * card's swipe hints ("Later · Thursday", CARD-09) and Browse's rows
+ * ("Thursday", BROWSE-07, strings_browse.xml) can never put the same person in
+ * two different buckets. Each screen owns its own words: a
  * fragment that slots mid-sentence and a label that stands alone are separate
  * strings for translators.
  *

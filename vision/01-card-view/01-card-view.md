@@ -37,7 +37,7 @@ The single highest-leverage change in the whole app. The card showed logistics (
 ### `CARD-2` · Idle swipe hint, not standing labels · **Superseded 2026-10-05**
 This entry proposed removing the "Later" / "Sooner" captions and teaching the swipe by a one-time idle motion. Both halves were decided the other way:
 - **The labels stay.** Every control carries a visible name and a TalkBack name (`ux-rubric.md` gate G2, CARD-02). Unlabelled arrows failed the accessibility floor, whatever onboarding had taught.
-- **No idle motion.** rules.md Design 8 forbids motion on idle surfaces (CORE-09), and a card that stirs when you stall reads as anxious, not calm.
+- **No idle motion.** rules.md Design 8 forbids motion on idle surfaces (CORE-09), and a card that stirs when you stall reads as anxious, not calm. *Revisited 2026-10-07:* reviewing the prototype, the owner asked for hints that fade in and out to teach the swipe, so the card now has them (CARD-09), as a bounded exception: the card never moves, two labels ("Later · Thursday", "Sooner · Tomorrow") fade in at its top corners after four untouched seconds, at most three times for a person, and never again once five moves are made. The labels on the buttons stay.
 - **The asymmetry is fixed.** The bottom row read "Skip · View details" while the arrows said Later and Sooner. "Skip" is removed; Later and Sooner are the two words everywhere (voice.md glossary, `X-5`).
 
 ### `CARD-3` · De-risk the accidental call · **Shipped 2026-10-05 as CARD-01 (`468d68d`)**

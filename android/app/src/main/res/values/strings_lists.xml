@@ -216,15 +216,6 @@
          components_action_cancel. -->
     <string name="lists_name_save">Save list name</string>
 
-    <!-- Rhythm choices. Contact detail's per-person rhythm offers these; List settings shows
-         one "How often" control instead (LIST-24). -->
-    <string name="lists_rule_keep_in_touch">Keep in touch</string>
-    <string name="lists_rule_keep_in_touch_sub">Surfaces each person on a steady rhythm you set.</string>
-    <string name="lists_rule_late_night">Late night</string>
-    <string name="lists_rule_late_night_sub">A slower, more patient rhythm for people you reach at night.</string>
-    <string name="lists_rule_energize">Energize</string>
-    <string name="lists_rule_energize_sub">A quicker rhythm that brings people back sooner after a call.</string>
-
     <!-- Smart rule editor. Each rule is one sentence over its control, with the current
          setting as the argument, so a translator can reorder the words. -->
     <!-- %1$d: a number of days, set by the slider below the sentence. -->

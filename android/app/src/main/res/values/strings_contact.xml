@@ -130,17 +130,21 @@
 
     <!-- A person's own schedule, when they are on two or more lists. -->
     <string name="contact_schedule_title">Custom schedule</string>
-    <!-- %1$s: the rhythm's name in lowercase, below. %2$s: the list it comes from. -->
-    <string name="contact_schedule_follows">Follows the %1$s rhythm from %2$s.</string>
+    <!-- %1$s: how often they come up, below ("every 14 days"). %2$s: the list it comes from. -->
+    <string name="contact_schedule_follows">Comes up %1$s, like the rest of %2$s.</string>
     <!-- The same under the privacy curtain, when the list's name is hidden. -->
-    <string name="contact_schedule_follows_hidden_list">Follows the %1$s rhythm from its list.</string>
-    <!-- Rhythm names as they sit mid-sentence above. -->
-    <string name="contact_rhythm_name_keep_in_touch">keep in touch</string>
-    <string name="contact_rhythm_name_late_night">late night</string>
-    <string name="contact_rhythm_name_energize">energize</string>
+    <string name="contact_schedule_follows_hidden_list">Comes up %1$s, like the rest of their list.</string>
+    <!-- When the list's rhythm cannot be read, so there is no interval to name. %1$s: the list. -->
+    <string name="contact_schedule_follows_list">Follows the rhythm of %1$s.</string>
+    <string name="contact_schedule_follows_its_list">Follows the rhythm of their list.</string>
+    <!-- How often, as it sits mid-sentence above. Every list is described by its interval
+         (LIST-24), so the rhythm's old names (keep in touch, late night, energize) are gone. -->
+    <string name="contact_rhythm_every_day">every day</string>
+    <plurals name="contact_rhythm_every_days">
+        <item quantity="one">every %d day</item>
+        <item quantity="other">every %d days</item>
+    </plurals>
     <string name="contact_schedule_set">Set a schedule for this person</string>
     <string name="contact_schedule_reset">Reset to default</string>
-    <string name="contact_rhythm_note_late_night">The late night rhythm runs on its own: slower and more patient, with nothing to set.</string>
-    <string name="contact_rhythm_note_energize">The energize rhythm runs on its own: quicker, with nothing to set.</string>
 
 </resources>

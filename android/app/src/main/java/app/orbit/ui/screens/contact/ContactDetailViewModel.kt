@@ -12,7 +12,6 @@ import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.entity.NoteEntity
-import app.orbit.data.entity.RuleKind
 import app.orbit.data.entity.RuleTemplateEntity
 import app.orbit.data.mappers.toUiContact
 import app.orbit.data.mappers.withCallPatterns
@@ -27,6 +26,7 @@ import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.model.PauseDuration
 import app.orbit.domain.rule.RuleParams
+import app.orbit.domain.rule.baseIntervalHours
 import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.AddNoteUseCase
 import app.orbit.domain.usecase.AddRetroactiveNoteUseCase
@@ -38,6 +38,8 @@ import app.orbit.domain.usecase.LogConnectionUseCase
 import app.orbit.domain.usecase.LogConnectionWhen
 import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
+import app.orbit.ui.screens.lists.RuleParamsResolution
+import app.orbit.ui.screens.lists.resolveRuleParams
 import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatAbsolute
@@ -363,13 +365,13 @@ class ContactDetailViewModel @Inject constructor(
         // CONTACT-03: derive RuleOverrideSection
         // inputs. Corrupted-JSON recovery is the try/catch
         // around decodeFromString; failed decode flips currentParams and
-        // currentTemplateName to null (the section shows the editor).
+        // inheritedRhythm to null (the section shows the editor).
         val customScheduleVisible = listsOn.size >= 2
         // The editor branch renders when an override is
         // PERSISTED or the user peeked the editor open this session.
         // Opening alone persists nothing (see onOpenOverride).
         val hasOverride = entity.ruleOverrideJson != null || six.overrideEditorOpen
-        val (currentTemplateName, currentParams) = deriveOverrideDisplay(
+        val (inheritedRhythm, currentParams) = deriveOverrideDisplay(
             ruleOverrideJson = entity.ruleOverrideJson,
             memberships = tuple.memberships,
             allLists = tuple.allLists,
@@ -423,7 +425,7 @@ class ContactDetailViewModel @Inject constructor(
                 phoneContactId = entity.phoneContactId,
                 callLogDenied = six.callLogDenied,
                 customScheduleVisible = customScheduleVisible,
-                currentTemplateName = currentTemplateName,
+                inheritedRhythm = inheritedRhythm,
                 primaryListName = primaryListName,
                 hasOverride = hasOverride,
                 currentParams = currentParams,
@@ -443,20 +445,21 @@ class ContactDetailViewModel @Inject constructor(
     }.catch { emit(ContactDetailUiState.Error) }
 
     /**
-     * CONTACT-03 — resolves the (template-name, RuleParams) pair driving the
-     * RuleOverrideSection copy.
+     * CONTACT-03: resolves the (inherited rhythm, RuleParams) pair driving the
+     * RuleOverrideSection.
      *
      * Three branches:
-     *   1. Override exists + decodes cleanly → ("keep in touch" / "late
-     *      night" / "energize" via [labelForKind], decoded RuleParams).
-     *   2. Override exists + decode throws (corrupted JSON) → (null, null).
+     *   1. Override exists + decodes cleanly: (null, decoded RuleParams). With
+     *      an override stored the section shows the editor, never the
+     *      "Comes up every ..." sentence, so there is nothing to describe.
+     *   2. Override exists + decode throws (corrupted JSON): (null, null).
      *      The screen passes a fresh default RuleParams so the editor still
-     *      renders; with an override stored the section never shows the
-     *      "Follows the ... rhythm" sentence, so there is no name to give.
-     *   3. No override → (template name from primary list, null params).
-     *
-     * The name is the lowercase form that sits mid-sentence
-     * (strings_contact.xml, `contact_rhythm_name_*`).
+     *      renders.
+     *   3. No override: (how often the primary list brings people up, null).
+     *      The list's own override or template, resolved the way List
+     *      settings resolves it ([resolveRuleParams]), described by its
+     *      interval ("every 14 days", LIST-24: no rhythm names), or null when
+     *      the list has no readable rhythm.
      */
     private fun deriveOverrideDisplay(
         ruleOverrideJson: String?,
@@ -466,37 +469,36 @@ class ContactDetailViewModel @Inject constructor(
     ): Pair<UiText?, RuleParams?> {
         if (ruleOverrideJson != null) {
             return try {
-                val params = JsonProvider.json.decodeFromString<RuleParams>(ruleOverrideJson)
-                Pair(labelForKind(params.toRuleKind()), params)
+                Pair(null, JsonProvider.json.decodeFromString<RuleParams>(ruleOverrideJson))
             } catch (_: Throwable) {
                 Pair(null, null)
             }
         }
-        // No per-contact override — show the template inherited from the
-        // primary list. The "primary" list is the first membership row;
-        // the RoundRobinEngine treats memberships as ordered so this
-        // matches the surfacing path's notion of "first".
+        // No per-contact override: describe the primary list's rhythm. The
+        // "primary" list is the first membership row; the RoundRobinEngine
+        // treats memberships as ordered so this matches the surfacing path's
+        // notion of "first".
         val primaryListId = memberships.firstOrNull()?.listId
         val primaryList = primaryListId?.let { lid -> allLists.firstOrNull { it.id == lid } }
-        val templateId = primaryList?.ruleTemplateId
-        val templateKind = templateId?.let { tid -> templates.firstOrNull { it.id == tid } }?.kind
-        val name = labelForKind(templateKind ?: RuleKind.KEEP_IN_TOUCH)
-        return Pair(name, null)
+        val template = primaryList?.ruleTemplateId?.let { tid -> templates.firstOrNull { it.id == tid } }
+        val resolved = resolveRuleParams(
+            overrideJson = primaryList?.ruleParamsOverrideJson,
+            templateParamsJson = template?.paramsJson,
+            json = JsonProvider.json,
+        )
+        val inherited = (resolved as? RuleParamsResolution.Decoded)?.let { everyFor(it.params.baseIntervalHours) }
+        return Pair(inherited, null)
     }
 
-    private fun RuleParams.toRuleKind(): RuleKind = when (this) {
-        is RuleParams.KeepInTouch -> RuleKind.KEEP_IN_TOUCH
-        is RuleParams.LateNight -> RuleKind.LATE_NIGHT
-        is RuleParams.Energize -> RuleKind.ENERGIZE
-    }
-
-    private fun labelForKind(kind: RuleKind): UiText = UiText.res(
-        when (kind) {
-            RuleKind.KEEP_IN_TOUCH -> R.string.contact_rhythm_name_keep_in_touch
-            RuleKind.LATE_NIGHT -> R.string.contact_rhythm_name_late_night
-            RuleKind.ENERGIZE -> R.string.contact_rhythm_name_energize
+    /** "every day" or "every 14 days", as it sits mid-sentence (strings_contact.xml). */
+    private fun everyFor(hours: Int): UiText {
+        val days = (hours / 24).coerceAtLeast(1)
+        return if (days == 1) {
+            UiText.res(R.string.contact_rhythm_every_day)
+        } else {
+            UiText.plural(R.plurals.contact_rhythm_every_days, days, days)
         }
-    )
+    }
 
     /**
      * Longest gap between consecutive call events: "21 days". Null if fewer
@@ -848,11 +850,11 @@ class ContactDetailViewModel @Inject constructor(
     /**
      * CONTACT-03 — clears the per-contact override. Passing null to the
      * setter wipes the column; on the next emission the section flips back
-     * to the no-override branch ("Inherits {template} from {primary list}").
+     * to the no-override branch ("Comes up every 14 days, like the rest of {primary list}").
      *
      * Also covers the corrupted-JSON recovery path: when decode fails the
      * section shows the editor primed with default RuleParams under its
-     * usual "Custom schedule" label (no special copy; `currentTemplateName`
+     * usual "Custom schedule" label (no special copy; `inheritedRhythm`
      * is null and nothing displays it), and tapping Reset to default here
      * clears the corrupted column without forcing the user to overwrite it.
      */

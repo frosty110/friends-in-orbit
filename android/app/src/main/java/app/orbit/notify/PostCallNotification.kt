@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.Bundle
 import androidx.annotation.ColorInt
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import app.orbit.R
 import app.orbit.nav.AppLinks
 import app.orbit.nav.Routes
@@ -84,4 +85,17 @@ internal object PostCallNotification {
             AppLinks.openRoute(context, Routes.postCallNote(contactId.toString(), callEventId)),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+
+    /**
+     * Withdraws the notification after a call with [contactId] (one per
+     * person, [NotificationIds.postCall]). The note page calls it when it
+     * opens, whichever way it was reached (the card after a call, Home's
+     * stack, the notification itself, which auto-cancels anyway), because the
+     * page is the question the notification asks. A no-op when none is
+     * showing. The call still waits on Home until a note is written or it is
+     * dismissed (NOTE-05).
+     */
+    fun cancel(context: Context, contactId: Long) {
+        NotificationManagerCompat.from(context).cancel(NotificationIds.postCall(contactId))
+    }
 }
