@@ -116,12 +116,17 @@ import kotlinx.coroutines.launch
  * X · Undo" / "Couldn't save that") is published on [PickerCommitBus] and shown
  * by the app-level [PickerCommitSnackbarHost] mounted in `OrbitNavHost`, on
  * whatever screen the pop lands on.
+ *
+ * [PickerMode.Collect] (LIST-28) commits nothing: its button ("Add 3 people")
+ * hands the selection to [onCollect], and New list makes the list and its
+ * people together on "Create list".
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactPickerScreen(
     onBack: () -> Unit,
     onCommit: () -> Unit,
+    onCollect: (contactIds: List<Long>) -> Unit = {},
     vm: ContactPickerViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -166,8 +171,12 @@ fun ContactPickerScreen(
             contact.phoneContactId?.let { context.openPhoneContact(it) }
         },
         onCommit = {
-            vm.onCommit()
-            onCommit()
+            if (state.mode == PickerMode.Collect) {
+                onCollect(state.selectedIds.toList())
+            } else {
+                vm.onCommit()
+                onCommit()
+            }
         },
         onPermissionGrant = { permissionLauncher.launch(Manifest.permission.READ_CONTACTS) },
         onOpenSettings = {
@@ -185,7 +194,9 @@ fun ContactPickerScreen(
  * title read "Add contacts" until 2026-10-05).
  */
 internal fun pickerModeTitle(mode: PickerMode, selectionCount: Int): UiText = when (mode) {
-    PickerMode.Add -> UiText.res(R.string.picker_title_add)
+    // LIST-28: Collect chooses people for New list's People step, whose
+    // heading is the same "Add people".
+    PickerMode.Add, PickerMode.Collect -> UiText.res(R.string.picker_title_add)
     PickerMode.Move -> UiText.plural(R.plurals.picker_title_move, selectionCount, selectionCount)
     PickerMode.Copy -> UiText.plural(R.plurals.picker_title_copy, selectionCount, selectionCount)
     // CONTACT-07: one pick, so no count.
@@ -833,6 +844,12 @@ private fun PickerEmptyMessage(
             actionLabel = stringResource(R.string.components_action_go_back),
             onAction = onBack
         )
+        ContactPickerUiState.EmptyReason.NoOneToAdd -> OrbitScreenMessage(
+            icon = "users",
+            title = stringResource(R.string.picker_collect_none_title),
+            actionLabel = stringResource(R.string.components_action_go_back),
+            onAction = onBack
+        )
         ContactPickerUiState.EmptyReason.EveryoneIgnored -> OrbitScreenMessage(
             icon = "eye-slash",
             title = stringResource(R.string.picker_everyone_ignored_title),
@@ -1122,6 +1139,31 @@ private fun ContactPickerRelinkPreview() {
             targetListName = "Sarah Levin",
             allContacts = ready.allContacts.map { it.copy(phoneContactId = it.contactId) },
             selectedIds = setOf(2L)
+        )
+    )
+}
+
+// LIST-28: Collect, New list's People step. No list yet, so the bar says
+// "Add 2 people" and names none, and Sarah, already on another list, is
+// offered like everyone else.
+@PreviewLightDark
+@Preview(name = "200%", fontScale = 2f)
+@Composable
+private fun ContactPickerCollectPreview() {
+    ContactPickerPreviewHost(
+        previewReadyState().copy(mode = PickerMode.Collect, targetListName = "", selectedIds = setOf(1L, 3L))
+    )
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerCollectNoOneToAddPreview() {
+    ContactPickerPreviewHost(
+        previewReadyState().copy(
+            mode = PickerMode.Collect,
+            targetListName = "",
+            allContacts = emptyList(),
+            selectedIds = emptySet()
         )
     )
 }

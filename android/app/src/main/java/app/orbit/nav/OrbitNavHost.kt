@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -224,7 +225,9 @@ private fun OrbitNavGraph(
                 onOpenSearch = { nav.navigate(Routes.GlobalSearch) },
                 onOpenSettings = openSettings,
                 onOpenLists = { nav.navigate(Routes.lists()) },
-                onCreateList = { nav.navigate(Routes.lists(openCreate = true)) },
+                // LIST-28: "New list" and "Create your first list" open the
+                // flow straight from Home, and Create returns here.
+                onCreateList = { nav.navigate(Routes.NewList) },
                 // Long-press quick-actions: navigation legs (add people, list settings).
                 onAddPeopleToList = { listId -> nav.navigate(Routes.pickContacts(listId)) },
                 onOpenListSettings = { listId -> nav.navigate(Routes.listConfig(listId)) },
@@ -359,16 +362,52 @@ private fun OrbitNavGraph(
                 }
             )
         ) { entry ->
+            // LIST-28: `lists?openCreate=true` used to open the create sheet
+            // over Lists. The sheet is gone, so the route opens New list over
+            // Lists instead, once: the entry remembers it did, so coming back
+            // to Lists (Create, or leaving the flow) does not open it again,
+            // and neither does a rotation or a process death.
+            if (entry.arguments?.getBoolean("openCreate") == true) {
+                LaunchedEffect(entry) {
+                    if (entry.savedStateHandle.get<Boolean>(OPEN_CREATE_HANDLED) != true) {
+                        entry.savedStateHandle[OPEN_CREATE_HANDLED] = true
+                        nav.navigate(Routes.NewList)
+                    }
+                }
+            }
             screens.Lists(
                 onBack = { nav.popBackStack() },
                 // LIST-23: tapping a list opens its deck, as on Home. List
                 // settings is one step away in the row's menu, and is where
-                // the archived row's settings icon and a just-created list
-                // land; until 2026-10-06 all three opened the deck.
+                // the archived row's settings icon lands; until 2026-10-06
+                // both opened the deck.
                 onOpenList = { listId -> nav.navigate(Routes.card(listId)) },
                 onOpenListSettings = { listId -> nav.navigate(Routes.listConfig(listId)) },
                 onAddContacts = { listId -> nav.navigate(Routes.pickContacts(listId)) },
-                openCreateOnLaunch = entry.arguments?.getBoolean("openCreate") == true
+                onCreateList = { nav.navigate(Routes.NewList) }
+            )
+        }
+        // LIST-28: New list, step by step. Its People step opens the picker
+        // in Collect mode, which hands the chosen ids back through this
+        // entry's SavedStateHandle (the nav result pattern: one caller, so
+        // the app-level bus the other picker modes use would be one reader
+        // too many). Leaving pops back to the opener, Home or Lists, where
+        // "Created {name}." shows; only while the flow is on top, so a second
+        // leave (Create landing as Back is pressed) never pops the opener.
+        composable(Routes.NewList) { entry ->
+            val chosen by entry.savedStateHandle
+                .getStateFlow<LongArray?>(NEW_LIST_CHOSEN_PEOPLE, null)
+                .collectAsState()
+            screens.NewList(
+                chosenPeople = chosen?.toList(),
+                // Cleared by writing null, not remove(): remove drops the
+                // flow collected above without telling it, so it would keep
+                // the old selection and miss the next one.
+                onChosenPeopleTaken = { entry.savedStateHandle[NEW_LIST_CHOSEN_PEOPLE] = null },
+                onChoosePeople = { selected -> nav.navigate(Routes.collectPeople(selected)) },
+                onLeave = {
+                    if (nav.currentBackStackEntry?.id == entry.id) nav.popBackStack()
+                }
             )
         }
         composable(
@@ -622,12 +661,28 @@ private fun OrbitNavGraph(
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
+                },
+                // mode=collect only (LIST-28): the people New list has
+                // already chosen, comma-separated.
+                navArgument("selected") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
                 }
             )
-        ) {
+        ) { entry ->
             screens.PickContacts(
                 onBack = { nav.popBackStack() },
-                onCommit = { nav.popBackStack() }
+                onCommit = { nav.popBackStack() },
+                // LIST-28: Collect hands its selection to New list, the entry
+                // under it, and returns there. Only while the picker is on
+                // top, so a double tap cannot pop New list too.
+                onCollect = { ids ->
+                    if (nav.currentBackStackEntry?.id == entry.id) {
+                        nav.previousBackStackEntry?.savedStateHandle?.set(NEW_LIST_CHOSEN_PEOPLE, ids.toLongArray())
+                        nav.popBackStack()
+                    }
+                }
             )
         }
         composable(
@@ -667,6 +722,15 @@ private fun OrbitNavGraph(
         }
     }
 }
+
+/**
+ * LIST-28: the key under which the Collect picker leaves its selection on New
+ * list's entry. Not copy: a SavedStateHandle key.
+ */
+internal const val NEW_LIST_CHOSEN_PEOPLE = "new_list_chosen_people"
+
+/** LIST-28: set on a Lists entry once its `openCreate` has opened New list. */
+private const val OPEN_CREATE_HANDLED = "lists_open_create_handled"
 
 /**
  * A back leg when there is somewhere to go back to, null when this is the

@@ -24,13 +24,11 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -67,7 +65,6 @@ import app.orbit.ui.theme.orbitCardShadow
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.asString
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -97,14 +94,19 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
  * (LIST-23):
  *  - [onOpenList]: a tap on a row opens the list's deck (`Routes.card`), as
  *    the same tap does on Home.
- *  - [onOpenListSettings]: the row menu's "List settings", the archived row's
- *    settings control, and a successful Create all open List settings
- *    (`Routes.listConfig`), where a new list gets its name, rhythm and people.
- *    Until 2026-10-06 the screen had only [onOpenList], so all three opened
- *    the deck: a brand-new list opened as a deck with nobody in it, and List
- *    settings was reachable from here only by going back Home.
+ *  - [onOpenListSettings]: the row menu's "List settings" and the archived
+ *    row's settings control open List settings (`Routes.listConfig`). Until
+ *    2026-10-06 the screen had only [onOpenList], so both opened the deck
+ *    (and so did a list just made with the create sheet, which opened List
+ *    settings from here until LIST-28 replaced the sheet).
  *  It defaults to [onOpenList] so the NavHost keeps compiling until it passes
  *  the settings route; the NavHost is the only caller that knows routes.
+ *
+ * LIST-28: "New list" (the floating button, or the centred one when there
+ * are no lists) opens New list, the step-by-step flow, through
+ * [onCreateList]. It is a screen of its own, not a sheet here, so Home opens
+ * it too and Create returns to whichever screen opened it, with "Created
+ * {name}." and the new list in place.
  *
  * BULK-05 wiring: each active list row carries a trailing "Add people" "+"
  * affordance whose tap routes via [onAddContacts] → `Routes.pickContacts(listId)`.
@@ -118,16 +120,11 @@ fun ListsManagerScreen(
     onOpenList: (listId: String) -> Unit,
     onOpenListSettings: (listId: String) -> Unit = onOpenList,
     onAddContacts: (listId: String) -> Unit = {}, // BULK-05 — entry to ContactPickerScreen
-    // When true, the create-list bottom sheet is expanded on first composition.
-    // Used by Home's "Create your first list" / "New list" CTAs (Routes.lists(openCreate = true))
-    // so a single tap from Home lands the user directly in the creation form.
-    // Subsequent rotations preserve whatever the user did from there via rememberSaveable.
-    openCreateOnLaunch: Boolean = false,
+    onCreateList: () -> Unit = {},
     vm: ListsManagerViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
 
@@ -179,25 +176,6 @@ fun ListsManagerScreen(
         }
     }
 
-    // 2026-06-09 #26 — create used to show "List created." and strand the user
-    // here. Now the VM emits the new id and we route straight into the new
-    // list's settings screen; arriving there IS the confirmation. Settings,
-    // not the deck: a list made a moment ago has nobody on it to deal.
-    LaunchedEffect(lifecycleOwner) {
-        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            vm.createdListEvents.collect { newListId ->
-                onOpenListSettings(newListId.toString())
-            }
-        }
-    }
-
-    // The launch-then-flip pattern lives here, not in CreateListBottomSheet
-    // itself. Direct
-    // `showSheet = false` is a known visual-jank bug; we hide via the sheet
-    // animation first, then flip the parent flag in invokeOnCompletion.
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var showSheet by rememberSaveable { mutableStateOf(openCreateOnLaunch) }
-
     ListsManagerContent(
         onRetry = vm::onRetry,
         state = state,
@@ -206,7 +184,7 @@ fun ListsManagerScreen(
         onOpenList = onOpenList,
         onOpenListSettings = onOpenListSettings,
         onAddContacts = onAddContacts,
-        onCreate = { showSheet = true },
+        onCreate = onCreateList,
         onMove = vm::moveList,
         // LOW polish (Group 5) — VM owns the snackbar event + Undo dispatch
         // (see archiveList + onUndoArchive). Screen no longer races
@@ -224,28 +202,6 @@ fun ListsManagerScreen(
         onToggleNudges = vm::toggleNudges,
         onToggleArchived = vm::toggleArchivedExpanded
     )
-
-    if (showSheet) {
-        CreateListBottomSheet(
-            sheetState = sheetState,
-            onCreate = { template, name ->
-                // 2026-06-09 #26 — no "List created." snackbar: the VM's
-                // createdListEvents collector above opens the new list's
-                // settings instead of stranding the user here.
-                vm.createList(template, name)
-                scope.launch { sheetState.hide() }
-                    .invokeOnCompletion {
-                        if (!sheetState.isVisible) showSheet = false
-                    }
-            },
-            onDismiss = {
-                scope.launch { sheetState.hide() }
-                    .invokeOnCompletion {
-                        if (!sheetState.isVisible) showSheet = false
-                    }
-            }
-        )
-    }
 }
 
 // Internal, not private, so ListsManagerScreenTest can drive the stateless

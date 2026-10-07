@@ -2,233 +2,126 @@ package app.orbit.ui.screens.lists
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import app.orbit.data.entity.ListType
-import app.orbit.data.entity.RuleKind
-import app.orbit.domain.FakeListRepository
-import app.orbit.domain.FakeRuleTemplateRepository
 import app.orbit.domain.JsonProvider
-import app.orbit.domain.ruleTemplateFixture
 import app.orbit.domain.smart.SmartListRule
-import app.orbit.notify.NudgeScheduler
-import app.orbit.testutil.MainDispatcherRule
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.runTest
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Catalog invariants for [TemplateChoice.Catalog]
- * and the SMART-02 Recently-added-not-called JSON shape.
+ * LIST-29: what New list's first step offers, [TemplateChoice.Catalog], in
+ * the owner's order (vision/flows/owner-review-2026-10-07.md, decision 13):
+ * "Start from blank" first, the three rhythm templates from most to least
+ * often, then the list that fills itself; Mentors gone.
  *
- * Tests bind the contract that the bottom sheet picks up:
- *   - 6 entries, locked id order
- *   - Verbatim displayNames
- *   - The single SMART entry encodes [SmartListRule.RecentlyAddedNotCalled]
- *     with `daysWindow = 30` (SMART-02 default)
- *   - 4 named static templates default to [RuleKind.KEEP_IN_TOUCH]
- *   - "Start from blank" carries an empty default name + KEEP_IN_TOUCH kind
- *   - VM-level integration: createList(recently_added, name) persists a SMART
- *     ListEntity whose smartRuleJson decodes back to RecentlyAddedNotCalled(30)
+ * Each template still makes the rhythm its subtitle names: the flow's How
+ * often step starts at [TemplateChoice.startingIntervalHours] and Create
+ * writes what it ends on (`NewListViewModelTest`, `CreateListUseCaseTest`).
+ * Until 2026-10-05 every template made the same 2-day list.
  *
- * Robolectric is needed because the ListsManagerViewModel ctor takes a
- * NudgeScheduler which requires ApplicationContext; this test's VM-level
- * integration test supplies a no-op NudgeScheduler subclass.
+ * Robolectric for the English string resources the names and subtitles are.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = android.app.Application::class)
 class CreateListTemplateCatalogTest {
 
-    @get:Rule
-    val mainDispatcherRule = MainDispatcherRule()
-
-    // Template names and subtitles are string resources; resolve them here.
     private val context = ApplicationProvider.getApplicationContext<Context>()
+    private val byId = TemplateChoice.Catalog.associateBy { it.id }
 
-    // ============================================================================
-    // Test 1 — locked size + id order.
-    // ============================================================================
+    private fun name(id: String): String = context.getString(byId.getValue(id).displayNameRes)
+    private fun subtitle(id: String): String = context.getString(byId.getValue(id).subtitleRes)
 
     @Test
-    fun catalog_has_six_templates_in_locked_order() {
-        val ids = TemplateChoice.Catalog.map { it.id }
-        assertEquals(6, TemplateChoice.Catalog.size)
+    fun blank_first_then_the_rhythms_most_frequent_first_then_the_smart_list() {
+        assertEquals(
+            listOf("blank", "inner_orbit", "family", "drifted", "recently_added_not_called"),
+            TemplateChoice.Catalog.map { it.id },
+        )
         assertEquals(
             listOf(
-                "inner_orbit",
-                "family",
-                "mentors",
-                "drifted",
-                "recently_added_not_called",
-                "blank"
+                TemplateChoice.Group.Blank,
+                TemplateChoice.Group.Rhythm,
+                TemplateChoice.Group.Rhythm,
+                TemplateChoice.Group.Rhythm,
+                TemplateChoice.Group.Smart,
             ),
-            ids
+            TemplateChoice.Catalog.map { it.group },
         )
     }
 
-    // ============================================================================
-    // Test 2 — verbatim displayNames.
-    // ============================================================================
+    @Test
+    fun the_rhythm_templates_sort_from_most_to_least_often() {
+        // The tile tints follow this order (more often reads warmer), so the
+        // catalogue's order and the intervals must agree.
+        val intervals = TemplateChoice.Catalog.filter { it.group == TemplateChoice.Group.Rhythm }.map { it.intervalDays }
+        assertEquals(listOf(7, 14, 30), intervals)
+    }
 
     @Test
-    fun displayNames_are_verbatim_per_ui_spec() {
-        val byId = TemplateChoice.Catalog.associateBy { it.id }
-        fun name(id: String): String = context.getString(byId.getValue(id).displayNameRes)
-        assertEquals("Inner orbit", name("inner_orbit"))
-        assertEquals("Family", name("family"))
-        assertEquals("Mentors", name("mentors"))
-        assertEquals("Drifted", name("drifted"))
-        assertEquals("Recently added, not called", name("recently_added_not_called"))
+    fun mentors_is_gone() {
+        // LIST-29: the How often slider reaches 60 days for anyone who wants
+        // "every couple of months".
+        assertTrue(TemplateChoice.Catalog.none { it.id == "mentors" })
+        assertEquals(5, TemplateChoice.Catalog.size)
+    }
+
+    @Test
+    fun names_and_subtitles_say_what_each_is() {
         assertEquals("Start from blank", name("blank"))
-    }
-
-    // ============================================================================
-    // Test 3 — SMART-02 default: RecentlyAddedNotCalled(daysWindow = 30) round-trips.
-    // ============================================================================
-
-    @Test
-    fun recently_added_template_emits_correct_smart_rule_json() {
-        val recently = TemplateChoice.Catalog.single { it.id == "recently_added_not_called" }
-        val rule =
-            assertNotNull(recently.smartRule, "Recently added template must carry a SmartListRule")
-        val encoded = JsonProvider.json.encodeToString(SmartListRule.serializer(), rule)
-        val decoded = JsonProvider.json.decodeFromString(SmartListRule.serializer(), encoded)
-        assertTrue(
-            decoded is SmartListRule.RecentlyAddedNotCalled,
-            "decoded rule must be RecentlyAddedNotCalled"
-        )
-        assertEquals(30, decoded.daysWindow)
-        assertEquals(ListType.SMART, recently.type)
-        // A smart list needs a cadence to surface anyone: with no rule template
-        // every surface (card, queue, Home's Next up) returned nothing.
-        assertEquals(RuleKind.KEEP_IN_TOUCH, recently.ruleKind)
-    }
-
-    // ============================================================================
-    // Test 4 — the 4 named static templates all default to KEEP_IN_TOUCH.
-    // ============================================================================
-
-    @Test
-    fun static_named_templates_use_keep_in_touch_kind() {
-        val staticIds = setOf("inner_orbit", "family", "mentors", "drifted")
-        val staticTemplates = TemplateChoice.Catalog.filter { it.id in staticIds }
-        assertEquals(4, staticTemplates.size)
-        staticTemplates.forEach { tpl ->
-            assertEquals(ListType.STATIC, tpl.type, "${tpl.id} must be STATIC")
-            assertEquals(
-                RuleKind.KEEP_IN_TOUCH,
-                tpl.ruleKind,
-                "${tpl.id} must default to KEEP_IN_TOUCH"
-            )
-            assertNull(tpl.smartRule, "${tpl.id} must not carry a smart rule")
-        }
+        assertEquals("Choose your own rhythm.", subtitle("blank"))
+        assertEquals("Inner orbit", name("inner_orbit"))
+        assertEquals("Closest people, about weekly.", subtitle("inner_orbit"))
+        assertEquals("Family", name("family"))
+        assertEquals("Steady, every couple of weeks.", subtitle("family"))
+        assertEquals("Drifted", name("drifted"))
+        assertEquals("Reconnect about once a month.", subtitle("drifted"))
+        assertEquals("Recently added, not called", name("recently_added_not_called"))
+        assertEquals("Auto-updates as you add people.", subtitle("recently_added_not_called"))
     }
 
     @Test
-    fun named_templates_carry_the_rhythm_their_subtitle_promises() {
-        // Regression: all four created the same 2-day list, so "Mentors:
-        // Quarterly check-ins" surfaced each mentor every 2 days.
-        val byId = TemplateChoice.Catalog.associateBy { it.id }
-        assertEquals(7, byId.getValue("inner_orbit").intervalDays)
-        assertEquals(14, byId.getValue("family").intervalDays)
-        assertEquals(60, byId.getValue("mentors").intervalDays)
-        assertEquals(30, byId.getValue("drifted").intervalDays)
-        assertEquals("Every couple of months.", context.getString(byId.getValue("mentors").subtitleRes))
-        // Every interval must be reachable on the 1-60 day slider (ADR 0010).
+    fun each_template_starts_how_often_at_the_rhythm_its_subtitle_promises() {
+        assertEquals(7 * 24, byId.getValue("inner_orbit").startingIntervalHours)
+        assertEquals(14 * 24, byId.getValue("family").startingIntervalHours)
+        assertEquals(30 * 24, byId.getValue("drifted").startingIntervalHours)
+        // No rhythm of their own: Keep in touch's every 2 days.
+        assertEquals(48, byId.getValue("blank").startingIntervalHours)
+        assertEquals(48, byId.getValue("recently_added_not_called").startingIntervalHours)
+        // Every interval is one the 1 to 60 day slider can show (ADR 0010).
         TemplateChoice.Catalog.mapNotNull { it.intervalDays }.forEach { assertTrue(it in 1..60) }
     }
 
     @Test
-    fun vm_createList_writes_the_template_interval_as_the_override() = runTest {
-        val listRepo = FakeListRepository()
-        val ruleRepo =
-            FakeRuleTemplateRepository(
-                initial = listOf(ruleTemplateFixture(id = 1L, kind = RuleKind.KEEP_IN_TOUCH))
-            )
-        val noOpNudge = object : NudgeScheduler(
-            context = ApplicationProvider.getApplicationContext<Context>(),
-            listRepo = FakeListRepository()
-        ) {
-            override fun cancel(listId: Long) = Unit
-            override suspend fun scheduleFromEntity(list: app.orbit.data.entity.ListEntity) = Unit
-        }
-        val vm =
-            ListsManagerViewModel(
-                listRepo = listRepo,
-                ruleTemplateRepo = ruleRepo,
-                nudgeScheduler = noOpNudge
-            )
-
-        vm.createList(TemplateChoice.Catalog.single { it.id == "mentors" }, "Mentors").join()
-
-        val overrideJson = assertNotNull(listRepo.createCalls.single().ruleParamsOverrideJson)
-        val params = JsonProvider.json.decodeFromString(
-            app.orbit.domain.rule.RuleParams.serializer(),
-            overrideJson
+    fun the_smart_template_carries_recently_added_not_called_for_30_days() {
+        val recently = byId.getValue("recently_added_not_called")
+        val rule = assertNotNull(recently.smartRule, "the list that fills itself needs its rule")
+        assertTrue(recently.isSmart)
+        val decoded = JsonProvider.json.decodeFromString(
+            SmartListRule.serializer(),
+            JsonProvider.json.encodeToString(SmartListRule.serializer(), rule),
         )
-        assertTrue(params is app.orbit.domain.rule.RuleParams.KeepInTouch)
-        assertEquals(60 * 24, params.cooldownMinHours, "Mentors must surface every 60 days")
+        assertEquals(SmartListRule.RecentlyAddedNotCalled(daysWindow = 30), decoded)
     }
 
-    // ============================================================================
-    // Test 5 — "Start from blank" has empty default name + KEEP_IN_TOUCH kind.
-    // ============================================================================
-
     @Test
-    fun blank_template_has_empty_default_name() {
-        val blank = TemplateChoice.Catalog.single { it.id == "blank" }
-        // No default name: the sheet leaves the field empty for the user to fill.
-        assertNull(blank.defaultNameRes)
-        assertEquals(RuleKind.KEEP_IN_TOUCH, blank.ruleKind)
-        assertEquals(ListType.STATIC, blank.type)
-        assertNull(blank.smartRule)
-    }
-
-    // ============================================================================
-    // Test 6 — VM.createList wires SMART entry → ListEntity with the right JSON.
-    // ============================================================================
-
-    @Test
-    fun vm_createList_with_recently_added_persists_smart_list() = runTest {
-        val seedTemplate = ruleTemplateFixture(id = 1L, kind = RuleKind.KEEP_IN_TOUCH)
-        val listRepo = FakeListRepository()
-        val ruleRepo = FakeRuleTemplateRepository(initial = listOf(seedTemplate))
-        // NudgeScheduler injection on the VM ctor; provide a
-        // no-op subclass so WorkManager is never touched in this catalog test.
-        val noOpNudge = object : NudgeScheduler(
-            context = ApplicationProvider.getApplicationContext<Context>(),
-            listRepo = FakeListRepository()
-        ) {
-            override fun cancel(listId: Long) = Unit
-            override suspend fun scheduleFromEntity(list: app.orbit.data.entity.ListEntity) = Unit
+    fun only_the_smart_template_fills_itself() {
+        TemplateChoice.Catalog.filter { it.group != TemplateChoice.Group.Smart }.forEach {
+            assertNull(it.smartRule, "${it.id} is a regular list")
+            assertFalse(it.isSmart)
         }
-        val vm =
-            ListsManagerViewModel(
-                listRepo = listRepo,
-                ruleTemplateRepo = ruleRepo,
-                nudgeScheduler = noOpNudge
-            )
+    }
 
-        val recently = TemplateChoice.Catalog.single { it.id == "recently_added_not_called" }
-
-        vm.createList(recently, "My recent contacts").join()
-
-        val captured = listRepo.createCalls.single()
-        assertEquals("My recent contacts", captured.name)
-        assertEquals(ListType.SMART, captured.type)
-        // SMART entries carry KEEP_IN_TOUCH like every other template, or nothing
-        // ever surfaces from them.
-        assertEquals(1L, captured.ruleTemplateId)
-        val ruleJson = assertNotNull(captured.smartRuleJson, "SMART list must carry smartRuleJson")
-        val decoded = JsonProvider.json.decodeFromString(SmartListRule.serializer(), ruleJson)
-        assertTrue(decoded is SmartListRule.RecentlyAddedNotCalled)
-        assertEquals(30, decoded.daysWindow)
+    @Test
+    fun a_template_names_the_list_after_itself_and_blank_leaves_it_empty() {
+        assertNull(byId.getValue("blank").defaultNameRes)
+        TemplateChoice.Catalog.filter { it.id != "blank" }.forEach {
+            assertEquals(it.displayNameRes, it.defaultNameRes, "${it.id} starts the list with its own name")
+        }
     }
 }

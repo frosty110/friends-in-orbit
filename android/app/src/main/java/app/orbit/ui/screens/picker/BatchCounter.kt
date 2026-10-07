@@ -102,6 +102,8 @@ fun BatchCounter(
  *   - [PickerMode.Copy] → "Copy {N} people to {targetListName}"
  *   - [PickerMode.Relink] → "Re-link {orphan name}" (CONTACT-07; the picker
  *     passes the orphan's name as [targetListName], and N is always 1)
+ *   - [PickerMode.Collect] → "Add {N} people" (LIST-28: New list's People
+ *     step; the list is made on "Create list", so the button names none)
  *
  * PRIV-03: under the privacy curtain the name reads "List" for a list and
  * "Contact" for the person a Re-link merges into. It read "Re-link List" for
@@ -130,6 +132,7 @@ fun BatchCounter(
         PickerMode.Move -> pluralStringResource(R.plurals.picker_commit_move, selectionCount, selectionCount, name)
         PickerMode.Copy -> pluralStringResource(R.plurals.picker_commit_copy, selectionCount, selectionCount, name)
         PickerMode.Relink -> stringResource(R.string.picker_commit_relink, name)
+        PickerMode.Collect -> pluralStringResource(R.plurals.picker_commit_collect, selectionCount, selectionCount)
     }
 
     BatchCounter(

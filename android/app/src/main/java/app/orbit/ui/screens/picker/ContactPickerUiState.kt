@@ -256,6 +256,8 @@ data class ContactPickerUiState(
     val emptyReason: EmptyReason? = when {
         filteredContacts.isNotEmpty() -> null
         allContacts.isEmpty() && mode == PickerMode.Relink -> EmptyReason.NoRelinkTargets
+        // Collect has no target list to be "already on" (LIST-28).
+        allContacts.isEmpty() && mode == PickerMode.Collect -> EmptyReason.NoOneToAdd
         allContacts.isEmpty() -> EmptyReason.EveryoneOnList
         searchQuery.isNotBlank() -> EmptyReason.NoSearchMatches
         activeFilters.isNotEmpty() -> EmptyReason.NoFilterMatches
@@ -263,6 +265,7 @@ data class ContactPickerUiState(
         // Only rows with no number are left, which ingest never writes
         // (matching is number-first): say the nearest true thing.
         mode == PickerMode.Relink -> EmptyReason.NoRelinkTargets
+        mode == PickerMode.Collect -> EmptyReason.NoOneToAdd
         else -> EmptyReason.EveryoneOnList
     }
 
@@ -273,6 +276,9 @@ data class ContactPickerUiState(
 
         /** Re-link mode: no other live phone contact to merge into. */
         NoRelinkTargets,
+
+        /** Collect mode (LIST-28): Orbit has no one from the phone's contacts to offer. */
+        NoOneToAdd,
 
         /** No query and no filter, but everyone left is ignored; offer "Show ignored". */
         EveryoneIgnored,
@@ -409,6 +415,12 @@ sealed class PickerFilter {
  *   dispatches [app.orbit.domain.usecase.RelinkContactUseCase]. Selection is
  *   single (a new pick replaces the old one) and candidates are restricted to
  *   [app.orbit.domain.usecase.RelinkContactUseCase.isRelinkTarget].
+ * - [Collect]: LIST-28. New list's People step chooses people for a list
+ *   that does not exist yet, so nothing is written: the picker hands the
+ *   selection back to the flow (`onCollect`), which makes the list and its
+ *   people in one transaction on "Create list". No target list; it opens
+ *   with the people already chosen ticked (the route's `selected`), and
+ *   offers everyone the phone's contacts hold.
  *
  * Note (2026-10-06): [Move] and [Copy] are route-only. Every caller opens the
  * picker in Add mode (`Routes.pickContacts(listId)`), and moving or copying
@@ -419,7 +431,7 @@ sealed class PickerFilter {
  * change of its own. They are a removal candidate; the page view describes
  * the picker as adding and re-linking only.
  */
-enum class PickerMode { Add, Move, Copy, Relink }
+enum class PickerMode { Add, Move, Copy, Relink, Collect }
 
 /**
  * UI-domain projection of a contact for the picker. Carries the pre-derived

@@ -40,6 +40,20 @@ class RoutesTest {
     }
 
     @Test
+    fun `new list is its own route, apart from Lists and a list's settings`() {
+        // LIST-28: the step-by-step flow, opened by Home and Lists.
+        assertEquals("lists/new", Routes.NewList)
+    }
+
+    @Test
+    fun `collectPeople opens the picker to collect, with who is already chosen`() {
+        // LIST-28: no list id (the list does not exist yet), and the chosen
+        // people comma-separated so the picker opens with them ticked.
+        assertEquals("pick/contacts?mode=collect", Routes.collectPeople())
+        assertEquals("pick/contacts?mode=collect&selected=3,7,12", Routes.collectPeople(listOf(3L, 7L, 12L)))
+    }
+
+    @Test
     fun `contactWithFocus omits the query string when both args are absent`() {
         assertEquals("contact/9", Routes.contactWithFocus("9"))
     }

@@ -4,7 +4,7 @@
 **Group:** Core loop
 **Status:** active
 **Last reviewed:** 2026-10-07
-**Spec:** [home](../home/README.md): HOME-6, HOME-7, HOME-8, HOME-9, HOME-10, HOME-11, HOME-13 and HOME-14 (added 2026-10-07); NOTE-04 and NOTE-05 in [contact-detail](../contact-detail/README.md); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
+**Spec:** [home](../home/README.md): HOME-6, HOME-7, HOME-8, HOME-9, HOME-10, HOME-11, HOME-13 and HOME-14 (added 2026-10-07); NOTE-04 and NOTE-05 in [contact-detail](../contact-detail/README.md); LIST-28 in [orbit-lists](../orbit-lists/README.md); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
 
@@ -13,6 +13,7 @@
 - The start destination once onboarding is complete: every cold launch lands here, and Done clears the way back so Back from Home leaves the app
 - Card view: "Go home" or Back, when the deck was opened from Home or by a nudge, a widget or the "Call next" shortcut
 - The note page: "Not now", Back, or a saved note, when it was opened from here or from the notification after a call
+- New list, when it was opened from here: after Create ("Created {name}.", the new list's card last), or on leaving it
 
 ## What the user sees
 
@@ -37,7 +38,7 @@
   - "Pause nudges", or "Resume nudges" while they are paused: changes in place, confirmed by "Nudges paused." or "Nudges on."
   - a divider, then "Archive" with the line "Hides {list} from home. You can restore it.": hides the list; "List archived." with Undo
   - "Delete": asks "Delete this list?" / "This removes the list. People stay in your contacts." with "Delete" and "Keep"; then "List deleted." with Undo, and the delete is held until the snackbar goes
-- "New list", or "Create your first list": opens Lists with the create sheet already open
+- "New list", or "Create your first list": opens New list, step by step (LIST-28); Create returns here with "Created {name}." and the new list's card after the others
 - The calls waiting for a note: "Add a note" opens the note page for that call (NOTE-04); the call waits until a note is saved. "Dismiss" closes one call, "Dismissed 1 call" with Undo. A tap on the pile (TalkBack: "3 calls to write about, Collapsed") opens it into one row per call, each with "Add a note" and "Dismiss", then "Dismiss all" ("Dismissed 3 calls" with Undo); the count line at the top ("Expanded") folds it. TalkBack names the person on each button ("Add a note about your call with Kai", "Dismiss your call with Kai")
 - Search, Lists and Settings in the app bar open those screens
 - A change that could not be saved says "Couldn't save your change" and shows no success message
@@ -61,7 +62,8 @@
 - The note page (a waiting call's "Add a note"); Back, "Not now" or a saved note ("Note saved") returns here
 - The Add people picker (menu); it returns here with "Added 3 people to {list}" and Undo
 - List settings (menu); Done or Back returns here
-- Lists (app bar), and Lists with the create sheet open ("New list", "Create your first list")
+- Lists (app bar)
+- New list ("New list", "Create your first list"); Create, or leaving it, returns here
 - Search and Settings (app bar)
 - Home is the root of the back stack: Back leaves the app
 
@@ -73,6 +75,6 @@
 - `HomeContentTest` (added this round: menu labels in order, "Call Kai" and "Call Someone" under the curtain, the full weekday in a day column's label, a quiet day announces "No calls"; added 2026-10-07: "See your week" on each card opens that list's week, and the day sheet's "See the whole week" does too)
 - `RhythmDaySheetTest`, `HomeFeedRhythmTest`
 - `HomeNotesWaitingTest` (added 2026-10-07: one call is a card whose buttons name the person, three are a closed pile that says how many and opens and folds, Dismiss and Dismiss all, the curtain), `AppViewModelTest` (the stack's state, its window and floor, a dismissal with Undo and a failed one), `WaitingCallsTest` (which calls wait, NOTE-05)
-- `OrbitNavHostTest` (added 2026-10-07: "Add a note" on a waiting call opens the note page for that call, and leaving returns here; "See your week" opens the Week screen for that list, and Back returns here)
+- `OrbitNavHostTest` (added 2026-10-07: "Add a note" on a waiting call opens the note page for that call, and leaving returns here; "See your week" opens the Week screen for that list, and Back returns here; "New list" opens New list, and leaving it returns here, LIST-28)
 - `HomeFeedRhythmTest` (added 2026-10-07: the Week screen's this week is the strip, call for call)
 - Gallery previews: `HomeContentPreview`, `HomeContentLongNamesPreview`, `HomeContentNotesWaitingPreview`, `HomeContentEmptyPreview`, `HomeContentLoadingPreview`, `HomeContentErrorPreview`, `RhythmDaySheetBodyPreview`, and the stack's `NotesWaitingStackOnePreview`, `NotesWaitingStackPilePreview`, `NotesWaitingStackPileOfTwoPreview`, `NotesWaitingStackOpenPreview`, `NotesWaitingStackCurtainPreview`, with the curtain pass

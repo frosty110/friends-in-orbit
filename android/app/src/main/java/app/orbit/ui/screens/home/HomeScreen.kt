@@ -367,8 +367,8 @@ internal fun HomeContent(
         }
 
         // HOME-11: the genuine first-install state gets a primary-weight CTA,
-        // centered, with one warm line above it. Routes to Lists Manager with
-        // the create-list bottom sheet auto-opened. Only when no list exists:
+        // centered, with one warm line above it. Opens New list (LIST-28),
+        // whose Create returns here. Only when no list exists:
         // Loading never renders it (ADR 0006), so it cannot flash at a user
         // who has lists.
         if (isError) {

@@ -43,7 +43,8 @@ Each page view lives in its own file under [`page-views/`](page-views/). When a 
 
 | Page view | Route |
 |---|---|
-| [Lists](page-views/lists-manager.md) | `lists`, `lists?openCreate=true` |
+| [Lists](page-views/lists-manager.md) | `lists` (`lists?openCreate=true` opens New list over it) |
+| [New list](page-views/new-list.md) | `lists/new` |
 | [List settings](page-views/list-config.md) | `lists/{listId}/config` |
 | [Add people](page-views/picker-contacts.md) | `pick/contacts?targetListId={listId}`; Re-link: `pick/contacts?mode=relink&relinkContactId={contactId}` |
 

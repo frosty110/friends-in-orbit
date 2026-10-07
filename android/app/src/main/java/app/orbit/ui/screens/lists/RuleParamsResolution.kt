@@ -11,7 +11,7 @@ import kotlinx.serialization.json.Json
  * Three answers, because until 2026-10-06 "no subtitle" covered two
  * different facts. [None] is a list with nothing configured: no per-list
  * override and no template (a partially created row). [Unreadable] is a blob
- * Orbit itself wrote (`createList` encodes the override, the seed writes the
+ * Orbit itself wrote (`CreateListUseCase` encodes the override, the seed writes the
  * template) that no longer decodes, which is a bug worth seeing, not a list
  * without a rhythm (rules.md Code 3: a path that cannot happen gets a loud
  * guard, not a shrug). The domain decodes the same JSON with a plain
