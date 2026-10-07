@@ -410,6 +410,24 @@ open class AppPrefs(private val dataStore: DataStore<Preferences>) {
     }
 
     /**
+     * CARD-09: how many Later and Sooner moves the user has made on the card
+     * (a swipe, a button, or TalkBack's action), so the idle hints that teach
+     * the swipe stop for good once it is learnt. A count, nothing about who
+     * was moved (this store is not encrypted). It only matters up to the
+     * card's threshold, so [recordCardMove] stops counting at [cap].
+     */
+    val cardMovesMade: Flow<Int> =
+        dataStore.data.map { it[KEY_CARD_MOVES_MADE] ?: 0 }
+
+    /** CARD-09: one more move, counted up to [cap] and no further. */
+    suspend fun recordCardMove(cap: Int) {
+        dataStore.edit { prefs ->
+            val made = prefs[KEY_CARD_MOVES_MADE] ?: 0
+            if (made < cap) prefs[KEY_CARD_MOVES_MADE] = made + 1
+        }
+    }
+
+    /**
      * SET-06 — destructive wipe of every key in the DataStore. Used by
      * [app.orbit.data.repository.ResetService] in the user-confirmed Reset path.
      *
@@ -459,6 +477,9 @@ open class AppPrefs(private val dataStore: DataStore<Preferences>) {
 
         // NOTE-05: calls dismissed from Home's stack, "{id}:{dismissedAtMs}".
         private val KEY_POST_CALL_DISMISSED = stringSetPreferencesKey("post_call_dismissed")
+
+        // CARD-09: Later and Sooner moves made on the card, for the idle hints.
+        private val KEY_CARD_MOVES_MADE = intPreferencesKey("card_moves_made")
     }
 }
 

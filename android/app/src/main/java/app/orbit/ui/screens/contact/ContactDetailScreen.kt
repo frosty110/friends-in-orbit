@@ -75,11 +75,13 @@ import app.orbit.data.Contact
 import app.orbit.data.NoteRow
 import app.orbit.domain.model.PauseDuration
 import app.orbit.domain.rule.RuleParams
+import app.orbit.domain.usecase.LogConnectionWhen
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.ContactStatsPanel
 import app.orbit.ui.components.InfoTip
 import app.orbit.ui.components.ListContextChip
 import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.components.LogConnectionSheet
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
@@ -95,7 +97,6 @@ import app.orbit.ui.components.PauseDurationSheet
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.components.StatEntry
-import app.orbit.ui.screens.contact.sections.LogConnectionSheet
 import app.orbit.ui.screens.contact.sections.NotesSection
 import app.orbit.ui.screens.contact.sections.RuleOverrideSection
 import app.orbit.ui.screens.contact.sections.UnpauseBanner
@@ -254,9 +255,9 @@ fun ContactDetailScreen(
         // button rendered below the tinted call row when the user arrives
         // via Routes.contactWithFocus(scrollToCallEventId = ...).
         onAddRetroactiveNote = vm::onAddRetroactiveNote,
-        // Manual connection log — confirm handler for LogConnectionSheet.
-        // Inserts a CallEventEntity(source = MANUAL) via MarkCalledUseCase so
-        // per-list nextDueAt advances; quiet "Logged." snackbar on success.
+        // Manual connection log: confirm handler for the shared
+        // LogConnectionSheet. The VM writes through LogConnectionUseCase, the
+        // one the card uses too (CARD-10); quiet "Logged." snackbar on success.
         onLogConnection = vm::onLogConnection,
         onOpenSettings = onOpenSettings,
         notesInputFocusRequester = notesInputFocusRequester

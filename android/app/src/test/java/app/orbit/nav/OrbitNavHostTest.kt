@@ -385,13 +385,33 @@ class OrbitNavHostTest {
         start(Routes.Home)
         navigate(Routes.card("3"))
 
-        act { screens.cardOnAddNote("c-7") }
+        act { screens.cardOnAddNote("c-7", null) }
 
         assertEquals(Routes.PostCallNote, route)
         assertEquals("c-7", arg("contactId"))
         // The card knows who was called, not which call: the page finds it.
         assertNull(arg("callEventId"))
         assertEquals("c-7", screens.noteShownFor?.first)
+    }
+
+    // CARD-11: after a call worth a note the card opens the page for that call
+    // by itself, and leaving the page lands back on the deck.
+
+    @Test
+    fun cardAfterACallWorthANote_opensTheNotePage_forThatCall_andLeavingReturnsToTheDeck() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+
+        act { screens.cardOnAddNote("c-7", 41L) }
+
+        assertEquals(Routes.PostCallNote, route)
+        assertEquals("c-7", arg("contactId"))
+        assertEquals("41", arg("callEventId"))
+        assertEquals("c-7" to "41", screens.noteShownFor)
+
+        act { screens.noteOnLeave() }
+        assertEquals(Routes.Card, route)
+        assertEquals("3", arg("listId"))
     }
 
     // HOME-14 / NOTE-04
@@ -586,7 +606,7 @@ private class StubScreens : OrbitNavScreens {
     lateinit var firstListOnStartAgain: () -> Unit
     lateinit var doneOnFinish: () -> Unit
     lateinit var cardOnOpenContact: (String) -> Unit
-    lateinit var cardOnAddNote: (String) -> Unit
+    lateinit var cardOnAddNote: (String, Long?) -> Unit
     lateinit var homeOnOpenPostCallNote: (String, Long) -> Unit
     lateinit var homeOnOpenWeek: (String) -> Unit
     lateinit var weekOnBack: () -> Unit
@@ -656,7 +676,7 @@ private class StubScreens : OrbitNavScreens {
         listId: String,
         onBack: () -> Unit,
         onOpenContact: (contactId: String) -> Unit,
-        onAddNote: (contactId: String) -> Unit,
+        onAddNote: (contactId: String, callEventId: Long?) -> Unit,
         onBrowse: (listId: String, focusContactId: Long?) -> Unit,
         onEditList: (listId: String) -> Unit,
         onAddContacts: (listId: String) -> Unit,

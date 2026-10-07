@@ -14,6 +14,7 @@ import app.orbit.domain.rule.RuleParams
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -136,5 +137,40 @@ class SurfaceSoonerUseCaseTest {
 
         assertEquals(MutationResult.MembershipMissing, result)
         assertTrue(listRepo.updateNextDueAtCalls.isEmpty(), "missing contact → no writes")
+    }
+
+    // CARD-09: preview is what a Sooner would write, without writing it. The
+    // card's idle hint says it, so it must equal what the Sooner then writes.
+
+    @Test
+    fun `preview is what the Sooner then writes, and writes nothing itself`() = runTest {
+        listOf(null, T0.minus(Duration.ofHours(5)), T0.plus(Duration.ofHours(6)), T0.plus(Duration.ofDays(4))).forEach { prior ->
+            val contactRepo = FakeContactRepository(listOf(contactFixture(id = 1L)))
+            val listRepo = FakeListRepository(listOf(listFixture(id = 10L, ruleTemplateId = 1L)))
+            listRepo.seedMemberships(listOf(membershipFixture(contactId = 1L, listId = 10L, nextDueAt = prior)))
+            val templateRepo = FakeRuleTemplateRepository(listOf(ruleTemplateFixture(id = 1L, params = params)))
+            val sooner = useCase(contactRepo, listRepo, templateRepo)
+
+            val previewed = sooner.preview(contactId = 1L, listId = 10L)
+            assertTrue(listRepo.updateNextDueAtCalls.isEmpty(), "a preview writes nothing (prior $prior)")
+
+            sooner(contactId = 1L, listId = 10L)
+            assertEquals(listRepo.updateNextDueAtCalls.single().newNextDueAt, previewed, "prior $prior")
+        }
+    }
+
+    @Test
+    fun `preview is null when the move could not be made`() = runTest {
+        val contactRepo = FakeContactRepository(listOf(contactFixture(id = 1L)))
+        val listRepo = FakeListRepository(
+            listOf(listFixture(id = 10L, ruleTemplateId = 1L), listFixture(id = 20L, ruleTemplateId = 9L)),
+        )
+        listRepo.seedMemberships(listOf(membershipFixture(contactId = 1L, listId = 20L)))
+        val templateRepo = FakeRuleTemplateRepository(listOf(ruleTemplateFixture(id = 1L, params = params)))
+        val sooner = useCase(contactRepo, listRepo, templateRepo)
+
+        assertNull(sooner.preview(contactId = 1L, listId = 10L), "not on that list")
+        assertNull(sooner.preview(contactId = 1L, listId = 20L), "a template that is gone")
+        assertNull(sooner.preview(contactId = 2L, listId = 10L), "no such person")
     }
 }

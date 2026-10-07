@@ -267,11 +267,15 @@ private fun OrbitNavGraph(
                 onBack = { nav.popBackStack() },
                 onOpenContact = openContact,
                 // CARD-03 / NOTE-04: "Add a note" on "Called Kai" opens the
-                // page for writing about the call, as Home's does. The card
-                // knows who was called, not which call-log row, so the page
-                // describes their latest connected call. A plain tap on the
-                // face opens the person at the top.
-                onAddNote = { contactId -> nav.navigate(Routes.postCallNote(contactId)) },
+                // page for writing about the call, as Home's does, with no
+                // call id: the page describes their latest connected call.
+                // CARD-11: after a call worth a note the card opens the page
+                // by itself and names the call. Leaving the page pops back to
+                // the deck, which has moved on to the next person. A plain tap
+                // on the face opens the person at the top.
+                onAddNote = { contactId, callEventId ->
+                    nav.navigate(Routes.postCallNote(contactId, callEventId))
+                },
                 // BROWSE-09: the menu's "Browse people" passes the person on
                 // the card; "Browse this list" on the All quiet deck passes none.
                 onBrowse = { listId, focusContactId -> nav.navigate(Routes.browse(listId, focusContactId)) },

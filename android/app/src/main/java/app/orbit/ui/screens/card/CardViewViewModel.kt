@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.orbit.R
+import app.orbit.data.AppPrefs
 import app.orbit.data.NoteRow
 import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.CallSource
@@ -15,10 +16,14 @@ import app.orbit.data.feed.CardSnapshot
 import app.orbit.data.mappers.toUiContact
 import app.orbit.data.mappers.withCallPatterns
 import app.orbit.data.mappers.withCallStats
+import app.orbit.data.repository.CallEventRepository
 import app.orbit.data.repository.ListRepository
+import app.orbit.data.repository.WaitingCalls
 import app.orbit.domain.CallLogResyncTrigger
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.undo.UndoStack
+import app.orbit.domain.usecase.LogConnectionUseCase
+import app.orbit.domain.usecase.LogConnectionWhen
 import app.orbit.domain.usecase.SkipContactUseCase
 import app.orbit.domain.usecase.SurfaceResult
 import app.orbit.domain.usecase.SurfaceSoonerUseCase
@@ -72,8 +77,8 @@ import javax.inject.Inject
  *     the dialer; on return ([onReturnedFromDial]) the VM kicks an immediate
  *     incremental call-log sync so the detected call advances the deck on its
  *     own within ~1-2s. There is no "did you talk?" confirmation — the call log
- *     is the source of truth; off-log connections use "Log a connection" on the
- *     contact screen.
+ *     is the source of truth; off-log connections use "Log a connection", on the
+ *     card since 2026-10-07 (CARD-10) as on the contact screen.
  *
  * The VM keeps the `nowHour` snapshot, the `NoteEntity → NoteRow` mapping
  * (Option B layering), and the `WhileSubscribed(5_000L)` per-screen cache
@@ -100,18 +105,41 @@ import javax.inject.Inject
  *   - **CARD-03 by evidence.** "Called {name}" waits for a connected call at
  *     or after the dial, or for the deck to move past the person, not for
  *     motion alone (see [acknowledgeCallWhenConfirmed]).
+ *
+ * Owner review (2026-10-07):
+ *   - **CARD-09, idle hints.** [moveHints] says what the hints over the
+ *     card's edges say, worked out by the Later and Sooner use cases' own
+ *     `preview` so the "when" is the one the move's snackbar then says, and
+ *     null once the user has made [SWIPE_HINT_MOVES_TO_LEARN] moves
+ *     (counted in [AppPrefs] on every Later and Sooner).
+ *   - **CARD-10, Log a connection.** [onLogConnection] writes through
+ *     [LogConnectionUseCase], the one Contact detail calls, and the deck
+ *     moves on through the feed like after a call.
+ *   - **CARD-11, the note page after a call.** A confirmed call that
+ *     connected and lasted [WaitingCalls.MIN_SECONDS] or more opens the
+ *     page for writing about it, once ([CardMessage.OpenNote]); a shorter
+ *     or unanswered one keeps the "Called {name}" snackbar. The pending
+ *     dial now lives in the [SavedStateHandle], so a process killed during
+ *     a long call (common, see CallLogTriggerWorker) still has it on return.
  */
 @HiltViewModel
 class CardViewViewModel @Inject constructor(
     cardFeed: CardFeed,
     private val skipContact: SkipContactUseCase,
     private val surfaceSooner: SurfaceSoonerUseCase,
+    // CARD-10: the one way to log a connection, shared with Contact detail.
+    private val logConnection: LogConnectionUseCase,
     private val listRepo: ListRepository,
+    // CARD-11: reads the call the log confirmed, to tell a call worth a note
+    // from a short or unanswered one.
+    private val callEventRepo: CallEventRepository,
+    // CARD-09: how many moves the user has made, so the idle hints stop.
+    private val appPrefs: AppPrefs,
     private val undoStack: UndoStack,
     private val callLogResync: CallLogResyncTrigger,
     private val clock: Clock,
     private val zoneId: ZoneId,
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     // listId arrives as a String. One that does not parse as Long (a bad deep
@@ -170,11 +198,36 @@ class CardViewViewModel @Inject constructor(
 
     // Dial-in-flight marker: the contact id set on tap-to-call, consumed on the
     // next ON_RESUME to trigger an immediate call-log resync ([onReturnedFromDial]).
-    // Plain fields; no UI reads them. A non-null id just means "a dial happened";
-    // the instant is what a logged call must be at or after to count (CARD-03).
-    private var dialPendingContactId: Long? = null
+    // No UI reads them. A non-null id just means "a dial happened"; the instant
+    // is what a logged call must be at or after to count (CARD-03).
+    //
+    // CARD-11: the id and the instant live in the SavedStateHandle, not plain
+    // fields. A call long enough to write about is exactly the one during which
+    // Android often kills Orbit's process, and a plain field forgot the dial,
+    // so the card said nothing on return. Consumed (removed) on the first
+    // resume, so neither a second resume, a rotation nor a restored process can
+    // act on one dial twice. The first name stays in memory only: an id and a
+    // time are not PII, a name is, and after a process death the snackbar's
+    // unnamed sentence is what is lost.
+    private var dialPendingContactId: Long?
+        get() = savedStateHandle[KEY_DIAL_CONTACT_ID]
+        set(value) {
+            if (value == null) {
+                savedStateHandle.remove<Long>(KEY_DIAL_CONTACT_ID)
+            } else {
+                savedStateHandle[KEY_DIAL_CONTACT_ID] = value
+            }
+        }
+    private var dialPendingAt: Instant?
+        get() = savedStateHandle.get<Long>(KEY_DIAL_AT_MS)?.let(Instant::ofEpochMilli)
+        set(value) {
+            if (value == null) {
+                savedStateHandle.remove<Long>(KEY_DIAL_AT_MS)
+            } else {
+                savedStateHandle[KEY_DIAL_AT_MS] = value.toEpochMilli()
+            }
+        }
     private var dialPendingName: String? = null
-    private var dialPendingAt: Instant? = null
 
     // The newest undoable action. Older snackbars are replaced on screen, and a
     // stale token can never replay an inverse that belongs to someone else.
@@ -188,6 +241,7 @@ class CardViewViewModel @Inject constructor(
     /** CORE-04: Later (left swipe or the Later button) defers this contact on the current list. */
     fun onSwipeLeft(contactId: Long) = viewModelScope.launch {
         callAckJob?.cancel()
+        recordMove()
         val name = firstNameOf(contactId)
         runMutation(
             if (name != null) {
@@ -206,6 +260,7 @@ class CardViewViewModel @Inject constructor(
     /** CORE-03: Sooner (right swipe or the Sooner button) brings this contact forward on the current list. */
     fun onSwipeRight(contactId: Long) = viewModelScope.launch {
         callAckJob?.cancel()
+        recordMove()
         val name = firstNameOf(contactId)
         runMutation(
             if (name != null) {
@@ -219,6 +274,109 @@ class CardViewViewModel @Inject constructor(
             val newDue = focusedDueAfterMutation(contactId)
             stageUndo(prior, label = soonerMessage(name, newDue))
         }
+    }
+
+    /**
+     * CARD-09: counts a Later or Sooner toward [SWIPE_HINT_MOVES_TO_LEARN],
+     * after which the idle hints never show again. Its own coroutine, so the
+     * move's write never waits on the preferences file.
+     *
+     * A failure here is swallowed, on purpose and only here: the count is not
+     * the user's data and not a change they asked for, so "Couldn't save your
+     * change" would be about nothing they did (rules.md Code 3 is about the
+     * user's writes). What it costs is a few more hints.
+     */
+    private fun recordMove() {
+        viewModelScope.launch {
+            try {
+                appPrefs.recordCardMove(cap = SWIPE_HINT_MOVES_TO_LEARN)
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+            }
+        }
+    }
+
+    /**
+     * CARD-09: what the idle hints over the card's edges say for [contactId],
+     * asked by the screen just before each appearance; null when they should
+     * not show at all, because the user has made [SWIPE_HINT_MOVES_TO_LEARN]
+     * moves, or nothing could be read.
+     *
+     * The "when" is what the move would do right now, from
+     * [SkipContactUseCase.preview] and [SurfaceSoonerUseCase.preview], the
+     * functions the moves themselves write with, and worded from the same
+     * [comesUp] bucket as the move's snackbar ([futureDueLabel]), so the hint
+     * and the snackbar that follows it say the same day. Where a move's time
+     * cannot be worked out (a list without a rule template) the hint is the
+     * bare "Later" or "Sooner". Asked fresh each time rather than carried on
+     * [uiState]: a "when" fixed at emission goes stale while the card sits,
+     * and a state change while a swiped card is held off-screen would bring
+     * the old card back ([CardSwipeFrame]'s re-center).
+     *
+     * A failure is null, no hints this time: they are decoration, and a read
+     * that failed here must not take the deck down with it.
+     */
+    suspend fun moveHints(contactId: Long): CardMoveHints? {
+        val list = listId ?: return null
+        return try {
+            if (appPrefs.cardMovesMade.first() >= SWIPE_HINT_MOVES_TO_LEARN) return null
+            val laterAt = skipContact.preview(contactId, list)
+            val soonerAt = surfaceSooner.preview(contactId, list)
+            val now = clock.now()
+            CardMoveHints(
+                later = laterAt?.let { UiText.res(R.string.card_hint_later_when, hintWhenLabel(it, now)) }
+                    ?: UiText.res(R.string.card_later),
+                sooner = soonerAt?.let { UiText.res(R.string.card_hint_sooner_when, hintWhenLabel(it, now)) }
+                    ?: UiText.res(R.string.card_sooner),
+            )
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            null
+        }
+    }
+
+    /**
+     * CARD-10: "Log a connection" from the card, for the person the sheet was
+     * opened over. The write is [LogConnectionUseCase], exactly what Contact
+     * detail does, so the person goes back into the rhythm and the feed moves
+     * the deck on by itself, as after a call; nothing here moves the card.
+     * Then "Logged. Kai comes up again in 2 weeks." (or "Attempt logged. ..."),
+     * with a nameless twin for the privacy curtain; a failure says "Couldn't
+     * save your change" (rules.md Code 3).
+     *
+     * Cancels a pending "Called {name}": a deck that moved because of this
+     * log is not evidence of a call (CARD-03).
+     */
+    fun onLogConnection(contactId: Long, whenChoice: LogConnectionWhen, note: String, isAttempt: Boolean) =
+        viewModelScope.launch {
+            callAckJob?.cancel()
+            val name = firstNameOf(contactId)
+            runMutation(UiText.res(R.string.components_snackbar_save_failed)) {
+                logConnection(contactId, whenChoice, note, isAttempt)
+                val now = clock.now()
+                // A connection logged for a day long past can leave the person
+                // still up now; "comes up again later today" would be wrong
+                // about someone who is up already, so only a future time is said.
+                val `when` = focusedDueAfterMutation(contactId)
+                    ?.takeIf { it.isAfter(now) }
+                    ?.let { futureDueLabel(it, now) }
+                _messages.tryEmit(loggedMessage(name, `when`, isAttempt))
+            }
+        }
+
+    private fun loggedMessage(name: String?, `when`: UiText?, isAttempt: Boolean): CardMessage.Logged {
+        val unnamed = when {
+            `when` == null && isAttempt -> UiText.res(R.string.card_attempt_logged)
+            `when` == null -> UiText.res(R.string.card_logged)
+            isAttempt -> UiText.res(R.string.card_attempt_logged_unnamed_when, `when`)
+            else -> UiText.res(R.string.card_logged_unnamed_when, `when`)
+        }
+        val named = when {
+            name == null || `when` == null -> unnamed
+            isAttempt -> UiText.res(R.string.card_attempt_logged_named_when, name, `when`)
+            else -> UiText.res(R.string.card_logged_named_when, name, `when`)
+        }
+        return CardMessage.Logged(text = named, curtainText = unnamed)
     }
 
     /**
@@ -247,7 +405,8 @@ class CardViewViewModel @Inject constructor(
      * does not. The sync is cheap (reads only rows since the last-sync watermark)
      * and idempotent; a still-in-progress call (no call-log row yet) is a no-op
      * and the observer picks it up on hang-up. Off-log connections (WhatsApp,
-     * landline, in person) use "Log a connection" on the contact screen.
+     * landline, in person) use "Log a connection", on the card (CARD-10) or the
+     * contact screen.
      *
      * Resumes with nothing pending (including first composition) are no-ops.
      */
@@ -283,15 +442,46 @@ class CardViewViewModel @Inject constructor(
             val confirmed = withTimeoutOrNull(CALL_ACK_WAIT_MS) {
                 uiState.first { state -> state.confirmsCall(contactId, dialedAt) }
             }
-            if (confirmed != null) {
-                val text = if (name != null) {
-                    UiText.res(R.string.card_called_named, name)
-                } else {
-                    UiText.res(R.string.card_call_logged)
-                }
-                _messages.tryEmit(CardMessage.Called(text = text, contactId = contactId))
+            if (confirmed == null) return@launch
+            // CARD-11: a call worth a note opens the page for it, in place of
+            // the snackbar. This job runs once per dial (the dial is consumed
+            // in onReturnedFromDial), so the page opens at most once a call.
+            val worthANote = callWorthANote(contactId, dialedAt)
+            if (worthANote != null) {
+                _messages.tryEmit(CardMessage.OpenNote(contactId = contactId, callEventId = worthANote.id))
+                return@launch
             }
+            val text = if (name != null) {
+                UiText.res(R.string.card_called_named, name)
+            } else {
+                UiText.res(R.string.card_call_logged)
+            }
+            _messages.tryEmit(CardMessage.Called(text = text, contactId = contactId))
         }
+    }
+
+    /**
+     * CARD-11: the call placed from the card, if the call log has it as one
+     * worth writing about: the newest call-log call with [contactId] at or
+     * after the dial that connected and lasted at least
+     * [WaitingCalls.MIN_SECONDS], NOTE-05's floor, the one constant Home's
+     * stack and the notification after a call use too, so the three never
+     * disagree about which calls are worth a note. An attempt never is, and a
+     * connection logged by hand is not a call. Null for anything else, which
+     * keeps CARD-03's "Called {name}" snackbar and its "Add a note".
+     *
+     * A failed read is null too: the call was already confirmed, so the quiet
+     * snackbar is still true, and it offers the same page.
+     */
+    private suspend fun callWorthANote(contactId: Long, dialedAt: Instant): CallEventEntity? = try {
+        callEventRepo.observeForContact(contactId, CALLS_SCANNED_FOR_NOTE).first().firstOrNull { call ->
+            call.source == CallSource.CALL_LOG &&
+                !call.occurredAt.isBefore(dialedAt) &&
+                call.durationSeconds >= WaitingCalls.MIN_SECONDS
+        }
+    } catch (t: Throwable) {
+        if (t is CancellationException) throw t
+        null
     }
 
     /** CARD-03's evidence test; see [acknowledgeCallWhenConfirmed]. */
@@ -514,6 +704,24 @@ class CardViewViewModel @Inject constructor(
         }
 
     /**
+     * CARD-09: the same [comesUp] bucket as [futureDueLabel], worded to stand
+     * alone after the hint's dot ("Later · Thursday", "Sooner · In 2 weeks").
+     * Its own strings because a phrase that slots mid-sentence and a label
+     * that stands alone are separate strings for translators (the Browse
+     * precedent, ComesUp.kt).
+     */
+    internal fun hintWhenLabel(due: Instant, now: Instant): UiText =
+        when (val bucket = comesUp(due, now, zoneId)) {
+            ComesUp.LaterToday -> UiText.res(R.string.card_hint_today)
+            ComesUp.Tomorrow -> UiText.res(R.string.card_hint_tomorrow)
+            is ComesUp.OnDay -> UiText.res(
+                R.string.card_hint_on_day,
+                bucket.day.getDisplayName(TextStyle.FULL, Locale.getDefault()),
+            )
+            is ComesUp.InDays -> UiText.res(R.string.card_hint_in_span, formatSpan(bucket.days))
+        }
+
+    /**
      * B3 — Clock-aware mapper. `now` is the same snapshot used elsewhere in
      * `toUiState` so the rendered relative timestamps are consistent.
      */
@@ -529,6 +737,22 @@ class CardViewViewModel @Inject constructor(
 
 /** How long to wait for the call log to confirm a call before saying nothing. */
 private const val CALL_ACK_WAIT_MS = 15_000L
+
+/**
+ * CARD-11: how many of the person's newest calls are looked through for the
+ * one placed from the card. It is the newest or close to it; ten is margin.
+ */
+private const val CALLS_SCANNED_FOR_NOTE = 10
+
+/**
+ * CARD-09: Later and Sooner moves after which the idle hints never show
+ * again ("a handful", owner review decision 4). Internal for the tests.
+ */
+internal const val SWIPE_HINT_MOVES_TO_LEARN = 5
+
+// SavedStateHandle keys for the pending dial (not copy, voice.md).
+private const val KEY_DIAL_CONTACT_ID = "card_dial_contact_id"
+private const val KEY_DIAL_AT_MS = "card_dial_at_ms"
 
 /**
  * The card's "when you last spoke" line for a gap of [days] whole days: "You
