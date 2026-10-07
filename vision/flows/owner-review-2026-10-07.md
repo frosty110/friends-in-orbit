@@ -165,3 +165,27 @@ people in one go and returns you to where you started, with the new list there.
 
 - The rhythm strip's tap-a-day sheet stays; the Week screen sits beside it.
 - Contact detail keeps its own note field and its own "Log a connection".
+
+## Status (2026-10-07, end of the round)
+
+Every decision above is built in the app and shown in the prototype. Where it
+landed (merge commits on `claude/design-prototype-views-flows-abl5bv`):
+
+| # | Landed in | Notes from building it |
+|---|---|---|
+| 1 | `eb21eea` | |
+| 2 | `80a4ab6` (app), `a285380` (prototype) | Weeks are the seven days ending today, so "This week" is exactly the strip's days. Hour labels sit inside the chart rather than in a gutter, so each day keeps a 48dp column on a 360dp phone. |
+| 3 | `ab282e2` (the page), `e1e21a3` (the card opens it) | The note page withdraws that person's notification as it opens, by any way in (`cb23e87`). |
+| 4 | `e1e21a3` | Later and Sooner already played the swipe in the app; the prototype did not show it. With animations off the move now lands in one frame. The hints sit at the card's top corners, not its side edges: at the sides they covered the name at large text and in landscape. rules.md Design 8 records them as the one exception to "no motion on idle surfaces". |
+| 5 | `e1e21a3` | Contact detail and the card now share one sheet and one write. |
+| 6, 7 | `12df9c7` | The cause of "the person I'm viewing should be at the top": Browse and the card ordered people with two copies of one rule, and only the card's honoured Later, Sooner and calls. They now share one ordering. |
+| 8, 9, 10, 11 | `1f6416b` | Contact detail's per-person schedule got the same one "How often" control, so no rhythm names remain anywhere (`cb23e87`). |
+| 12 | `ab282e2` | The notification has its own channel, "After a call", and an amendment to ADR 0009 allows exactly this one event-driven notification. |
+| 13, 14 | `7f38fe1` (app), `dcbec1d` (prototype) | The list that fills itself has three steps; its How often step ends in "Create list". |
+
+Verified: the full unit suite on the integrated branch (1,431 tests in 177
+classes, no failures and no retries), each package's strict accessibility and
+privacy-curtain audits on its previews, and every prototype screen, state and
+journey in Chromium. Not verified: anything on a phone. In particular the
+post-call notification waking Orbit after a real call, the feel of the swipe
+hints' timing, and TalkBack itself.
