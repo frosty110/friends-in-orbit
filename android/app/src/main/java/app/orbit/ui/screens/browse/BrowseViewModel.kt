@@ -515,7 +515,7 @@ class BrowseViewModel @Inject constructor(
             if (ids.isEmpty()) return@launch
             runMutation {
                 val result = moveUseCase(srcListId, targetListId, ids)
-                emitBatchResult(
+                val moved = emitBatchResult(
                     result.count,
                     result.inverse,
                     UiText.plural(
@@ -525,7 +525,7 @@ class BrowseViewModel @Inject constructor(
                         targetListName
                     ),
                 )
-                onExitMultiSelect()
+                if (moved) onExitMultiSelect()
             }
         } finally {
             _isCommitting.value = false
@@ -539,7 +539,7 @@ class BrowseViewModel @Inject constructor(
             if (ids.isEmpty()) return@launch
             runMutation {
                 val result = copyUseCase(targetListId, ids)
-                emitBatchResult(
+                val copied = emitBatchResult(
                     result.count,
                     result.inverse,
                     UiText.plural(
@@ -549,7 +549,7 @@ class BrowseViewModel @Inject constructor(
                         targetListName
                     ),
                 )
-                onExitMultiSelect()
+                if (copied) onExitMultiSelect()
             }
         } finally {
             _isCommitting.value = false
@@ -564,13 +564,22 @@ class BrowseViewModel @Inject constructor(
      * failed save (rules.md Code 3), the way the contact picker reports the
      * same case.
      */
-    private fun emitBatchResult(count: Int, inverse: suspend () -> Unit, message: UiText) {
+    /**
+     * Announces a Move or Copy and returns whether anything was written. A
+     * count of 0 (the target was archived or became a smart list meanwhile)
+     * says "Couldn't save your change" with no Undo and returns false, so the
+     * caller keeps the selection for another target, exactly as a write that
+     * throws does. Until 2026-10-07 a count-0 Move or Copy still left
+     * multi-select, while a throw kept it: two failures, two behaviours.
+     */
+    private fun emitBatchResult(count: Int, inverse: suspend () -> Unit, message: UiText): Boolean {
         if (count == 0) {
             _snackbarEvents.tryEmit(SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)))
-            return
+            return false
         }
         undoStack.put(UndoStack.PendingUndo(inverse))
         _snackbarEvents.tryEmit(SnackbarEvent.undoable(message))
+        return true
     }
 
     fun onUndo() = viewModelScope.launch {

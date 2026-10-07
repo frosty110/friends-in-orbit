@@ -740,6 +740,14 @@ class BrowseViewModelTest {
         }
         assertTrue(s.recDao.moveCalls.isEmpty(), "nothing moved")
         assertNull(s.undoStack.peek(), "nothing to undo")
+        // A failed save keeps the selection for another target, as a write
+        // that throws does (until 2026-10-07 this path left multi-select).
+        s.vm.uiState.test(timeout = 2.seconds) {
+            val ready = awaitReady(this)
+            assertTrue(ready.isMultiSelect, "the selection stays for another try")
+            assertEquals(setOf(1L), ready.selectedIds)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
