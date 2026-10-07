@@ -184,8 +184,10 @@ landed (merge commits on `claude/design-prototype-views-flows-abl5bv`):
 | 13, 14 | `7f38fe1` (app), `dcbec1d` (prototype) | The list that fills itself has three steps; its How often step ends in "Create list". |
 
 Verified: the full unit suite on the integrated branch (1,431 tests in 177
-classes, no failures and no retries), each package's strict accessibility and
-privacy-curtain audits on its previews, and every prototype screen, state and
-journey in Chromium. Not verified: anything on a phone. In particular the
+classes, no failures and no retries); the whole preview gallery on the
+integrated branch with the strict accessibility audit (4,329 controls across
+725 previews, no findings) and with the privacy curtain down (725 previews, no
+name reaching text, fields or TalkBack); and every prototype screen, state
+and journey in Chromium (152 states, 13 journeys). Not verified: anything on a phone. In particular the
 post-call notification waking Orbit after a real call, the feel of the swipe
 hints' timing, and TalkBack itself.
