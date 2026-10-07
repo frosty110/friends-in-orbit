@@ -21,6 +21,7 @@ import app.orbit.domain.membershipFixture
 import app.orbit.domain.ruleTemplateFixture
 import app.orbit.domain.usecase.SurfaceNextUseCase
 import app.orbit.testutil.newPrefs
+import app.orbit.ui.screens.week.weekPages
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
@@ -279,6 +280,33 @@ class HomeFeedRhythmTest {
     fun `a list with nobody surfaceable has no next up`() = runTest {
         val feed = feed(contacts = emptyList(), events = emptyList())
         assertNull(feed.enrichment.first { it.containsKey(1L) }.getValue(1L).nextUp)
+    }
+
+    // HOME-13: the Week screen's "This week" is the strip, call for call: the
+    // same seven days, the same calls, the same order, the same labels. Both
+    // go through the one bucketing (bucketRhythm), and this holds them to it
+    // across the 3-minute floor, a quiet day, two calls in one day and a
+    // call too old for the strip.
+    @Test
+    fun `the Week screen's this week is the strip, call for call`() = runTest {
+        val contacts = listOf(
+            contactFixture(id = 1L, displayName = "Kai"),
+            contactFixture(id = 2L, displayName = "Mara"),
+        )
+        val events = listOf(
+            callEvent(1L, 1L, daysAgo = 0, seconds = 14 * 60, CallDirection.OUTGOING),
+            callEvent(2L, 2L, daysAgo = 2, seconds = 20 * 60, CallDirection.INCOMING),
+            callEvent(3L, 1L, daysAgo = 2, seconds = 10 * 60, CallDirection.OUTGOING, minutesEarlier = 90L),
+            callEvent(4L, 2L, daysAgo = 3, seconds = 179, CallDirection.OUTGOING),
+            callEvent(5L, 1L, daysAgo = 9, seconds = 30 * 60, CallDirection.INCOMING),
+        )
+        val zone = ZoneId.systemDefault()
+
+        val strip = rhythmOf(feed(contacts = contacts, events = events))
+        val week = weekPages(events, contacts.associateBy { it.id }, now.atZone(zone).toLocalDate(), zone)
+
+        assertEquals(strip, week[0].days)
+        assertEquals(2, week.size, "the nine-day-old call is last week, not this one")
     }
 
     // HOME-12: the strip buckets by clock.now() when a Room flow re-emits, so

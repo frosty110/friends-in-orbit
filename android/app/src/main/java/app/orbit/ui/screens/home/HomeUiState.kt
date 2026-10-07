@@ -129,6 +129,13 @@ data class NextUp(
  * Manual "Logged" connections never reach here: they're written with
  * `durationSeconds = 0` and the 3-minute rhythm floor drops them, so
  * [direction] is always a real carrier-observed direction.
+ *
+ * HOME-13: [minuteOfDay] is where the Week screen draws the call on its time
+ * axis: the wall-clock minute it started in the device's zone (0 to 1439,
+ * 18:40 is 1120), the same moment [timeLabel] words. Wall clock, not time
+ * elapsed since midnight: on a day the clocks change, elapsed time would
+ * draw a 6:40pm call an hour off its label. A number, so the composables
+ * still never see an `Instant`.
  */
 @Immutable
 data class RhythmCall(
@@ -140,8 +147,12 @@ data class RhythmCall(
     val direction: CallDirection,
     val durationLabel: UiText,   // "14 min"
     val timeLabel: String,       // "4:30pm"
+    val minuteOfDay: Int,        // 1120 for 6:40pm
 )
 
-/** One day of the 7-day rhythm strip — the qualifying calls placed that day. */
+/**
+ * One day of the 7-day rhythm strip, and one column of the Week screen
+ * (HOME-13): the qualifying calls placed that day, oldest first.
+ */
 @Immutable
 data class RhythmDay(val calls: List<RhythmCall>)

@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -129,6 +131,9 @@ fun HomeScreen(
     onOpenContactWithFocus: (contactId: String, focusNote: Boolean) -> Unit = { _, _ -> },
     // HOME-14: "Add a note" on a call waiting for one opens the note page (NOTE-04).
     onOpenPostCallNote: (contactId: String, callEventId: Long) -> Unit = { _, _ -> },
+    // HOME-13: the strip's "See your week" and the day sheet's "See the whole
+    // week" open the list's Week screen.
+    onOpenWeek: (listId: String) -> Unit = {},
     vm: HomeViewModel = hiltViewModel(),
     appVm: AppViewModel = hiltViewModel(),
 ) {
@@ -232,6 +237,7 @@ fun HomeScreen(
         // HOME-8 — a rhythm-day sheet row taps through to the person. No note
         // focus: this is "who was that", not a post-call prompt.
         onOpenContact = { contactId -> onOpenContactWithFocus(contactId.toString(), false) },
+        onOpenWeek = { listId -> onOpenWeek(listId.toString()) },
         // HOME-14: the calls waiting for a note. "Add a note" opens the
         // note page and leaves the call waiting until a note is saved
         // (NOTE-05); only Dismiss closes it.
@@ -267,6 +273,8 @@ internal fun HomeContent(
     onArchive: (Long) -> Unit = {},
     onDeleteConfirmed: (Long) -> Unit = {},
     onOpenContact: (contactId: Long) -> Unit = {},
+    // HOME-13: a card's Week screen, from its strip or its day sheet.
+    onOpenWeek: (listId: Long) -> Unit = {},
     // HOME-14: the calls waiting for a note, newest first, and what their
     // buttons do. Dismiss passes one id; "Dismiss all" passes every one shown.
     notesWaiting: List<NoteWaiting> = emptyList(),
@@ -446,6 +454,7 @@ internal fun HomeContent(
                             onDelete = { pendingDeleteId = tile.id },
                             onOpenContact = onOpenContact,
                             onCallNextUp = onCallNextUp,
+                            onOpenWeek = { onOpenWeek(tile.id) },
                         )
                         }
                     }
@@ -492,6 +501,7 @@ private fun ListTile(
     onDelete: () -> Unit = {},
     onOpenContact: (contactId: Long) -> Unit = {},
     onCallNextUp: (phone: String) -> Unit = {},
+    onOpenWeek: () -> Unit = {},
 ) {
     val curtain = LocalPrivacyCurtain.current
     val isDark = OrbitTheme.colors.isDark
@@ -643,6 +653,7 @@ private fun ListTile(
                     rhythm = tile.rhythm,
                     today = today,
                     onDayClick = { index -> openDayIndex = index },
+                    onSeeWeek = onOpenWeek,
                     headerPadding = OrbitTheme.spacing.x4,
                 )
             }
@@ -668,6 +679,12 @@ private fun ListTile(
                     onOpenContact(contactId)
                 },
                 onDismiss = { openDayIndex = null },
+                // HOME-13: every day the strip shows is in this week, so the
+                // Week screen opens on it.
+                onSeeWeek = {
+                    openDayIndex = null
+                    onOpenWeek()
+                },
             )
         }
     }
@@ -823,12 +840,17 @@ private fun NextUpRow(
  *     answerable at a glance.
  *   - a **tap target per day**, which opens [RhythmDaySheet] with that day's
  *     calls: who, which way, how long, when.
+ *
+ * HOME-13 makes the header line the way into the Week screen: "See your
+ * week" with a chevron, the legend still beside it ([onSeeWeek]).
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RhythmStrip(
     rhythm: List<RhythmDay>,
     today: LocalDate,
     onDayClick: (index: Int) -> Unit,
+    onSeeWeek: () -> Unit,
     headerPadding: Dp = 0.dp,
 ) {
     // The drawn glyph is the one-letter weekday ("S M T W T F S"). Keyed on
@@ -852,21 +874,30 @@ private fun RhythmStrip(
     val scaleMax = ((totals.maxOrNull() ?: 0).coerceAtLeast(1)) * RHYTHM_HEADROOM
 
     Column(Modifier.fillMaxWidth()) {
-        Row(
+        // A flow, not a row: at large text the legend moves under the button
+        // rather than squeezing "See your week" onto two lines.
+        FlowRow(
             modifier = Modifier.fillMaxWidth().padding(horizontal = headerPadding),
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            itemVerticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = stringResource(R.string.home_rhythm_eyebrow),
-                style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgSubtle),
-                modifier = Modifier.weight(1f),
+            // HOME-13: the line that said "Last 7 days" is the button to the
+            // whole week (the owner asked for a bigger chart behind "See this
+            // day"). Its own 48dp target, inside the card's: the card's tap
+            // still opens the deck everywhere else. The end padding is the
+            // least gap to the legend on one line, and nothing once it wraps.
+            SeeWeekLink(
+                text = stringResource(R.string.home_rhythm_see_week),
+                onClick = onSeeWeek,
+                modifier = Modifier.padding(end = OrbitTheme.spacing.x2),
             )
             // The rim colours are meaningless without a key, and the sheet is
             // one tap too far to serve as the only explanation. Kept to two
             // words so it survives large font scales on a narrow card.
             DirectionLegend()
         }
-        Spacer(Modifier.height(OrbitTheme.spacing.x2))
+        // The button's 48dp already leaves air above the bars.
+        Spacer(Modifier.height(OrbitTheme.spacing.x1))
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Bottom,
@@ -888,9 +919,10 @@ private fun RhythmStrip(
 
 /** Two-swatch key for the direction rims. Swatches mirror the bar mark exactly:
  *  coloured rim, black ring, neutral fill. The legend teaches the encoding,
- *  not a second one. */
+ *  not a second one. Internal so the Week screen (HOME-13) shows this same
+ *  key, not a second drawing of it. */
 @Composable
-private fun DirectionLegend() {
+internal fun DirectionLegend() {
     val legendDescription = stringResource(R.string.home_rhythm_legend_a11y)
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1134,6 +1166,7 @@ private fun previewCall(
     direction = direction,
     durationLabel = formatDuration(minutes * 60),
     timeLabel = "4:30pm",
+    minuteOfDay = 16 * 60 + 30,
 )
 
 private fun previewRhythm(seed: Int): List<RhythmDay> = listOf(

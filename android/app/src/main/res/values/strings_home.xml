@@ -63,8 +63,9 @@
     <!-- %1$s: how long ago, for example "3 weeks ago". -->
     <string name="home_why_ago">You spoke %1$s</string>
 
-    <!-- The 7-day rhythm strip on each card. -->
-    <string name="home_rhythm_eyebrow">Last 7 days</string>
+    <!-- The 7-day rhythm strip on each card. Its header line is a button that opens the
+         Week screen for the list, with the key to the bar outlines beside it. -->
+    <string name="home_rhythm_see_week">See your week</string>
     <!-- Two-colour key: each bar's outline shows who called. "You" = calls you made. -->
     <string name="home_rhythm_legend_you">You</string>
     <!-- "Them" = calls you received. -->
@@ -102,6 +103,40 @@
     <string name="home_rhythm_call_meta">%1$s · %2$s · %3$s</string>
     <!-- Stands in for the name of someone who has left the list since the call. -->
     <string name="home_rhythm_someone">Someone</string>
+    <!-- At the foot of the day sheet: opens the Week screen on the week of this day. -->
+    <string name="home_rhythm_see_whole_week">See the whole week</string>
+
+    <!-- The Week screen: one list's calls as a calendar of seven days, each day a column
+         on a time axis from midnight at the top to midnight at the bottom. -->
+    <!-- The heading over the seven days ending today, the same days as the strip on Home. -->
+    <string name="home_week_this_week">This week</string>
+    <!-- The heading over an earlier week. %1$s: its first day, %2$s: its last day
+         ("28 Sep to 4 Oct"), each in the pattern below. -->
+    <string name="home_week_range">%1$s to %2$s</string>
+    <!-- java.time pattern for a day in the heading above, for example "28 Sep".
+         d = day of month, MMM = short month name. Reorder for your language. -->
+    <string name="home_week_day_pattern">d MMM</string>
+    <!-- The same for a week that reaches into another year, for example "29 Dec 2025". -->
+    <string name="home_week_day_year_pattern">d MMM yyyy</string>
+    <!-- Screen-reader names of the arrows either side of the heading. -->
+    <string name="home_week_previous">Previous week</string>
+    <string name="home_week_next">Next week</string>
+    <!-- Over the empty chart of a week with no calls. -->
+    <string name="home_week_empty">No calls this week.</string>
+    <!-- The calls could not be read. -->
+    <string name="home_week_error_title">Orbit couldn\'t load this week</string>
+    <!-- Screen-reader label for a day with calls. %1$s: the day ("Wednesday 30 September",
+         "Today"), %2$s: "2 calls", %3$s: one sentence per call, in time order, from the four
+         strings below. -->
+    <string name="home_week_day_a11y">%1$s, %2$s: %3$s</string>
+    <!-- One call, read aloud. %1$s: the person\'s name, %2$s: the time it started ("6:40pm"),
+         %3$s: how long it lasted ("14 min"). -->
+    <string name="home_week_call_you_called">You called %1$s at %2$s for %3$s.</string>
+    <string name="home_week_call_they_called">%1$s called you at %2$s for %3$s.</string>
+    <!-- The same with no name: the privacy curtain is down, or the person has left the list.
+         %1$s: the time, %2$s: how long. -->
+    <string name="home_week_call_you_called_someone">You called someone at %1$s for %2$s.</string>
+    <string name="home_week_call_someone_called">Someone called you at %1$s for %2$s.</string>
 
     <!-- The one reflective line at the foot of Home. -->
     <string name="home_reflection">The call that makes your day can make someone else\'s. You deserve to be the one who reaches out.</string>
