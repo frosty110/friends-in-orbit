@@ -14,6 +14,8 @@ import app.orbit.data.repository.ListRepository
 import app.orbit.data.repository.RuleTemplateRepository
 import app.orbit.domain.JsonProvider
 import app.orbit.domain.rule.RuleParams
+import app.orbit.domain.rule.baseIntervalHours
+import app.orbit.domain.rule.toKeepInTouchEvery
 import app.orbit.domain.smart.SmartListEngine
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.domain.undo.UndoStack
@@ -39,7 +41,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.LocalTime
 import javax.inject.Inject
 
 /**
@@ -54,9 +55,10 @@ import javax.inject.Inject
  *  - For SMART lists: combine with `smartListEngine.membership(rule)` to project
  *    a Flow-driven members preview that re-emits when rule params change
  *    (SMART-06).
- *  - Five save-on-change setters that dispatch directly to repository methods —
- *    no local UI mutation. Per the save-on-change semantics no "Save"
- *    button exists.
+ *  - Save-on-change setters that dispatch directly to repository methods,
+ *    with no local UI mutation. Per the save-on-change semantics there is no
+ *    "Save" button for the settings; renaming from the title has its own
+ *    "Save list name" (LIST-26), which calls [setName] once.
  *
  * `ruleParams` resolution mirrors `OverrideResolver` (per-list override beats
  * template default). Per-contact override is irrelevant for List Configuration
@@ -231,9 +233,10 @@ class ListConfigViewModel @Inject constructor(
      * The per-list override, else the template's defaults, through the
      * resolver this screen shares with the Lists row (the top-level
      * [resolveRuleParams] in RuleParamsResolution.kt). Nothing configured and
-     * a blob that does not decode both come back null here: How often has
-     * nothing honest to show for either, and the Lists row is where the
-     * unreadable case is named ("Couldn't read this list's rhythm"). The
+     * a blob that does not decode both come back null here: How often has no
+     * interval to show for either, so it says the list has no rhythm yet and
+     * lets the slider set one ([setIntervalHours]), and the Lists row is where
+     * the unreadable case is named ("Couldn't read this list's rhythm"). The
      * domain's `OverrideResolver.resolveParamsFor` decodes the same JSON
      * without a catch and throws, so a list whose override is unreadable
      * here also fails to surface anyone in the deck and the queue.
@@ -273,6 +276,11 @@ class ListConfigViewModel @Inject constructor(
      * update` round trip; two overlapping setter taps on different columns no
      * longer clobber one another.
      *
+     * One caller since LIST-24 took the rhythm choice off List settings: Make
+     * your first list gives its new list Keep in touch on first read (the list
+     * arrives with no template, and a list with no template surfaces no one).
+     * Moving How often goes through [setIntervalHours] instead.
+     *
      * The parameter is the [RuleKind], not a raw template id.
      * UI callers previously mapped kind → hardcoded `1L/2L/3L` (which merely
      * mirrored the seed-insert order) and an unknown id silently returned.
@@ -310,27 +318,69 @@ class ListConfigViewModel @Inject constructor(
     }
 
     /**
-     * LIST-04 — write the per-list rule-params override JSON. Pass `null` to
-     * clear (revert to template default). Caller encodes via
-     * `JsonProvider.json.encodeToString(RuleParams.serializer(), params)`.
+     * LIST-24 + LIST-04: How often, for every list. Writes the per-list
+     * override as Keep in touch at [hours], built by the domain's
+     * [toKeepInTouchEvery] through `withIntervalHours` (the one honest entry
+     * point: both cooldown bounds move together), and gives the list the Keep
+     * in touch template when it has another or none. So a Late night or
+     * Energize list becomes an ordinary list at the chosen interval, with Keep
+     * in touch's reset percentages and skip penalty (the helper's KDoc lists
+     * every number that changes); a Keep in touch list keeps its other numbers.
+     * Nothing else about the list changes: its people, each person's next
+     * turn, its time of day and its nudges.
+     *
+     * Releasing the slider at the interval the list already has writes
+     * nothing, so a Late night list stays Late night until the interval moves.
+     * A list whose rhythm cannot be read (no template, or an override that no
+     * longer decodes) has no interval to compare, so any choice is written:
+     * this is how such a list gets a rhythm back, now that the rhythm choice
+     * that used to clear a broken override is gone.
+     *
+     * Order matters because the two writes are separate (the repository has
+     * no single write for both; [setRuleTemplate] makes the same trade). The
+     * Keep in touch template is looked up first, so a missing seed row fails
+     * before anything is written. The override goes next: if the template
+     * write then fails, the engine already runs the chosen interval (engines
+     * are picked by the parameters' type, not the template) and the screen
+     * shows it, with "Couldn't save your change". The other order would leave
+     * the Keep in touch template over no override, an every-2-days list that
+     * is neither what it was nor what was chosen.
      */
-    fun setRuleParamsOverrideJson(jsonText: String?) {
+    fun setIntervalHours(hours: Int) {
         val id = listId ?: return
         viewModelScope.launch {
-            runMutation { listRepo.setRuleParamsOverrideJson(id, jsonText) }
+            runMutation {
+                val entity = listRepo.getById(id) ?: return@runMutation
+                val template = templateLookup(entity)
+                val current = resolveRuleParams(entity, template)
+                if (current != null && current.baseIntervalHours == hours) return@runMutation
+                val keepInTouchTemplate = if (template?.kind == RuleKind.KEEP_IN_TOUCH) {
+                    null
+                } else {
+                    checkNotNull(ruleTemplateRepo.getByKind(RuleKind.KEEP_IN_TOUCH)) {
+                        "rule_templates seed row missing for kind KEEP_IN_TOUCH"
+                    }
+                }
+                val next = current.toKeepInTouchEvery(hours)
+                listRepo.setRuleParamsOverrideJson(id, json.encodeToString(RuleParams.serializer(), next))
+                keepInTouchTemplate?.let { listRepo.updateRuleTemplate(id, it.id) }
+            }
         }
     }
 
     /**
-     * LIST-05 + H3 fix — atomic single-column write of (activeHoursStart,
-     * activeHoursEnd). Both nulls = always active. Both non-null = the window
-     * (start may equal end for the inactive case; UI blocks identical times).
+     * LIST-25 + LIST-05 + H3 fix: the list's time of day, as the atomic
+     * single-column write of (activeHoursStart, activeHoursEnd) the
+     * active-hours editor used. [DayPart.AnyTime] writes both null; every
+     * other part writes its window. Only a chosen part is ever written: a
+     * custom window from the old editor is read back as Custom and left as it
+     * is until the user picks a part.
      */
-    fun setActiveHours(start: LocalTime?, end: LocalTime?) {
+    fun setTimeOfDay(part: DayPart) {
         val id = listId ?: return
         viewModelScope.launch {
             runMutation {
-                listRepo.updateActiveHours(id, start, end)
+                listRepo.updateActiveHours(id, part.start, part.end)
                 // The effective nudge schedule depends on the window (D-09: a slot at
                 // the window start only when no chosen time lands inside it), so a
                 // window edit re-anchors the chain instead of leaving the old slot
@@ -425,15 +475,16 @@ class ListConfigViewModel @Inject constructor(
     }
 
     /**
-     * ONB-11 / ONB-24 — atomic single-column write of the list name.
-     * Mirrors the H3-fix setter family ([setRuleTemplate], [setActiveHours],
+     * ONB-11 / ONB-24 / LIST-26: atomic single-column write of the list name.
+     * Mirrors the H3-fix setter family ([setRuleTemplate], [setTimeOfDay],
      * [setNotificationsEnabled]). Two callers: the onboarding first-list
      * wrapper's name TextField, so the onboarding flow can satisfy ONB-11 (no
      * empty/unnamed lists can leave onboarding) without a getById → copy →
-     * update round trip; and List settings' inline rename row (F-12,
-     * `ListNameRenameRow`), which commits on IME Done, focus loss or the check.
-     * The create sheet also names a list, but through `createList`, before
-     * this screen opens.
+     * update round trip; and List settings' title, which renames in place and
+     * commits once, on "Save list name" or the keyboard's Done (LIST-26). A
+     * blank name keeps the old one; a failed write says "Couldn't save your
+     * change" through [runMutation]. The create sheet also names a list, but
+     * through `createList`, before this screen opens.
      */
     fun setName(name: String) {
         val id = listId ?: return

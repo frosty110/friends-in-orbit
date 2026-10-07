@@ -30,7 +30,12 @@ import app.orbit.data.entity.RuleTemplateEntity
 import app.orbit.ui.theme.OrbitTheme
 
 /**
- * Rhythm picker for List settings.
+ * Rhythm picker: Keep in touch, Late night, Energize.
+ *
+ * Contact detail's per-person rhythm (`RuleOverrideSection`) is its one
+ * caller. List settings and Make your first list dropped it with LIST-24: the
+ * three are one calculation with different numbers, so those screens show one
+ * "How often" slider ([HowOftenSlider]) for every list instead.
  *
  * Renders the three [RuleKind] options as a stack of radio rows: one
  * `selectableGroup`, each row `selectable` with `Role.RadioButton` and its
@@ -42,8 +47,6 @@ import app.orbit.ui.theme.OrbitTheme
  *
  * Token-clean — no inline color hex literals, no RoundedCornerShape, no fontSize literals.
  * Layout-local `dp` literals are acceptable per the project's design token conventions.
- *
- * Consumed by the `ListConfigScreen` rewrite.
  */
 @Composable
 fun RuleTemplatePicker(

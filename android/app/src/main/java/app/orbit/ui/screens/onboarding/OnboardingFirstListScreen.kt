@@ -41,7 +41,6 @@ import app.orbit.ui.screens.lists.ListConfigViewModel
 import app.orbit.ui.screens.lists.SettingGroup
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.asString
-import java.time.LocalTime
 
 /**
  * ONB-20: first-list creation reusing the production List
@@ -74,8 +73,9 @@ import java.time.LocalTime
  * the onboarding wrapper inherits Save-on-change behavior, the convert
  * dialog (irrelevant for new STATIC lists but harmless), and the
  * snackbar-event collector. The setter callbacks bind to the actual VM
- * method names (`setName`, `setRuleTemplate`, `setActiveHours`,
- * `setNotificationsEnabled`, `setSmartRuleJson`, `confirmConvert`).
+ * method names (`setName`, `setIntervalHours`, `setTimeOfDay`,
+ * `setNotificationsEnabled`, `setSmartRuleJson`, `confirmConvert`), and the
+ * first read seeds the template with `setRuleTemplate`.
  */
 @Composable
 fun OnboardingFirstListScreen(
@@ -140,7 +140,9 @@ fun OnboardingFirstListScreen(
     // selected. Pre-seed the "Keep in touch" template once the entity loads;
     // the Room write re-emits with ruleKind set, so the effect self-quiesces.
     // Kind-based: the VM resolves the seeded row via
-    // RuleTemplateRepository.getByKind (no hardcoded seed id).
+    // RuleTemplateRepository.getByKind (no hardcoded seed id). The picker is
+    // gone (LIST-24), but a list with no template still surfaces no one, and
+    // How often reads the template's interval, so the seed stays.
     LaunchedEffect(ready?.id, ready?.ruleKind) {
         if (ready != null && ready.type == ListType.STATIC && ready.ruleKind == null) {
             vm.setRuleTemplate(RuleKind.KEEP_IN_TOUCH)
@@ -205,20 +207,10 @@ fun OnboardingFirstListScreen(
             isOnboarding = true,
             snackbarHostState = snackbarHostState,
             onNameChange = vm::setName,
-            onRuleTemplateChange = vm::setRuleTemplate,
-            onRuleParamsChange = { params ->
-                vm.setRuleParamsOverrideJson(
-                    JsonProvider.json.encodeToString(RuleParams.serializer(), params)
-                )
-            },
-            onActiveHoursChange = vm::setActiveHours,
-            onAlwaysActiveToggled = { alwaysActive ->
-                if (alwaysActive) {
-                    vm.setActiveHours(start = null, end = null)
-                } else {
-                    vm.setActiveHours(start = LocalTime.of(9, 0), end = LocalTime.of(17, 0))
-                }
-            },
+            // LIST-24 / LIST-25: the same How often and Time of day as List
+            // settings; the rhythm choice went from both screens at once.
+            onIntervalChange = vm::setIntervalHours,
+            onTimeOfDayChange = vm::setTimeOfDay,
             onNotificationsToggle = vm::setNotificationsEnabled,
             // isOnboarding=true means NudgeScheduleSection is absent from the tree;
             // the callback is still required by the signature.
@@ -340,8 +332,8 @@ internal fun firstListHelperText(
 private fun FirstListLoadingSkeleton() {
     listOf(
         R.string.lists_section_name,
-        R.string.lists_section_rhythm,
-        R.string.lists_section_active_hours,
+        R.string.lists_section_how_often,
+        R.string.lists_section_time_of_day,
         R.string.lists_section_nudges,
         R.string.lists_section_members,
     ).forEach { title ->
@@ -410,10 +402,8 @@ private fun OnboardingFirstListScreenPreviewBody(
             isOnboarding = true,
             snackbarHostState = snackbarHostState,
             onNameChange = {},
-            onRuleTemplateChange = {},
-            onRuleParamsChange = {},
-            onActiveHoursChange = { _, _ -> },
-            onAlwaysActiveToggled = {},
+            onIntervalChange = {},
+            onTimeOfDayChange = {},
             onNotificationsToggle = {},
             onNudgeScheduleChange = {},
             onSmartRuleChange = {},

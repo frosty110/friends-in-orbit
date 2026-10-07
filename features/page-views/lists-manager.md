@@ -3,8 +3,8 @@
 **Route:** `lists`; `lists?openCreate=true` opens with the create sheet already up
 **Group:** Lists
 **Status:** active
-**Last reviewed:** 2026-10-06
-**Spec:** [orbit-lists](../orbit-lists/README.md): LIST-20, LIST-22, LIST-23, BULK-05; PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
+**Last reviewed:** 2026-10-07
+**Spec:** [orbit-lists](../orbit-lists/README.md): LIST-20, LIST-22, LIST-23, LIST-24, BULK-05; PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
 
@@ -16,7 +16,7 @@
 ## What the user sees
 
 - App bar: Back and "Lists"
-- One row per list, in Home's order: a drag handle ("Reorder list"), the name, a "Smart list" chip where the list fills itself, a second line with its rhythm ("Every 14 days", "Late night rhythm", "Energize rhythm") or its rule ("Recently added · 30 days", "Never called"), or "Couldn't read this list's rhythm" when the stored rhythm cannot be decoded (the deck fails on the same data), a count badge (left out at zero), "+" ("Add people to {list}"; regular lists only) and "More actions for {list}"
+- One row per list, in Home's order: a drag handle ("Reorder list"), the name, a "Smart list" chip where the list fills itself, a second line with its rhythm as its interval, whatever rule it runs ("Every 14 days"; "Every 3 days" for a Late night list and "Every day" for Energize, LIST-24) or its rule ("Recently added · 30 days", "Never called"), or "Couldn't read this list's rhythm" when the stored rhythm cannot be decoded (the deck fails on the same data), a count badge (left out at zero), "+" ("Add people to {list}"; regular lists only) and "More actions for {list}"
 - A foot note: "Drag to reorder. Lists higher up show first on home."
 - "Archived (2)", which expands to the archived lists, each with "Restore", a delete control ("Delete {list}") and a settings control ("List settings for {list}")
 - A floating "New list" button when lists exist (the one accent; LIST-20), centred in the body when there are none
@@ -47,7 +47,7 @@
 
 ## Tests that pin it
 
-- `ListsManagerViewModelTest` (archive, restore, delete with undo, reorder, the nudge toggle, the failure path, the rhythm line and its unreadable case), `RuleParamsResolutionTest` (the resolver shared with List settings)
+- `ListsManagerViewModelTest` (archive, restore, delete with undo, reorder, the nudge toggle, the failure path, the rhythm line for every rule type and its unreadable case), `RuleParamsResolutionTest` (the resolver shared with List settings)
 - `ListRowMenuOrderTest` (menu order, and the same pause and resume words as Home)
 - `ListsManagerScreenTest` (added this round: a row tap, "List settings" and create go to different places)
 - `CreateListTemplateCatalogTest` (each template makes the rhythm its subtitle names)

@@ -10,6 +10,7 @@ import app.orbit.data.repository.RuleTemplateRepository
 import app.orbit.domain.JsonProvider
 import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.rule.RuleParams
+import app.orbit.domain.rule.baseIntervalHours
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeScheduler
 import app.orbit.ui.screens.home.HomeSnackbarEvent
@@ -468,9 +469,12 @@ class ListsManagerViewModel @Inject constructor(
     }
 
     /**
-     * A regular list's rhythm as its row subtitle: "Every 14 days" for Keep
-     * in touch (the slider's own words, `lists_interval_every_days`), or the
-     * name of a rhythm that has nothing to set. The parameters resolve through
+     * A regular list's rhythm as its row subtitle, as its interval whichever
+     * rule it runs (LIST-24): "Every 14 days" for Keep in touch, "Every 3
+     * days" for Late night, "Every day" for Energize, in the words How often
+     * uses ([howOftenEveryLabel]). Until 2026-10-07 the last two read "Late
+     * night rhythm" and "Energize rhythm", names List settings no longer
+     * shows anywhere. The parameters resolve through
      * the resolver List settings shares ([resolveRuleParams]): the per-list
      * override wins, else the template's defaults. A "Start from blank" list
      * has no override, so its rhythm lives only in the seeded
@@ -492,15 +496,8 @@ class ListsManagerViewModel @Inject constructor(
             RuleParamsResolution.Unreadable -> return UiText.res(R.string.lists_rhythm_unreadable)
             is RuleParamsResolution.Decoded -> resolved.params
         }
-        return when (params) {
-            is RuleParams.KeepInTouch -> {
-                // Whole days, as the interval slider shows them (48h reads "Every 2 days").
-                val days = (params.cooldownMinHours / 24).coerceAtLeast(1)
-                UiText.plural(R.plurals.lists_interval_every_days, days, days)
-            }
-            is RuleParams.LateNight -> UiText.res(R.string.lists_rhythm_late_night)
-            is RuleParams.Energize -> UiText.res(R.string.lists_rhythm_energize)
-        }
+        // Whole days, as the interval slider shows them (48h reads "Every 2 days").
+        return howOftenEveryLabel(intervalDaysFor(params.baseIntervalHours))
     }
 
     private companion object {

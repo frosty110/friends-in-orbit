@@ -21,7 +21,8 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * The rhythm rows on List settings and the template tiles on the create sheet
+ * The rhythm rows (Contact detail's per-person rhythm; List settings shows
+ * one How often slider instead since LIST-24) and the template tiles on the create sheet
  * are one choice each, so TalkBack must hear a radio button with its selected
  * state (WCAG 4.1.2) and not "Keep in touch, button". Until 2026-10-06 both
  * were plain clickables whose only selection cue was drawn: a dot, a tint.
