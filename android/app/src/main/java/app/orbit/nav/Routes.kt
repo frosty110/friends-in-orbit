@@ -4,7 +4,13 @@ package app.orbit.nav
 object Routes {
     const val Home = "home"
     const val Card = "card/{listId}"
-    const val Browse = "browse/{listId}"
+
+    // BROWSE-09: `focus` is an optional query arg, the id of the person on the
+    // card when its menu's "Browse people" opened Browse; Browse marks that row
+    // "On your card" and scrolls to it. "Browse this list" (All quiet, nobody
+    // on the card) leaves it out, so `browse/3` still matches. Build it with
+    // [browse].
+    const val Browse = "browse/{listId}?focus={focus}"
 
     // NOTE-02 / LOG-03 — optional query args for "open contact and focus the
     // Notes input" / "open contact and scroll to a specific call event". When
@@ -78,7 +84,8 @@ object Routes {
     const val PickLists = "pick/lists?contactId={contactId}"
 
     fun card(listId: String) = "card/$listId"
-    fun browse(listId: String) = "browse/$listId"
+    fun browse(listId: String, focusContactId: Long? = null) =
+        if (focusContactId == null) "browse/$listId" else "browse/$listId?focus=$focusContactId"
     fun contact(contactId: String) = "contact/$contactId"
     fun listConfig(listId: String) = "lists/$listId/config"
     fun firstList(listId: String) = "onboard/first-list/$listId"

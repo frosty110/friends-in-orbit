@@ -34,13 +34,19 @@ import app.orbit.domain.usecase.CopyContactsUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MoveContactsUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
+import app.orbit.domain.usecase.ReorderSequenceUseCase
 import app.orbit.domain.usecase.SurfaceQueueUseCase
 import app.orbit.testutil.MainDispatcherRule
 import app.orbit.ui.util.UiText
+import app.orbit.ui.util.formatSpan
 import app.orbit.ui.util.pausedPeopleSnackbar
 import app.orbit.ui.util.pausedSnackbar
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -105,6 +111,7 @@ class BrowseViewModelTest {
      */
     private fun makeVm(
         savedStateListId: String? = "1",
+        focus: String? = null,
         ruleTemplateRepo: FakeRuleTemplateRepository = FakeRuleTemplateRepository(),
         scriptedForList: ((Long) -> StateFlow<BrowseFeedSnapshot>)? = null,
         targetLists: List<ListEntity> = emptyList(),
@@ -120,7 +127,7 @@ class BrowseViewModelTest {
         val recDao = RecordingListMembershipDao()
         val recContactDao = RecordingContactDao(ignoredSnapshots, pausedSnapshots)
         val undoStack = UndoStack()
-        val savedState = SavedStateHandle(mapOf("listId" to savedStateListId))
+        val savedState = SavedStateHandle(mapOf("listId" to savedStateListId, "focus" to focus))
         val refreshes = intArrayOf(0)
         // Real [BrowseFeed] over the existing fakes; the
         // singleton's `forList(...)` projection re-derives from the same
@@ -206,6 +213,15 @@ class BrowseViewModelTest {
                 clock
             ),
             pauseContactUseCase = PauseContactUseCase(contactRepo, clock),
+            // BROWSE-08: the drag's writes, over the same fake repository the
+            // feed reads, so a test sees the moved order arrive.
+            reorderSequence = ReorderSequenceUseCase(
+                useCaseTx,
+                listRepo,
+                surfaceQueueUseCase,
+                clock,
+                WidgetRefreshTrigger { refreshes[0] += 1 }
+            ),
             undoStack = undoStack,
             widgetRefreshTrigger = WidgetRefreshTrigger { refreshes[0] += 1 },
             savedStateHandle = savedState
@@ -340,7 +356,7 @@ class BrowseViewModelTest {
                             memberships = listOf(membershipFixture(contactId = 1L, listId = 1L)),
                             allContacts = listOf(contactFixture(id = 1L, displayName = "Alex")),
                             callEvents = emptyList(),
-                            queueOrder = emptyList()
+                            sequence = emptyList()
                         )
                     }
                 )
@@ -1185,6 +1201,256 @@ class BrowseViewModelTest {
             )
         )
         return s
+    }
+
+    // ─── BROWSE-07 / BROWSE-08 / BROWSE-09: the sequence ──────────────────────
+    //
+    // A list with a rule, so the feed's sequence (the card's own order) is not
+    // empty. TestClock starts at [seqNow].
+
+    private val seqNow: Instant = Instant.parse("2026-01-01T12:00:00Z")
+
+    private fun sequenceVm(focus: String? = null, useCaseTx: TransactionRunner = passThruTx): Setup {
+        val s = makeVm(
+            focus = focus,
+            ruleTemplateRepo = FakeRuleTemplateRepository(listOf(ruleTemplateFixture(id = 1L))),
+            useCaseTx = useCaseTx
+        )
+        s.listRepo.seed(listOf(listFixture(id = 1L, ruleTemplateId = 1L)))
+        return s
+    }
+
+    /** Ada up now, Ben up now, Cy tomorrow: three people in the sequence. */
+    private fun Setup.seedThree() {
+        contactRepo.seed(
+            listOf(
+                contactFixture(id = 1L, displayName = "Ada Byron"),
+                contactFixture(id = 2L, displayName = "Ben Okri"),
+                contactFixture(id = 3L, displayName = "Cy Twombly")
+            )
+        )
+        listRepo.seedMemberships(
+            listOf(
+                membershipFixture(contactId = 1L, listId = 1L, nextDueAt = seqNow.minus(Duration.ofHours(2))),
+                membershipFixture(contactId = 2L, listId = 1L, nextDueAt = seqNow.minus(Duration.ofHours(1))),
+                membershipFixture(contactId = 3L, listId = 1L, nextDueAt = seqNow.plus(Duration.ofDays(1)))
+            )
+        )
+    }
+
+    @Test
+    fun `the sequence comes first with when each person comes up, then the paused, then the ignored`() = runTest {
+        val s = sequenceVm()
+        val zone = ZoneId.systemDefault()
+        val inThreeDays = seqNow.plus(Duration.ofDays(3))
+        val backInFiveDays = seqNow.plus(Duration.ofDays(5))
+        s.contactRepo.seed(
+            listOf(
+                contactFixture(id = 1L, displayName = "Ada"),
+                contactFixture(id = 2L, displayName = "Ben"),
+                contactFixture(id = 3L, displayName = "Cy"),
+                contactFixture(id = 4L, displayName = "Dee"),
+                contactFixture(id = 5L, displayName = "Eve"),
+                contactFixture(id = 6L, displayName = "Fin"),
+                contactFixture(id = 7L, displayName = "Gil", pausedUntil = PauseContactUseCase.INDEFINITE_PAUSE_SENTINEL),
+                contactFixture(id = 8L, displayName = "Hope", pausedUntil = backInFiveDays),
+                contactFixture(id = 9L, displayName = "Ike", isIgnored = true),
+                contactFixture(id = 10L, displayName = "Abe", isIgnored = true)
+            )
+        )
+        s.listRepo.seedMemberships(
+            listOf(
+                membershipFixture(contactId = 1L, listId = 1L, nextDueAt = seqNow.minus(Duration.ofDays(2))),
+                membershipFixture(contactId = 2L, listId = 1L, nextDueAt = null), // never scheduled: now
+                membershipFixture(contactId = 3L, listId = 1L, nextDueAt = seqNow.plus(Duration.ofHours(2))),
+                membershipFixture(contactId = 4L, listId = 1L, nextDueAt = seqNow.plus(Duration.ofDays(1))),
+                membershipFixture(contactId = 5L, listId = 1L, nextDueAt = inThreeDays),
+                membershipFixture(contactId = 6L, listId = 1L, nextDueAt = seqNow.plus(Duration.ofDays(14))),
+                membershipFixture(contactId = 7L, listId = 1L, nextDueAt = seqNow.minus(Duration.ofDays(9))),
+                membershipFixture(contactId = 8L, listId = 1L, nextDueAt = seqNow.minus(Duration.ofDays(9))),
+                membershipFixture(contactId = 9L, listId = 1L),
+                membershipFixture(contactId = 10L, listId = 1L)
+            )
+        )
+
+        s.vm.uiState.test(timeout = 2.seconds) {
+            val ready = awaitReadyWhere(this) { it.contacts.size == 10 && it.queuePositions.size == 6 }
+
+            // The sequence in the card's order, then paused (soonest back
+            // first), then ignored by name.
+            assertEquals(
+                listOf("Ada", "Ben", "Cy", "Dee", "Eve", "Fin", "Hope", "Gil", "Abe", "Ike"),
+                ready.contacts.map { it.name }
+            )
+            assertEquals((1..6).associate { "c-$it" to it }, ready.queuePositions)
+            assertEquals(UiText.res(R.string.browse_when_up_now), ready.whenLabels["c-1"])
+            assertEquals(UiText.res(R.string.browse_when_up_now), ready.whenLabels["c-2"])
+            assertEquals(UiText.res(R.string.browse_when_later_today), ready.whenLabels["c-3"])
+            assertEquals(UiText.res(R.string.browse_when_tomorrow), ready.whenLabels["c-4"])
+            assertEquals(
+                UiText.res(
+                    R.string.browse_when_on_day,
+                    inThreeDays.atZone(zone).dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+                ),
+                ready.whenLabels["c-5"]
+            )
+            assertEquals(UiText.res(R.string.browse_when_in_span, formatSpan(14)), ready.whenLabels["c-6"])
+            assertEquals(setOf("c-1", "c-2", "c-3", "c-4", "c-5", "c-6"), ready.whenLabels.keys)
+            assertEquals(
+                UiText.res(
+                    R.string.browse_row_until,
+                    backInFiveDays.atZone(zone).format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
+                ),
+                ready.untilLabels["c-8"]
+            )
+            assertEquals(UiText.res(R.string.browse_row_until_unpause), ready.untilLabels["c-7"])
+            // The dot and "Up now" are one fact.
+            assertEquals(setOf("c-1", "c-2"), ready.dueIds)
+            assertEquals(BrowseRowStatus.Paused, ready.rowStatus["c-8"])
+            assertEquals(BrowseRowStatus.Ignored, ready.rowStatus["c-10"])
+            assertNull(ready.onYourCardId, "not opened from the card")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a filter narrows each group without reordering it or renumbering it`() = runTest {
+        val s = sequenceVm()
+        s.seedThree()
+        // Ben has a recent call; Ada and Cy have none.
+        s.callEventRepo.seed(
+            listOf(callEventFixture(id = 1L, contactId = 2L, occurredAt = seqNow.minus(Duration.ofDays(40))))
+        )
+        s.vm.onToggleFilter(BrowseFilter.NotCalledYet)
+
+        s.vm.uiState.test(timeout = 2.seconds) {
+            val ready = awaitReadyWhere(this) { it.activeFilters.isNotEmpty() && it.contacts.size == 2 }
+            assertEquals(listOf("c-1", "c-3"), ready.contacts.map { it.id })
+            assertEquals(1, ready.queuePositions["c-1"])
+            assertEquals(3, ready.queuePositions["c-3"], "numbers stay the whole sequence's")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a search keeps the sequence's order instead of ranking matches`() = runTest {
+        val s = sequenceVm()
+        s.contactRepo.seed(
+            listOf(
+                contactFixture(id = 1L, displayName = "Jordan Lee"), // "an" mid-word
+                contactFixture(id = 2L, displayName = "Anand Rao") // "an" at a word start
+            )
+        )
+        s.listRepo.seedMemberships(
+            listOf(
+                membershipFixture(contactId = 1L, listId = 1L, nextDueAt = seqNow.minus(Duration.ofHours(2))),
+                membershipFixture(contactId = 2L, listId = 1L, nextDueAt = seqNow.plus(Duration.ofDays(2)))
+            )
+        )
+        s.vm.onSearchChanged("an")
+
+        s.vm.uiState.test(timeout = 2.seconds) {
+            val ready = awaitReadyWhere(this) { it.searchQuery == "an" && it.contacts.size == 2 }
+            assertEquals(listOf("Jordan Lee", "Anand Rao"), ready.contacts.map { it.name })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `opened from the card, its person is marked, and the mark follows the head after a drop`() = runTest {
+        val s = sequenceVm(focus = "1")
+        s.seedThree()
+
+        s.vm.uiState.test(timeout = 2.seconds) {
+            val opened = awaitReadyWhere(this) { it.contacts.size == 3 }
+            assertEquals("c-1", opened.contacts.first().id, "the card's person is first")
+            assertEquals("c-1", opened.onYourCardId)
+
+            s.vm.onReorder(3L, null, "Cy Twombly")
+            val moved = awaitReadyWhere(this) { it.contacts.first().id == "c-3" }
+            assertEquals("c-3", moved.onYourCardId, "the card shows the new head now")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a card person who is not first is marked where they are`() = runTest {
+        // The deck moved between the card's read and Browse's (a call landed).
+        val s = sequenceVm(focus = "2")
+        s.seedThree()
+
+        s.vm.uiState.test(timeout = 2.seconds) {
+            val ready = awaitReadyWhere(this) { it.contacts.size == 3 }
+            assertEquals("c-1", ready.contacts.first().id)
+            assertEquals("c-2", ready.onYourCardId)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a drop says which way the person moved, and Undo puts the order back`() = runTest {
+        val s = sequenceVm()
+        s.seedThree()
+
+        s.vm.uiState.test(timeout = 2.seconds) {
+            awaitReadyWhere(this) { it.contacts.map { c -> c.id } == listOf("c-1", "c-2", "c-3") }
+
+            s.vm.snackbarEvents.test(timeout = 2.seconds) {
+                s.vm.onReorder(3L, null, "Cy Twombly")
+                val event = awaitItem()
+                assertEquals(UiText.res(R.string.browse_snackbar_moved_earlier, "Cy"), event.message)
+                assertEquals(UiText.res(R.string.components_action_undo), event.actionLabel)
+                cancelAndIgnoreRemainingEvents()
+            }
+            val moved = awaitReadyWhere(this) { it.contacts.first().id == "c-3" }
+            assertEquals(UiText.res(R.string.browse_when_up_now), moved.whenLabels["c-3"])
+
+            s.vm.snackbarEvents.test(timeout = 2.seconds) {
+                s.vm.onReorder(1L, 2L, "Ada Byron")
+                assertEquals(UiText.res(R.string.browse_snackbar_moved_later, "Ada"), awaitItem().message)
+                cancelAndIgnoreRemainingEvents()
+            }
+            awaitReadyWhere(this) { it.contacts.map { c -> c.id } == listOf("c-3", "c-2", "c-1") }
+
+            s.vm.onUndo()
+            awaitReadyWhere(this) { it.contacts.map { c -> c.id } == listOf("c-3", "c-1", "c-2") }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a drop that fails says so with no Undo, and the row goes back`() = runTest {
+        val s = sequenceVm(useCaseTx = failingTx)
+        s.seedThree()
+
+        s.vm.uiState.test(timeout = 2.seconds) {
+            awaitReadyWhere(this) { it.contacts.size == 3 }
+            s.vm.snackbarEvents.test(timeout = 2.seconds) {
+                s.vm.onReorder(3L, null, "Cy Twombly")
+                val event = awaitItem()
+                assertEquals(UiText.res(R.string.components_snackbar_save_failed), event.message)
+                assertNull(event.actionLabel, "no Undo for a change that did not happen")
+                cancelAndIgnoreRemainingEvents()
+            }
+            // The order shown at once is withdrawn: the last state is the old order.
+            val back = expectMostRecentItem() as BrowseUiState.Ready
+            assertEquals(listOf("c-1", "c-2", "c-3"), back.contacts.map { it.id })
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertNull(s.undoStack.take(), "nothing to undo")
+    }
+
+    @Test
+    fun `a drop for someone who left the sequence meanwhile is a failed save`() = runTest {
+        val s = sequenceVm()
+        s.seedThree()
+
+        s.vm.snackbarEvents.test(timeout = 2.seconds) {
+            s.vm.onReorder(9L, null, "Nobody")
+            assertEquals(UiText.res(R.string.components_snackbar_save_failed), awaitItem().message)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertNull(s.undoStack.take())
     }
 
     /** Skips Loading and returns the first Ready emission. */

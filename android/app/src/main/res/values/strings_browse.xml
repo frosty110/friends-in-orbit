@@ -27,11 +27,41 @@
          is "Open settings" (strings_components.xml). -->
     <string name="browse_call_log_denied_notice">Orbit can\'t see your calls, so call times are hidden.</string>
 
-    <!-- Section headings: who Orbit will suggest next, in order, and everyone else. "Next up" is
-         the glossary's spelling, the same as Home's cards. -->
+    <!-- Section headings. "Next up" is over everyone in the order the card brings them up, the
+         glossary's spelling, the same as Home's cards. "Everyone else" (or "On this list" when
+         nobody is in that order) holds people the list's rule cannot place. Then the people who
+         are paused, then the ignored ones. -->
     <string name="browse_section_next_up">Next up</string>
     <string name="browse_section_on_this_list">On this list</string>
     <string name="browse_section_everyone_else">Everyone else</string>
+    <string name="browse_section_paused">Paused</string>
+    <string name="browse_section_ignored">Ignored</string>
+    <!-- The quiet line under the order: dragging changes it, but the rhythm moves people again.
+         "Later" and "Sooner" are the card's two buttons. -->
+    <string name="browse_sequence_footnote">Drag to change who comes up next. A call, Later or Sooner moves people again.</string>
+
+    <!-- When a person in the order comes up, at the start of their row's second line. Never a
+         deadline word such as "due" (voice.md). -->
+    <string name="browse_when_up_now">Up now</string>
+    <string name="browse_when_later_today">Later today</string>
+    <string name="browse_when_tomorrow">Tomorrow</string>
+    <!-- %1$s: a weekday within the next week, for example "Thursday". -->
+    <string name="browse_when_on_day">%1$s</string>
+    <!-- %1$s: a span, for example "2 weeks", so "In 2 weeks". -->
+    <string name="browse_when_in_span">In %1$s</string>
+    <!-- When a paused person's pause ends, on their row under the word "Paused". %1$s: a short
+         date, for example "12 Oct". -->
+    <string name="browse_row_until">Until %1$s</string>
+    <string name="browse_row_until_unpause">Until you unpause</string>
+    <!-- Over the name of the person the card is showing, when Browse is opened from the card. -->
+    <string name="browse_row_on_your_card">On your card</string>
+    <!-- The drag handle on a row in the order, and its screen-reader actions. %1$s: the person's
+         name. Under the privacy curtain the handle says "Reorder" alone. "Move up" and "Move
+         down" are the Lists screen's words for the same thing. -->
+    <string name="browse_row_reorder">Reorder %1$s</string>
+    <string name="browse_row_reorder_unnamed">Reorder</string>
+    <string name="browse_row_move_up">Move up</string>
+    <string name="browse_row_move_down">Move down</string>
 
     <!-- The error title. The body and "Try again" are the shared components_error_* strings. -->
     <string name="browse_error_title">Couldn\'t load this list</string>
@@ -97,6 +127,9 @@
         <item quantity="other">Ignored %1$d people</item>
     </plurals>
     <string name="browse_snackbar_open_failed">Couldn\'t open this person</string>
+    <!-- After a drag in the order, with Undo. %1$s: the person's first name. -->
+    <string name="browse_snackbar_moved_earlier">Moved %1$s earlier</string>
+    <string name="browse_snackbar_moved_later">Moved %1$s later</string>
 
     <!-- Search: everyone in the phone's contacts, whether on a list or not. -->
     <string name="browse_search_title">Search</string>

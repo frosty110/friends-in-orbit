@@ -3,7 +3,7 @@
 **Route:** `card/{listId}`
 **Group:** Core loop
 **Status:** active
-**Last reviewed:** 2026-10-06
+**Last reviewed:** 2026-10-07
 **Spec:** [card-view](../card-view/README.md): CARD-01, CARD-02, CARD-03, CARD-04, CARD-05, CARD-06, CARD-07 (defined this round), CORE-04; NOTE-02 in [contact-detail](../contact-detail/README.md); PRIV-03 and PRIV-05 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
@@ -34,7 +34,7 @@
 - "Later" (or a left swipe): moves them further out on this list; "{Name} will come up again {tomorrow / on Tuesday / in 2 weeks}." with Undo. "Sooner" (or a right swipe): brings them forward; "{Name} comes up {when}." with Undo. Each undo is its own, and a swipe that commits gives a haptic (CARD-02)
 - A move that could not be saved says so: "Couldn't move {name} to later. Try again.", "Couldn't move {name} sooner. Try again.", "Couldn't undo that. Try again."
 - After a call placed from the card, once the call log confirms it and the deck moves on by itself (CORE-04): "Called {first name}" with "Add a note", which opens the person with the note field focused (CARD-03, NOTE-02)
-- "More actions for {list}", in order: "Browse people" (opens Browse for this list), "Add people" (opens the Add people picker; not offered on smart lists, nor on the Loading and Error decks, where the list's type is not yet known), "List settings"
+- "More actions for {list}", in order: "Browse people" (opens Browse for this list on the person the card shows, marked "On your card" and scrolled into view, BROWSE-09 in [browse](../browse/README.md)), "Add people" (opens the Add people picker; not offered on smart lists, nor on the Loading and Error decks, where the list's type is not yet known), "List settings"
 - "Open settings" on the notice: opens Orbit's Settings, where the Call log row hosts the grant
 - "Go home" on the empty, quiet and error decks: leaves the deck the same way Back does, to the screen that opened it; on the error deck for a list id that never parsed it is the one action
 
@@ -52,7 +52,7 @@
 
 - The dialer (Call)
 - Contact detail (the face, "Open details"; "Add a note", with the note field focused)
-- Browse people (menu; "Browse this list")
+- Browse people (menu, on the card's person; "Browse this list")
 - The Add people picker (menu; the empty deck); it returns here with "Added 3 people to {list}" and Undo
 - List settings (menu; the smart list's empty deck); Done or Back returns here
 - Settings ("Open settings")

@@ -109,6 +109,10 @@
     <string name="components_browse_row_never_called">Never called</string>
     <!-- %1$s: how long ago, for example "3 days ago". -->
     <string name="components_browse_row_last_call">Last call: %1$s</string>
+    <!-- Browse's second line: when the person comes up, then their last call, as two facts on
+         one line. %1$s: "Up now", "Thursday", "In 2 weeks" or "Until 12 Oct". %2$s: "Last call:
+         3 days ago" or "Never called". -->
+    <string name="components_browse_row_when_meta">%1$s · %2$s</string>
 
     <string name="components_search_clear">Clear search</string>
     <!-- Screen-reader name of the placeholder shapes shown while a list loads. -->

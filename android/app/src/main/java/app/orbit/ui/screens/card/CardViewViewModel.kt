@@ -22,7 +22,9 @@ import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.SkipContactUseCase
 import app.orbit.domain.usecase.SurfaceResult
 import app.orbit.domain.usecase.SurfaceSoonerUseCase
+import app.orbit.ui.util.ComesUp
 import app.orbit.ui.util.UiText
+import app.orbit.ui.util.comesUp
 import app.orbit.ui.util.formatAbsolute
 import app.orbit.ui.util.formatAgo
 import app.orbit.ui.util.formatRelative
@@ -497,20 +499,19 @@ class CardViewViewModel @Inject constructor(
      * Forward-looking phrase for snackbars and the up-next hint:
      * "later today" / "tomorrow" / "on Tuesday" / "in 12 days" / "in 3 weeks"
      * / "in 2 months". Lowercase fragment so it slots mid-sentence (a nested
-     * [UiText] argument of the snackbar and up-next sentences).
+     * [UiText] argument of the snackbar and up-next sentences). The buckets
+     * are [comesUp]'s, shared with Browse's rows (BROWSE-07).
      */
-    internal fun futureDueLabel(due: Instant, now: Instant): UiText {
-        val days = Duration.between(now, due).toDays()
-        return when {
-            days <= 0L -> UiText.res(R.string.card_due_later_today)
-            days == 1L -> UiText.res(R.string.card_due_tomorrow)
-            days < 7L -> UiText.res(
+    internal fun futureDueLabel(due: Instant, now: Instant): UiText =
+        when (val bucket = comesUp(due, now, zoneId)) {
+            ComesUp.LaterToday -> UiText.res(R.string.card_due_later_today)
+            ComesUp.Tomorrow -> UiText.res(R.string.card_due_tomorrow)
+            is ComesUp.OnDay -> UiText.res(
                 R.string.card_due_on_day,
-                due.atZone(zoneId).dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()),
+                bucket.day.getDisplayName(TextStyle.FULL, Locale.getDefault()),
             )
-            else -> UiText.res(R.string.card_due_in_span, formatSpan(days))
+            is ComesUp.InDays -> UiText.res(R.string.card_due_in_span, formatSpan(bucket.days))
         }
-    }
 
     /**
      * B3 — Clock-aware mapper. `now` is the same snapshot used elsewhere in

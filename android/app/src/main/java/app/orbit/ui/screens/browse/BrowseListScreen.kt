@@ -3,6 +3,7 @@ package app.orbit.ui.screens.browse
 import android.Manifest
 import android.content.pm.PackageManager
 import android.content.res.Resources
+import androidx.annotation.StringRes
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -23,14 +24,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.Text
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +47,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
@@ -88,12 +92,15 @@ import app.orbit.ui.util.UiText
 import app.orbit.ui.util.asString
 import app.orbit.ui.util.dialPhoneNumber
 import app.orbit.ui.util.formatDuration
+import app.orbit.ui.util.formatSpan
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 /**
  * Browse outer composable with multi-select gesture-and-bar substrate.
@@ -104,8 +111,17 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  *   - inner owns the local debounced TextField buffer (via `snapshotFlow` +
  *     `debounce(250)`) and forwards committed query strings to `vm::onSearchChanged`.
  *
- * BROWSE-01: per-list contacts in queue order (VM-side), under "Next up";
- *            members outside the rotation follow under "Everyone else".
+ * BROWSE-07: one sequence under "Next up": everyone in the order the card
+ *            brings them up, numbered, each with when ("Up now", "Thursday");
+ *            then "Everyone else" (people the rule cannot place), "Paused"
+ *            (with until when) and "Ignored". Groups keep their order through
+ *            search and the filters.
+ * BROWSE-08: a drag handle on each sequence row (not while selecting), with
+ *            TalkBack's "Move up" and "Move down"; a drop is one write with
+ *            Undo, and one quiet line under the sequence says it is not
+ *            permanent.
+ * BROWSE-09: opened from the card, the card's person is marked "On your
+ *            card" and scrolled into view.
  * BROWSE-02: 250ms debounced search + 2 filter chips (chip×chip = UNION per
  *            user decision), drawn with the shared [OrbitFilterChip].
  * BROWSE-04: long-press on a row opens quick actions; "Select" enters
@@ -138,8 +154,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  * Call history do; until 2026-10-06 Browse named Settings and gave no path.
  *
  * One accent element (rules.md §Design 5): the due dot, which marks who is
- * ready. Active filters use the cluster-tier tint, selected rows the same, and
- * the queue head's number is ink, not terracotta.
+ * ready. Active filters use the cluster-tier tint, selected rows the same, the
+ * queue head's number is ink, not terracotta, and "On your card" is a Stone
+ * chip.
  */
 @Composable
 fun BrowseListScreen(
@@ -204,6 +221,7 @@ fun BrowseListScreen(
         onSingleRowUnpause = vm::onSingleRowUnpause,
         onUndo = vm::onUndo,
         onContactIdParseFail = vm::onContactIdParseFail,
+        onReorder = vm::onReorder,
         snackbarEvents = vm.snackbarEvents
     )
 }
@@ -241,6 +259,7 @@ private fun BrowseContent(
     onSingleRowUnpause: (Long, String) -> Unit,
     onUndo: () -> Unit,
     onContactIdParseFail: () -> Unit,
+    onReorder: (contactId: Long, placeAfter: Long?, name: String) -> Unit,
     snackbarEvents: SharedFlow<SnackbarEvent>
 ) {
     val curtain = LocalPrivacyCurtain.current
@@ -259,6 +278,11 @@ private fun BrowseContent(
             .collect { onSearchChanged(it) }
     }
 
+    // BROWSE-08: the drag's held order. Every drop ends in a snackbar ("Moved
+    // Kai earlier", or "Couldn't save your change"), so the collector below
+    // releases it (see SequenceDrag).
+    val drag = remember { SequenceDrag() }
+
     // Snackbar event collector. VM emits a SnackbarEvent on Bulk* commit; tap
     // on Undo runs the inverse closure recorded on UndoStack.
     // Gated by STARTED so the snackbar does not fire on a
@@ -266,6 +290,7 @@ private fun BrowseContent(
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             snackbarEvents.collect { event ->
+                drag.release()
                 val r = snackbarHostState.showSnackbar(
                     message = event.message.asString(context),
                     actionLabel = event.actionLabel?.asString(context),
@@ -310,6 +335,8 @@ private fun BrowseContent(
     // dismiss. Multi-select preempts these (long-press is a no-op when
     // `isMultiSelect` is true).
     var menuAnchorContactId by rememberSaveable { mutableStateOf<Long?>(null) }
+    // BROWSE-09: whether the list has already jumped to the card's person.
+    var scrolledToCard by rememberSaveable { mutableStateOf(false) }
     var pauseSheetForContactId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pauseSheetForContactName by rememberSaveable { mutableStateOf("") }
 
@@ -512,41 +539,14 @@ private fun BrowseContent(
                             onAction = onOpenSettings
                         )
                     }
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = OrbitTheme.spacing.x4),
-                        contentPadding = PaddingValues(bottom = OrbitTheme.spacing.x6)
-                    ) {
-                        // Partition contacts into queued (position number) and
-                        // non-queued (everyone else, below, no position number).
-                        val (queuedContacts, otherContacts) =
-                            state.contacts.partition { state.queuePositions[it.id] != null }
-
-                        // BROWSE-01: the numbers mean "the order Orbit will
-                        // suggest them" (vision BROWSE-1); the label says so.
-                        if (queuedContacts.isNotEmpty()) {
-                            item(key = "up-next-header", contentType = "sectionHeader") {
-                                BrowseSectionLabel(stringResource(R.string.browse_section_next_up))
-                            }
-                        }
-                        personRows(queuedContacts, state, rowActions)
-
-                        if (otherContacts.isNotEmpty()) {
-                            item(key = "other-members-header", contentType = "sectionHeader") {
-                                BrowseSectionLabel(
-                                    stringResource(
-                                        if (queuedContacts.isEmpty()) {
-                                            R.string.browse_section_on_this_list
-                                        } else {
-                                            R.string.browse_section_everyone_else
-                                        }
-                                    )
-                                )
-                            }
-                            personRows(otherContacts, state, rowActions)
-                        }
-                    }
+                    BrowseReadyList(
+                        state = state,
+                        actions = rowActions,
+                        onReorder = onReorder,
+                        drag = drag,
+                        scrolledToCard = scrolledToCard,
+                        onScrolledToCard = { scrolledToCard = true }
+                    )
                 }
 
                 // BROWSE-06: the feed hasn't emitted yet: a quiet skeleton,
@@ -663,21 +663,264 @@ private class BrowseRowActions(
 )
 
 /**
- * The person rows of one section. Both sections ("Up next" and everyone
- * else) used to carry their own copy of this block; one copy means the
- * selection semantics below cannot drift apart again.
+ * One entry of the Ready list, in drawing order. Built once per state by
+ * [browseItems] so the LazyColumn, the drag's keys and BROWSE-09's scroll
+ * target all read the same positions.
  */
-private fun LazyListScope.personRows(
-    contacts: List<Contact>,
+private sealed interface BrowseItem {
+    val key: String
+
+    class Header(override val key: String, @StringRes val text: Int) : BrowseItem
+
+    /** [inSequence]: a row of the order the card follows, the only rows that move (BROWSE-08). */
+    class Person(val contact: Contact, val inSequence: Boolean) : BrowseItem {
+        override val key: String get() = contact.id
+    }
+
+    data object Footnote : BrowseItem {
+        override val key: String = "sequence-footnote"
+    }
+}
+
+/**
+ * BROWSE-07: the Ready list's groups, in order. "Next up" over the sequence
+ * (with [sequence], possibly the order under the finger mid-drag), then the
+ * quiet line that dragging is not permanent when rows can be dragged, then
+ * "Everyone else" (or "On this list" when nobody is in the sequence),
+ * "Paused" and "Ignored". Each group keeps the ViewModel's order, so a search
+ * or a filter narrows a group without reordering it.
+ */
+private fun browseItems(state: BrowseUiState.Ready, sequence: List<Contact>, showFootnote: Boolean): List<BrowseItem> {
+    val inSequence = sequence.map { it.id }.toSet()
+    val outside = state.contacts.filter { it.id !in inSequence && state.queuePositions[it.id] == null }
+    val paused = outside.filter { state.rowStatus[it.id] == BrowseRowStatus.Paused }
+    val ignored = outside.filter { state.rowStatus[it.id] == BrowseRowStatus.Ignored }
+    val others = outside.filter { state.rowStatus[it.id] == null }
+    return buildList {
+        if (sequence.isNotEmpty()) {
+            add(BrowseItem.Header("up-next-header", R.string.browse_section_next_up))
+            sequence.forEach { add(BrowseItem.Person(it, inSequence = true)) }
+            if (showFootnote) add(BrowseItem.Footnote)
+        }
+        if (others.isNotEmpty()) {
+            add(
+                BrowseItem.Header(
+                    "other-members-header",
+                    if (sequence.isEmpty()) R.string.browse_section_on_this_list else R.string.browse_section_everyone_else
+                )
+            )
+            others.forEach { add(BrowseItem.Person(it, inSequence = false)) }
+        }
+        if (paused.isNotEmpty()) {
+            add(BrowseItem.Header("paused-header", R.string.browse_section_paused))
+            paused.forEach { add(BrowseItem.Person(it, inSequence = false)) }
+        }
+        if (ignored.isNotEmpty()) {
+            add(BrowseItem.Header("ignored-header", R.string.browse_section_ignored))
+            ignored.forEach { add(BrowseItem.Person(it, inSequence = false)) }
+        }
+    }
+}
+
+/**
+ * BROWSE-08: the order under the finger, by row id, from the start of a drag
+ * until the drop has been answered. The drag follows the Lists screen
+ * (sh.calvin.reorderable, a handle per row), with one difference: Lists writes
+ * on every swap, while here a drop is one write and one snackbar with Undo, so
+ * the order is held here until then. Gesture state with one owner, the screen
+ * (rules.md Code 7): [start] and the library's moves set it, [stop] ends the
+ * gesture, and [release] lets go once the drop is answered, which is either
+ * the ViewModel's state showing it or the drop's snackbar arriving. The
+ * snackbar matters: a write that fails at once can show and withdraw the
+ * ViewModel's overlay inside one frame, so the state the screen sees never
+ * changes, and without it the dropped order would stay on screen after
+ * "Couldn't save your change".
+ */
+@Stable
+private class SequenceDrag {
+    var order by mutableStateOf<List<String>?>(null)
+    private var active by mutableStateOf(false)
+
+    fun start(current: List<String>) {
+        active = true
+        order = current
+    }
+
+    /** Ends the gesture and returns the order it dropped. */
+    fun stop(): List<String>? {
+        active = false
+        return order
+    }
+
+    /** Lets go of the held order, unless a new drag is under way. */
+    fun release() {
+        if (!active) order = null
+    }
+}
+
+/**
+ * The Ready list: the sequence and its groups (BROWSE-07), the card's person
+ * marked and scrolled to (BROWSE-09), and drag to reorder (BROWSE-08, see
+ * [SequenceDrag]). Rows move only in the sequence and not while selecting,
+ * where a tap selects.
+ */
+@Composable
+private fun BrowseReadyList(
     state: BrowseUiState.Ready,
-    actions: BrowseRowActions
+    actions: BrowseRowActions,
+    onReorder: (contactId: Long, placeAfter: Long?, name: String) -> Unit,
+    drag: SequenceDrag,
+    scrolledToCard: Boolean,
+    onScrolledToCard: () -> Unit
 ) {
-    items(
-        items = contacts,
-        key = { it.id },
-        contentType = { "browseRow" }
-    ) { contact ->
-        BrowsePersonRow(contact = contact, state = state, actions = actions)
+    val curtain = LocalPrivacyCurtain.current
+    val lazyListState = rememberLazyListState()
+    val stateSequence = state.contacts.filter { state.queuePositions[it.id] != null }
+    val canReorder = !state.isMultiSelect && stateSequence.size > 1
+
+    val stateOrder = stateSequence.map { it.id }
+    // The state shows the drop (the ViewModel's overlay, or the write's result).
+    LaunchedEffect(stateOrder) { drag.release() }
+
+    val sequence = drag.order?.let { order ->
+        val byId = stateSequence.associateBy { it.id }
+        order.mapNotNull { byId[it] } + stateSequence.filter { it.id !in order }
+    } ?: stateSequence
+    val items = browseItems(state, sequence, showFootnote = canReorder)
+
+    // BROWSE-09: once, when the card's person first shows, bring their row into
+    // view with the row above it (or the heading) for context. A jump, not an
+    // animation: it is where the screen opens. The flag is the screen's
+    // (saved there), so neither a rotation nor a search that empties and
+    // refills this list scrolls again under the user's thumb.
+    LaunchedEffect(state.onYourCardId) {
+        val target = state.onYourCardId ?: return@LaunchedEffect
+        if (scrolledToCard) return@LaunchedEffect
+        val index = items.indexOfFirst { it.key == target }
+        if (index >= 0) {
+            lazyListState.scrollToItem((index - 1).coerceAtLeast(0))
+            onScrolledToCard()
+        }
+    }
+
+    val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
+        val order = drag.order ?: return@rememberReorderableLazyListState
+        val fromIndex = order.indexOf(from.key as? String)
+        val toIndex = order.indexOf(to.key as? String)
+        if (fromIndex < 0 || toIndex < 0) return@rememberReorderableLazyListState
+        drag.order = order.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+    }
+
+    // Resolved here: the drag callbacks and semantics blocks are not composable.
+    val moveUpLabel = stringResource(R.string.browse_row_move_up)
+    val moveDownLabel = stringResource(R.string.browse_row_move_down)
+
+    LazyColumn(
+        state = lazyListState,
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = OrbitTheme.spacing.x4),
+        contentPadding = PaddingValues(bottom = OrbitTheme.spacing.x6)
+    ) {
+        items(
+            items = items,
+            key = { it.key },
+            contentType = { item ->
+                when (item) {
+                    is BrowseItem.Header -> "sectionHeader"
+                    is BrowseItem.Person -> "browseRow"
+                    BrowseItem.Footnote -> "footnote"
+                }
+            }
+        ) { item ->
+            when (item) {
+                is BrowseItem.Header -> BrowseSectionLabel(stringResource(item.text))
+                BrowseItem.Footnote -> BrowseSequenceFootnote()
+                is BrowseItem.Person -> {
+                    val contact = item.contact
+                    val entityId = contact.id.removePrefix("c-").toLongOrNull()
+                    if (item.inSequence && canReorder && entityId != null) {
+                        ReorderableItem(reorderState, key = contact.id) { isDragging ->
+                            // PRIV-03: "Reorder" alone under the curtain, never the name.
+                            val handleLabel = if (curtain) {
+                                stringResource(R.string.browse_row_reorder_unnamed)
+                            } else {
+                                stringResource(R.string.browse_row_reorder, contact.name)
+                            }
+                            val index = sequence.indexOfFirst { it.id == contact.id }
+                            val idAt = { i: Int -> sequence.getOrNull(i)?.id?.removePrefix("c-")?.toLongOrNull() }
+                            val reorder = RowReorder(
+                                handle = Modifier.draggableHandle(
+                                    onDragStarted = { drag.start(sequence.map { it.id }) },
+                                    onDragStopped = {
+                                        val order = drag.stop()
+                                        if (order == null || order == stateOrder) {
+                                            drag.release()
+                                        } else {
+                                            val at = order.indexOf(contact.id)
+                                            val above = order.getOrNull(at - 1)?.removePrefix("c-")?.toLongOrNull()
+                                            onReorder(entityId, above, contact.name)
+                                        }
+                                    }
+                                ),
+                                handleLabel = handleLabel,
+                                moveUpLabel = moveUpLabel,
+                                moveDownLabel = moveDownLabel,
+                                // Up: follow the row two above (or go first);
+                                // down: follow the row below.
+                                onMoveUp = if (index > 0) ({ onReorder(entityId, idAt(index - 2), contact.name) }) else null,
+                                onMoveDown = if (index in 0 until sequence.lastIndex) {
+                                    { onReorder(entityId, idAt(index + 1), contact.name) }
+                                } else {
+                                    null
+                                },
+                                isDragging = isDragging
+                            )
+                            PersonRowWithDivider(contact, state, actions, leadingCell = true, reorder = reorder)
+                        }
+                    } else {
+                        // Every row keeps the draggable rows' leading cell while
+                        // any row can move, so the avatars line up.
+                        PersonRowWithDivider(contact, state, actions, leadingCell = canReorder, reorder = null)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** What a sequence row needs to move (BROWSE-08); null on rows that cannot. */
+private class RowReorder(
+    val handle: Modifier,
+    val handleLabel: String,
+    val moveUpLabel: String,
+    val moveDownLabel: String,
+    val onMoveUp: (() -> Unit)?,
+    val onMoveDown: (() -> Unit)?,
+    val isDragging: Boolean
+)
+
+@Composable
+private fun PersonRowWithDivider(
+    contact: Contact,
+    state: BrowseUiState.Ready,
+    actions: BrowseRowActions,
+    leadingCell: Boolean,
+    reorder: RowReorder?
+) {
+    Column(
+        modifier = Modifier.background(
+            // The row being dragged lifts off the list onto the surface colour.
+            if (reorder?.isDragging == true) OrbitTheme.colors.surface else Color.Transparent
+        )
+    ) {
+        BrowsePersonRow(
+            contact = contact,
+            state = state,
+            actions = actions,
+            leadingCell = leadingCell,
+            reorder = reorder
+        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -685,6 +928,19 @@ private fun LazyListScope.personRows(
                 .background(OrbitTheme.colors.lineSoft)
         )
     }
+}
+
+/** BROWSE-08: the owner's "not permanent", once, under the sequence. */
+@Composable
+private fun BrowseSequenceFootnote() {
+    Text(
+        text = stringResource(R.string.browse_sequence_footnote),
+        style = OrbitTheme.type.meta,
+        color = OrbitTheme.colors.fgMuted,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = OrbitTheme.spacing.x5, vertical = OrbitTheme.spacing.x3)
+    )
 }
 
 /**
@@ -702,7 +958,9 @@ private fun LazyListScope.personRows(
 private fun BrowsePersonRow(
     contact: Contact,
     state: BrowseUiState.Ready,
-    actions: BrowseRowActions
+    actions: BrowseRowActions,
+    leadingCell: Boolean,
+    reorder: RowReorder?
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -777,7 +1035,36 @@ private fun BrowsePersonRow(
             },
             showCallMeta = !state.callLogPermissionDenied,
             queuePosition = queuePos,
-            isHead = queuePos == 1
+            isHead = queuePos == 1,
+            // BROWSE-07: "Up now", "Thursday"; on a paused row, "Until 12 Oct".
+            whenLabel = (state.whenLabels[contact.id] ?: state.untilLabels[contact.id])?.asString(),
+            // BROWSE-09: the person the card is showing.
+            marker = if (contact.id == state.onYourCardId) stringResource(R.string.browse_row_on_your_card) else null,
+            leadingCell = leadingCell,
+            dragHandle = reorder?.handle,
+            dragHandleLabel = reorder?.handleLabel,
+            // BROWSE-08: TalkBack moves a row with "Move up" and "Move down"
+            // (the handle is a gesture). In the row's own action list, after
+            // "Call": set on this Row instead, they replaced "Call {name}" in
+            // the merged node (BrowseSequenceContentTest caught it).
+            extraActions = if (reorder == null) {
+                emptyList()
+            } else {
+                listOfNotNull(
+                    reorder.onMoveUp?.let { up ->
+                        CustomAccessibilityAction(reorder.moveUpLabel) {
+                            up()
+                            true
+                        }
+                    },
+                    reorder.onMoveDown?.let { down ->
+                        CustomAccessibilityAction(reorder.moveDownLabel) {
+                            down()
+                            true
+                        }
+                    }
+                )
+            }
         )
 
         // Anchored DropdownMenu: only renders for the row whose entityId
@@ -883,19 +1170,34 @@ private fun previewContact(id: Long, name: String, lastCalled: UiText?): Contact
     patternNote = ""
 )
 
+// BROWSE-07: the sequence (two up now, one tomorrow, one on a weekday, one in
+// two weeks), then a paused and an ignored person; opened from the card, so
+// its person is marked (BROWSE-09).
 private val previewState: BrowseUiState = BrowseUiState.Ready(
     contacts = listOf(
         previewContact(1, "Avery Quinn", UiText.plural(R.plurals.time_ago_days, 11, 11)),
         previewContact(2, "Sam Patel", UiText.plural(R.plurals.time_ago_weeks, 3, 3)),
         previewContact(3, "Jordan Lee", null),
-        previewContact(4, "Priya Anand", UiText.plural(R.plurals.time_ago_months, 2, 2))
+        previewContact(5, "Mei Tanaka", UiText.plural(R.plurals.time_ago_weeks, 1, 1)),
+        previewContact(6, "Leo Brandt", UiText.plural(R.plurals.time_ago_days, 4, 4)),
+        previewContact(4, "Priya Anand", UiText.plural(R.plurals.time_ago_months, 2, 2)),
+        previewContact(7, "Kai Moreno", null)
     ),
     searchQuery = "",
     activeFilters = emptySet(),
     callLogPermissionDenied = false,
     dueIds = setOf("c-1", "c-2"),
-    rowStatus = mapOf("c-4" to BrowseRowStatus.Paused),
-    queuePositions = mapOf("c-1" to 1, "c-2" to 2, "c-3" to 3)
+    rowStatus = mapOf("c-4" to BrowseRowStatus.Paused, "c-7" to BrowseRowStatus.Ignored),
+    queuePositions = mapOf("c-1" to 1, "c-2" to 2, "c-3" to 3, "c-5" to 4, "c-6" to 5),
+    whenLabels = mapOf(
+        "c-1" to UiText.res(R.string.browse_when_up_now),
+        "c-2" to UiText.res(R.string.browse_when_up_now),
+        "c-3" to UiText.res(R.string.browse_when_tomorrow),
+        "c-5" to UiText.res(R.string.browse_when_on_day, "Thursday"),
+        "c-6" to UiText.res(R.string.browse_when_in_span, formatSpan(14))
+    ),
+    untilLabels = mapOf("c-4" to UiText.res(R.string.browse_row_until, "12 Oct")),
+    onYourCardId = "c-1"
 )
 
 // internal (not private) so BrowseErrorShellTest can render a state's shell
@@ -905,7 +1207,9 @@ private val previewState: BrowseUiState = BrowseUiState.Ready(
 internal fun BrowsePreviewHost(
     state: BrowseUiState,
     activeFilters: Set<BrowseFilter> = emptySet(),
-    listType: ListType = ListType.STATIC
+    listType: ListType = ListType.STATIC,
+    onReorder: (contactId: Long, placeAfter: Long?, name: String) -> Unit = { _, _, _ -> },
+    snackbarEvents: SharedFlow<SnackbarEvent> = MutableSharedFlow<SnackbarEvent>().asSharedFlow()
 ) {
     OrbitTheme {
         BrowseContent(
@@ -939,16 +1243,35 @@ internal fun BrowsePreviewHost(
             onSingleRowUnpause = { _, _ -> },
             onUndo = {},
             onContactIdParseFail = {},
-            snackbarEvents = MutableSharedFlow<SnackbarEvent>().asSharedFlow()
+            onReorder = onReorder,
+            snackbarEvents = snackbarEvents
         )
     }
 }
 
+/** BROWSE-07/08/09: the sequence with when, its handles and footnote, the groups, the card's person. */
 @PreviewLightDark
 @PreviewFontScale
 @Composable
 private fun BrowseContentPreview() {
     BrowsePreviewHost(previewState)
+}
+
+/**
+ * BROWSE-09: the card's person is not first (the deck moved between the
+ * card's read and Browse's), so the mark sits where the order puts them.
+ */
+@PreviewLightDark
+@Composable
+private fun BrowseCardPersonMovedPreview() {
+    BrowsePreviewHost((previewState as BrowseUiState.Ready).copy(onYourCardId = "c-3"))
+}
+
+/** Opened from "Browse this list" (nobody on the card): no row is marked. */
+@PreviewLightDark
+@Composable
+private fun BrowseNoCardPersonPreview() {
+    BrowsePreviewHost((previewState as BrowseUiState.Ready).copy(onYourCardId = null))
 }
 
 @PreviewLightDark

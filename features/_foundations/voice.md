@@ -1,7 +1,7 @@
 # Voice and content rules
 
 **Status:** active
-**Last reviewed:** 2026-10-06
+**Last reviewed:** 2026-10-07
 **Canonical for:** voice, tone, never-say list, empty-state framing
 **Ground truth:** enforced at notification-formatter level (`features/notifications/README.md`); elsewhere enforced by review
 
@@ -54,6 +54,7 @@ Added 2026-10-05 ([UX rubric](../../vision/ux-rubric.md) D7). The same idea had 
 |---|---|---|
 | **Later** | Move this person further out on this list. | Skip, defer, pass, snooze |
 | **Sooner** | Bring this person forward on this list. | Surface sooner, move up, boost |
+| **Move up** / **Move down** | Move one row one place in an order the user arranges by hand: a list on Lists, a person in Browse's order (BROWSE-08). TalkBack's actions beside a drag handle, which is named "Reorder {name}". A drop in Browse says which way: "Moved Kai earlier" / "Moved Kai later". Added 2026-10-07. | Sooner or Later for a drag (those are the card's moves, by the rhythm); "move up" for Sooner |
 | **Nudge** | The notification Orbit sends when someone on a list is worth a call. | Reminder, prompt, notification (in UI copy), alert |
 | **List** | A group of people the user keeps in touch with, with its own rhythm. | Orbit (as a noun for a list), group, circle |
 | **Rhythm** | How often the user means to talk to people on a list ("every 2 weeks"), and the 7-day strip on Home. | Cadence, frequency, interval, threshold |
