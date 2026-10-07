@@ -23,6 +23,14 @@ class RoutesTest {
     }
 
     @Test
+    fun `browse adds the card's person as focus only when there is one`() {
+        // BROWSE-09: Card view's "Browse people" passes the person on the card;
+        // "Browse this list" passes none and keeps the bare path.
+        assertEquals("browse/7?focus=42", Routes.browse("7", focusContactId = 42L))
+        assertEquals("browse/7", Routes.browse("7", focusContactId = null))
+    }
+
+    @Test
     fun `lists toggles the openCreate query arg`() {
         assertEquals("lists?openCreate=false", Routes.lists())
         assertEquals("lists?openCreate=false", Routes.lists(false))

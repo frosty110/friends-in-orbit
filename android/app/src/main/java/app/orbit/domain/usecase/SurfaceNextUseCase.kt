@@ -1,19 +1,11 @@
 package app.orbit.domain.usecase
 
-import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.ContactEntity
-import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.repository.CallEventRepository
 import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ListRepository
 import app.orbit.data.repository.RuleTemplateRepository
 import app.orbit.domain.clock.Clock
-import app.orbit.domain.rule.ContactSnapshot
-import app.orbit.domain.rule.RuleContext
-import app.orbit.domain.rule.RuleParams
-import app.orbit.domain.rule.engineFor
-import app.orbit.domain.rule.resolveParamsFor
-import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -51,6 +43,11 @@ import kotlinx.serialization.json.Json
  *   1. `nextDueAt` ASC (earliest due first — most overdue / closest-future first)
  *   2. `lastCalledAt` ASC (longer-silent first for ties)
  *   3. `contact.id` ASC (deterministic final tiebreak)
+ *
+ * The filters and the order are [SurfaceOrder]'s, shared with
+ * [SurfaceQueueUseCase] since 2026-10-07 (BROWSE-07): this use case is that
+ * sequence's head, so the card's person is always Browse's first row. The two
+ * use cases kept separate copies until then and drifted (SurfaceOrder KDoc).
  *
  * Emits one of three [SurfaceResult] variants:
  *   - [SurfaceResult.Found] — head of queue + engine-computed `nextDueAt`
@@ -111,92 +108,19 @@ class SurfaceNextUseCase @Inject constructor(
             val template = ruleTemplateRepo.getById(templateId)
                 ?: return@combine SurfaceResult.NothingEligible
 
-            val now = clock.now()
+            // BROWSE-07: the one shared ordering (SurfaceOrder). Its head is the
+            // card's person and the first row of Browse's sequence; the SWIPE-FIX
+            // and tide-marker notes that lived here moved there with the code.
+            val head = SurfaceOrder.sequence(
+                memberships = visibleMembers,
+                contactsById = contactsById,
+                list = list,
+                template = template,
+                latestPerContact = latestPerContact,
+                now = clock.now(),
+                json = json,
+            ).firstOrNull() ?: return@combine SurfaceResult.NothingEligible
 
-            val candidates = visibleMembers.mapNotNull { membership ->
-                val contact = contactsById.getValue(membership.contactId)
-
-                contact.pausedUntil?.let { if (it.isAfter(now)) return@mapNotNull null }
-
-                // M4 — direct map lookup for the latest call event per contact, no
-                // full event list groupBy + maxByOrNull. Members with zero events
-                // return null. Full CallEventEntity (not just timestamp) so the rule
-                // engines preserve their short-call / incoming-call signals.
-                val lastCall = latestPerContact[contact.id]
-
-                // SWIPE-FIX (2026-06-08) — surface by the PERSISTED
-                // `membership.nextDueAt`, not a fresh engine recomputation. That
-                // column is the source of truth for "when is this contact next due
-                // on this list": MarkCalledUseCase, SkipContactUseCase (push later),
-                // and SurfaceSoonerUseCase (pull earlier) all write it. The previous
-                // code ignored it and recomputed `nextDue` purely from `lastCallAt`
-                // + `skipCount` every emission — so swipe-right (Sooner, which never
-                // touches skipCount/lastCallAt) had ZERO effect on ordering, and
-                // swipe-left (Skip) had no effect on cold-start contacts (no call
-                // history → engine returns `now` regardless of skipCount). Both
-                // swipes re-surfaced the same head.
-                //
-                // The engine result is the COLD-START default, consulted ONLY when
-                // the membership has never been scheduled (`nextDueAt == null`:
-                // freshly added, never called/skipped/sooner'd). Once any mutation
-                // writes a value, that persisted value drives surfacing.
-                //
-                // Tide marker (2026-05-08): future `nextDue` is no longer a drop — it
-                // surfaces as the "ahead of today" tail of the queue. Only a null
-                // engine result (reachable solely for ignored contacts, already
-                // filtered out above) still drops the candidate.
-                val nextDue: Instant = membership.nextDueAt ?: run {
-                    val params = resolveParamsFor(contact, list, template, json)
-                    val engine = engineFor(params)
-                    val snapshot = ContactSnapshot(
-                        id = contact.id,
-                        isIgnored = contact.isIgnored,
-                        pausedUntil = contact.pausedUntil,
-                    )
-                    val ctx = buildContext(membership, lastCall, params)
-                    engine.nextDue(snapshot, ctx, clock) ?: return@mapNotNull null
-                }
-
-                Candidate(
-                    contact = contact,
-                    nextDue = nextDue,
-                    lastCalledAt = lastCall?.occurredAt,
-                )
-            }
-
-            val head = candidates
-                .sortedWith(
-                    compareBy<Candidate> { it.nextDue }
-                        .thenBy { it.lastCalledAt ?: Instant.MIN }
-                        // Deterministic final tiebreak — cold-start contacts all share
-                        // Instant.MIN on the previous key; contact.id ASC matches the
-                        // "no randomness" invariant.
-                        .thenBy { it.contact.id }
-                )
-                .firstOrNull()
-                ?: return@combine SurfaceResult.NothingEligible
-
-            SurfaceResult.Found(contact = head.contact, nextDueAt = head.nextDue)
+            SurfaceResult.Found(contact = head.contact, nextDueAt = head.nextDueAt)
         }
-
-    private data class Candidate(
-        val contact: ContactEntity,
-        val nextDue: Instant,
-        val lastCalledAt: Instant?,
-    )
-
-    private fun buildContext(
-        membership: ListMembershipEntity,
-        lastCall: CallEventEntity?,
-        params: RuleParams,
-    ): RuleContext = RuleContext(
-        lastCallAt = lastCall?.occurredAt,
-        lastCallDurationSec = lastCall?.durationSeconds ?: 0,
-        lastCallDirection = lastCall?.direction,
-        lastCallSource = lastCall?.source,
-        skipCount = membership.skipCount,
-        params = params,
-        activeHoursStart = null,                      // active-hours filter is the use-case's job
-        activeHoursEnd = null,                        // not the engine's; engines stay cooldown-only
-    )
 }

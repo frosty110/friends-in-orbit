@@ -27,7 +27,7 @@ Each page view lives in its own file under [`page-views/`](page-views/). When a 
 |---|---|
 | [Home](page-views/home.md) | `home` |
 | [Card view](page-views/card-view.md) | `card/{listId}` |
-| [Browse people](page-views/browse.md) | `browse/{listId}` (the numbered queue lives here, under "Next up") |
+| [Browse people](page-views/browse.md) | `browse/{listId}`, with optional `focus` (the card's person); the numbered sequence lives here, under "Next up" |
 
 ## People
 

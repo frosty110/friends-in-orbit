@@ -126,7 +126,7 @@ fun CardViewScreen(
     listId: String,
     onBack: () -> Unit,
     onCall: (contactId: String) -> Unit,
-    onBrowse: (listId: String) -> Unit,
+    onBrowse: (listId: String, focusContactId: Long?) -> Unit,
     onEditList: (listId: String) -> Unit = {},
     onAddContacts: (listId: String) -> Unit = {},
     onOpenContact: (contactId: String) -> Unit = onCall, // NOTE-03 — RecentNotesSummary tap target
@@ -259,7 +259,7 @@ internal fun CardViewContent(
     callLogDenied: Boolean,
     messages: SharedFlow<CardMessage>,
     onBack: () -> Unit,
-    onBrowse: (listId: String) -> Unit,
+    onBrowse: (listId: String, focusContactId: Long?) -> Unit,
     onEditList: (listId: String) -> Unit,
     onAddContacts: (listId: String) -> Unit,
     onTapToCall: (contactId: Long, phone: String) -> Unit,
@@ -343,7 +343,9 @@ internal fun CardViewContent(
                 ListActionsMenu(
                     listName = appBarTitle,
                     listType = state.listType,
-                    onBrowse = { onBrowse(listId) },
+                    // BROWSE-09: "Browse people" opens on the person this card
+                    // shows, marked and scrolled to; no one when it shows nobody.
+                    onBrowse = { onBrowse(listId, (state as? CardViewUiState.Ready)?.contactId) },
                     onEditList = { onEditList(listId) },
                     onAddContacts = { onAddContacts(listId) }
                 )
@@ -380,7 +382,7 @@ internal fun CardViewContent(
                 )
                 is CardViewUiState.EmptyNothingEligible -> NothingEligibleShell(
                     state = state,
-                    onBrowse = { onBrowse(listId) },
+                    onBrowse = { onBrowse(listId, null) },
                     onGoHome = onBack
                 )
                 is CardViewUiState.Error -> ErrorShell(
@@ -1147,7 +1149,7 @@ private fun PreviewContent(state: CardViewUiState, callLogDenied: Boolean = fals
         callLogDenied = callLogDenied,
         messages = MutableSharedFlow<CardMessage>().asSharedFlow(),
         onBack = {},
-        onBrowse = {},
+        onBrowse = { _, _ -> },
         onEditList = {},
         onAddContacts = {},
         onTapToCall = { _, _ -> },

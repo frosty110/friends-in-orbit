@@ -251,6 +251,32 @@ class OrbitNavHostTest {
         assertEquals("5", arg("listId"))
     }
 
+    // BROWSE-09
+
+    @Test
+    fun cardBrowsePeople_opensBrowse_onTheCardsPerson() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+
+        act { screens.cardOnBrowse("3", 42L) }
+
+        assertEquals(Routes.Browse, route)
+        assertEquals("3", arg("listId"))
+        assertEquals("42", arg("focus"), "Browse reads the card's person from the focus argument")
+    }
+
+    @Test
+    fun cardBrowseThisList_opensBrowse_withNoOneToFocus() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+
+        act { screens.cardOnBrowse("3", null) }
+
+        assertEquals(Routes.Browse, route)
+        assertEquals("3", arg("listId"))
+        assertNull(arg("focus"))
+    }
+
     // CARD-03 / NOTE-04: the card's "Add a note" opens the page for writing
     // about the call. Until 2026-10-07 it opened the person with the note
     // field focused (NOTE-02).
@@ -435,6 +461,7 @@ private class StubScreens : OrbitNavScreens {
 
     /** The person and call the note page was last composed for. */
     var noteShownFor: Pair<String, String?>? = null
+    lateinit var cardOnBrowse: (String, Long?) -> Unit
     lateinit var browseOnOpenSettings: () -> Unit
     lateinit var searchOnOpenSettings: () -> Unit
     lateinit var contactOnViewAllCalls: () -> Unit
@@ -473,13 +500,14 @@ private class StubScreens : OrbitNavScreens {
         onBack: () -> Unit,
         onOpenContact: (contactId: String) -> Unit,
         onAddNote: (contactId: String) -> Unit,
-        onBrowse: (listId: String) -> Unit,
+        onBrowse: (listId: String, focusContactId: Long?) -> Unit,
         onEditList: (listId: String) -> Unit,
         onAddContacts: (listId: String) -> Unit,
         onOpenSettings: () -> Unit,
     ) {
         cardOnOpenContact = onOpenContact
         cardOnAddNote = onAddNote
+        cardOnBrowse = onBrowse
         Stub(Routes.card(listId))
     }
 

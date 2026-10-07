@@ -8,6 +8,7 @@ import app.orbit.data.repository.CallEventRepository
 import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ListRepository
 import app.orbit.di.ApplicationScope
+import app.orbit.domain.usecase.SequencedContact
 import app.orbit.domain.usecase.SurfaceQueueUseCase
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -17,7 +18,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 /**
@@ -81,9 +81,9 @@ open class BrowseFeed @Inject constructor(
                 listRepo.observeMembersOfList(id),
                 contactRepo.observeAll(),
                 callEventRepo.observeRecentForListContacts(id),
-                surfaceQueueUseCase(id).map { ordered -> ordered.map(ContactEntity::id) },
-            ) { memberships, allContacts, callEvents, queueOrder ->
-                BrowseFeedSnapshot(memberships, allContacts, callEvents, queueOrder)
+                surfaceQueueUseCase(id),
+            ) { memberships, allContacts, callEvents, sequence ->
+                BrowseFeedSnapshot(memberships, allContacts, callEvents, sequence)
             }
                 // BROWSE-06: a failed source becomes a snapshot that says so.
                 // Uncaught, it escaped the @ApplicationScope (no handler) and
@@ -111,17 +111,19 @@ open class BrowseFeed @Inject constructor(
  * mirror the trio that BrowseViewModel.buildState consumed before the
  * feed-widening; the VM rewire is a 1:1 substitution.
  *
- * `queueOrder` carries the [SurfaceQueueUseCase]-ordered contact ids for the
- * list (queue head first). Non-queued members (paused / out-of-active-hours /
- * no-template / engine-null) are absent from this list — Browse computes the
- * set-difference against `memberships` and renders them in a separate "Other
- * members" section without a position number.
+ * `sequence` is the list's people in the order the card brings them up, each
+ * with the time they come up ([SurfaceQueueUseCase], the card's own ordering;
+ * BROWSE-07). It carried bare ids (`queueOrder`) until 2026-10-07; Browse now
+ * words each row's time ("Up now", "Thursday") and places a dragged person
+ * between their neighbours' times (BROWSE-08), so it needs the times too.
+ * Paused, ignored and archived members, and everyone on a list without a rule,
+ * are absent: Browse groups them after the sequence.
  */
 data class BrowseFeedSnapshot(
     val memberships: List<ListMembershipEntity>,
     val allContacts: List<ContactEntity>,
     val callEvents: List<CallEventEntity>,
-    val queueOrder: List<Long>,
+    val sequence: List<SequencedContact>,
     /** False only for [NotLoaded], the placeholder before the first emission. */
     val loaded: Boolean = true,
     /** True only for [Failed]: a source flow threw (BROWSE-06). */

@@ -254,7 +254,9 @@ private fun OrbitNavGraph(
                 // describes their latest connected call. A plain tap on the
                 // face opens the person at the top.
                 onAddNote = { contactId -> nav.navigate(Routes.postCallNote(contactId)) },
-                onBrowse = { listId -> nav.navigate(Routes.browse(listId)) },
+                // BROWSE-09: the menu's "Browse people" passes the person on
+                // the card; "Browse this list" on the All quiet deck passes none.
+                onBrowse = { listId, focusContactId -> nav.navigate(Routes.browse(listId, focusContactId)) },
                 onEditList = { listId -> nav.navigate(Routes.listConfig(listId)) },
                 onAddContacts = { listId -> nav.navigate(Routes.pickContacts(listId)) },
                 // 2026-06-09: the call-log-denied notice deep-links to Settings,
@@ -264,7 +266,16 @@ private fun OrbitNavGraph(
         }
         composable(
             Routes.Browse,
-            arguments = listOf(navArgument("listId") { type = NavType.StringType })
+            arguments = listOf(
+                navArgument("listId") { type = NavType.StringType },
+                // BROWSE-09: optional, StringType like Contact's query args;
+                // BrowseViewModel reads it from SavedStateHandle and parses it.
+                navArgument("focus") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
         ) { entry ->
             screens.Browse(
                 listId = entry.requiredString("listId"),

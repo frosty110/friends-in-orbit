@@ -11,6 +11,7 @@ import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.entity.ListType
 import app.orbit.data.feed.BrowseFeed
+import app.orbit.data.feed.BrowseFeedSnapshot
 import app.orbit.data.mappers.toUiContact
 import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ListRepository
@@ -26,15 +27,24 @@ import app.orbit.domain.usecase.CopyContactsUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MoveContactsUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
+import app.orbit.domain.usecase.ReorderSequenceUseCase
+import app.orbit.domain.usecase.ReorderSequenceUseCase.Companion.afterMove
+import app.orbit.domain.usecase.SequencedContact
 import app.orbit.ui.screens.picker.SnackbarEvent
+import app.orbit.ui.util.ComesUp
 import app.orbit.ui.util.UiText
+import app.orbit.ui.util.comesUp
 import app.orbit.ui.util.formatRelative
+import app.orbit.ui.util.formatSpan
 import app.orbit.ui.util.pausedPeopleSnackbar
 import app.orbit.ui.util.pausedSnackbar
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -52,6 +62,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Browse ViewModel: wires per-list filtering + queue-order sort +
@@ -65,12 +77,15 @@ import kotlinx.coroutines.launch
  * or single-row, runs through [runMutation], so one that throws says
  * "Couldn't save your change" and announces nothing else (rules.md Code 3).
  *
- * Sort: queue order (matching [SurfaceQueueUseCase]); non-queued members
- * (paused / out-of-active-hours / no-template / engine-null) trail, sorted by
- * displayName. Queue order arrives in [BrowseFeedSnapshot.queueOrder] — ADR 0006
- * puts that composition in the feed singleton, not the VM. The due-dot /
- * paused-ignored status / call-log-denied notice are independent of ordering and
- * unchanged.
+ * Order (BROWSE-07): the sequence, everyone in the order the card brings
+ * them up ([BrowseFeedSnapshot.sequence], the card's own ordering through
+ * SurfaceQueueUseCase; ADR 0006 puts that composition in the feed singleton,
+ * not the VM), each with when they come up; then anyone the rule cannot
+ * place, alphabetically; then the paused people, soonest back first, with
+ * when; then the ignored ones. Opened from the card, the card's person is
+ * marked (BROWSE-09). A drag writes new times through
+ * [ReorderSequenceUseCase] (BROWSE-08) and shows the dropped order at once
+ * (see [pendingMove]).
  *
  * Filter logic (per the BROWSE-02 chip-composition rule):
  *   - Search × chip = AND (search narrows the chip-filtered set).
@@ -101,6 +116,8 @@ class BrowseViewModel @Inject constructor(
     // Single-row quick actions from the Browse long-press menu.
     private val ignoreContactUseCase: IgnoreContactUseCase,
     private val pauseContactUseCase: PauseContactUseCase,
+    // BROWSE-08: a drag in the sequence.
+    private val reorderSequence: ReorderSequenceUseCase,
     private val undoStack: UndoStack,
     // WIDGET-06 (wnl-6): the unpause and the pause-undo paths below write
     // `setPausedUntil` directly rather than through a use case, so they fire
@@ -119,6 +136,18 @@ class BrowseViewModel @Inject constructor(
     // with no feed behind it, so `canRetry = false`: Retry could change
     // nothing, and until 2026-10-06 it was the screen's accent anyway.
     private val listId: Long? = savedStateHandle.get<String>("listId")?.toLongOrNull()
+
+    // BROWSE-09: the person on the card when its menu's "Browse people" opened
+    // this screen (the route's optional `focus`); absent from "Browse this
+    // list" on the All quiet deck, where the card shows nobody.
+    private val focusContactId: Long? = savedStateHandle.get<String>(FOCUS_KEY)?.toLongOrNull()
+
+    // BROWSE-09: the sequence's head the first time this screen had data.
+    // While it is still the head, the card shows the person it passed
+    // ([focusContactId]); once the head changes (a drag here, a call), the
+    // card will show the new head, so the mark follows it. Written once, from
+    // the state pipeline, which runs on one coroutine.
+    private var headWhenOpened: Long? = null
 
     // Zone for the shared relative-time formatter (CallLogViewModel
     // convention: read once, not per row).
@@ -233,6 +262,18 @@ class BrowseViewModel @Inject constructor(
     // re-calling forList subscribes afresh.
     private val retryCount = MutableStateFlow(0)
 
+    /**
+     * BROWSE-08: the drop the user just made, shown at once while its write
+     * lands. It applies only to the snapshot it was made against ([base]): the
+     * write's own result arrives as a new snapshot, which already holds the
+     * new order, so the overlay retires itself without a flash back to the old
+     * order. A failed write clears it, which puts the row back where it was;
+     * so does an Undo.
+     */
+    private val pendingMove = MutableStateFlow<PendingMove?>(null)
+
+    private class PendingMove(val contactId: Long, val placeAfter: Long?, val base: BrowseFeedSnapshot)
+
     /** The Error state's Retry. */
     fun onRetry() {
         retryCount.update { it + 1 }
@@ -267,21 +308,33 @@ class BrowseViewModel @Inject constructor(
                 retryCount.flatMapLatest { browseFeed.forList(listId) },
                 searchQuery,
                 _activeFilters,
-                _callLogDenied
-            ) { snapshot, query, filters, callLogDenied ->
+                _callLogDenied,
+                pendingMove
+            ) { snapshot, query, filters, callLogDenied, pending ->
                 if (snapshot.failed) return@combine BrowseUiState.Error()
                 if (!snapshot.loaded) return@combine BrowseUiState.Loading
+                // The drop, with the times its write will store, so the moved
+                // row's "when" is right at once. A plan that cannot be made
+                // shows the stored order: the write runs the same plan and
+                // reports the failure (rules.md Code 3), so nothing is hidden.
+                val sequence = pending?.takeIf { it.base === snapshot }
+                    ?.let { move ->
+                        runCatching {
+                            snapshot.sequence.afterMove(move.contactId, move.placeAfter, clock.now())
+                        }.getOrNull()
+                    }
+                    ?: snapshot.sequence
                 buildState(
                     snapshot.memberships,
                     snapshot.allContacts,
                     snapshot.callEvents,
-                    snapshot.queueOrder,
+                    sequence,
                     query,
                     filters,
                     callLogDenied
                 )
             }
-                // combine arity caps at 5 — chain three more for multi-select state.
+                // combine arity caps at 5; chain three more for multi-select state.
                 .combine(isMultiSelectFlow) { state, isMs ->
                     if (state is BrowseUiState.Ready) state.copy(isMultiSelect = isMs) else state
                 }
@@ -582,7 +635,58 @@ class BrowseViewModel @Inject constructor(
         return true
     }
 
+    // ─── BROWSE-08: drag to reorder ─────────────────────────────────────────────
+
+    // One reorder write at a time (the ListsManagerViewModel precedent): each
+    // plan reads the sequence afresh, so a second drop must see the first
+    // one's times, not race it.
+    private val reorderMutex = Mutex()
+
+    /**
+     * A drop in the sequence, from the handle or TalkBack's Move up / Move
+     * down: [contactId] now follows [placeAfter] (null: the top of the
+     * sequence). The screen shows the dropped order at once ([pendingMove]);
+     * the write goes through [ReorderSequenceUseCase], which says which way
+     * they moved and hands back the exact inverse for Undo. A write that
+     * fails, or a person who left the sequence meanwhile, says "Couldn't save
+     * your change" with no Undo, and the row goes back (rules.md Code 3).
+     * [name] is the row's name, for "Moved Kai earlier".
+     */
+    fun onReorder(contactId: Long, placeAfter: Long?, name: String) = viewModelScope.launch {
+        val id = listId ?: return@launch
+        pendingMove.value = PendingMove(contactId, placeAfter, browseFeed.forList(id).value)
+        val saved = runMutation {
+            val result = reorderMutex.withLock { reorderSequence(id, contactId, placeAfter) }
+            when (result) {
+                is ReorderSequenceUseCase.Result.Moved -> {
+                    undoStack.put(UndoStack.PendingUndo(result.inverse))
+                    val firstName = name.trim().substringBefore(' ').ifBlank { name }
+                    _snackbarEvents.tryEmit(
+                        SnackbarEvent.undoable(
+                            UiText.res(
+                                if (result.earlier) {
+                                    R.string.browse_snackbar_moved_earlier
+                                } else {
+                                    R.string.browse_snackbar_moved_later
+                                },
+                                firstName
+                            )
+                        )
+                    )
+                }
+                ReorderSequenceUseCase.Result.Unchanged -> pendingMove.value = null
+                ReorderSequenceUseCase.Result.Missing -> {
+                    pendingMove.value = null
+                    _snackbarEvents.tryEmit(SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)))
+                }
+            }
+        }
+        if (!saved) pendingMove.value = null
+    }
+
     fun onUndo() = viewModelScope.launch {
+        // An Undo replaces whatever order a drop was still showing.
+        pendingMove.value = null
         runMutation { undoStack.take()?.inverse?.invoke() }
     }
 
@@ -623,7 +727,7 @@ class BrowseViewModel @Inject constructor(
         memberships: List<ListMembershipEntity>,
         allContacts: List<ContactEntity>,
         callEvents: List<CallEventEntity>,
-        queueOrder: List<Long>,
+        sequence: List<SequencedContact>,
         query: String,
         filters: Set<BrowseFilter>,
         callLogDenied: Boolean
@@ -636,104 +740,117 @@ class BrowseViewModel @Inject constructor(
         // hard CallLogDenied gate fires instead of a false filter result.
         if (callLogDenied && filters.isNotEmpty()) return BrowseUiState.CallLogDenied
 
-        // Build (contact, lastCallAt?) pairs scoped to this list's members.
         val memberIds = memberships.map { it.contactId }.toSet()
         val contactsHere = allContacts.filter { it.id in memberIds }
+        val now = clock.now()
 
         val lastCallByContact: Map<Long, Instant?> =
             callEvents.groupBy { it.contactId }
                 .mapValues { (_, events) -> events.maxByOrNull { it.occurredAt }?.occurredAt }
 
-        // Apply filter chips per W-02 chip-composition rule (UI-SPEC §BROWSE-02).
-        val now = clock.now()
-        val recentlyCalledThreshold = now.minus(Duration.ofDays(30))
-        val pairs: List<Pair<ContactEntity, Instant?>> =
-            contactsHere.map { it to lastCallByContact[it.id] }
+        // BROWSE-07: the groups, in the order the screen draws them. The
+        // sequence is the card's own order (SurfaceOrder through the feed), so
+        // its first row is the card's person and Later, Sooner and a call move
+        // rows here exactly as they move the deck. Outside it: anyone the
+        // rule cannot place (archived, or a list with no rule) by name; the
+        // paused, soonest back first ("until you unpause" is the far-future
+        // sentinel, so it sorts last); the ignored by name. Ignored wins over
+        // paused, as on the row's word.
+        val sequenceIds = sequence.map { it.contact.id }
+        val inSequence = sequenceIds.toSet()
+        val contactById = contactsHere.associateBy { it.id }
+        val outside = contactsHere.filter { it.id !in inSequence }
+        val isPaused = { c: ContactEntity -> !c.isIgnored && c.pausedUntil?.isAfter(now) == true }
+        val byName = compareBy<ContactEntity> { it.displayName.lowercase() }
+        val ordered: List<ContactEntity> =
+            sequenceIds.mapNotNull { contactById[it] } +
+                outside.filter { !it.isIgnored && !isPaused(it) }.sortedWith(byName) +
+                outside.filter(isPaused).sortedWith(compareBy<ContactEntity> { it.pausedUntil }.then(byName)) +
+                outside.filter { it.isIgnored }.sortedWith(byName)
 
-        val afterFilter: List<Pair<ContactEntity, Instant?>> =
+        // Filter chips per the BROWSE-02 chip-composition rule: chip × chip is
+        // a UNION (OR), since "called in the last 30 days" and "never called"
+        // never overlap.
+        val recentlyCalledThreshold = now.minus(Duration.ofDays(30))
+        val afterFilter =
             if (filters.isEmpty()) {
-                pairs
+                ordered
             } else {
-                pairs.filter { (_, lastCallAt) ->
+                ordered.filter { entity ->
+                    val lastCallAt = lastCallByContact[entity.id]
                     val matches = mutableSetOf<BrowseFilter>()
                     if (lastCallAt != null && lastCallAt.isAfter(recentlyCalledThreshold)) {
                         matches += BrowseFilter.CalledRecently
                     }
-                    if (lastCallAt == null) {
-                        matches += BrowseFilter.NotCalledYet
-                    }
-                    // UNION (OR) semantics across chips — W-02 user decision.
-                    // Reference: UI-SPEC §BROWSE-02 chip-composition rule.
+                    if (lastCallAt == null) matches += BrowseFilter.NotCalledYet
                     matches.any { it in filters }
                 }
             }
 
-        // Queue-order sort replaces lastCallAt DESC. `queueOrder` is the
-        // canonical rendering order for queued members (SurfaceQueueUseCase). Non-queued
-        // members (paused / out-of-active-hours / no-template / engine-null) follow,
-        // sorted by displayName for stable rendering. Search still runs AFTER this sort;
-        // ContactSearch.filterRanked is a stable rank-only sort, so queue order survives
-        // within each rank band (the position number stays meaningful while filtering).
-        val queuePositionByEntityId: Map<Long, Int> =
-            queueOrder.withIndex().associate { (idx, contactId) -> contactId to (idx + 1) }
-        val (queuedPairs, nonQueuedPairs) = afterFilter.partition { (entity, _) ->
-            entity.id in queuePositionByEntityId
-        }
-        val sorted =
-            queuedPairs.sortedBy { (entity, _) -> queuePositionByEntityId.getValue(entity.id) } +
-                nonQueuedPairs.sortedBy { (entity, _) -> entity.displayName.lowercase() }
-
-        // #16 — diacritic-folded, rank-ordered, phone-aware matching via the
-        // shared domain matcher (replaces the naive displayName.contains).
-        // Search × chip composition stays AND (UI-SPEC §BROWSE-02).
+        // #16: diacritic-folded, phone-aware matching via the shared domain
+        // matcher; search × chip stays AND (BROWSE-02). A filter, not a rank:
+        // the order is what this screen is about (BROWSE-07), so a match keeps
+        // its place and its number. ContactSearch.filterRanked put word-start
+        // matches first, which reordered the queue's numbers ("4, 2, 7") until
+        // 2026-10-07.
         val q = query.trim()
         val afterSearch =
             if (q.isEmpty()) {
-                sorted
+                afterFilter
             } else {
-                ContactSearch.filterRanked(
-                    items = sorted,
-                    query = q,
-                    name = { (entity, _) -> entity.displayName },
-                    phone = { (entity, _) -> entity.normalizedPhone }
-                )
+                afterFilter.filter { ContactSearch.match(q, it.displayName, it.normalizedPhone) != null }
             }
 
         return when {
             afterSearch.isNotEmpty() -> {
-                // 2026-06-09 #19 — per-row orientation. Due rides the persisted
-                // membership nextDueAt (null or past = due, matching the
-                // dueCount SQL in ListRepository.recomputeDueCountForList);
-                // paused/ignored suppress the dot — a paused person is not
-                // surfaceable, so claiming "due" would conflict with the
-                // status word.
+                val timeById: Map<Long, Instant> = sequence.associate { it.contact.id to it.nextDueAt }
                 val membershipByContact = memberships.associateBy { it.contactId }
                 val dueIds = mutableSetOf<String>()
                 val rowStatus = mutableMapOf<String, BrowseRowStatus>()
-                afterSearch.forEach { (entity, _) ->
+                val whenLabels = mutableMapOf<String, UiText>()
+                val untilLabels = mutableMapOf<String, UiText>()
+                afterSearch.forEach { entity ->
                     val uiId = "c-${entity.id}"
+                    val pausedUntil = entity.pausedUntil?.takeIf { it.isAfter(now) }
                     val status = when {
                         entity.isIgnored -> BrowseRowStatus.Ignored
-                        entity.pausedUntil?.isAfter(now) == true -> BrowseRowStatus.Paused
+                        pausedUntil != null -> BrowseRowStatus.Paused
                         else -> null
                     }
-                    if (status != null) {
-                        rowStatus[uiId] = status
-                    } else {
-                        val nextDueAt = membershipByContact[entity.id]?.nextDueAt
-                        if (nextDueAt == null || !nextDueAt.isAfter(now)) dueIds += uiId
+                    if (status != null) rowStatus[uiId] = status
+                    val time = timeById[entity.id]
+                    when {
+                        time != null -> {
+                            whenLabels[uiId] = whenLabel(time, now)
+                            // The dot and "Up now" are one fact (BROWSE-07): a
+                            // never-scheduled person whose rule puts them in the
+                            // future said "worth a call now" beside "Thursday".
+                            if (status == null && !time.isAfter(now)) dueIds += uiId
+                        }
+                        status == BrowseRowStatus.Paused && pausedUntil != null ->
+                            untilLabels[uiId] = untilLabel(pausedUntil)
+                        // Outside the sequence and not paused or ignored: the
+                        // persisted time, null or past (recomputeDueCountForList's
+                        // rule), as before the sequence.
+                        status == null -> {
+                            val nextDueAt = membershipByContact[entity.id]?.nextDueAt
+                            if (nextDueAt == null || !nextDueAt.isAfter(now)) dueIds += uiId
+                        }
                     }
                 }
                 BrowseUiState.Ready(
-                    contacts = afterSearch.map { (entity, lastCallAt) ->
-                        entity.toUiContact().withLastCallLabel(lastCallAt, now)
+                    contacts = afterSearch.map { entity ->
+                        entity.toUiContact().withLastCallLabel(lastCallByContact[entity.id], now)
                     },
                     searchQuery = q,
                     activeFilters = filters,
                     callLogPermissionDenied = callLogDenied,
                     dueIds = dueIds,
                     rowStatus = rowStatus,
-                    queuePositions = queuePositionByEntityId.mapKeys { (entityId, _) -> "c-$entityId" }
+                    queuePositions = sequenceIds.withIndex().associate { (idx, id) -> "c-$id" to idx + 1 },
+                    whenLabels = whenLabels,
+                    untilLabels = untilLabels,
+                    onYourCardId = cardPersonRow(sequenceIds.firstOrNull(), memberIds)
                 )
             }
             q.isNotEmpty() -> BrowseUiState.NoMatches(q)
@@ -744,6 +861,47 @@ class BrowseViewModel @Inject constructor(
             else -> BrowseUiState.Empty
         }
     }
+
+    /**
+     * BROWSE-09: the row marked "On your card". Opened from the card's menu,
+     * that is the person the card passed, wherever the order puts them (the
+     * head almost always; see [headWhenOpened]); once the head has changed
+     * since, the card will show the new head, so that row is marked. Opened
+     * any other way, no row is.
+     */
+    private fun cardPersonRow(head: Long?, memberIds: Set<Long>): String? {
+        val focus = focusContactId ?: return null
+        if (headWhenOpened == null) headWhenOpened = head
+        val marked = if (head == null || head == headWhenOpened) focus else head
+        return if (marked in memberIds) "c-$marked" else null
+    }
+
+    /**
+     * BROWSE-07: when someone in the sequence comes up, in the words the rest
+     * of the app uses: "Up now" once their time has come (the card's own
+     * eyebrow), then [comesUp]'s buckets, the same ones the card's Later and
+     * Sooner snackbars word, as labels that stand alone.
+     */
+    private fun whenLabel(time: Instant, now: Instant): UiText {
+        if (!time.isAfter(now)) return UiText.res(R.string.browse_when_up_now)
+        return when (val bucket = comesUp(time, now, zone)) {
+            ComesUp.LaterToday -> UiText.res(R.string.browse_when_later_today)
+            ComesUp.Tomorrow -> UiText.res(R.string.browse_when_tomorrow)
+            is ComesUp.OnDay -> UiText.res(
+                R.string.browse_when_on_day,
+                bucket.day.getDisplayName(TextStyle.FULL, Locale.getDefault())
+            )
+            is ComesUp.InDays -> UiText.res(R.string.browse_when_in_span, formatSpan(bucket.days))
+        }
+    }
+
+    /** When a pause ends, under the row's "Paused": Contact detail's status line, as a label. */
+    private fun untilLabel(pausedUntil: Instant): UiText =
+        if (PauseContactUseCase.isIndefinite(pausedUntil)) {
+            UiText.res(R.string.browse_row_until_unpause)
+        } else {
+            UiText.res(R.string.browse_row_until, pausedUntil.atZone(zone).format(PAUSED_UNTIL_FORMAT))
+        }
 
     /**
      * Helper — overlay a relative-time `lastCalledLabel` on the minimal-safe
@@ -761,6 +919,14 @@ class BrowseViewModel @Inject constructor(
 
     companion object {
         internal const val SEARCH_QUERY_KEY = "searchQuery"
+
+        /** BROWSE-09: the route's optional argument naming the card's person (`Routes.Browse`). */
+        internal const val FOCUS_KEY = "focus"
+
+        // Contact detail's "Paused until 12 Oct" date (ContactDetailViewModel),
+        // so one pause reads the same on both screens.
+        private val PAUSED_UNTIL_FORMAT: DateTimeFormatter =
+            DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())
 
         // M4 — SavedStateHandle keys for multi-select persistence so process
         // death mid-flow doesn't drop the user's selection.

@@ -2,17 +2,29 @@ package app.orbit.ui.screens.browse
 
 import androidx.compose.runtime.Immutable
 import app.orbit.data.Contact
+import app.orbit.ui.util.UiText
 
 /**
  * Browse state contract. Sealed
  * interface; every variant `@Immutable` for Compose skipping.
  *
- * `Ready.contacts` carries the UI-domain [Contact] projection. Queued
- * contacts come first, in [SurfaceQueueUseCase] order; non-queued members (paused /
- * out-of-active-hours / no-template / engine-null) follow, sorted alphabetically by
- * `displayName`. Per-row queue position is carried in [Ready.queuePositions] (absent
- * entry → non-queued row, rendered without a position number). This ordering is
- * independent of the `dueIds`/`rowStatus` orientation — they still apply per row.
+ * `Ready.contacts` carries the UI-domain [Contact] projection in the order
+ * the screen draws it, group by group (BROWSE-07): first the sequence,
+ * everyone in the order the card brings them up ([SurfaceQueueUseCase], the
+ * card's own ordering), numbered by [Ready.queuePositions]; then anyone the
+ * list's rule cannot place (an archived person, or everyone on a list with no
+ * rule) alphabetically; then the paused people, soonest back first; then the
+ * ignored ones alphabetically. The screen tells the groups apart by
+ * `queuePositions` and `rowStatus`, so search and the filters narrow each
+ * group without reordering it.
+ *
+ * `whenLabels` says when each person in the sequence comes up ("Up now",
+ * "Tomorrow", "Thursday", "In 2 weeks"); `untilLabels` when each paused
+ * person's pause ends ("Until 12 Oct", "Until you unpause"). `onYourCardId`
+ * is the row marked "On your card" (BROWSE-09): the person the card showed
+ * when Browse was opened from it, or, once the sequence's head has changed
+ * since (a drag here, a call), the new head, which is who the card shows now.
+ * Null when Browse was not opened from a person on the card.
  *
  * `searchQuery` is echoed back so
  * the TextField rendering doesn't need a second `collectAsState()` on the VM's
@@ -29,9 +41,11 @@ import app.orbit.data.Contact
  *
  * `dueIds` / `rowStatus` carry per-row orientation keyed by
  * the UI contact id ("c-<entityId>"):
- *   - `dueIds` — rows whose membership `nextDueAt` is null or past now AND
- *     that aren't paused/ignored; BrowseRow renders the quiet accent due dot
- *     (features/browse/README.md:23,34).
+ *   - `dueIds`: rows that are worth a call now; BrowseRow renders the quiet
+ *     accent due dot (features/browse/README.md). For a row in the sequence
+ *     that is exactly the rows whose when reads "Up now", so the dot and the
+ *     words never disagree (BROWSE-07); a row outside it keeps the older test
+ *     (membership `nextDueAt` null or past, not paused or ignored).
  *   - `rowStatus` — paused/ignored rows get a muted treatment + status word.
  * Both live on Ready (not only on [Contact]) because [Contact.equals] compares
  * `id` alone — flags riding the Contact copy would not survive StateFlow
@@ -92,12 +106,18 @@ sealed interface BrowseUiState {
         // Per-row orientation, keyed by UI contact id ("c-<id>").
         val dueIds: Set<String> = emptySet(),
         val rowStatus: Map<String, BrowseRowStatus> = emptyMap(),
-        // Queue-position map. Key = UI-domain `Contact.id` String (`"c-$entityId"`).
-        // Only queued contacts appear in the map; non-queued members (paused / out-of-active-hours /
-        // no-template / engine-null) are absent. Browse uses null lookup as the "non-queued" signal
-        // and renders them in the "Other members" section without a position number. Independent of
-        // dueIds/rowStatus — a row can be queued (position N) AND due (dot) at once.
+        // Sequence positions (BROWSE-07). Key = UI-domain `Contact.id` String (`"c-$entityId"`),
+        // value = 1-based place in the WHOLE sequence, so a filtered view still shows true numbers.
+        // Only people in the sequence appear; paused, ignored and unplaceable members are absent,
+        // which is how the screen knows a row is not in the sequence. Independent of
+        // dueIds/rowStatus: a row can be in the sequence (position N) AND up now (dot) at once.
         val queuePositions: Map<String, Int> = emptyMap(),
+        // BROWSE-07: when each person in the sequence comes up, and when a paused person's pause
+        // ends; keyed like the maps above. Text, not times, so the screen formats nothing.
+        val whenLabels: Map<String, UiText> = emptyMap(),
+        val untilLabels: Map<String, UiText> = emptyMap(),
+        // BROWSE-09: the row marked "On your card", or null.
+        val onYourCardId: String? = null,
     ) : BrowseUiState
 
     @Immutable data object Empty : BrowseUiState
