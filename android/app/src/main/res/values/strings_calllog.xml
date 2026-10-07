@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Call history: the in-app call log, for everyone or for one person.
+    Keys are area_what (features/_foundations/voice.md, "Where copy lives").
+    Day headings and durations come from strings_time.xml.
+-->
+<resources>
+
+    <!-- App bar. %1$s: the person's name. -->
+    <string name="calllog_title">Call history</string>
+    <string name="calllog_title_person">Calls with %1$s</string>
+
+    <!-- Nothing recorded. %1$s: the person's first name. -->
+    <string name="calllog_empty_title">No calls yet</string>
+    <string name="calllog_empty_title_person">No calls with %1$s yet</string>
+    <string name="calllog_empty_body">Calls with the people in your contacts show up here.</string>
+    <string name="calllog_empty_body_person">When you and %1$s talk, the call shows up here.</string>
+
+    <!-- No access to the phone's call log and nothing recorded yet. -->
+    <string name="calllog_denied_title">Orbit can\'t see your calls</string>
+    <string name="calllog_denied_body">Call history comes from your phone\'s call log, and Orbit doesn\'t have access to it. Turn it on in Settings and your calls will appear here. They stay on this device.</string>
+    <!-- Its action is the shared components_action_open_settings ("Open settings"). -->
+    <!-- No access, but some calls recorded earlier: shown above them. Not "this list":
+         on this screen that word would read as an Orbit list (voice.md glossary). -->
+    <string name="calllog_denied_notice">Orbit can\'t see new calls, so some may be missing here.</string>
+
+    <!-- The body and the Try again action are the shared components_error_body and
+         components_error_retry. -->
+    <string name="calllog_error_title">Couldn\'t load your calls</string>
+
+    <!-- Direction filter chips. -->
+    <string name="calllog_filter_all">All</string>
+    <string name="calllog_filter_incoming">Incoming</string>
+    <string name="calllog_filter_outgoing">Outgoing</string>
+    <!-- When a narrowing filter matches nothing. There is no "All" line: with no calls at
+         all the screen shows calllog_empty_title instead. -->
+    <string name="calllog_filtered_empty_incoming">No incoming calls yet.</string>
+    <string name="calllog_filtered_empty_outgoing">No outgoing calls yet.</string>
+
+    <!-- Footer that shows the next page of rows. %1$d: how many more. -->
+    <plurals name="calllog_show_more">
+        <item quantity="one">Show %1$d more</item>
+        <item quantity="other">Show %1$d more</item>
+    </plurals>
+
+    <!-- A row's subtitle in everyone's log: which list, how long, which way. -->
+    <!-- %1$s: the list's name. -->
+    <string name="calllog_from_list">from %1$s</string>
+    <string name="calllog_direction_outgoing">Outgoing</string>
+    <string name="calllog_direction_incoming">Incoming</string>
+    <string name="calllog_direction_logged">Logged</string>
+    <string name="calllog_direction_attempted">Attempted</string>
+    <!-- A person the user has ignored still shows, greyed. %1$s: the name. -->
+    <string name="calllog_name_ignored">%1$s (ignored)</string>
+
+    <!-- In one person's log every row is them, so rows say what happened.
+         %1$s: the person's first name. -->
+    <string name="calllog_person_you_called">You called</string>
+    <string name="calllog_person_they_called">%1$s called</string>
+    <string name="calllog_person_logged">You logged a connection</string>
+    <string name="calllog_person_attempted">You tried to reach them</string>
+
+    <!-- Row actions. A tap opens the person (the shared components_action_open_details,
+         "Open details"); the row's three-dots button and a long-press open the same menu.
+         The long-press is "Quick actions" and the button "More actions for {name}" to
+         TalkBack, the glossary's words for the two triggers (voice.md).
+         %1$s: the person's name, masked under the privacy curtain. -->
+    <string name="calllog_show_quick_actions">Quick actions</string>
+    <string name="calllog_more_actions_for">More actions for %1$s</string>
+    <string name="calllog_call_again">Call again</string>
+
+</resources>

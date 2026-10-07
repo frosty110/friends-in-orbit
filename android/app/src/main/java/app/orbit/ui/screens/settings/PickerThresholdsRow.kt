@@ -11,21 +11,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 
 /**
  * PICK-07 — Settings nav row that opens [PickerThresholdsDialog].
  *
- * Mirrors the existing private `NavRow` shape inside [SettingsScreen] (caret-right chevron,
- * label + sub Text pair, 16dp horizontal / 14dp vertical padding) but adds a leading
- * `sliders-horizontal` Phosphor icon as the affordance. The row's title is functional copy
- * ("Picker thresholds"), not a list name, so the privacy curtain (PRIV-*) doesn't apply to
- * the label itself.
- *
- * Copy: title "Picker thresholds" + subtitle "Edit chip-match thresholds".
+ * Same shape as the other entry rows in [SettingsScreen] (caret-right chevron,
+ * label + sub Text pair, 16dp horizontal / 14dp vertical padding) with a leading
+ * `sliders-horizontal` Phosphor icon as the affordance. The row's title is
+ * functional copy (SET-10, "Groups when adding people"), not a list name, so
+ * the privacy curtain (PRIV-03) doesn't apply to the label itself.
  */
 @Composable
 fun PickerThresholdsRow(
@@ -34,11 +34,11 @@ fun PickerThresholdsRow(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         PhIcon(
             name = "sliders-horizontal",
@@ -47,13 +47,15 @@ fun PickerThresholdsRow(
         )
         Column(Modifier.weight(1f)) {
             Text(
-                text = "Picker thresholds",
+                // Plain words (rubric D7): the row used to read "Picker
+                // thresholds / Edit chip-match thresholds".
+                text = stringResource(R.string.settings_thresholds_title),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             Text(
-                text = "Edit chip-match thresholds",
+                text = stringResource(R.string.settings_thresholds_row_sub),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
             )
         }
         PhIcon(

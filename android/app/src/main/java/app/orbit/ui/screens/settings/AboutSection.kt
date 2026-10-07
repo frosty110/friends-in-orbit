@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,9 +19,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import app.orbit.BuildConfig
+import app.orbit.R
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 
@@ -29,6 +33,9 @@ private const val PRIVACY_POLICY_URL = "https://frosty110.github.io/friends-in-o
  * SET-06 / RELEASE-05 About rows:
  *
  *   - Version — static, from BuildConfig.
+ *   - The privacy promise (SET-13): "Everything stays on your phone: no
+ *     cloud, no tracking." Not tappable; it is the one sentence a person
+ *     checking the app's privacy reads first, in the words onboarding used.
  *   - Send feedback — `mailto:hello@bearlumen.com` via ACTION_SENDTO.
  *     Fulfills the parked follow-up from the welcome-screen mailto removal;
  *     Settings → About is its decided home.
@@ -47,12 +54,17 @@ fun AboutSection(
 
     Column {
         AboutRow(
-            primary = "Orbit",
-            secondary = "Version ${BuildConfig.VERSION_NAME}",
+            primary = stringResource(R.string.app_name),
+            secondary = stringResource(R.string.settings_about_version, BuildConfig.VERSION_NAME),
             onClick = null,
         )
         AboutRow(
-            primary = "Send feedback",
+            primary = stringResource(R.string.settings_about_privacy_promise),
+            secondary = null,
+            onClick = null,
+        )
+        AboutRow(
+            primary = stringResource(R.string.settings_about_feedback),
             secondary = "hello@bearlumen.com",
             onClick = {
                 val intent = Intent(
@@ -63,8 +75,8 @@ fun AboutSection(
             },
         )
         AboutRow(
-            primary = "Privacy policy",
-            secondary = "Read how Orbit handles your data",
+            primary = stringResource(R.string.settings_about_privacy),
+            secondary = stringResource(R.string.settings_about_privacy_sub),
             onClick = {
                 val intent = Intent(
                     Intent.ACTION_VIEW,
@@ -74,13 +86,13 @@ fun AboutSection(
             },
         )
         AboutRow(
-            primary = "Source code",
+            primary = stringResource(R.string.settings_about_source),
             secondary = "github.com/frosty110/friends-in-orbit",
             onClick = onSourceCode,
         )
         AboutRow(
-            primary = "Open source licenses",
-            secondary = "What we built on",
+            primary = stringResource(R.string.settings_about_licenses),
+            secondary = stringResource(R.string.settings_about_licenses_sub),
             onClick = { showLicenses = true },
         )
     }
@@ -93,27 +105,29 @@ fun AboutSection(
 @Composable
 private fun AboutRow(
     primary: String,
-    secondary: String,
+    secondary: String?,
     onClick: (() -> Unit)?,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         Column(Modifier.weight(1f)) {
             Text(
                 text = primary,
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
-            Text(
-                text = secondary,
-                style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(top = 2.dp),
-            )
+            if (secondary != null) {
+                Text(
+                    text = secondary,
+                    style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
+                    modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
+                )
+            }
         }
         if (onClick != null) {
             PhIcon(name = "caret-right", size = 16.dp, tint = OrbitTheme.colors.fgSubtle)
@@ -121,10 +135,15 @@ private fun AboutRow(
     }
 }
 
+// Scrolls because the section sits in Settings' scrolling column: a
+// 360dp-high landscape window would otherwise squeeze the last row under
+// 48dp and the gallery's audit would report a target the app never shows.
 @PreviewLightDark
 @Composable
 private fun AboutSectionPreview() {
     OrbitTheme {
-        AboutSection(onSourceCode = {})
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            AboutSection(onSourceCode = {})
+        }
     }
 }

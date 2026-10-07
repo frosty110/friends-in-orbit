@@ -1,106 +1,270 @@
 package app.orbit.ui.util
 
+import android.content.Context
+import android.text.format.DateFormat
+import androidx.annotation.PluralsRes
+import app.orbit.R
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /**
- * Single-source-of-truth relative-time formatters. Used by:
- *   - `ContactDetailViewModel.toUiCallEntry` — populates
- *     `CallEntry.relativeWhen` + `lengthLabel` from `CallEventEntity`.
- *   - `ContactDetailScreen.CallHistoryRow` — renders the same labels at the
- *     row level.
+ * Single-source-of-truth time formatters: how long ago, how long for, which
+ * day, what time. Used by every screen that says any of those, plus the data
+ * feeds that pre-format them (HomeFeed, ContactMapper).
  *
  * Keeping these in one file prevents drift (e.g., the VM saying "today" while
  * the UI says "0 days ago"). Voice rule: lowercase verb fragments, no
- * exclamation, no "yesterday!" or "ages ago" — quiet factual labels only.
+ * exclamation, no "yesterday!" or "ages ago", quiet factual labels only.
+ *
+ * The words are copy, so they live in `strings_time.xml` (UX rubric 3.4) and
+ * the word-building formatters return [UiText]: a ViewModel or feed can call
+ * them without a Context, and the screen (or a notification, with its
+ * Context) resolves the result in the user's language. Clock times stay
+ * [String]: they are numbers plus the locale's own am/pm marker, which
+ * java.time already supplies for every language.
  */
 
 /**
- * "today" / "yesterday" / "{n} days ago" / "1 month ago" / "{n} months ago".
+ * The one way Orbit says how long something has been (voice.md glossary):
+ * "1 day", "9 days", "2 weeks", "5 weeks", "3 months", "1 year". Every
+ * "time since a call" in the app is built from this, so one screen can't say
+ * "27 days ago" while the next says "3 weeks" (UX rubric D7).
+ *
+ * Buckets: days below 14, weeks below 60 days, months below a year, then
+ * years ([spanBucket]). Singular forms come from `<plurals>`, so "1 week",
+ * never "1 weeks", in every language.
+ */
+fun formatSpan(days: Long): UiText {
+    val (unit, n) = spanBucket(days)
+    return UiText.plural(unit.spanPlural, n, n)
+}
+
+/**
+ * "today" / "yesterday" / "{span} ago", in [formatSpan]'s buckets:
+ * "9 days ago", "3 weeks ago", "2 months ago". Each "ago" form is its own
+ * plural rather than "{span} ago", because other languages inflect the
+ * number word differently after "ago" (German "vor 3 Tagen", not "Tage").
  *
  * Day-relative labels compare LOCAL calendar days, not 24-hour windows: an
  * 11pm call read the next morning is "yesterday", never "today".
  * [zone] defaults to [ZoneId.systemDefault] (same convention as
  * [formatAbsolute]); existing call sites pass only `(occurredAt, now)` and
- * keep their contracts. Singular forms are honest ("1 month ago", never
- * "1 months ago"); the 2..29 day band is always plural by construction.
+ * keep their contracts.
  */
 fun formatRelative(
     occurredAt: Instant,
     now: Instant = Instant.now(),
     zone: ZoneId = ZoneId.systemDefault(),
-): String {
+): UiText {
     val days = ChronoUnit.DAYS.between(
         occurredAt.atZone(zone).toLocalDate(),
         now.atZone(zone).toLocalDate(),
-    ).coerceAtLeast(0L)
+    )
+    return formatAgo(days)
+}
+
+/**
+ * [formatRelative]'s words for a day count the caller has already taken:
+ * "today", "yesterday", then "{span} ago" in [formatSpan]'s buckets ("3 days
+ * ago", "3 weeks ago"). For the why-now line on Card view and Home, which
+ * count whole days between instants (their own day boundary) and then need
+ * the one "ago" wording as the argument of "You spoke {ago}". Building the
+ * line from [formatSpan] gave "3 days since you last spoke", the shame
+ * framing voice.md never says, and the string audit could not see it because
+ * the span arrived as an argument. Negative clamps to "today".
+ */
+fun formatAgo(days: Long): UiText = when (val d = days.coerceAtLeast(0L)) {
+    0L -> UiText.res(R.string.time_ago_today)
+    1L -> UiText.res(R.string.time_ago_yesterday)
+    else -> spanBucket(d).let { (unit, n) -> UiText.plural(unit.agoPlural, n, n) }
+}
+
+/**
+ * [formatRelative] with a finer grain for the first day: "just now" under a
+ * minute, then "5 minutes ago", then "3 hours ago", and from a calendar day
+ * on exactly what [formatRelative] says ("yesterday", "3 days ago"). For
+ * things that happen all day and are read moments later, such as the sync
+ * rows in Settings ("Last synced 5 minutes ago"); a call's age stays on the
+ * day grain, where a finer one would read as a stopwatch.
+ *
+ * Hours count elapsed time, so "23 hours ago" can cross midnight; the
+ * calendar-day fallback takes over only once a full day has passed. Lowercase
+ * like [formatRelative]'s words, because it sits after a label.
+ */
+fun formatRelativeFine(
+    occurredAt: Instant,
+    now: Instant = Instant.now(),
+    zone: ZoneId = ZoneId.systemDefault(),
+): UiText {
+    val seconds = java.time.Duration.between(occurredAt, now).seconds.coerceAtLeast(0L)
     return when {
-        days == 0L -> "today"
-        days == 1L -> "yesterday"
-        days < 30L -> "$days days ago"
-        else -> {
-            val months = days / 30L
-            if (months == 1L) "1 month ago" else "$months months ago"
+        seconds < 60L -> UiText.res(R.string.time_ago_just_now)
+        seconds < 3_600L -> (seconds / 60L).toInt().let { UiText.plural(R.plurals.time_ago_minutes, it, it) }
+        seconds < 86_400L -> (seconds / 3_600L).toInt().let { UiText.plural(R.plurals.time_ago_hours, it, it) }
+        else -> formatRelative(occurredAt, now, zone)
+    }
+}
+
+/** The four units [formatSpan] and [formatRelative] count in, with their plurals. */
+private enum class SpanUnit(@PluralsRes val spanPlural: Int, @PluralsRes val agoPlural: Int) {
+    Days(R.plurals.time_span_days, R.plurals.time_ago_days),
+    Weeks(R.plurals.time_span_weeks, R.plurals.time_ago_weeks),
+    Months(R.plurals.time_span_months, R.plurals.time_ago_months),
+    Years(R.plurals.time_span_years, R.plurals.time_ago_years),
+}
+
+/** Days below 14, weeks below 60 days, months below a year, then years. Negative clamps to 0 days. */
+private fun spanBucket(days: Long): Pair<SpanUnit, Int> {
+    val d = days.coerceAtLeast(0L)
+    return when {
+        d < 14L -> SpanUnit.Days to d.toInt()
+        d < 60L -> SpanUnit.Weeks to (d / 7L).toInt()
+        d < 365L -> SpanUnit.Months to (d / 30L).toInt()
+        else -> SpanUnit.Years to (d / 365L).toInt()
+    }
+}
+
+/**
+ * Whether clock times show as "16:30" or "4:30pm". Follows the phone's
+ * 12/24-hour setting (it used to be hardcoded: 12-hour on call rows and
+ * active hours, 24-hour in nudge summaries). Refreshed by the app on start
+ * and every time it returns to the foreground, so a change in Android
+ * settings shows up without a restart. Plain field, not state: screens
+ * recompose on resume anyway. Also decides the 24-hour strips' tick labels
+ * ([axisTickLabels]) and the time picker's dial.
+ */
+object TimeStyle {
+    @Volatile
+    var is24Hour: Boolean = false
+
+    fun refresh(context: Context) {
+        is24Hour = DateFormat.is24HourFormat(context)
+    }
+}
+
+/**
+ * A clock time in the phone's style: "16:30" / "16:00", or "4:30pm" / "4pm"
+ * (lowercase marker, no space, minutes dropped on the hour, the app's quiet
+ * 12-hour convention).
+ *
+ * The am/pm marker is the locale's own (java.time, [Locale.getDefault]), not
+ * a hardcoded English "pm"; only the layout (number first, no space,
+ * lowercase) is Orbit's.
+ */
+fun formatClockTime(time: LocalTime, use24Hour: Boolean = TimeStyle.is24Hour): String {
+    val locale = Locale.getDefault()
+    val pattern = when {
+        use24Hour -> "HH:mm"
+        time.minute == 0 -> "ha"
+        else -> "h:mma"
+    }
+    val formatted = DateTimeFormatter.ofPattern(pattern, locale).format(time)
+    return if (use24Hour) formatted else formatted.lowercase(locale)
+}
+
+/** Wall-clock label for call-log rows, in the phone's 12/24-hour style ([formatClockTime]). */
+fun formatWallClock(
+    occurredAt: Instant,
+    zone: ZoneId = ZoneId.systemDefault(),
+    use24Hour: Boolean = TimeStyle.is24Hour,
+): String = formatClockTime(occurredAt.atZone(zone).toLocalTime(), use24Hour)
+
+/**
+ * Tick labels under a 24-hour strip (Card view's heat strip, a list's active
+ * hours bar): midnight, 6am, noon, 6pm, midnight. "12a 6a 12p 6p 12a" on a
+ * 12-hour phone, "00 06 12 18 00" on a 24-hour one, so the strip reads the
+ * same way as every clock time beside it. Returns string resource ids.
+ */
+fun axisTickLabels(use24Hour: Boolean = TimeStyle.is24Hour): List<Int> = if (use24Hour) {
+    listOf(
+        R.string.time_axis_24h_midnight,
+        R.string.time_axis_24h_6am,
+        R.string.time_axis_24h_noon,
+        R.string.time_axis_24h_6pm,
+        R.string.time_axis_24h_midnight,
+    )
+} else {
+    listOf(
+        R.string.time_axis_midnight,
+        R.string.time_axis_6am,
+        R.string.time_axis_noon,
+        R.string.time_axis_6pm,
+        R.string.time_axis_midnight,
+    )
+}
+
+/**
+ * Calendar-day section header for the call log and Home's rhythm day sheet:
+ * "Today" / "Yesterday" / "Wednesday 3 June" (year appended only when the
+ * day falls outside [today]'s year, e.g. "Wednesday 3 June 2025").
+ *
+ * The weekday and month names come from java.time in [Locale.getDefault]
+ * (the convention the nudge schedule's day chips and Card view's "on
+ * Tuesday" already follow); their order is the resource's, so a translation
+ * can put the month first.
+ *
+ * Pure over [LocalDate] so callers own the Instant→LocalDate conversion and
+ * grouping + labelling can never disagree about which day a call landed on.
+ */
+fun formatDayHeader(day: LocalDate, today: LocalDate): UiText = when (day) {
+    today -> UiText.res(R.string.time_day_today)
+    today.minusDays(1) -> UiText.res(R.string.time_day_yesterday)
+    else -> {
+        val locale = Locale.getDefault()
+        val weekday = day.dayOfWeek.getDisplayName(TextStyle.FULL, locale)
+        val month = day.month.getDisplayName(TextStyle.FULL, locale)
+        if (day.year == today.year) {
+            UiText.res(R.string.time_day_named, weekday, day.dayOfMonth, month)
+        } else {
+            UiText.res(R.string.time_day_named_year, weekday, day.dayOfMonth, month, day.year)
         }
     }
 }
 
 /**
- * Wall-clock label for call-log rows, e.g. "4:30pm". Lowercase am/pm marker,
- * no space — matches the quiet-voice convention set by [formatAbsolute].
- * [zone] defaults to [ZoneId.systemDefault].
- */
-fun formatWallClock(occurredAt: Instant, zone: ZoneId = ZoneId.systemDefault()): String =
-    DateTimeFormatter.ofPattern("h:mma", Locale.getDefault())
-        .format(occurredAt.atZone(zone))
-        .lowercase(Locale.getDefault())
-
-/**
- * Calendar-day section header for the call log:
- * "Today" / "Yesterday" / "Wednesday 3 June" (year appended only when the
- * day falls outside [today]'s year, e.g. "Wednesday 3 June 2025").
+ * How long a call lasted: "45s" / "14 min" / "1h 5m".
  *
- * Pure over [LocalDate] so callers own the Instant→LocalDate conversion and
- * grouping + labelling can never disagree about which day a call landed on.
+ * A plain formatter: zero reads "0s" like any other short call. Whether a
+ * zero means "no measured call" is the caller's call, and every caller
+ * already decides it before getting here (manual and attempted rows say
+ * "Logged" / "Attempted", and [app.orbit.data.mappers.withCallStats] leaves
+ * the average empty when no call was measured). Until 2026-10-05 zero
+ * returned an em dash, which leaked onto Card view's stats.
  */
-fun formatDayHeader(day: LocalDate, today: LocalDate): String = when (day) {
-    today -> "Today"
-    today.minusDays(1) -> "Yesterday"
-    else -> {
-        val base = DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault()).format(day)
-        if (day.year == today.year) base else "$base ${day.year}"
+fun formatDuration(seconds: Int): UiText {
+    val s = seconds.coerceAtLeast(0)
+    return when {
+        s < 60 -> UiText.plural(R.plurals.time_duration_seconds, s, s)
+        s < 3600 -> (s / 60).let { UiText.plural(R.plurals.time_duration_minutes, it, it) }
+        else -> UiText.res(R.string.time_duration_hours_minutes, s / 3600, (s % 3600) / 60)
     }
 }
-
-/** "—" (no call) / "{n}s" / "{n} min" / "{h}h {m}m". */
-fun formatDuration(seconds: Int): String =
-    when {
-        seconds <= 0 -> "—"
-        seconds < 60 -> "${seconds}s"
-        seconds < 3600 -> "${seconds / 60} min"
-        else -> "${seconds / 3600}h ${(seconds % 3600) / 60}m"
-    }
 
 /**
  * Pure absolute formatter for note timestamps.
  *
- * Format: "MMM d · h:mm a" lowercase am/pm, e.g., "mar 14 · 2:14 pm". Sentence
- * case (no leading caps); matches the rest of the app's quiet-voice convention.
+ * Format: "MMM d · {clock time}", e.g. "Mar 14 · 2:14pm", or "Mar 14 · 14:14"
+ * when the phone uses 24-hour time ([formatClockTime]). The month name is the
+ * locale's (java.time); the layout is a date-and-time pattern, not a sentence,
+ * so it stays a [String].
  *
- * Pure — no `now` parameter. Uses [ZoneId.systemDefault] so the rendered date
+ * Pure: no `now` parameter. Uses [ZoneId.systemDefault] so the rendered date
  * matches the device's local time zone. Tests can pin a specific zone via the
  * overload that takes an explicit [zone]; the default is sufficient because
  * notes always render against the user's wall clock.
  */
-fun formatAbsolute(occurredAt: Instant, zone: ZoneId = ZoneId.systemDefault()): String {
+fun formatAbsolute(
+    occurredAt: Instant,
+    zone: ZoneId = ZoneId.systemDefault(),
+    use24Hour: Boolean = TimeStyle.is24Hour,
+): String {
     val ldt = occurredAt.atZone(zone)
     val date = DateTimeFormatter.ofPattern("MMM d", Locale.getDefault()).format(ldt)
-    val time = DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault())
-        .format(ldt)
-        .lowercase(Locale.getDefault())
-    return "$date · $time"
+    return "$date · ${formatClockTime(ldt.toLocalTime(), use24Hour)}"
 }

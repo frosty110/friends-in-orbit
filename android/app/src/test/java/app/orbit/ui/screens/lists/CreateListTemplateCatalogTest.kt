@@ -49,6 +49,9 @@ class CreateListTemplateCatalogTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
+    // Template names and subtitles are string resources; resolve them here.
+    private val context = ApplicationProvider.getApplicationContext<Context>()
+
     // ============================================================================
     // Test 1 — locked size + id order.
     // ============================================================================
@@ -64,9 +67,9 @@ class CreateListTemplateCatalogTest {
                 "mentors",
                 "drifted",
                 "recently_added_not_called",
-                "blank",
+                "blank"
             ),
-            ids,
+            ids
         )
     }
 
@@ -77,15 +80,13 @@ class CreateListTemplateCatalogTest {
     @Test
     fun displayNames_are_verbatim_per_ui_spec() {
         val byId = TemplateChoice.Catalog.associateBy { it.id }
-        assertEquals("Inner orbit", byId["inner_orbit"]?.displayName)
-        assertEquals("Family", byId["family"]?.displayName)
-        assertEquals("Mentors", byId["mentors"]?.displayName)
-        assertEquals("Drifted", byId["drifted"]?.displayName)
-        assertEquals(
-            "Recently added, not called",
-            byId["recently_added_not_called"]?.displayName,
-        )
-        assertEquals("Start from blank", byId["blank"]?.displayName)
+        fun name(id: String): String = context.getString(byId.getValue(id).displayNameRes)
+        assertEquals("Inner orbit", name("inner_orbit"))
+        assertEquals("Family", name("family"))
+        assertEquals("Mentors", name("mentors"))
+        assertEquals("Drifted", name("drifted"))
+        assertEquals("Recently added, not called", name("recently_added_not_called"))
+        assertEquals("Start from blank", name("blank"))
     }
 
     // ============================================================================
@@ -95,13 +96,19 @@ class CreateListTemplateCatalogTest {
     @Test
     fun recently_added_template_emits_correct_smart_rule_json() {
         val recently = TemplateChoice.Catalog.single { it.id == "recently_added_not_called" }
-        val rule = assertNotNull(recently.smartRule, "Recently added template must carry a SmartListRule")
+        val rule =
+            assertNotNull(recently.smartRule, "Recently added template must carry a SmartListRule")
         val encoded = JsonProvider.json.encodeToString(SmartListRule.serializer(), rule)
         val decoded = JsonProvider.json.decodeFromString(SmartListRule.serializer(), encoded)
-        assertTrue(decoded is SmartListRule.RecentlyAddedNotCalled, "decoded rule must be RecentlyAddedNotCalled")
+        assertTrue(
+            decoded is SmartListRule.RecentlyAddedNotCalled,
+            "decoded rule must be RecentlyAddedNotCalled"
+        )
         assertEquals(30, decoded.daysWindow)
         assertEquals(ListType.SMART, recently.type)
-        assertNull(recently.ruleKind, "SMART entry must not carry a rule template kind")
+        // A smart list needs a cadence to surface anyone: with no rule template
+        // every surface (card, queue, Home's Next up) returned nothing.
+        assertEquals(RuleKind.KEEP_IN_TOUCH, recently.ruleKind)
     }
 
     // ============================================================================
@@ -115,9 +122,59 @@ class CreateListTemplateCatalogTest {
         assertEquals(4, staticTemplates.size)
         staticTemplates.forEach { tpl ->
             assertEquals(ListType.STATIC, tpl.type, "${tpl.id} must be STATIC")
-            assertEquals(RuleKind.KEEP_IN_TOUCH, tpl.ruleKind, "${tpl.id} must default to KEEP_IN_TOUCH")
+            assertEquals(
+                RuleKind.KEEP_IN_TOUCH,
+                tpl.ruleKind,
+                "${tpl.id} must default to KEEP_IN_TOUCH"
+            )
             assertNull(tpl.smartRule, "${tpl.id} must not carry a smart rule")
         }
+    }
+
+    @Test
+    fun named_templates_carry_the_rhythm_their_subtitle_promises() {
+        // Regression: all four created the same 2-day list, so "Mentors:
+        // Quarterly check-ins" surfaced each mentor every 2 days.
+        val byId = TemplateChoice.Catalog.associateBy { it.id }
+        assertEquals(7, byId.getValue("inner_orbit").intervalDays)
+        assertEquals(14, byId.getValue("family").intervalDays)
+        assertEquals(60, byId.getValue("mentors").intervalDays)
+        assertEquals(30, byId.getValue("drifted").intervalDays)
+        assertEquals("Every couple of months.", context.getString(byId.getValue("mentors").subtitleRes))
+        // Every interval must be reachable on the 1-60 day slider (ADR 0010).
+        TemplateChoice.Catalog.mapNotNull { it.intervalDays }.forEach { assertTrue(it in 1..60) }
+    }
+
+    @Test
+    fun vm_createList_writes_the_template_interval_as_the_override() = runTest {
+        val listRepo = FakeListRepository()
+        val ruleRepo =
+            FakeRuleTemplateRepository(
+                initial = listOf(ruleTemplateFixture(id = 1L, kind = RuleKind.KEEP_IN_TOUCH))
+            )
+        val noOpNudge = object : NudgeScheduler(
+            context = ApplicationProvider.getApplicationContext<Context>(),
+            listRepo = FakeListRepository()
+        ) {
+            override fun cancel(listId: Long) = Unit
+            override suspend fun scheduleFromEntity(list: app.orbit.data.entity.ListEntity) = Unit
+        }
+        val vm =
+            ListsManagerViewModel(
+                listRepo = listRepo,
+                ruleTemplateRepo = ruleRepo,
+                nudgeScheduler = noOpNudge
+            )
+
+        vm.createList(TemplateChoice.Catalog.single { it.id == "mentors" }, "Mentors").join()
+
+        val overrideJson = assertNotNull(listRepo.createCalls.single().ruleParamsOverrideJson)
+        val params = JsonProvider.json.decodeFromString(
+            app.orbit.domain.rule.RuleParams.serializer(),
+            overrideJson
+        )
+        assertTrue(params is app.orbit.domain.rule.RuleParams.KeepInTouch)
+        assertEquals(60 * 24, params.cooldownMinHours, "Mentors must surface every 60 days")
     }
 
     // ============================================================================
@@ -127,7 +184,8 @@ class CreateListTemplateCatalogTest {
     @Test
     fun blank_template_has_empty_default_name() {
         val blank = TemplateChoice.Catalog.single { it.id == "blank" }
-        assertEquals("", blank.defaultName)
+        // No default name: the sheet leaves the field empty for the user to fill.
+        assertNull(blank.defaultNameRes)
         assertEquals(RuleKind.KEEP_IN_TOUCH, blank.ruleKind)
         assertEquals(ListType.STATIC, blank.type)
         assertNull(blank.smartRule)
@@ -146,12 +204,17 @@ class CreateListTemplateCatalogTest {
         // no-op subclass so WorkManager is never touched in this catalog test.
         val noOpNudge = object : NudgeScheduler(
             context = ApplicationProvider.getApplicationContext<Context>(),
-            listRepo = FakeListRepository(),
+            listRepo = FakeListRepository()
         ) {
             override fun cancel(listId: Long) = Unit
             override suspend fun scheduleFromEntity(list: app.orbit.data.entity.ListEntity) = Unit
         }
-        val vm = ListsManagerViewModel(listRepo = listRepo, ruleTemplateRepo = ruleRepo, nudgeScheduler = noOpNudge)
+        val vm =
+            ListsManagerViewModel(
+                listRepo = listRepo,
+                ruleTemplateRepo = ruleRepo,
+                nudgeScheduler = noOpNudge
+            )
 
         val recently = TemplateChoice.Catalog.single { it.id == "recently_added_not_called" }
 
@@ -160,8 +223,9 @@ class CreateListTemplateCatalogTest {
         val captured = listRepo.createCalls.single()
         assertEquals("My recent contacts", captured.name)
         assertEquals(ListType.SMART, captured.type)
-        // SMART entries must NOT carry a rule template id — engine uses smartRule directly.
-        assertNull(captured.ruleTemplateId)
+        // SMART entries carry KEEP_IN_TOUCH like every other template, or nothing
+        // ever surfaces from them.
+        assertEquals(1L, captured.ruleTemplateId)
         val ruleJson = assertNotNull(captured.smartRuleJson, "SMART list must carry smartRuleJson")
         val decoded = JsonProvider.json.decodeFromString(SmartListRule.serializer(), ruleJson)
         assertTrue(decoded is SmartListRule.RecentlyAddedNotCalled)

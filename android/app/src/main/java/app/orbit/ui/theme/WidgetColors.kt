@@ -17,6 +17,7 @@ package app.orbit.ui.theme
 
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.ui.graphics.Color
 import androidx.glance.color.ColorProviders
 import androidx.glance.material3.ColorProviders as ColorProvidersFromM3
 
@@ -87,14 +88,56 @@ val OrbitWidgetColorProviders: ColorProviders by lazy {
  * touches android.graphics.Color, which is not mocked on the JVM, so the test
  * path uses the static [OrbitWidgetColorProviders] above instead.
  */
-fun orbitWidgetColorProviders(settings: ThemeSettings): ColorProviders {
+fun orbitWidgetColorProviders(settings: ThemeSettings, deviceHue: Float? = null): ColorProviders {
     val lightColors = OrbitThemes.resolve(
         settings,
         isDark = settings.darkMode == OrbitDarkMode.DARK,
+        deviceHue = deviceHue,
     ).colors
     val darkColors = OrbitThemes.resolve(
         settings,
         isDark = settings.darkMode != OrbitDarkMode.LIGHT,
+        deviceHue = deviceHue,
     ).colors
     return ColorProvidersFromM3(lightColors.toM3Scheme(), darkColors.toM3Scheme())
 }
+
+/**
+ * WIDGET-11: an avatar's circle and monogram colours for a widget, in both of
+ * the modes the widget can be shown in. A placed widget switches between light
+ * and dark with the phone, without asking Orbit to redraw, so each colour is a
+ * day and night pair. The pairs come from the same theme, accent dial and mode
+ * override as [orbitWidgetColorProviders], and from
+ * [OrbitTones.avatarPalette], so a person's avatar on the home screen is the
+ * one they have in the app.
+ */
+data class WidgetAvatarColors(
+    val backgroundDay: Color,
+    val foregroundDay: Color,
+    val backgroundNight: Color,
+    val foregroundNight: Color,
+)
+
+/** The day and night tones [WidgetAvatarColors] are picked from, resolved once per render. */
+class WidgetAvatarTones(private val day: OrbitTones, private val night: OrbitTones) {
+    fun forName(name: String): WidgetAvatarColors {
+        val (dayBg, dayFg) = day.avatarPalette(name)
+        val (nightBg, nightFg) = night.avatarPalette(name)
+        return WidgetAvatarColors(dayBg, dayFg, nightBg, nightFg)
+    }
+}
+
+/** Resolve [WidgetAvatarTones] the way [orbitWidgetColorProviders] resolves colours. */
+fun orbitWidgetAvatarTones(settings: ThemeSettings, deviceHue: Float? = null): WidgetAvatarTones =
+    WidgetAvatarTones(
+        day = OrbitThemes.resolve(
+            settings,
+            isDark = settings.darkMode == OrbitDarkMode.DARK,
+            deviceHue = deviceHue,
+        ).tones,
+        night = OrbitThemes.resolve(
+            settings,
+            isDark = settings.darkMode != OrbitDarkMode.LIGHT,
+            deviceHue = deviceHue,
+        ).tones,
+    )

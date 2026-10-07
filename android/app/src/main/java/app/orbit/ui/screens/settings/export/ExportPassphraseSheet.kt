@@ -1,8 +1,7 @@
 package app.orbit.ui.screens.settings.export
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
@@ -27,8 +28,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -90,6 +97,11 @@ private fun ExportPassphraseContent(
     val mismatch = confirm.isNotEmpty() && confirm != password
     val canSubmit = password.length >= 8 && confirm == password
 
+    // Resolved here: semantics blocks are not composable.
+    val passwordLabel = stringResource(R.string.settings_password)
+    val confirmLabel = stringResource(R.string.settings_password_confirm)
+    val tooShortMessage = stringResource(R.string.settings_password_too_short)
+    val mismatchMessage = stringResource(R.string.settings_password_mismatch)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -103,21 +115,22 @@ private fun ExportPassphraseContent(
             ),
     ) {
         Text(
-            text = "Export your data",
+            text = stringResource(R.string.settings_export_sheet_title),
             style = OrbitTheme.type.h2.copy(color = OrbitTheme.colors.fg),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
-            text = "We'll save an encrypted file of your lists, contacts, call history, " +
-                "notes, and rule overrides. Pick a strong password — we don't store it, " +
-                "and we can't recover it.",
+            text = stringResource(R.string.settings_export_sheet_body),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
 
         Text(
-            text = "Password",
+            text = stringResource(R.string.settings_password),
             style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
+            // Spoken as the field's own label instead (below), so TalkBack
+            // says "Password, edit box" rather than an unlabelled edit box.
+            modifier = Modifier.clearAndSetSemantics {},
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         TextField(
@@ -130,10 +143,14 @@ private fun ExportPassphraseContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(OrbitTheme.shapes.md)
-                .background(OrbitTheme.colors.bgSubtle),
+                .background(OrbitTheme.colors.bgSubtle)
+                .semantics {
+                    contentDescription = passwordLabel
+                    if (tooShort) error(tooShortMessage)
+                },
         )
         Text(
-            text = if (tooShort) "Use 8 or more characters." else "At least 8 characters.",
+            text = stringResource(if (tooShort) R.string.settings_password_too_short else R.string.settings_password_hint),
             style = OrbitTheme.type.meta.copy(
                 color = if (tooShort) OrbitTheme.colors.danger else OrbitTheme.colors.fgMuted,
             ),
@@ -143,8 +160,11 @@ private fun ExportPassphraseContent(
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
 
         Text(
-            text = "Type it again",
+            text = stringResource(R.string.settings_password_confirm),
             style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
+            // Spoken as the field's own label instead (below), so TalkBack
+            // says "Password, edit box" rather than an unlabelled edit box.
+            modifier = Modifier.clearAndSetSemantics {},
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         TextField(
@@ -157,11 +177,15 @@ private fun ExportPassphraseContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(OrbitTheme.shapes.md)
-                .background(OrbitTheme.colors.bgSubtle),
+                .background(OrbitTheme.colors.bgSubtle)
+                .semantics {
+                    contentDescription = confirmLabel
+                    if (mismatch) error(mismatchMessage)
+                },
         )
         if (mismatch) {
             Text(
-                text = "Passwords don't match.",
+                text = stringResource(R.string.settings_password_mismatch),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.danger),
                 modifier = Modifier.padding(top = OrbitTheme.spacing.x1, start = OrbitTheme.spacing.x1),
             )
@@ -174,13 +198,13 @@ private fun ExportPassphraseContent(
             horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x4),
         ) {
             OrbitButton(
-                text = "Cancel",
+                text = stringResource(R.string.components_action_cancel),
                 onClick = onCancel,
                 variant = OrbitButtonVariant.Ghost,
                 modifier = Modifier.weight(1f),
             )
             OrbitButton(
-                text = "Export",
+                text = stringResource(R.string.settings_export_cta),
                 onClick = {
                     if (canSubmit) onSubmit(password.toCharArray())
                 },
@@ -217,7 +241,7 @@ private fun ExportPassphraseSheetLightPreview() {
     }
 }
 
-@Preview(name = "ExportPassphraseSheet · dark", showBackground = true, backgroundColor = 0xFF0E0F12)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "ExportPassphraseSheet · dark", showBackground = true, backgroundColor = 0xFF0E0F12)
 @Composable
 private fun ExportPassphraseSheetDarkPreview() {
     OrbitTheme(darkTheme = true) {

@@ -4,6 +4,7 @@ import app.orbit.data.dao.ListDao
 import app.orbit.data.dao.ListMembershipDao
 import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListMembershipEntity
+import app.orbit.data.entity.ListType
 import app.orbit.data.repository.ListRepository
 import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
@@ -19,6 +20,10 @@ import javax.inject.Inject
  * Guards:
  *  - empty `contactIds`           → no-op result
  *  - missing/archived destination → no-op result (mirrors UnignoreContactUseCase)
+ *  - smart destination            → no-op result (browse-1). A smart list's rows are
+ *    written by `SmartListMembershipSync`, not by the user, so a copy into one is
+ *    a write the sync quietly reverts on its next reconcile. A count of 0 makes
+ *    the caller say "Couldn't save your change" (rules.md Code 3).
  *
  * The `dao.insertAll` is `OnConflictStrategy.IGNORE`, but rather than rely on
  * that for inverse correctness we snapshot pre-existing target memberships
@@ -41,22 +46,22 @@ class CopyContactsUseCase @Inject constructor(
     /**
      * @property inverse Suspending closure the snackbar's "Undo" runs to revert
      *                   the copy by removing only the rows this call inserted.
-     * @property label Snackbar copy: "Copied {N} to {targetListName}". Empty
-     *                 when the use case short-circuits (caller should suppress UI).
+     * @property count How many people were copied, for the caller's snackbar
+     *                 ("Copied 3 to Inner orbit", string resources). 0 when the
+     *                 use case short-circuits (caller should suppress UI).
      */
-    data class Result(val inverse: suspend () -> Unit, val label: String)
+    data class Result(val inverse: suspend () -> Unit, val count: Int)
 
     suspend operator fun invoke(
         toListId: Long,
         contactIds: List<Long>,
-        targetListName: String,
     ): Result {
-        if (contactIds.isEmpty()) return Result(inverse = {}, label = "")
+        if (contactIds.isEmpty()) return Result(inverse = {}, count = 0)
 
         val result = txRunner.withTransaction {
             val target = listDao.get(toListId)
-            if (target == null || target.isArchived) {
-                return@withTransaction Result(inverse = {}, label = "")
+            if (target == null || target.isArchived || target.type != ListType.STATIC) {
+                return@withTransaction Result(inverse = {}, count = 0)
             }
 
             val preExistingIds: Set<Long> = contactIds
@@ -92,12 +97,12 @@ class CopyContactsUseCase @Inject constructor(
                         widgetRefreshTrigger.scheduleRefresh()
                     }
                 },
-                label = "Copied ${contactIds.size} to $targetListName",
+                count = contactIds.size,
             )
         }
-        // WIDGET-06: membership copied — who-is-due changed. Only fire on the
-        // success path (non-empty label signals the copy actually happened).
-        if (result.label.isNotEmpty()) {
+        // WIDGET-06: membership copied, so who-is-due changed. Only fire on the
+        // success path (a non-zero count signals the copy actually happened).
+        if (result.count > 0) {
             widgetRefreshTrigger.scheduleRefresh()
         }
         return result

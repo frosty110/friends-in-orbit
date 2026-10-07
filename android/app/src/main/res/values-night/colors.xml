@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- WIDGET-09: dark twins of the widget preview colours in
+         values/colors.xml, copied from the Warm theme's dark tokens. -->
+    <color name="widget_preview_surface">#2B2724</color>     <!-- surface -->
+    <color name="widget_preview_fg">#F0EBE4</color>          <!-- fg -->
+    <color name="widget_preview_fg_muted">#C9C2B9</color>    <!-- fgMuted -->
+    <color name="widget_preview_line">#3D3631</color>        <!-- line -->
+    <color name="widget_preview_accent">#D87560</color>      <!-- accent -->
+    <color name="widget_preview_on_accent">#211E1C</color>   <!-- accentFg -->
+</resources>

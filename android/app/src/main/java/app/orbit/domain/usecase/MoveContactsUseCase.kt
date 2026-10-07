@@ -4,6 +4,7 @@ import app.orbit.data.dao.ListDao
 import app.orbit.data.dao.ListMembershipDao
 import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListMembershipEntity
+import app.orbit.data.entity.ListType
 import app.orbit.data.repository.ListRepository
 import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
@@ -18,10 +19,16 @@ import javax.inject.Inject
  * source-side rows verbatim (preserving `addedAt` / `nextDueAt` / `skipCount`)
  * while only removing target-side rows that this call actually inserted.
  *
- * Guards (review-fixes C4 + M2 + M3):
+ * Guards (review-fixes C4 + M2 + M3, and browse-1):
  *  - empty `contactIds`           → no-op result
  *  - same-list move               → no-op result (would otherwise destroy `addedAt`)
  *  - missing/archived destination → no-op result (mirrors UnignoreContactUseCase)
+ *  - smart destination            → no-op result. A smart list's rows are written by
+ *    `SmartListMembershipSync`, not by the user (features/orbit-lists/README.md):
+ *    the sync's next reconcile would remove whoever does not match the rule,
+ *    silently, after the Undo window, and Move had already taken them off the
+ *    source list, so they would be on neither. A count of 0 makes the caller say
+ *    "Couldn't save your change" (rules.md Code 3) instead.
  *
  * The [TransactionRunner.withTransaction] body calls only suspending
  * DAO methods; no dispatcher switch inside.
@@ -36,24 +43,24 @@ class MoveContactsUseCase @Inject constructor(
 ) {
     /**
      * @property inverse Suspending closure the snackbar's "Undo" runs to revert.
-     * @property label Snackbar copy: "Moved {N} to {targetListName}". Empty when
-     *                 the use case short-circuits (caller should suppress UI).
+     * @property count How many people were moved, for the caller's snackbar
+     *                 ("Moved 3 to Inner orbit", string resources). 0 when the
+     *                 use case short-circuits (caller should suppress UI).
      */
-    data class Result(val inverse: suspend () -> Unit, val label: String)
+    data class Result(val inverse: suspend () -> Unit, val count: Int)
 
     suspend operator fun invoke(
         fromListId: Long,
         toListId: Long,
         contactIds: List<Long>,
-        targetListName: String,
     ): Result {
-        if (contactIds.isEmpty()) return Result(inverse = {}, label = "")
-        if (fromListId == toListId) return Result(inverse = {}, label = "")
+        if (contactIds.isEmpty()) return Result(inverse = {}, count = 0)
+        if (fromListId == toListId) return Result(inverse = {}, count = 0)
 
         val result = txRunner.withTransaction {
             val target = listDao.get(toListId)
-            if (target == null || target.isArchived) {
-                return@withTransaction Result(inverse = {}, label = "")
+            if (target == null || target.isArchived || target.type != ListType.STATIC) {
+                return@withTransaction Result(inverse = {}, count = 0)
             }
 
             // Snapshot source-side rows so the inverse can restore addedAt /
@@ -96,12 +103,12 @@ class MoveContactsUseCase @Inject constructor(
                     // the forward path. Debounced by the 30s KEEP work.
                     widgetRefreshTrigger.scheduleRefresh()
                 },
-                label = "Moved ${contactIds.size} to $targetListName",
+                count = contactIds.size,
             )
         }
-        // WIDGET-06: membership moved — who-is-due changed. Only fire on the
-        // success path (non-empty label signals the move actually happened).
-        if (result.label.isNotEmpty()) {
+        // WIDGET-06: membership moved, so who-is-due changed. Only fire on the
+        // success path (a non-zero count signals the move actually happened).
+        if (result.count > 0) {
             widgetRefreshTrigger.scheduleRefresh()
         }
         return result

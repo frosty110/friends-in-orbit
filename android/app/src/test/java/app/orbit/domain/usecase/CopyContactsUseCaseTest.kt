@@ -5,6 +5,7 @@ import app.orbit.data.dao.TestListDaoStub
 import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListMembershipEntity
+import app.orbit.data.entity.ListType
 import app.orbit.domain.FakeListRepository
 import app.orbit.domain.clock.Clock
 import java.time.Instant
@@ -22,9 +23,10 @@ import org.junit.Test
  *   forward — `insertAll(notYetMembers)` ONLY (skips IDs already on target).
  *   inverse — `removeAll(toListId, notYetMembers)` ONLY.
  *
- * The use case short-circuits to `Result(inverse = {}, label = "")` when
+ * The use case short-circuits to `Result(inverse = {}, count = 0)` when
  *   - `contactIds` is empty, or
- *   - the destination list is missing or archived.
+ *   - the destination list is missing or archived, or
+ *   - the destination is a smart list (browse-1: the sync owns its rows).
  */
 class CopyContactsUseCaseTest {
 
@@ -50,7 +52,7 @@ class CopyContactsUseCaseTest {
         )
         val useCase = CopyContactsUseCase(passThruTx, dao, listDaoWithTarget(), FakeListRepository(), fixedClock)
 
-        useCase(toListId = 20L, contactIds = listOf(1L, 2L, 3L), targetListName = "Target")
+        useCase(toListId = 20L, contactIds = listOf(1L, 2L, 3L))
 
         // Only contactIds 1 and 3 should be inserted (2 was pre-existing).
         val insertCall = dao.insertCalls.single()
@@ -64,7 +66,7 @@ class CopyContactsUseCaseTest {
         val dao = RecordingListMembershipDao()
         val useCase = CopyContactsUseCase(passThruTx, dao, listDaoWithTarget(), FakeListRepository(), fixedClock)
 
-        useCase(20L, listOf(1L, 2L, 3L), "Target")
+        useCase(20L, listOf(1L, 2L, 3L))
 
         val insertCall = dao.insertCalls.single()
         assertEquals(setOf(1L, 2L, 3L), insertCall.memberships.map { it.contactId }.toSet())
@@ -79,7 +81,7 @@ class CopyContactsUseCaseTest {
         )
         val useCase = CopyContactsUseCase(passThruTx, dao, listDaoWithTarget(), FakeListRepository(), fixedClock)
 
-        useCase(20L, listOf(1L, 2L), "Target")
+        useCase(20L, listOf(1L, 2L))
 
         // Every id is already a member — no insert dispatched.
         assertTrue(dao.insertCalls.isEmpty())
@@ -90,11 +92,12 @@ class CopyContactsUseCaseTest {
         val dao = RecordingListMembershipDao()
         val useCase = CopyContactsUseCase(passThruTx, dao, listDaoWithTarget(), FakeListRepository(), fixedClock)
 
-        val result = useCase(20L, listOf(1L, 2L), "Inner orbit")
+        val result = useCase(20L, listOf(1L, 2L))
 
         // Label uses the full input count, NOT just the notYetMembers count
         // (per the use case contract — see CopyContactsUseCase docstring).
-        assertEquals("Copied 2 to Inner orbit", result.label)
+        // "Copied 2 to Inner orbit" is the caller's plural (SnackbarCopyTest).
+        assertEquals(2, result.count)
     }
 
     @Test
@@ -106,7 +109,7 @@ class CopyContactsUseCaseTest {
         )
         val useCase = CopyContactsUseCase(passThruTx, dao, listDaoWithTarget(), FakeListRepository(), fixedClock)
 
-        val result = useCase(20L, listOf(1L, 2L, 3L), "Target")
+        val result = useCase(20L, listOf(1L, 2L, 3L))
         dao.clearCalls()
         result.inverse.invoke()
 
@@ -127,7 +130,7 @@ class CopyContactsUseCaseTest {
         )
         val useCase = CopyContactsUseCase(passThruTx, dao, listDaoWithTarget(), FakeListRepository(), fixedClock)
 
-        val result = useCase(20L, listOf(1L, 2L), "Target")
+        val result = useCase(20L, listOf(1L, 2L))
         dao.clearCalls()
         result.inverse.invoke()
 
@@ -139,11 +142,11 @@ class CopyContactsUseCaseTest {
         val dao = RecordingListMembershipDao()
         val useCase = CopyContactsUseCase(passThruTx, dao, listDaoWithTarget(), FakeListRepository(), fixedClock)
 
-        val result = useCase(20L, emptyList(), "Target")
+        val result = useCase(20L, emptyList())
 
         assertTrue(dao.insertCalls.isEmpty())
         assertTrue(dao.removeCalls.isEmpty())
-        assertEquals("", result.label)
+        assertEquals(0, result.count)
     }
 
     @Test
@@ -154,10 +157,10 @@ class CopyContactsUseCaseTest {
         )
         val useCase = CopyContactsUseCase(passThruTx, dao, listDaoArchived, FakeListRepository(), fixedClock)
 
-        val result = useCase(20L, listOf(1L), "Archived")
+        val result = useCase(20L, listOf(1L))
 
         assertTrue(dao.insertCalls.isEmpty())
-        assertEquals("", result.label)
+        assertEquals(0, result.count)
     }
 
     @Test
@@ -166,9 +169,26 @@ class CopyContactsUseCaseTest {
         val listDaoEmpty = TestListDaoStub(emptyList())
         val useCase = CopyContactsUseCase(passThruTx, dao, listDaoEmpty, FakeListRepository(), fixedClock)
 
-        val result = useCase(20L, listOf(1L), "Missing")
+        val result = useCase(20L, listOf(1L))
 
         assertTrue(dao.insertCalls.isEmpty())
-        assertEquals("", result.label)
+        assertEquals(0, result.count)
+    }
+
+    @Test
+    fun smart_destination_short_circuits_no_dao_call() = runTest {
+        // Regression (browse-1): a copy into a smart list is a write the
+        // sync's next reconcile quietly reverts. The use case refuses it so the
+        // caller says "Couldn't save your change" instead of "Copied 1 to ...".
+        val dao = RecordingListMembershipDao()
+        val listDaoSmartTarget = TestListDaoStub(
+            listOf(ListEntity(id = 20L, name = "Late night", sortOrder = 0, type = ListType.SMART)),
+        )
+        val useCase = CopyContactsUseCase(passThruTx, dao, listDaoSmartTarget, FakeListRepository(), fixedClock)
+
+        val result = useCase(20L, listOf(1L))
+
+        assertTrue(dao.insertCalls.isEmpty())
+        assertEquals(0, result.count)
     }
 }

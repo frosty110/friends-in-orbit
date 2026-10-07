@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Contact detail: one person's page, with their calls, notes, lists, pause and
+    per-person schedule, plus the Log a connection sheet. The Pause sheet is the
+    shared one (strings_components.xml, components_pause_*).
+    Keys are area_what (features/_foundations/voice.md, "Where copy lives").
+    Say "this person", never "the contact": "contact" only for the phone's own
+    address book.
+-->
+<resources>
+
+    <!-- App bar overflow. %1$s: the person's name. -->
+    <string name="contact_more_actions_named">More actions for %1$s</string>
+    <string name="contact_more_actions">More actions</string>
+    <string name="contact_menu_view_all_calls">View all calls</string>
+    <string name="contact_menu_pause">Pause</string>
+    <string name="contact_menu_unpause">Unpause</string>
+    <!-- Hands the person to the phone's own contacts app. Shown only when they are in it. -->
+    <string name="contact_menu_open_in_contacts">Open in Contacts</string>
+    <string name="contact_menu_ignore">Ignore</string>
+    <!-- The one word that reverses Ignore (voice.md glossary), shown while the person is ignored. -->
+    <string name="contact_menu_unignore">Unignore</string>
+
+    <!-- The person was removed while the page was open, or the link is stale. -->
+    <string name="contact_not_found_title">This person isn\'t in Orbit anymore</string>
+    <string name="contact_not_found_body">They may have been removed from your phone\'s contacts.</string>
+
+    <!-- The body and the Try again action are the shared ones (components_error_body,
+         components_error_retry). -->
+    <string name="contact_error_title">Couldn\'t load this person</string>
+
+    <!-- Under the privacy curtain the phone number is hidden like the name. -->
+    <string name="contact_number_hidden">Number hidden</string>
+    <!-- Screen-reader label of the tappable phone number. %1$s: the number as shown. -->
+    <string name="contact_call_number">Call %1$s</string>
+    <string name="contact_call">Call</string>
+    <string name="contact_log_connection">Log a connection</string>
+
+    <!-- Status line under the number while a pause is in force. %1$s: a short date, "12 Oct". -->
+    <string name="contact_paused_until">Paused until %1$s</string>
+    <string name="contact_paused_indefinitely">Paused until you unpause</string>
+    <!-- Status line under the number for a person the user has ignored or archived. -->
+    <string name="contact_status_ignored">Ignored</string>
+    <string name="contact_status_archived">Archived</string>
+
+    <!-- Section headings. -->
+    <string name="contact_section_lists">On these lists</string>
+    <string name="contact_not_on_any_list">Not on any list yet</string>
+    <string name="contact_section_stats">Stats</string>
+    <string name="contact_section_recent_calls">Recent calls</string>
+    <string name="contact_no_calls">No calls yet.</string>
+
+    <!-- The stats panel. A stat without enough history says so in words, never a dash; the
+         words are the shared ones (components_stat_never_called, components_stat_not_enough_calls). -->
+    <string name="contact_stat_last_call">Last call</string>
+    <string name="contact_stat_total_calls">Total calls</string>
+    <string name="contact_stat_average_length">Average length</string>
+    <string name="contact_stat_longest_gap">Longest gap</string>
+    <!-- Above the stats while Orbit has no call log access: nothing below can claim "Never
+         called". The action is components_action_open_settings. -->
+    <string name="contact_call_log_denied_notice">Orbit can\'t see your phone calls</string>
+    <!-- When this person usually picks up, from past calls ("Evenings"). -->
+    <string name="contact_stat_usually">Usually</string>
+    <string name="contact_usually_tooltip">Based on when you usually answer or call this person.</string>
+    <string name="contact_usually_tooltip_label">What usually means</string>
+
+    <string name="contact_add_to_lists">Add to lists</string>
+
+    <!-- Banner when the person was deleted from the phone's contacts. -->
+    <string name="contact_orphan_title">This contact was deleted from your phone</string>
+    <string name="contact_orphan_body">History stays here. Re-link to a phone contact, or archive to remove from lists.</string>
+    <string name="contact_orphan_relink">Re-link</string>
+
+    <!-- A row in Recent calls that isn't a measured phone call. -->
+    <string name="contact_call_attempted">Attempted</string>
+    <string name="contact_call_logged">Logged</string>
+    <!-- Screen-reader words for a call row's direction icon, the same words Call history leads
+         its rows with. %1$s: the person's first name. -->
+    <string name="contact_call_you_called">You called</string>
+    <string name="contact_call_they_called">%1$s called</string>
+
+    <!-- Arriving from the call log: write a note about that call. -->
+    <string name="contact_retro_note_hint">Add a note about this call</string>
+    <string name="contact_retro_note_add">Add note to this call</string>
+
+    <!-- Notes. -->
+    <string name="contact_notes_title">Notes</string>
+    <string name="contact_notes_hint">Add a note</string>
+    <string name="contact_notes_add">Add</string>
+    <string name="contact_notes_empty">No notes yet.</string>
+    <!-- Screen-reader action on a note's timestamp, which switches between "3 days ago" and the date. -->
+    <string name="contact_notes_show_relative">Show how long ago</string>
+    <string name="contact_notes_show_date">Show the date</string>
+    <string name="contact_notes_more_actions">More actions for this note</string>
+    <string name="contact_notes_edit">Edit</string>
+    <!-- Under the privacy curtain a note's text is hidden like the name. -->
+    <string name="contact_notes_hidden">Note hidden</string>
+    <!-- Screen-reader name of the long-press on a note. -->
+    <string name="contact_notes_edit_note">Edit note</string>
+
+    <!-- Snackbars. -->
+    <string name="contact_snackbar_note_saved">Note saved</string>
+    <string name="contact_snackbar_note_deleted">Note deleted</string>
+    <string name="contact_snackbar_logged">Logged.</string>
+    <string name="contact_snackbar_attempt_logged">Attempt logged.</string>
+    <!-- %1$s: the person's name. -->
+    <string name="contact_snackbar_archived">Archived %1$s</string>
+    <string name="contact_snackbar_add_note_failed">Couldn\'t add note</string>
+    <string name="contact_snackbar_log_failed">Couldn\'t log that</string>
+    <string name="contact_snackbar_delete_note_failed">Couldn\'t delete note</string>
+    <string name="contact_snackbar_update_note_failed">Couldn\'t update note</string>
+    <string name="contact_snackbar_undo_failed">Couldn\'t undo</string>
+    <string name="contact_snackbar_unpause_failed">Couldn\'t unpause</string>
+    <!-- %1$s: the person's name. -->
+    <string name="contact_snackbar_ignore_failed">Couldn\'t ignore %1$s</string>
+    <string name="contact_snackbar_unignore_failed">Couldn\'t unignore %1$s</string>
+    <string name="contact_snackbar_pause_failed">Couldn\'t pause %1$s</string>
+    <string name="contact_snackbar_archive_failed">Couldn\'t archive %1$s</string>
+
+    <!-- The banner when a timed pause has run out. %1$s: the person's name. -->
+    <string name="contact_unpaused_heading_named">%1$s is unpaused</string>
+    <string name="contact_unpaused_heading">Contact is unpaused</string>
+    <!-- "Come up", not "surface" (the engine's word), and "their lists": this page is not
+         list-scoped and the person may be on several. -->
+    <string name="contact_unpaused_body">They\'ll come up again on their lists.</string>
+    <string name="contact_unpaused_dismiss">Dismiss unpause notice</string>
+
+    <!-- Log a connection sheet: a call or a visit Orbit couldn't see, or a call that didn't
+         connect. -->
+    <string name="contact_log_title_connection">Log a connection</string>
+    <string name="contact_log_title_attempt">Log an attempt</string>
+    <string name="contact_log_body_connection">For calls Orbit can\'t see, like a video call or time together in person.</string>
+    <string name="contact_log_body_attempt">A voicemail or no answer: you reached out but didn\'t connect.</string>
+    <string name="contact_log_mode_connected">We connected</string>
+    <string name="contact_log_mode_attempt">Couldn\'t reach them</string>
+    <string name="contact_log_today">Today</string>
+    <string name="contact_log_yesterday">Yesterday</string>
+    <string name="contact_log_pick_date">Pick a date</string>
+    <string name="contact_log_note_hint">Add a note (optional)</string>
+    <string name="contact_log_confirm_connection">Log connection</string>
+    <string name="contact_log_confirm_attempt">Log attempt</string>
+
+    <!-- A person's own schedule, when they are on two or more lists. -->
+    <string name="contact_schedule_title">Custom schedule</string>
+    <!-- %1$s: the rhythm's name in lowercase, below. %2$s: the list it comes from. -->
+    <string name="contact_schedule_follows">Follows the %1$s rhythm from %2$s.</string>
+    <!-- The same under the privacy curtain, when the list's name is hidden. -->
+    <string name="contact_schedule_follows_hidden_list">Follows the %1$s rhythm from its list.</string>
+    <!-- Rhythm names as they sit mid-sentence above. -->
+    <string name="contact_rhythm_name_keep_in_touch">keep in touch</string>
+    <string name="contact_rhythm_name_late_night">late night</string>
+    <string name="contact_rhythm_name_energize">energize</string>
+    <string name="contact_schedule_set">Set a schedule for this person</string>
+    <string name="contact_schedule_reset">Reset to default</string>
+    <string name="contact_rhythm_note_late_night">The late night rhythm runs on its own: slower and more patient, with nothing to set.</string>
+    <string name="contact_rhythm_note_energize">The energize rhythm runs on its own: quicker, with nothing to set.</string>
+
+</resources>

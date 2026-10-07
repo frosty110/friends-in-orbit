@@ -1,5 +1,7 @@
 package app.orbit.ui.screens.picker
 
+import android.content.res.Configuration
+import android.content.res.Resources
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -11,42 +13,47 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.components.OrbitCheckbox
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.asString
 import app.orbit.ui.util.formatRelative
-import coil.compose.AsyncImage
 import java.time.Instant
 
 /**
  * Single picker contact row (PICK-04).
  *
  * Layout: avatar (44dp) leading + Column(name h3 + 1-2 metadata lines) +
- * trailing Material3 Checkbox. Tap on the row toggles selection — the checkbox
- * itself is non-interactive ([androidx.compose.material3.Checkbox.onCheckedChange]
- * = null) so the row is the single tap target.
+ * trailing [OrbitCheckbox]. Tap on the row toggles selection; the mark is
+ * display-only, so the row is the single tap target, and the row itself is the
+ * checkbox for TalkBack ("Sarah Levin, checkbox, checked"). It was a stock
+ * Material checkbox until 2026-10-05 (rubric D4).
  *
  * Selected-row tint: [OrbitTheme.colors.accentTint] background — cluster-tier
  * accent, NOT the action-tier `accent` (per the per-screen accent budget).
@@ -58,19 +65,23 @@ import java.time.Instant
  * Metadata format:
  *   Line 1 (call line):
  *     - callCount > 0  → "Last called {relative} · {N} {call|calls}"
- *     - callCount == 0 → literal "never called" (lowercase per PICK-04)
+ *     - callCount == 0 → "Never called", in sentence case like every other
+ *       line (it was lowercase until 2026-10-05; voice.md wins), and the
+ *       same words Browse and Search use
  *     - both absent    → "—" in fgSubtle (covered by callCount == 0 branch since
  *                         lastCallAt is null when callCount == 0)
  *   Line 2 (memberships, optional):
- *     - listNames.size in 1..3   → "In: ${listNames.joinToString(", ")}"
- *     - listNames.size > 3       → "In: A, B, C + N more"
- *     - empty                    → omit line entirely (no "In: none")
+ *     - listNames.size in 1..3   → "On A, B"
+ *     - listNames.size > 3       → "On A, B, C and N more"
+ *     - empty                    → omit line entirely (no "On none")
+ *     - under the privacy curtain → "On 2 lists": list names are masked
+ *       everywhere (ListContextChip) and showed here until 2026-10-05.
  *
- * "never called" lowercase first letter is a PICK-04 invariant. The
- * zero-count phrasing is forbidden everywhere in source.
+ * The zero-count phrasing ("0 calls") is forbidden everywhere in source.
  *
- * A trailing ⋮ button — and still a long-press anywhere on the row — opens a
- * small anchored action menu:
+ * A trailing ⋮ button ("More actions for {name}") and a long-press anywhere on
+ * the row ("Quick actions" to TalkBack, the glossary's word for that gesture
+ * on every screen) open a small anchored action menu:
  *   - "Open in Contacts" ([onOpenInPhone]): hands the row to the device
  *     contacts app, where the call and message history for an unrecognised
  *     number actually lives. Hidden when the row has no
@@ -102,7 +113,7 @@ fun PickerContactRow(
     onOpenInPhone: ((PickerContact) -> Unit)? = null,
 ) {
     val curtain = LocalPrivacyCurtain.current
-    val displayName = if (curtain) "Contact" else contact.displayName
+    val displayName = if (curtain) stringResource(R.string.components_curtain_contact) else contact.displayName
     val haptics = LocalHapticFeedback.current
 
     // The ignore-side action for this row's state (null = not a curation
@@ -115,20 +126,24 @@ fun PickerContactRow(
     var menuExpanded by remember { mutableStateOf(false) }
 
     val callLine: String = if (contact.callCount == 0 || contact.lastCallAt == null) {
-        "never called"
+        stringResource(R.string.picker_row_never_called)
     } else {
-        val rel = formatRelative(contact.lastCallAt)
-        val callsWord = if (contact.callCount == 1) "call" else "calls"
-        "Last called $rel · ${contact.callCount} $callsWord"
+        val rel = formatRelative(contact.lastCallAt).asString()
+        pluralStringResource(R.plurals.picker_row_last_called, contact.callCount, rel, contact.callCount)
     }
 
     val membershipLine: String? = when {
         contact.listNames.isEmpty() -> null
-        contact.listNames.size <= 3 -> "In: ${contact.listNames.joinToString(", ")}"
+        curtain -> pluralStringResource(
+            R.plurals.picker_row_on_lists_count,
+            contact.listNames.size,
+            contact.listNames.size,
+        )
+        contact.listNames.size <= 3 -> stringResource(R.string.picker_row_on_lists, contact.listNames.joinToString(", "))
         else -> {
             val head = contact.listNames.take(3).joinToString(", ")
             val rest = contact.listNames.size - 3
-            "In: $head + $rest more"
+            pluralStringResource(R.plurals.picker_row_on_lists_more, rest, head, rest)
         }
     }
 
@@ -162,27 +177,21 @@ fun PickerContactRow(
                     } else {
                         null
                     },
+                    onLongClickLabel = if (hasMenu) stringResource(R.string.picker_row_more_actions) else null,
+                    role = if (contact.isIgnored) Role.Button else Role.Checkbox,
                 )
                 .padding(
                     horizontal = OrbitTheme.spacing.x4,
                     vertical = OrbitTheme.spacing.x3,
                 )
-                .semantics { selected = isSelected },
+                .semantics {
+                    if (!contact.isIgnored) toggleableState = ToggleableState(isSelected)
+                },
         ) {
             // The photo is PII just like the name: under the
             // curtain the row falls back to initials derived from the masked
             // name, never the contact's face.
-            if (!curtain && !contact.photoUri.isNullOrBlank()) {
-                AsyncImage(
-                    model = contact.photoUri,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape),
-                )
-            } else {
-                Avatar(name = displayName, size = 44.dp)
-            }
+            Avatar(name = displayName, size = 44.dp, photoUri = if (curtain) null else contact.photoUri)
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -206,15 +215,12 @@ fun PickerContactRow(
 
             if (contact.isIgnored) {
                 Text(
-                    text = "Ignored",
+                    text = stringResource(R.string.picker_row_ignored),
                     style = OrbitTheme.type.meta,
                     color = OrbitTheme.colors.fgSubtle,
                 )
             } else {
-                Checkbox(
-                    checked = isSelected,
-                    onCheckedChange = null,
-                )
+                OrbitCheckbox(checked = isSelected)
             }
 
             // Visible entry to the row menu. Long-press still opens it, but a
@@ -228,7 +234,7 @@ fun PickerContactRow(
                     icon = "dots-three-vertical",
                     onClick = { menuExpanded = true },
                     tint = OrbitTheme.colors.fgMuted,
-                    contentDescription = "More actions for $displayName",
+                    contentDescription = stringResource(R.string.picker_row_more_actions_for, displayName),
                 )
             }
         }
@@ -250,24 +256,15 @@ fun PickerContactRow(
 
 /**
  * The row's action menu, reached by the trailing ⋮ button or a long-press.
- * Anchored [OrbitDropdownMenu] (FilterChipsRow precedent) — a modal sheet would
- * be too loud for two quiet actions.
+ * Anchored [OrbitDropdownMenu] (FilterChipsRow precedent): a modal sheet would
+ * be too loud for two quiet actions. The actions themselves come from
+ * [pickerRowActions], so a unit test can pin them.
  *
- * Actions are listed most-used-first per the menu ordering contract;
- * [OrbitDropdownMenu] sinks the destructive one below a divider itself, so the
- * order here is "Open in Contacts", then Ignore/Unignore:
- *
- *   - "Open in Contacts" is everyday and non-destructive — identifying an
- *     unknown number is the question that comes *before* deciding to hide it.
- *   - "Ignore" carries [OrbitMenuTone.Destructive]: it hides someone the user
- *     would otherwise have to go find again. It keeps its locked supporting
- *     line — the promise that ignoring touches only Orbit, never the phone's
- *     address book, is the whole reason the action is safe to offer inline.
- *   - "Unignore" restores, so it stays [OrbitMenuTone.Default].
- *
- * [onIgnoreAction] is null for non-curation callers, [onOpenInPhone] for rows
- * with no device contact behind them. [OrbitDropdownMenu] dismisses itself
- * before firing a callback, so neither needs to.
+ * [onIgnoreAction] is the ignore-side action for this row's state (Unignore
+ * for an ignored row, Ignore otherwise), null for non-curation callers;
+ * [onOpenInPhone] is null for rows with no device contact behind them.
+ * [OrbitDropdownMenu] dismisses itself before firing a callback, so neither
+ * needs to.
  */
 @Composable
 private fun PickerRowActionMenu(
@@ -281,35 +278,69 @@ private fun PickerRowActionMenu(
     OrbitDropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        actions = buildList {
-            if (onOpenInPhone != null) {
-                add(
-                    OrbitMenuAction(
-                        label = "Open in Contacts",
-                        onClick = onOpenInPhone,
-                        supporting = "See their call and message history in your " +
-                            "phone's contacts app.",
-                    ),
-                )
-            }
-            if (onIgnoreAction != null) {
-                add(
-                    if (isIgnored) {
-                        // Restoring someone is not destructive — it stays in fg.
-                        OrbitMenuAction(label = "Unignore", onClick = onIgnoreAction)
-                    } else {
-                        OrbitMenuAction(
-                            label = "Ignore",
-                            onClick = onIgnoreAction,
-                            tone = OrbitMenuTone.Destructive,
-                            supporting = "Hide $displayName from Orbit. " +
-                                "They stay in your phone's contacts.",
-                        )
-                    },
-                )
-            }
-        },
+        actions = pickerRowActions(
+            resources = LocalContext.current.resources,
+            name = displayName,
+            isIgnored = isIgnored,
+            onOpenInPhone = onOpenInPhone,
+            onIgnore = if (isIgnored) null else onIgnoreAction,
+            onUnignore = if (isIgnored) onIgnoreAction else null,
+        ),
     )
+}
+
+/**
+ * The picker row's menu actions, most-used first per the menu ordering
+ * contract; [OrbitDropdownMenu] sinks the destructive one below a divider
+ * itself, so the order here is "Open in Contacts", then Ignore or Unignore:
+ *
+ *   - "Open in Contacts" is everyday and non-destructive: identifying an
+ *     unknown number is the question that comes *before* deciding to hide it.
+ *     Absent when [onOpenInPhone] is null (no device contact behind the row).
+ *   - "Ignore" carries [OrbitMenuTone.Destructive]: it hides someone the user
+ *     would otherwise have to go find again. It keeps its locked supporting
+ *     line, "Hide {name} from Orbit. They stay in your phone's contacts.":
+ *     the promise that ignoring touches only Orbit, never the phone's address
+ *     book, is the whole reason the action is safe to offer inline.
+ *   - "Unignore" restores, so it stays [OrbitMenuTone.Default].
+ *
+ * `internal` so PickerRowMenuTest pins the labels, the supporting lines and
+ * which action is destructive (the browseRowMenuActions precedent; until
+ * 2026-10-06 this menu was asserted only by KDoc). Takes [Resources] because
+ * [OrbitMenuAction] carries resolved text. [name] is the name as displayed, so
+ * under the privacy curtain the caller passes the masked one.
+ */
+internal fun pickerRowActions(
+    resources: Resources,
+    name: String,
+    isIgnored: Boolean,
+    onOpenInPhone: (() -> Unit)?,
+    onIgnore: (() -> Unit)?,
+    onUnignore: (() -> Unit)?,
+): List<OrbitMenuAction> = buildList {
+    if (onOpenInPhone != null) {
+        add(
+            OrbitMenuAction(
+                label = resources.getString(R.string.picker_row_open_in_contacts),
+                onClick = onOpenInPhone,
+                supporting = resources.getString(R.string.picker_row_open_in_contacts_supporting),
+            ),
+        )
+    }
+    if (isIgnored) {
+        if (onUnignore != null) {
+            add(OrbitMenuAction(label = resources.getString(R.string.picker_row_unignore), onClick = onUnignore))
+        }
+    } else if (onIgnore != null) {
+        add(
+            OrbitMenuAction(
+                label = resources.getString(R.string.picker_row_ignore),
+                onClick = onIgnore,
+                tone = OrbitMenuTone.Destructive,
+                supporting = resources.getString(R.string.picker_row_ignore_supporting, name),
+            ),
+        )
+    }
 }
 
 @Preview(name = "PickerContactRow — light", showBackground = true)
@@ -367,7 +398,7 @@ private fun PickerContactRowPreviewLight() {
     }
 }
 
-@Preview(name = "PickerContactRow — dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "PickerContactRow — dark", showBackground = true)
 @Composable
 private fun PickerContactRowPreviewDark() {
     OrbitTheme(darkTheme = true) {

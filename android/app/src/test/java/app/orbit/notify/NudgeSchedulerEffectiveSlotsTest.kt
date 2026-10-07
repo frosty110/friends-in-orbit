@@ -4,18 +4,21 @@ import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import java.time.DayOfWeek
 import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 
 /**
- * Pure assertions for [NudgeScheduler.effectiveSchedule] and the D-09 implicit
- * activeHoursStart slot injection at the scheduling level.
+ * Pure assertions for [NudgeScheduler.effectiveSchedule]: the D-09 slot at the
+ * window start is added only when every chosen time falls outside the active-hours
+ * window, and never adds days or revives an emptied schedule.
  *
  * Uses Robolectric Application only to satisfy [NudgeScheduler]'s @ApplicationContext
  * constructor — [effectiveSchedule] itself never calls Android framework methods.
@@ -32,118 +35,118 @@ class NudgeSchedulerEffectiveSlotsTest {
     /** Minimal scheduler constructed without WorkManager (methods under test don't call it). */
     private val scheduler = NudgeScheduler(
         context = ApplicationProvider.getApplicationContext<Application>(),
-        listRepo = StubListRepository,
+        listRepo = StubListRepository
     )
 
-    // ─── effectiveSchedule — null activeHoursStart ────────────────────────────
+    private val weekdays = setOf(
+        DayOfWeek.MONDAY,
+        DayOfWeek.TUESDAY,
+        DayOfWeek.WEDNESDAY,
+        DayOfWeek.THURSDAY,
+        DayOfWeek.FRIDAY
+    )
+    private val nineToFive = LocalTime.of(9, 0) to LocalTime.of(17, 0)
+
+    private fun effective(explicit: NudgeSchedule, window: Pair<LocalTime, LocalTime>?) =
+        scheduler.effectiveSchedule(explicit, window?.first, window?.second)
+
+    // ─── No window: the fire-time gate never applies ─────────────────────────
 
     @Test
-    fun effectiveSchedule_withNullActiveHoursStart_returnsExplicitUnchanged() {
+    fun effectiveSchedule_withNoWindow_returnsExplicitUnchanged() {
         val explicit = NudgeSchedule.DEFAULT // all 7 days, 10:00
-        val effective = scheduler.effectiveSchedule(explicit, activeHoursStart = null)
-        assertEquals(explicit, effective, "null activeHoursStart must return explicit unchanged")
+        assertEquals(explicit, effective(explicit, window = null))
     }
 
     @Test
-    fun effectiveSchedule_withNullActiveHoursStart_preservesEmptySchedule() {
-        val empty = NudgeSchedule(days = emptySet(), times = emptyList())
-        val effective = scheduler.effectiveSchedule(empty, activeHoursStart = null)
-        assertEquals(empty, effective)
-    }
-
-    // ─── effectiveSchedule — non-null activeHoursStart (D-09) ────────────────
-
-    @Test
-    fun effectiveSchedule_injectsActiveHoursStartAlongsideExplicitTimes() {
-        // Default schedule: all 7 days at 10:00. activeHoursStart = 21:00.
-        // Effective times must include BOTH 10:00 AND 21:00.
+    fun effectiveSchedule_withOnlyOneWindowEnd_returnsExplicitUnchanged() {
+        // The worker gates only when both ends are set, so half a window gates nothing.
         val explicit = NudgeSchedule.DEFAULT
-        val effective = scheduler.effectiveSchedule(explicit, activeHoursStart = LocalTime.of(21, 0))
+        assertEquals(explicit, scheduler.effectiveSchedule(explicit, LocalTime.of(21, 0), null))
+    }
 
-        assertTrue(
-            LocalTime.of(10, 0) in effective.times,
-            "Explicit 10:00 slot must be preserved in effective schedule",
-        )
-        assertTrue(
-            LocalTime.of(21, 0) in effective.times,
-            "Implicit activeHoursStart 21:00 slot must be injected",
-        )
-        assertEquals(
-            2,
-            effective.times.distinct().size,
-            "Effective times must have exactly 2 distinct slots: 10:00 and 21:00",
-        )
+    // ─── The user's choices survive a window ─────────────────────────────────
+
+    @Test
+    fun effectiveSchedule_keepsTheUsersDays() {
+        // Regression: the window used to merge in all seven days, so "Weekdays at
+        // 10am" nudged on weekends too.
+        val explicit = NudgeSchedule(days = weekdays, times = listOf(LocalTime.of(10, 0)))
+        assertEquals(weekdays, effective(explicit, nineToFive).days)
     }
 
     @Test
-    fun effectiveSchedule_withActiveHoursStart_mergesAllSevenDays() {
-        // A weekdays-only explicit schedule + activeHoursStart should yield all 7 days,
-        // because the implicit slot fires every day.
-        val weekdays = NudgeSchedule(
-            days = setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
-                DayOfWeek.THURSDAY, DayOfWeek.FRIDAY),
-            times = listOf(LocalTime.of(9, 0)),
-        )
-        val effective = scheduler.effectiveSchedule(weekdays, activeHoursStart = LocalTime.of(18, 0))
-
-        assertEquals(
-            DayOfWeek.values().toSet(),
-            effective.days,
-            "effectiveSchedule must include all 7 days when activeHoursStart is non-null",
-        )
+    fun effectiveSchedule_doesNotAddASlotWhenAChosenTimeIsInsideTheWindow() {
+        // Regression: 10:00 inside 9-5 already posts; the old injection added 9:00
+        // as a second daily nudge.
+        val explicit = NudgeSchedule(days = weekdays, times = listOf(LocalTime.of(10, 0)))
+        assertEquals(explicit, effective(explicit, nineToFive))
     }
 
-    // ─── effectiveSchedule — de-duplication ──────────────────────────────────
-
     @Test
-    fun effectiveSchedule_deduplicatesWhenActiveHoursStartEqualsExplicitTime() {
-        // Explicit schedule already contains 10:00; injecting 10:00 via activeHoursStart
-        // must not produce a duplicate.
-        val explicit = NudgeSchedule(
-            days = DayOfWeek.values().toSet(),
-            times = listOf(LocalTime.of(10, 0)),
-        )
-        val effective = scheduler.effectiveSchedule(explicit, activeHoursStart = LocalTime.of(10, 0))
-
-        assertEquals(
-            1,
-            effective.times.distinct().size,
-            "Duplicate activeHoursStart must be de-duplicated; times should contain exactly one 10:00",
-        )
-        assertTrue(LocalTime.of(10, 0) in effective.times)
+    fun effectiveSchedule_withNoDays_staysOff() {
+        // Regression: "No days selected - nudges off" kept nudging once a window was set.
+        val explicit = NudgeSchedule(days = emptySet(), times = listOf(LocalTime.of(10, 0)))
+        val eff = effective(explicit, LocalTime.of(21, 0) to LocalTime.of(23, 0))
+        assertEquals(explicit, eff)
+        assertNull(eff.nextSlot(ZonedDateTime.of(2026, 10, 5, 8, 0, 0, 0, ZoneId.of("UTC"))))
     }
 
-    // ─── D-09 narrative: explains why the scheduling-layer injection prevents "silent forever" ──
-
-    /**
-     * Documents the D-09 failure mode and proves the fix.
-     *
-     * Scenario: a list with activeHoursStart=21:00 and an explicit schedule that only
-     * fires at 10:00. Without D-09 injection the active-hours fire-time gate (10:00 is
-     * before 21:00 window) suppresses every nudge forever — the chain re-enqueues but
-     * never posts. With D-09 injection the effective schedule has BOTH 10:00 and 21:00;
-     * the 21:00 slot lands at the boundary of the open window, so the worker posts at
-     * least once per day when all other gates pass.
-     *
-     * This test asserts the scheduling layer produces both candidate slots.
-     * The gate suppression at 10:00 (re-enqueue only) vs. the post at 21:00
-     * is asserted in [ListPromptWorkerTest] (Task 2).
-     */
     @Test
-    fun effectiveSchedule_d09NarrativeProof_bothSlotsPresent() {
-        val explicit = NudgeSchedule.DEFAULT // all days, 10:00 only
-        val effective = scheduler.effectiveSchedule(explicit, activeHoursStart = LocalTime.of(21, 0))
+    fun effectiveSchedule_withNoTimes_staysOff() {
+        val explicit = NudgeSchedule(days = weekdays, times = emptyList())
+        assertEquals(explicit, effective(explicit, nineToFive))
+    }
 
-        assertNotNull(effective)
-        assertTrue(LocalTime.of(10, 0) in effective.times, "10:00 explicit slot present")
-        assertTrue(LocalTime.of(21, 0) in effective.times, "21:00 activeHoursStart slot injected")
-        assertFalse(
-            effective.times.size > effective.times.distinct().size,
-            "No duplicates in effective times",
-        )
-        // Document: without D-09, effective == NudgeSchedule.DEFAULT (only 10:00),
-        // and the active-hours gate (window opens at 21:00) suppresses it forever.
-        // With D-09, 21:00 is in effective.times and will fire inside the window.
+    // ─── D-09: every chosen time is outside the window ───────────────────────
+
+    @Test
+    fun effectiveSchedule_addsTheWindowStartWhenEveryTimeIsOutside() {
+        // 10:00 can never post inside 21:00-23:00; without the added slot the
+        // gate would suppress this list forever.
+        val explicit = NudgeSchedule.DEFAULT
+        val eff = effective(explicit, LocalTime.of(21, 0) to LocalTime.of(23, 0))
+        assertEquals(listOf(LocalTime.of(10, 0), LocalTime.of(21, 0)), eff.times)
+        assertEquals(explicit.days, eff.days)
+    }
+
+    @Test
+    fun effectiveSchedule_addsTheWindowStartOnTheUsersDaysOnly() {
+        val explicit = NudgeSchedule(days = weekdays, times = listOf(LocalTime.of(9, 0)))
+        val eff = effective(explicit, LocalTime.of(18, 0) to LocalTime.of(22, 0))
+        assertTrue(LocalTime.of(18, 0) in eff.times)
+        assertEquals(weekdays, eff.days, "the added slot must not add weekend days")
+    }
+
+    @Test
+    fun effectiveSchedule_respectsAWindowThatSpansMidnight() {
+        // 23:30 is inside 22:00-02:00, so nothing is added.
+        val inside = NudgeSchedule(days = weekdays, times = listOf(LocalTime.of(23, 30)))
+        assertEquals(inside, effective(inside, LocalTime.of(22, 0) to LocalTime.of(2, 0)))
+        // 12:00 is outside it, so the window start is added.
+        val outside = NudgeSchedule(days = weekdays, times = listOf(LocalTime.of(12, 0)))
+        val lateWindow = LocalTime.of(22, 0) to LocalTime.of(2, 0)
+        assertTrue(LocalTime.of(22, 0) in effective(outside, lateWindow).times)
+    }
+
+    @Test
+    fun effectiveSchedule_doesNotDuplicateTheWindowStart() {
+        // A window whose start is also a chosen time is covered by the inside-window
+        // rule; the added slot can never duplicate it.
+        val explicit = NudgeSchedule(days = weekdays, times = listOf(LocalTime.of(21, 0)))
+        val eff = effective(explicit, LocalTime.of(21, 0) to LocalTime.of(23, 0))
+        assertEquals(eff.times.distinct(), eff.times)
+    }
+
+    // ─── One definition of "inside the window" ───────────────────────────────
+
+    @Test
+    fun isInActiveWindow_isInclusiveAndWrapsMidnight() {
+        assertTrue(isInActiveWindow(LocalTime.of(9, 0), LocalTime.of(9, 0), LocalTime.of(17, 0)))
+        assertTrue(isInActiveWindow(LocalTime.of(17, 0), LocalTime.of(9, 0), LocalTime.of(17, 0)))
+        assertFalse(isInActiveWindow(LocalTime.of(8, 59), LocalTime.of(9, 0), LocalTime.of(17, 0)))
+        assertTrue(isInActiveWindow(LocalTime.of(1, 0), LocalTime.of(22, 0), LocalTime.of(2, 0)))
+        assertFalse(isInActiveWindow(LocalTime.of(12, 0), LocalTime.of(22, 0), LocalTime.of(2, 0)))
     }
 }
 
@@ -156,31 +159,59 @@ private val StubListRepository: app.orbit.data.repository.ListRepository =
         override fun observeActive() = throw UnsupportedOperationException()
         override suspend fun getById(id: Long) = null
         override fun observeMembersOfList(listId: Long) = throw UnsupportedOperationException()
-        override fun observeMembershipsForContact(contactId: Long) = throw UnsupportedOperationException()
-        override suspend fun incrementSkipCount(contactId: Long, listId: Long, newNextDueAt: java.time.Instant) =
+        override fun observeMembershipsForContact(contactId: Long) =
             throw UnsupportedOperationException()
-        override suspend fun updateNextDueAt(contactId: Long, listId: Long, nextDueAt: java.time.Instant) =
+        override suspend fun incrementSkipCount(
+            contactId: Long,
+            listId: Long,
+            newNextDueAt: java.time.Instant
+        ) = throw UnsupportedOperationException()
+        override suspend fun updateNextDueAt(
+            contactId: Long,
+            listId: Long,
+            nextDueAt: java.time.Instant
+        ) = throw UnsupportedOperationException()
+        override suspend fun restoreMembershipSchedule(
+            contactId: Long,
+            listId: Long,
+            nextDueAt: java.time.Instant?,
+            skipCount: Int
+        ) = throw UnsupportedOperationException()
+        override suspend fun create(list: app.orbit.data.entity.ListEntity) =
             throw UnsupportedOperationException()
-        override suspend fun restoreMembershipSchedule(contactId: Long, listId: Long, nextDueAt: java.time.Instant?, skipCount: Int) =
+        override suspend fun update(list: app.orbit.data.entity.ListEntity) =
             throw UnsupportedOperationException()
-        override suspend fun create(list: app.orbit.data.entity.ListEntity) = throw UnsupportedOperationException()
-        override suspend fun update(list: app.orbit.data.entity.ListEntity) = throw UnsupportedOperationException()
-        override suspend fun setArchived(listId: Long, archived: Boolean) = throw UnsupportedOperationException()
-        override suspend fun reorder(fromIndex: Int, toIndex: Int) = throw UnsupportedOperationException()
-        override suspend fun setSmartRuleJson(listId: Long, json: String?) = throw UnsupportedOperationException()
-        override suspend fun setRuleParamsOverrideJson(listId: Long, json: String?) = throw UnsupportedOperationException()
-        override suspend fun convertSmartToStatic(listId: Long) = throw UnsupportedOperationException()
+        override suspend fun setArchived(listId: Long, archived: Boolean) =
+            throw UnsupportedOperationException()
+        override suspend fun reorder(fromIndex: Int, toIndex: Int) =
+            throw UnsupportedOperationException()
+        override suspend fun setSmartRuleJson(listId: Long, json: String?) =
+            throw UnsupportedOperationException()
+        override suspend fun setRuleParamsOverrideJson(listId: Long, json: String?) =
+            throw UnsupportedOperationException()
+        override suspend fun convertSmartToStatic(listId: Long) =
+            throw UnsupportedOperationException()
         override suspend fun delete(listId: Long) = throw UnsupportedOperationException()
-        override suspend fun updateRuleTemplate(listId: Long, templateId: Long) = throw UnsupportedOperationException()
-        override suspend fun updateActiveHours(listId: Long, start: java.time.LocalTime?, end: java.time.LocalTime?) =
+        override suspend fun updateRuleTemplate(listId: Long, templateId: Long) =
             throw UnsupportedOperationException()
-        override suspend fun updateNotificationsEnabled(listId: Long, enabled: Boolean) = throw UnsupportedOperationException()
-        override suspend fun updateName(listId: Long, name: String) = throw UnsupportedOperationException()
-        override suspend fun addMember(listId: Long, contactId: Long, addedAt: java.time.Instant) = throw UnsupportedOperationException()
+        override suspend fun updateActiveHours(
+            listId: Long,
+            start: java.time.LocalTime?,
+            end: java.time.LocalTime?
+        ) = throw UnsupportedOperationException()
+        override suspend fun updateNotificationsEnabled(listId: Long, enabled: Boolean) =
+            throw UnsupportedOperationException()
+        override suspend fun updateName(listId: Long, name: String) =
+            throw UnsupportedOperationException()
+        override suspend fun addMember(listId: Long, contactId: Long, addedAt: java.time.Instant) =
+            throw UnsupportedOperationException()
         override fun observeById(id: Long) = throw UnsupportedOperationException()
         override fun observeMemberCountsByListId() = throw UnsupportedOperationException()
-        override suspend fun setNudgeScheduleJson(listId: Long, json: String?) = throw UnsupportedOperationException()
+        override suspend fun setNudgeScheduleJson(listId: Long, json: String?) =
+            throw UnsupportedOperationException()
         override suspend fun dueCountForList(listId: Long) = 0
-        override suspend fun recomputeDueCountForList(listId: Long, now: java.time.Instant) = throw UnsupportedOperationException()
-        override suspend fun recomputeDueCountForActive(now: java.time.Instant) = throw UnsupportedOperationException()
+        override suspend fun recomputeDueCountForList(listId: Long, now: java.time.Instant) =
+            throw UnsupportedOperationException()
+        override suspend fun recomputeDueCountForActive(now: java.time.Instant) =
+            throw UnsupportedOperationException()
     }

@@ -4,11 +4,13 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import app.orbit.R
 import app.orbit.calllog.CallLogPermissionState
 import app.orbit.calllog.ContactsIngestWorker
 import app.orbit.calllog.ContentObserverController
@@ -16,12 +18,17 @@ import app.orbit.data.AppPrefs
 import app.orbit.data.PickerThresholds
 import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ResetService
+import app.orbit.di.ApplicationScope
+import app.orbit.domain.clock.Clock
 import app.orbit.ui.theme.OrbitDarkMode
 import app.orbit.ui.theme.OrbitThemeId
+import app.orbit.ui.util.UiText
 import app.orbit.widget.WidgetUpdateScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,10 +37,15 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Settings VM (ARCH-02 + ARCH-04), with the call-log sync surface (CALL-01 /
@@ -42,12 +54,14 @@ import kotlinx.coroutines.launch
  * - [permissionState]: a `Flow<CallLogPermissionState>` driven by [refreshPermissionState]
  *   which the screen calls onResume and after the system permission dialog resolves.
  * - [onPermissionResult]: screen calls this after the permission launcher resolves;
- *   on `Granted`, enqueues full-resync work + persists the `isCallLogSyncEnabled` flag +
- *   defensively starts the observer (Pitfall 5 — observer registration
- *   requires READ_CALL_LOG, so deferred start on grant is mandatory).
+ *   on `Granted`, starts the observer and enqueues a full resync (Pitfall 5: observer
+ *   registration requires READ_CALL_LOG, so deferred start on grant is mandatory).
+ *   No stored "sync enabled" flag mirrors the permission any more: the OS is the
+ *   only switch (ARCH-04), and the flag had no reader.
  * - [onManualResync]: Settings "Sync now" button → full-resync work via the existing
  *   unique-work name on [ContentObserverController].
- * - [onImportDaysChanged]: write-through to [AppPrefs.setCallLogImportDays].
+ * - [onImportDaysChanged]: write-through to [AppPrefs.setCallLogImportDays]; widening
+ *   the window also runs a full resync so the new months show up (SET-04).
  * - Worker state observation: exposes `callLogSyncInFlight` = `WorkInfo.State` in
  *   `(ENQUEUED, RUNNING)` for the observer's unique work, driving the spinner UI.
  *
@@ -56,23 +70,36 @@ import kotlinx.coroutines.launch
  * [notificationsPermissionState]. Both follow the same MutableStateFlow + compute
  * pattern as the existing [permissionState] for the call-log permission. The
  * [refreshAllPermissionStates] callback is invoked from the screen's
- * `Lifecycle.Event.ON_RESUME` observer with the three rationale flags. The
- * [onResetConfirmed] entry point delegates to the injected [ResetService] for the
- * destructive Reset Orbit confirmation.
+ * `Lifecycle.Event.ON_RESUME` observer with the three rationale flags, and runs the
+ * grant and revocation side effects for the observer-backed permissions in both
+ * directions, so a permission flipped in the phone's settings behaves like one
+ * granted from the row (SET-07). The [onResetConfirmed] entry point delegates to
+ * the injected [ResetService] for the destructive Reset Orbit confirmation.
+ *
+ * SET-12: the OS cannot tell "never asked" from "asked and refused for good"
+ * (`shouldShowRequestPermissionRationale` is false in both), so the raw state is
+ * resolved against [AppPrefs.hasAskedFor]: a permission that was never requested
+ * reads Denied (the row offers Allow), and "Off in your phone's settings" appears
+ * only after the OS has been asked once. [onLauncherFired] records the ask.
+ *
+ * SET-14: Notifications read Granted only when the app's notifications are actually
+ * enabled ([NotificationManagerCompat.areNotificationsEnabled]) and, on 33+, the
+ * permission is held. On 31 and 32 there is no runtime permission, so "off" is
+ * PermanentlyDenied and the row's action opens the app's notification settings.
  *
  * `stateIn(WhileSubscribed(5_000L))` keeps the upstream combine alive for 5 seconds
  * after the last subscriber detaches so rotation / dark-mode toggle don't recompute
  * the flow (ARCH-02 config-change survival). The `initialValue = Loading` is only
- * observable synchronously before DataStore emits — once the first read settles,
- * the flow is always `Ready`.
+ * observable synchronously before DataStore emits; once the first read settles,
+ * the flow is always `Ready` (or `Error`, SET-11).
  *
  * Type-safety note: the multi-flow composition is implemented as staged
- * 4-arg `combine(...) { ... }` calls — one builds the [SettingsSnapshot]
- * (permissions + import window), one builds the [SyncStatus] (call-log +
- * contacts in-flight flags and last-synced timestamps), and the outer
- * `combine(snapshot, syncStatus, pickerThresholds, ignoredContactCount) { ... }`
- * stitches them. Every stage uses Kotlin's type-safe overloads (max arity 5),
- * avoiding the fragile `vararg` + `args[N] as T` unchecked-cast pattern.
+ * `combine(...) { ... }` calls of at most five flows: one folds the raw OS
+ * permission reads, one the "asked once" flags, one builds the [SettingsSnapshot],
+ * one the [SyncStatus], and the outer combine stitches them with the thresholds,
+ * the ignored count and the appearance. Every stage uses Kotlin's type-safe
+ * overloads (max arity 5), avoiding the fragile `vararg` + `args[N] as T`
+ * unchecked-cast pattern.
  */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -81,8 +108,15 @@ class SettingsViewModel @Inject constructor(
     private val contentObserverController: ContentObserverController,
     // Drives the Settings "Ignored" row subtitle.
     private val contactRepo: ContactRepository,
-    // SET-06 — destructive Reset Orbit handler.
+    // SET-06: destructive Reset Orbit handler.
     private val resetService: ResetService,
+    // "Last synced ..." is worded against this clock inside the state, never
+    // read in composition.
+    private val clock: Clock,
+    // rules.md Code 6: the reset must finish even if the user leaves Settings
+    // mid-way; `viewModelScope` would cancel it between the wipe and the
+    // widget refresh.
+    @ApplicationScope private val appScope: CoroutineScope,
 ) : ViewModel() {
 
     private val workManager: WorkManager = WorkManager.getInstance(context)
@@ -90,10 +124,12 @@ class SettingsViewModel @Inject constructor(
     private val _permissionState = MutableStateFlow(computeCurrentPermissionState())
     val permissionState: StateFlow<CallLogPermissionState> = _permissionState.asStateFlow()
 
-    // SET-07 — per-permission status for the Settings
+    // SET-07: per-permission status for the Settings
     // Permissions section. Contacts and Notifications use the simpler 3-state
     // [PermissionStatus] enum; the call log permission stays on
     // [CallLogPermissionState] for back-compat with the observer plumbing.
+    // These hold the RAW OS reading; SET-12's "never asked" resolution happens
+    // in [snapshot], where the stored flags are available.
     private val _contactsPermissionState =
         MutableStateFlow(computeContactsPermissionState())
     val contactsPermissionState: StateFlow<PermissionStatus> =
@@ -103,6 +139,12 @@ class SettingsViewModel @Inject constructor(
         MutableStateFlow(computeNotificationsPermissionState())
     val notificationsPermissionState: StateFlow<PermissionStatus> =
         _notificationsPermissionState.asStateFlow()
+
+    // SET-14: whether Android will show this app's notifications at all. On
+    // 33+ this is a second gate behind the permission (the user can switch an
+    // app's notifications off in the phone's settings while the permission
+    // stays granted); below 33 it is the only gate.
+    private val _notificationsEnabled = MutableStateFlow(computeNotificationsEnabled())
 
     /**
      * Whether the call-log sync unique work is in `ENQUEUED` or `RUNNING` state.
@@ -118,7 +160,7 @@ class SettingsViewModel @Inject constructor(
 
     /**
      * Whether the contacts-ingest unique work is in `ENQUEUED` or `RUNNING`
-     * state. Drives the spinner next to the "Sync contacts" button — mirrors
+     * state. Drives the spinner next to the "Sync contacts" button; mirrors
      * [callLogSyncInFlight] for the call-log path.
      */
     private val contactsSyncInFlight: Flow<Boolean> =
@@ -133,11 +175,44 @@ class SettingsViewModel @Inject constructor(
     private val lastContactsSyncAtMs: Flow<Long> =
         appPrefs.lastContactsIngestedAt.map { it?.toEpochMilli() ?: 0L }
 
+    /** The three raw OS readings plus the notifications switch, folded for the arity ceiling. */
+    private data class RawPermissions(
+        val callLog: CallLogPermissionState,
+        val contacts: PermissionStatus,
+        val notifications: PermissionStatus,
+        val notificationsEnabled: Boolean,
+    )
+
+    private val rawPermissions: Flow<RawPermissions> =
+        combine(
+            permissionState,
+            contactsPermissionState,
+            notificationsPermissionState,
+            _notificationsEnabled,
+        ) { callLog, contacts, notifications, enabled ->
+            RawPermissions(callLog, contacts, notifications, enabled)
+        }
+
+    /** SET-12: whether the OS has been asked for each permission at least once. */
+    private data class AskedOnce(
+        val contacts: Boolean,
+        val callLog: Boolean,
+        val notifications: Boolean,
+    )
+
+    private val askedOnce: Flow<AskedOnce> =
+        combine(
+            appPrefs.hasAskedContacts,
+            appPrefs.hasAskedCallLog,
+            appPrefs.hasAskedNotifications,
+        ) { contacts, callLog, notifications ->
+            AskedOnce(contacts, callLog, notifications)
+        }
+
     /**
-     * Intermediate 4-tuple of the permission + import-window flows — uses
-     * Kotlin's type-safe `combine(a, b, c, d) { ... }` overload to avoid
-     * `vararg` + unchecked casts. Folded into the outer `uiState` combine
-     * alongside [syncStatus], thresholds, and the ignored count.
+     * Intermediate tuple of the resolved permission states + import window.
+     * Folded into the outer `uiState` combine alongside [syncStatus],
+     * thresholds, and the ignored count.
      */
     private data class SettingsSnapshot(
         val callLogPerm: CallLogPermissionState,
@@ -148,12 +223,16 @@ class SettingsViewModel @Inject constructor(
 
     private val snapshot: Flow<SettingsSnapshot> =
         combine(
-            permissionState,
-            contactsPermissionState,
-            notificationsPermissionState,
+            rawPermissions,
+            askedOnce,
             appPrefs.callLogImportDays,
-        ) { callLogPerm, contactsPerm, notifsPerm, importDays ->
-            SettingsSnapshot(callLogPerm, contactsPerm, notifsPerm, importDays)
+        ) { raw, asked, importDays ->
+            SettingsSnapshot(
+                callLogPerm = raw.callLog.resolveAskedOnce(asked.callLog),
+                contactsPerm = raw.contacts.resolveAskedOnce(asked.contacts),
+                notifsPerm = resolveNotifications(raw.notifications, raw.notificationsEnabled, asked.notifications),
+                importDays = importDays,
+            )
         }
 
     /**
@@ -181,18 +260,17 @@ class SettingsViewModel @Inject constructor(
 
     /**
      * Count of currently-ignored contacts. Drives the
-     * Settings "Ignored" row subtitle ("{N} ignored" / "No ignored contacts").
-     * Note: this counts ALL `isIgnored = true` rows including any that are also
-     * archived. The Settings → Ignored screen itself filters to !isArchived for
-     * display, but the row subtitle prefers the simpler total — the screen
-     * is the management surface, the count is informational. The two values
-     * differ only when a contact is both ignored AND archived (rare).
+     * Settings "Ignored" row subtitle ("{N} ignored" / "No one ignored").
+     * Reads the same `observeIgnored()` rows the Settings → Ignored screen
+     * lists, which exclude archived contacts in the query itself. This count
+     * used to include ignored-and-archived contacts, so "1 ignored" could open
+     * onto an empty Ignored screen.
      */
     private val ignoredContactCountFlow: Flow<Int> =
         contactRepo.observeIgnored().map { it.size }
 
     /**
-     * THEMING 2026-06-22 — Appearance selection, mapped from the raw AppPrefs
+     * THEMING 2026-06-22: Appearance selection, mapped from the raw AppPrefs
      * primitives. Bundled into one flow so the outer `uiState` combine stays
      * within Kotlin's type-safe arity-5 ceiling.
      */
@@ -215,7 +293,21 @@ class SettingsViewModel @Inject constructor(
             )
         }
 
-    val uiState: StateFlow<SettingsUiState> =
+    // SET-11: bumped by [onRetry] to re-subscribe after a failure.
+    private val retryCount = MutableStateFlow(0)
+
+    /** The Error state's Try again. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
+
+    // SET-06: true from the Reset confirmation until ResetService.resetAll
+    // returns, whichever way. Screen-side it disables the Data rows and holds
+    // Back; the outcome itself is MainActivity's to act on.
+    private val _isResetting = MutableStateFlow(false)
+
+    /** The saved settings and the OS readings, before the reset flag is stitched in. */
+    private val readyState: Flow<SettingsUiState.Ready> =
         combine(
             snapshot,
             syncStatus,
@@ -234,11 +326,27 @@ class SettingsViewModel @Inject constructor(
                 lastCallLogSyncAtMs = sync.lastCallLogSyncAtMs,
                 contactsSyncInFlight = sync.contactsInFlight,
                 lastContactsSyncAtMs = sync.lastContactsSyncAtMs,
+                // Taken when the state is built, so the screen never reads a
+                // clock in composition. A sync finishing updates the
+                // timestamp above, which rebuilds the state and the "now".
+                now = clock.now(),
                 colorTheme = appr.themeId,
                 darkMode = appr.darkMode,
                 accentHue = appr.accentHue,
             )
-        }.stateIn(
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<SettingsUiState> = retryCount.flatMapLatest {
+        // A second stage for the reset flag: the five-flow combine above is at
+        // Kotlin's type-safe arity ceiling.
+        combine(readyState, _isResetting) { ready, resetting ->
+            ready.copy(isResetting = resetting)
+        }.map<SettingsUiState.Ready, SettingsUiState> { it }.catch { t ->
+            if (t is CancellationException) throw t
+            emit(SettingsUiState.Error)
+        }
+    }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),
             initialValue = SettingsUiState.Loading,
@@ -251,27 +359,34 @@ class SettingsViewModel @Inject constructor(
      * result of `shouldShowRequestPermissionRationale` so we can distinguish
      * `Denied` (rationale allowed) from `PermanentlyDenied` (rationale blocked).
      *
-     * If the OS-truth state transitioned `Granted → not-Granted` since the last
-     * read (i.e. the user revoked permission via system Settings while the app was
-     * backgrounded), runs the same cleanup as [onPermissionResult] would on a
-     * direct revocation: clears `isCallLogSyncEnabled` and stops the observer.
+     * Runs the side effects for a transition in either direction, so a flip made
+     * in the phone's settings while Orbit was backgrounded behaves like one made
+     * from the row: `Granted → not-Granted` stops the observer (the same cleanup
+     * [onPermissionResult] runs on a direct refusal); `not-Granted → Granted`
+     * starts it and imports the window, as a grant from the row would.
      */
     fun refreshPermissionState(rationalePending: Boolean) {
         val prior = _permissionState.value
         val next = computeCurrentPermissionState(rationalePending)
         _permissionState.value = next
-        if (prior is CallLogPermissionState.Granted &&
-            next !is CallLogPermissionState.Granted
-        ) {
-            viewModelScope.launch { applyRevocationCleanup() }
+        when {
+            prior is CallLogPermissionState.Granted && next !is CallLogPermissionState.Granted ->
+                contentObserverController.stop()
+            prior !is CallLogPermissionState.Granted && next is CallLogPermissionState.Granted ->
+                onCallLogGranted()
         }
     }
 
     /**
-     * SET-07 — refresh all three permission states from a
-     * single call site (the screen's `Lifecycle.Event.ON_RESUME` observer). The
-     * screen passes one rationale flag per permission; the call log path also
-     * runs the revocation-cleanup branch via [refreshPermissionState].
+     * SET-07: refresh all three permission states from a
+     * single call site (the screen's `Lifecycle.Event.ON_RESUME` observer and
+     * the Contacts / Notifications launcher callbacks). The screen passes one
+     * rationale flag per permission; the call log path runs its transitions via
+     * [refreshPermissionState], and a Contacts `not-Granted → Granted` flip
+     * registers the contacts observer and runs one forced ingest, exactly what
+     * the onboarding grant does. Without this a permission granted from this
+     * row, or in the phone's settings, left the address book unmirrored until
+     * the next cold start.
      */
     fun refreshAllPermissionStates(
         callLogRationale: Boolean,
@@ -279,8 +394,25 @@ class SettingsViewModel @Inject constructor(
         notifsRationale: Boolean,
     ) {
         refreshPermissionState(callLogRationale)
-        _contactsPermissionState.value = computeContactsPermissionState(contactsRationale)
+        val priorContacts = _contactsPermissionState.value
+        val nextContacts = computeContactsPermissionState(contactsRationale)
+        _contactsPermissionState.value = nextContacts
+        if (priorContacts != PermissionStatus.Granted && nextContacts == PermissionStatus.Granted) {
+            contentObserverController.start()
+            contentObserverController.enqueueImmediateContactsIngest()
+        }
         _notificationsPermissionState.value = computeNotificationsPermissionState(notifsRationale)
+        _notificationsEnabled.value = computeNotificationsEnabled()
+    }
+
+    /**
+     * SET-12: the screen calls this from each `rememberLauncherForActivityResult`
+     * callback, before it refreshes, so the OS has been asked exactly once before
+     * a row can ever read "Off in your phone's settings". The write is a DataStore
+     * flag; the resolved state follows through [askedOnce] when it lands.
+     */
+    fun onLauncherFired(permission: String) {
+        viewModelScope.launch { appPrefs.setHasAsked(permission) }
     }
 
     private fun computeCurrentPermissionState(
@@ -311,12 +443,14 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * The POST_NOTIFICATIONS permission alone. It is API 33+; below that it is an
+     * implicit grant, and whether nudges can show is decided by
+     * [computeNotificationsEnabled] (SET-14).
+     */
     private fun computeNotificationsPermissionState(
         rationalePending: Boolean = false,
     ): PermissionStatus {
-        // POST_NOTIFICATIONS is API 33+. On API <33 it's an implicit grant;
-        // returning Granted keeps the row visually consistent without a
-        // permanent "Denied" label that the user can do nothing about.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             return PermissionStatus.Granted
         }
@@ -331,43 +465,69 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    private fun computeNotificationsEnabled(): Boolean =
+        NotificationManagerCompat.from(context).areNotificationsEnabled()
+
     /**
-     * Invoked by the screen after the permission launcher resolves. On `Granted`:
-     * flag sync as enabled, defensively start the observer (idempotent), and enqueue
-     * a full initial import. On `Denied` / `PermanentlyDenied`: clear the
-     * `isCallLogSyncEnabled` flag and stop the observer — keeping persisted state
-     * honest about the OS truth.
+     * SET-12: `shouldShowRequestPermissionRationale == false` means either "never
+     * asked" or "refused for good". Until the OS has been asked once, the honest
+     * row is Denied with an Allow button, because a launcher request WILL show the
+     * system dialog. Granted and Denied pass through unchanged.
+     */
+    private fun PermissionStatus.resolveAskedOnce(asked: Boolean): PermissionStatus =
+        if (this == PermissionStatus.PermanentlyDenied && !asked) PermissionStatus.Denied else this
+
+    private fun CallLogPermissionState.resolveAskedOnce(asked: Boolean): CallLogPermissionState =
+        if (this is CallLogPermissionState.PermanentlyDenied && !asked) CallLogPermissionState.Denied else this
+
+    /**
+     * SET-14: Granted only when Android will actually show the app's notifications.
+     * With the permission held (always, below 33) but the app's notifications
+     * switched off, the only way back on is the phone's settings, so the row reads
+     * PermanentlyDenied and its action opens them; the "never asked" resolution
+     * applies only when the permission itself is the thing missing, since a
+     * launcher cannot flip the notifications switch.
+     */
+    private fun resolveNotifications(
+        permission: PermissionStatus,
+        enabled: Boolean,
+        asked: Boolean,
+    ): PermissionStatus = when {
+        permission == PermissionStatus.Granted && enabled -> PermissionStatus.Granted
+        permission == PermissionStatus.Granted -> PermissionStatus.PermanentlyDenied
+        else -> permission.resolveAskedOnce(asked)
+    }
+
+    /**
+     * Invoked by the screen after the call-log permission launcher resolves. On
+     * `Granted`: defensively start the observer (idempotent) and enqueue a full
+     * initial import. On `Denied` / `PermanentlyDenied`: stop the observer, the
+     * same cleanup an observed revocation runs. Both run on the caller's thread
+     * before this returns; there is no stored flag to write first.
      */
     fun onPermissionResult(state: CallLogPermissionState) {
         _permissionState.value = state
         when (state) {
-            is CallLogPermissionState.Granted -> {
-                viewModelScope.launch {
-                    appPrefs.setCallLogSyncEnabled(true)
-                    contentObserverController.start()
-                    contentObserverController.enqueueImmediateSync(fullResync = true)
-                }
-            }
+            is CallLogPermissionState.Granted -> onCallLogGranted()
             is CallLogPermissionState.Denied,
-            is CallLogPermissionState.PermanentlyDenied -> {
-                viewModelScope.launch { applyRevocationCleanup() }
-            }
+            is CallLogPermissionState.PermanentlyDenied -> contentObserverController.stop()
         }
     }
 
     /**
-     * Shared cleanup path for an observed `Granted → not-Granted` transition.
-     * Idempotent — `setCallLogSyncEnabled(false)` and `stop()` are both no-ops if
-     * already in that state.
+     * Shared grant path for the call log, whether the grant came from the row's
+     * launcher or was noticed on resume. Pitfall 5: the observer can only be
+     * registered once READ_CALL_LOG is held, so `start()` is re-run here; the
+     * full resync imports the configured window.
      */
-    private suspend fun applyRevocationCleanup() {
-        appPrefs.setCallLogSyncEnabled(false)
-        contentObserverController.stop()
+    private fun onCallLogGranted() {
+        contentObserverController.start()
+        contentObserverController.enqueueImmediateSync(fullResync = true)
     }
 
     /**
      * Settings "Sync now" button. Enqueues a full-resync work request via the
-     * existing unique-work name — `ExistingWorkPolicy.REPLACE` collapses any pending
+     * existing unique-work name; `ExistingWorkPolicy.REPLACE` collapses any pending
      * debounced sync in favour of this one. No-ops when permission is not granted.
      */
     fun onManualResync() {
@@ -382,7 +542,7 @@ class SettingsViewModel @Inject constructor(
      * cleanly, but gating here avoids waking WorkManager pointlessly).
      *
      * The ingest path is delta-sync / reconcile (insert + refresh + orphan),
-     * never a destructive overwrite — see [ContentObserverController.enqueueImmediateContactsIngest].
+     * never a destructive overwrite; see [ContentObserverController.enqueueImmediateContactsIngest].
      */
     fun onManualContactsResync() {
         if (_contactsPermissionState.value != PermissionStatus.Granted) return
@@ -390,15 +550,38 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Import-window picker — 30 / 90 / 180 / 365 days. Writes through AppPrefs which
+     * Import-window picker: 30 / 90 / 180 / 365 days. Writes through AppPrefs which
      * the next worker invocation reads.
+     *
+     * SET-04: widening the window (with the call log readable) also runs a full
+     * resync right away. The incremental worker only reads forward from the last
+     * sync, so without this a user who moved from 3 months to 1 year saw nothing
+     * new until "Sync now". Narrowing changes nothing on screen (the log keeps
+     * what it already has), so it stays a plain write.
+     *
+     * A failed write tells the user ("Couldn't save your change", rules.md
+     * Code 3) and schedules nothing: the resync stays inside the guarded block,
+     * after the write, so a window that was not saved is never imported.
+     * Cancellation passes through (Code 5).
      */
     fun onImportDaysChanged(days: Int) {
-        viewModelScope.launch { appPrefs.setCallLogImportDays(days) }
+        viewModelScope.launch {
+            try {
+                val previous = appPrefs.callLogImportDays.first()
+                appPrefs.setCallLogImportDays(days)
+                if (days > previous && _permissionState.value is CallLogPermissionState.Granted) {
+                    contentObserverController.enqueueImmediateSync(fullResync = true)
+                }
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                _snackbarEvents.tryEmit(UiText.res(R.string.components_snackbar_save_failed))
+            }
+        }
     }
 
     /**
-     * PICK-07 — commit all four picker thresholds in one shot.
+     * PICK-07: commit all four picker thresholds in one shot.
      * Called from [PickerThresholdsDialog]'s Save button. Each setter applies its own
      * `coerceIn(min, max)` clamp at write time, so an out-of-bounds value from a future
      * UI bug cannot poison DataStore (T-07-30 mitigation).
@@ -413,32 +596,43 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * One-shot signal that [ResetService.resetAll] finished.
-     * The screen collects this and restarts the task (the onboarding flag
-     * was just cleared, so the relaunched MainActivity resolves the
-     * onboarding start destination) instead of leaving the user in a
-     * ghost app with empty state.
+     * One-off messages for the screen's snackbar, as [UiText] (voice.md: ViewModels
+     * hold no Context). Today only a failed import-window write. The reset's
+     * failure is not here: it is reported through [ResetService.outcome], which
+     * MainActivity shows wherever the user is, because this flow has no
+     * collector once Settings is popped.
      */
-    private val _resetCompleteEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val resetCompleteEvents: SharedFlow<Unit> = _resetCompleteEvents.asSharedFlow()
+    private val _snackbarEvents = MutableSharedFlow<UiText>(extraBufferCapacity = 1)
+    val snackbarEvents: SharedFlow<UiText> = _snackbarEvents.asSharedFlow()
 
     /**
-     * SET-06 — destructive Reset Orbit. Wired to [ResetConfirmDialog]'s confirm
+     * SET-06: destructive Reset Orbit. Wired to [ResetConfirmDialog]'s confirm
      * button via the screen's `vm::onResetConfirmed` lambda.
      * [ResetService.resetAll] cancels the unique WorkManager jobs and stops the
-     * content observers
-     * before wiping Room + DataStore (per features/settings/README.md);
-     * once it returns, [resetCompleteEvents] fires so the screen can
-     * restart the task into onboarding.
+     * content observers before wiping Room + DataStore (per
+     * features/settings/README.md) and records its outcome; MainActivity reads
+     * that outcome and restarts the task into onboarding, or tells the user it
+     * failed.
+     *
+     * Runs on the application scope (rules.md Code 6): a back press while the
+     * tables were half cleared used to cancel the job mid-way and leave a wiped
+     * database with the onboarding flag still set. This ViewModel only marks
+     * the reset as in flight ([SettingsUiState.Ready.isResetting]) for as long
+     * as it runs; `resetAll` throws nothing but cancellation, so there is no
+     * failure to report from here.
      */
     fun onResetConfirmed() {
-        viewModelScope.launch {
-            resetService.resetAll()
-            _resetCompleteEvents.emit(Unit)
+        _isResetting.value = true
+        appScope.launch {
+            try {
+                resetService.resetAll()
+            } finally {
+                _isResetting.value = false
+            }
         }
     }
 
-    // ---- THEMING 2026-06-22 — Appearance write-throughs. Each persists to
+    // ---- THEMING 2026-06-22: Appearance write-throughs. Each persists to
     // AppPrefs; AppViewModel's themeSettings collector retints the whole app. ----
 
     fun onSelectTheme(id: OrbitThemeId) {

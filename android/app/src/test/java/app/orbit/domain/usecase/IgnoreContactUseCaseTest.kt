@@ -76,7 +76,7 @@ class IgnoreContactUseCaseTest {
         )
         val useCase = IgnoreContactUseCase(passThruTx, contactRepo, membershipDao, FakeListRepository(), TestClock(T0))
 
-        useCase(contactId = 42L, contactName = "Alex Chen")
+        useCase(contactId = 42L)
 
         val args = contactRepo.markIgnoredCalls.single()
         assertEquals(42L, args.contactId)
@@ -100,7 +100,7 @@ class IgnoreContactUseCaseTest {
         )
         val useCase = IgnoreContactUseCase(passThruTx, contactRepo, membershipDao, FakeListRepository(), TestClock(T0))
 
-        useCase(contactId = 42L, contactName = "Alex Chen")
+        useCase(contactId = 42L)
 
         // Pitfall 1: ignoring MUST NOT delete any membership rows.
         assertEquals(0, membershipDao.deleteCalls.size, "Pitfall 1: no delete(membership) calls")
@@ -109,23 +109,12 @@ class IgnoreContactUseCaseTest {
     }
 
     @Test
-    fun `Result label uses contact name in sentence case`() = runTest {
-        val contactRepo = FakeContactRepository(listOf(contactFixture(id = 42L)))
-        val membershipDao = SeededListMembershipDao(memberships = emptyList())
-        val useCase = IgnoreContactUseCase(passThruTx, contactRepo, membershipDao, FakeListRepository(), TestClock(T0))
-
-        val result = useCase(contactId = 42L, contactName = "Alex Chen")
-
-        assertEquals("Ignored Alex Chen", result.label)
-    }
-
-    @Test
     fun `Result inverse flips four columns back to false null null`() = runTest {
         val contactRepo = FakeContactRepository(listOf(contactFixture(id = 42L)))
         val membershipDao = SeededListMembershipDao(memberships = emptyList())
         val useCase = IgnoreContactUseCase(passThruTx, contactRepo, membershipDao, FakeListRepository(), TestClock(T0))
 
-        val result = useCase(contactId = 42L, contactName = "Alex Chen")
+        val result = useCase(contactId = 42L)
         contactRepo.markIgnoredCalls.clear()  // discard the forward write; assert inverse only
         result.inverse()
 

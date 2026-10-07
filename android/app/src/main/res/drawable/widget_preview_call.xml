@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WIDGET-09: the accent Call button in the picker previews; a pill, or a
+     circle when the view is square. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_preview_accent" />
+    <corners android:radius="24dp" />
+</shape>

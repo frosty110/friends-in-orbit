@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Home: one card per list, with who is next and the last 7 days of calls.
+    Keys are area_what (features/_foundations/voice.md, "Where copy lives").
+-->
+<resources>
+
+    <!-- App bar icon buttons (screen-reader names). -->
+    <string name="home_action_search">Search</string>
+    <string name="home_action_lists">Lists</string>
+    <string name="home_action_settings">Settings</string>
+
+    <!-- Small label above today's date at the top of Home. -->
+    <string name="home_date_eyebrow">Today</string>
+    <!-- java.time date pattern for the date under "Today", for example "Wednesday 3 June".
+         EEEE = weekday, d = day of month, MMMM = month name. Reorder for your language. -->
+    <string name="home_date_pattern">EEEE d MMMM</string>
+
+    <!-- First install, before any list exists. -->
+    <string name="home_empty_body">Start with the people you keep meaning to call.</string>
+    <string name="home_empty_cta">Create your first list</string>
+    <string name="home_new_list">New list</string>
+
+    <!-- Screen-reader hints for a list card: tap opens the list, long-press opens its menu. -->
+    <string name="home_tile_open_list">Open list</string>
+    <string name="home_tile_quick_actions">Quick actions</string>
+
+    <!-- A list card's long-press menu. -->
+    <string name="home_menu_add_people">Add people</string>
+    <string name="home_menu_list_settings">List settings</string>
+    <!-- Glossary: a nudge is the notification Orbit sends; pause stops them for a while. -->
+    <string name="home_menu_pause_nudges">Pause nudges</string>
+    <string name="home_menu_resume_nudges">Resume nudges</string>
+
+    <!-- Snackbars after the menu's nudge toggle. -->
+    <string name="home_snackbar_nudges_on">Nudges on.</string>
+    <string name="home_snackbar_nudges_paused">Nudges paused.</string>
+
+    <!-- A list card's member count when nobody has been added yet. -->
+    <string name="home_member_count_none">No one yet</string>
+    <plurals name="home_member_count">
+        <item quantity="one">%1$d person</item>
+        <item quantity="other">%1$d people</item>
+    </plurals>
+
+    <!-- "Next up": the person this list would surface first. -->
+    <string name="home_next_up_eyebrow">Next up</string>
+    <!-- The list has people but nobody to suggest right now. Calm, never "caught up". -->
+    <string name="home_next_up_quiet">All quiet for now</string>
+    <!-- Screen-reader name of the call button. %1$s: the person's first name. -->
+    <string name="home_next_up_call">Call %1$s</string>
+
+    <!-- The line under the next person's name: warm context, never blame. Sentence case (voice.md); it read as a typo starting lowercase on its own line. -->
+    <string name="home_why_never">You haven\'t spoken yet</string>
+    <string name="home_why_today">You spoke today</string>
+    <string name="home_why_yesterday">You spoke yesterday</string>
+    <!-- %1$s: how long ago, for example "3 weeks ago". -->
+    <string name="home_why_ago">You spoke %1$s</string>
+
+    <!-- The 7-day rhythm strip on each card. -->
+    <string name="home_rhythm_eyebrow">Last 7 days</string>
+    <!-- Two-colour key: each bar's outline shows who called. "You" = calls you made. -->
+    <string name="home_rhythm_legend_you">You</string>
+    <!-- "Them" = calls you received. -->
+    <string name="home_rhythm_legend_them">Them</string>
+    <string name="home_rhythm_legend_a11y">Bar outlines show direction: one color for calls you made, another for calls you received</string>
+    <!-- Screen-reader hint on a day column that has calls. -->
+    <string name="home_rhythm_see_day">See this day</string>
+    <plurals name="home_rhythm_day_calls">
+        <item quantity="one">%1$d call</item>
+        <item quantity="other">%1$d calls</item>
+    </plurals>
+    <!-- Screen-reader label for one day column. %1$s: the day ("Monday 5 October", "Today"), %2$s: "2 calls",
+         %3$s: who called whom ("You called 1 · They called 1"). -->
+    <string name="home_rhythm_day_a11y">%1$s, %2$s. %3$s. Tap to see who.</string>
+    <!-- Screen-reader label for a day column with no calls, which cannot be tapped.
+         %1$s: the day ("Monday 5 October", "Yesterday"), %2$s: "No calls" (home_direction_none). -->
+    <string name="home_rhythm_day_quiet_a11y">%1$s, %2$s</string>
+
+    <!-- Summary line on the day sheet. Both sides read the same way, with no zeros. -->
+    <plurals name="home_direction_you_called_count">
+        <item quantity="one">You called %1$d</item>
+        <item quantity="other">You called %1$d</item>
+    </plurals>
+    <plurals name="home_direction_they_called_count">
+        <item quantity="one">They called %1$d</item>
+        <item quantity="other">They called %1$d</item>
+    </plurals>
+    <!-- Joins the two halves above: "You called 2 · They called 1". -->
+    <string name="home_direction_both">%1$s · %2$s</string>
+    <string name="home_direction_none">No calls</string>
+    <!-- Which way one call went, at the start of its row on the day sheet. -->
+    <string name="home_direction_you_called">You called</string>
+    <string name="home_direction_they_called">They called</string>
+    <!-- One call's row: direction, length, time. "You called · 14 min · 4:30pm". -->
+    <string name="home_rhythm_call_meta">%1$s · %2$s · %3$s</string>
+    <!-- Stands in for the name of someone who has left the list since the call. -->
+    <string name="home_rhythm_someone">Someone</string>
+
+    <!-- The one reflective line at the foot of Home. -->
+    <string name="home_reflection">The call that makes your day can make someone else\'s. You deserve to be the one who reaches out.</string>
+
+
+    <!-- Home could not read the lists from the database. -->
+    <string name="home_error_title">Orbit couldn\'t load your lists</string>
+</resources>

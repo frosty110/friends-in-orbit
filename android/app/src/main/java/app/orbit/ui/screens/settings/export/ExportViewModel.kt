@@ -3,9 +3,11 @@ package app.orbit.ui.screens.settings.export
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.di.ApplicationScope
 import app.orbit.domain.export.ExportService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -15,7 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * SET-05 / EXPORT-01 — coordinates the SAF picker handoff with
+ * SET-05 / EXPORT-01: coordinates the SAF picker handoff with
  * the domain ExportService.
  *
  * Holds the user-entered passphrase as a `CharArray` between the sheet's
@@ -27,10 +29,17 @@ import kotlinx.coroutines.launch
  * SettingsScreen subscribes via `LaunchedEffect` and calls the existing
  * `rememberLauncherForActivityResult` launcher with the requested
  * default filename.
+ *
+ * The export itself runs on the application scope (rules.md Code 6): the
+ * file is being written through a SAF stream, and a back press mid-write on
+ * `viewModelScope` would cancel it and leave a truncated file behind that the
+ * user believes is a backup. [uiState] is still this ViewModel's, so the
+ * screen can disable the Data rows while the write runs (SET-05).
  */
 @HiltViewModel
 class ExportViewModel @Inject constructor(
     private val exportService: ExportService,
+    @ApplicationScope private val appScope: CoroutineScope,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ExportUiState>(ExportUiState.Idle)
@@ -65,22 +74,22 @@ class ExportViewModel @Inject constructor(
         pendingPassphrase = null
 
         if (uri == null) {
-            // User cancelled the SAF picker — no error, no snackbar.
+            // User cancelled the SAF picker: no error, no snackbar.
             passphrase?.fill(0.toChar())
             return
         }
         if (passphrase == null) {
-            // Defensive: shouldn't happen — sheet must call onPassphraseSubmitted first.
-            viewModelScope.launch { _snackbarEvents.emit(ExportSnackbar.Failure) }
+            // Defensive: shouldn't happen: the sheet must call onPassphraseSubmitted first.
+            _snackbarEvents.tryEmit(ExportSnackbar.Failure)
             return
         }
 
         _uiState.value = ExportUiState.InFlight
-        viewModelScope.launch {
+        appScope.launch {
             val result = runCatching { exportService.export(uri, passphrase) }
             passphrase.fill(0.toChar())             // wipe regardless of outcome
             _uiState.value = ExportUiState.Idle
-            _snackbarEvents.emit(
+            _snackbarEvents.tryEmit(
                 if (result.isSuccess) ExportSnackbar.Success else ExportSnackbar.Failure,
             )
         }

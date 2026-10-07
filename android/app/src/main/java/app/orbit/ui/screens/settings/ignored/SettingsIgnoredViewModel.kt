@@ -2,6 +2,7 @@ package app.orbit.ui.screens.settings.ignored
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.repository.ContactRepository
 import app.orbit.domain.clock.Clock
@@ -9,37 +10,48 @@ import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
 import app.orbit.ui.screens.picker.SnackbarEvent
+import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatRelative
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Instant
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * IGNORE-06 — read + un-ignore surface for the Settings → Ignored route.
+ * IGNORE-06: read + un-ignore surface for the Settings → Ignored route.
  *
  * Sorted by ignoredAt DESC (DAO-enforced via `ContactRepository.observeIgnored`).
  * Empty state when the visible list is empty (warm locked copy).
  *
- * Explicit `!isArchived` filter so archived contacts never pollute this view.
- * Archive is a separate hide mechanism. Defensive even though
- * `ArchiveContactUseCase` doesn't touch `isIgnored` today; future codepaths
- * might ignore-then-archive and we don't want them leaking into the Ignored
- * management surface.
+ * Archived contacts are excluded by the query itself (`ContactDao.observeIgnored`),
+ * so this list and Settings' "{N} ignored" count always agree. Archive is a
+ * separate hide mechanism; an ignore-then-archive path must never leak into
+ * the Ignored management surface.
  *
  * Un-ignore re-uses [UnignoreContactUseCase] (drift restore via
  * pre-ignore membership snapshot). The snackbar Undo path
- * re-ignores via [IgnoreContactUseCase] wrapped through [UndoStack] — note
+ * re-ignores via [IgnoreContactUseCase] wrapped through [UndoStack]; note
  * that we deliberately do NOT use `IgnoreContactUseCase.Result.inverse` for
  * the Undo, because that closure UN-ignores; here the Undo intent is to
  * RE-ignore (the user just un-ignored and is reverting that).
+ *
+ * A failing read becomes [SettingsIgnoredUiState.Error] rather than a crash
+ * or a screen stuck on its skeleton, and [onRetry] re-subscribes (the same
+ * `retryCount.flatMapLatest` shape as SettingsViewModel's SET-11); cancellation
+ * is rethrown, never swallowed (rules.md Code 5).
  *
  * `WhileSubscribed(5_000L)` keeps the upstream observe-flow alive across
  * rotation / dark-mode toggle so the row list survives config changes
@@ -51,56 +63,95 @@ class SettingsIgnoredViewModel @Inject constructor(
     private val ignoreContactUseCase: IgnoreContactUseCase,
     private val unignoreContactUseCase: UnignoreContactUseCase,
     private val undoStack: UndoStack,
-    private val clock: Clock,
+    private val clock: Clock
 ) : ViewModel() {
 
+    // Bumped by [onRetry] to re-subscribe after a failure.
+    private val retryCount = MutableStateFlow(0)
+
+    /** The Error state's Try again. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<SettingsIgnoredUiState> =
-        contactRepo.observeIgnored()
-            .map { entities ->
-                // Filter archived contacts out of the Ignored view.
-                val visible = entities.filter { !it.isArchived }
-                if (visible.isEmpty()) {
-                    SettingsIgnoredUiState.Empty
-                } else {
-                    SettingsIgnoredUiState.Ready(
-                        ignored = visible.map { it.toRow(now = clock.now()) },
-                    )
+        retryCount.flatMapLatest {
+            contactRepo.observeIgnored()
+                .map<List<ContactEntity>, SettingsIgnoredUiState> { visible ->
+                    if (visible.isEmpty()) {
+                        SettingsIgnoredUiState.Empty
+                    } else {
+                        SettingsIgnoredUiState.Ready(
+                            ignored = visible.map { it.toRow(now = clock.now()) }
+                        )
+                    }
                 }
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = SettingsIgnoredUiState.Loading,
-            )
+                .catch { t ->
+                    if (t is CancellationException) throw t
+                    emit(SettingsIgnoredUiState.Error)
+                }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000L),
+            initialValue = SettingsIgnoredUiState.Loading
+        )
 
     private val _snackbarEvents = MutableSharedFlow<SnackbarEvent>(extraBufferCapacity = 1)
     val snackbarEvents: SharedFlow<SnackbarEvent> = _snackbarEvents.asSharedFlow()
 
     /**
-     * IGNORE-09 — un-ignore a contact and queue a re-ignore Undo.
+     * IGNORE-09: un-ignore a contact and queue a re-ignore Undo.
      *
      * Two writes happen on the snackbar dance:
      *   1. Immediate: [UnignoreContactUseCase] flips `isIgnored = false` and
      *      restores any drift-affected list memberships from the pre-ignore
      *      snapshot.
      *   2. On Undo tap: pop [UndoStack] and run the inverse, which dispatches
-     *      [IgnoreContactUseCase] — re-snapshots current memberships and flips
+     *      [IgnoreContactUseCase], which re-snapshots current memberships and flips
      *      `isIgnored = true`.
+     *
+     * The snackbar says "Unignored {name}", the one word for the inverse of
+     * Ignore everywhere (voice.md glossary; the picker's row says the same).
+     *
+     * A failed write tells the user (rules.md Code 3): "Couldn't save your
+     * change", the shared key, and no Undo is offered for a change that did
+     * not land. The success snackbar and the Undo are pushed only after the
+     * use case returned, so the words never promise more than the row did.
+     * Cancellation passes through (Code 5).
      */
     fun onUnignore(contactId: Long, name: String) = viewModelScope.launch {
-        unignoreContactUseCase(contactId)
-        undoStack.put(
-            UndoStack.PendingUndo(
-                inverse = { ignoreContactUseCase(contactId, name) },
-                label = "Restored $name",
-            ),
-        )
-        _snackbarEvents.tryEmit(SnackbarEvent("Restored $name", "Undo"))
+        try {
+            unignoreContactUseCase(contactId)
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (t: Throwable) {
+            _snackbarEvents.tryEmit(
+                SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)),
+            )
+            return@launch
+        }
+        undoStack.put(UndoStack.PendingUndo(inverse = { ignoreContactUseCase(contactId) }))
+        _snackbarEvents.tryEmit(SnackbarEvent.undoable(UiText.res(R.string.components_snackbar_unignored, name)))
     }
 
-    /** Snackbar "Undo" tap — replay the inverse closure recorded on [UndoStack]. */
+    /**
+     * Snackbar "Undo" tap: replay the inverse closure recorded on [UndoStack].
+     * The undo is consumed before it runs, so a second tap racing the first is
+     * a no-op; if the re-ignore fails the person stays unignored, as the first
+     * snackbar said, and "Couldn't save your change" says the Undo did not land.
+     */
     fun onUndo() = viewModelScope.launch {
-        undoStack.take()?.inverse?.invoke()
+        val pending = undoStack.take() ?: return@launch
+        try {
+            pending.inverse()
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (t: Throwable) {
+            _snackbarEvents.tryEmit(
+                SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)),
+            )
+        }
     }
 
     private fun ContactEntity.toRow(now: Instant): IgnoredContactRow {
@@ -110,7 +161,8 @@ class SettingsIgnoredViewModel @Inject constructor(
             name = displayName,
             photoUri = photoUri,
             ignoredAtMs = ignoredInstant.toEpochMilli(),
-            ignoredRelativeLabel = "Ignored " + formatRelative(ignoredInstant, now),
+            // "Ignored {3 days ago}": formatRelative's UiText nests as the argument.
+            ignoredRelativeLabel = UiText.res(R.string.settings_ignored_relative, formatRelative(ignoredInstant, now))
         )
     }
 }

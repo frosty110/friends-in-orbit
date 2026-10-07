@@ -17,19 +17,26 @@ import app.orbit.ui.screens.home.RhythmDay
 import app.orbit.ui.util.formatDuration
 import app.orbit.ui.util.formatWallClock
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 
 /**
  * Process-scoped HomeFeed (ADR 0006 §Rule 1).
@@ -59,6 +66,12 @@ import kotlinx.coroutines.flow.stateIn
  * precedent — test fixtures subclass to inject a deterministic `tiles` flow
  * without forcing the test to satisfy `@ApplicationScope CoroutineScope`
  * construction.
+ *
+ * **Failure is data (HOME-10).** Both projections catch what their sources
+ * throw and report it through [failed]; HomeViewModel maps that to
+ * `HomeUiState.Error`. Uncaught, a failing `observeActive()` escaped the
+ * handler-less `@ApplicationScope` and crashed the app (the shape BrowseFeed
+ * had, and fixed, for BROWSE-06). [retry] re-subscribes both.
  */
 @Singleton
 open class HomeFeed @Inject constructor(
@@ -71,9 +84,49 @@ open class HomeFeed @Inject constructor(
     @ApplicationScope private val scope: CoroutineScope,
 ) {
 
+    // HOME-10: bumped by [retry]; `tiles` and `enrichment` are flatMapLatest
+    // over it, so a bump drops the failed subscription and opens a fresh one.
+    // `tiles` and `enrichment` are plain vals (no per-key cache to evict, as
+    // BrowseFeed has), so this is the one seam that can rebuild them.
+    // Declared before them: their initializers read it.
+    private val retryCount = MutableStateFlow(0)
+
+    // One flag per projection, each with one writer (its own flow, rules.md
+    // Code 7): set in its catch, cleared by its next successful emission.
+    // Cleared there and not in [retry] on purpose: cleared at retry, the VM
+    // would see "not failed" with the stale value still in the StateFlow and
+    // flash Empty (the first-install CTA) until the fresh read answered.
+    private val tilesFailed = MutableStateFlow(false)
+    private val enrichmentFailed = MutableStateFlow(false)
+
+    /**
+     * HOME-10: true while a source behind [tiles] or [enrichment] has thrown
+     * and not yet recovered. HomeViewModel renders it as `HomeUiState.Error`
+     * with Try again, which calls [retry]. The failing flow keeps its last
+     * value, so a consumer reading `tiles.value` must check this first.
+     */
+    open val failed: StateFlow<Boolean> =
+        combine(tilesFailed, enrichmentFailed) { t, e -> t || e }
+            .stateIn(scope = scope, started = SharingStarted.Eagerly, initialValue = false)
+
+    // HOME-12: the local date Home last resumed on. [buildRhythm] buckets by
+    // `clock.now()` only when a Room flow re-emits, so with no call or
+    // membership change overnight the strip's last column kept meaning
+    // yesterday while the screen's weekday letters moved on. HomeViewModel
+    // reports each resume's date through [noteToday]; a StateFlow conflates
+    // equal values, so the per-list combine re-buckets only when the day has
+    // actually changed, not on every resume (ADR 0006: no projection re-fire
+    // on navigation).
+    private val today = MutableStateFlow<LocalDate?>(null)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     open val tiles: StateFlow<List<ListTileState>> =
-        listRepo.observeActive()
-            .map { rows -> rows.map { it.toTileState() } }
+        retryCount
+            .flatMapLatest {
+                listRepo.observeActive()
+                    .map { rows -> rows.map { it.toTileState() } }
+                    .reportingFailure(tilesFailed)
+            }
             .stateIn(
                 scope = scope,
                 started = SharingStarted.Eagerly,
@@ -99,19 +152,50 @@ open class HomeFeed @Inject constructor(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     open val enrichment: StateFlow<Map<Long, ListEnrichment>> =
-        listRepo.observeActive()
-            .flatMapLatest { lists ->
-                if (lists.isEmpty()) {
-                    flowOf(emptyMap())
-                } else {
-                    combine(lists.map { enrichOne(it.id) }) { it.toMap() }
-                }
+        retryCount
+            .flatMapLatest {
+                listRepo.observeActive()
+                    .flatMapLatest { lists ->
+                        if (lists.isEmpty()) {
+                            flowOf(emptyMap())
+                        } else {
+                            combine(lists.map { enrichOne(it.id) }) { it.toMap() }
+                        }
+                    }
+                    .reportingFailure(enrichmentFailed)
             }
             .stateIn(
                 scope = scope,
                 started = SharingStarted.Eagerly,
                 initialValue = emptyMap(),
             )
+
+    /** HOME-10: the Error state's Try again. Re-subscribes [tiles] and [enrichment]. */
+    open fun retry() {
+        retryCount.update { it + 1 }
+    }
+
+    /**
+     * HOME-12: Home resumed on [date]. Re-buckets every list's rhythm when the
+     * day has changed since the last call; a no-op otherwise.
+     */
+    open fun noteToday(date: LocalDate) {
+        today.value = date
+    }
+
+    /**
+     * Clears [flag] on each value and sets it when the upstream throws, then
+     * completes; the caller's `flatMapLatest` over [retryCount] is what starts
+     * again. The flow's last value stays in its StateFlow, which is why
+     * [failed] has to be read alongside it. No logging: the flag is the report
+     * (rules.md Code 4), and CancellationException passes through (Code 5).
+     */
+    private fun <T> Flow<T>.reportingFailure(flag: MutableStateFlow<Boolean>): Flow<T> =
+        onEach { flag.value = false }
+            .catch { t ->
+                if (t is CancellationException) throw t
+                flag.value = true
+            }
 
     private fun enrichOne(listId: Long) =
         combine(
@@ -122,7 +206,9 @@ open class HomeFeed @Inject constructor(
             // Room shares the underlying query with SurfaceNextUseCase's own
             // member read, so this is not an extra round trip per list.
             contactRepo.observeForListMembers(listId),
-        ) { surface, calls, members ->
+            // HOME-12: only a trigger; buildRhythm still reads clock.now().
+            today,
+        ) { surface, calls, members, _ ->
             val byId = members.associateBy { it.id }
             val nextUp = (surface as? SurfaceResult.Found)?.let { found ->
                 val last = calls.asSequence()
@@ -133,6 +219,7 @@ open class HomeFeed @Inject constructor(
                     name = found.contact.displayName,
                     photoUri = found.contact.photoUri,
                     lastCalledAt = last?.occurredAt,
+                    phone = found.contact.phoneNumber,
                 )
             }
             listId to ListEnrichment(nextUp = nextUp, rhythm = buildRhythm(calls, byId))
@@ -171,9 +258,10 @@ open class HomeFeed @Inject constructor(
                             callEventId = ev.id,
                             contactId = ev.contactId,
                             // A member removed from the list between the call
-                            // and now still has its bar; "Someone" keeps the
-                            // day honest rather than dropping the call.
-                            contactName = contact?.displayName ?: "Someone",
+                            // and now still has its bar; a null name renders as
+                            // "Someone" (strings_home.xml), which keeps the day
+                            // honest rather than dropping the call.
+                            contactName = contact?.displayName,
                             photoUri = contact?.photoUri,
                             durationSeconds = ev.durationSeconds,
                             direction = ev.direction,
@@ -263,4 +351,6 @@ data class NextUpRaw(
     val name: String,
     val photoUri: String?,
     val lastCalledAt: Instant?,
+    // HOME-9: the number the card's quiet Call button dials. Never logged.
+    val phone: String? = null,
 )

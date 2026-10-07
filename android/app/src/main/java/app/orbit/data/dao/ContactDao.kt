@@ -48,7 +48,7 @@ abstract class ContactDao {
     @Query(
         "SELECT c.* FROM contacts c " +
             "INNER JOIN list_memberships lm ON lm.contactId = c.id " +
-            "WHERE lm.listId = :listId",
+            "WHERE lm.listId = :listId"
     )
     abstract fun observeForListMembers(listId: Long): Flow<List<ContactEntity>>
 
@@ -68,7 +68,7 @@ abstract class ContactDao {
         "SELECT c.* FROM contacts c " +
             "LEFT JOIN call_events ce ON ce.contactId = c.id " +
             "GROUP BY c.id " +
-            "HAVING COUNT(ce.id) = 0",
+            "HAVING COUNT(ce.id) = 0"
     )
     abstract fun observeNeverCalled(): Flow<List<ContactEntity>>
 
@@ -77,7 +77,7 @@ abstract class ContactDao {
         "SELECT c.* FROM contacts c " +
             "LEFT JOIN call_events ce ON ce.contactId = c.id " +
             "GROUP BY c.id " +
-            "HAVING COUNT(ce.id) = 0",
+            "HAVING COUNT(ce.id) = 0"
     )
     abstract suspend fun snapshotNeverCalled(): List<ContactEntity>
 
@@ -184,8 +184,8 @@ abstract class ContactDao {
                     phoneNumber = contact.phoneNumber,
                     displayName = contact.displayName,
                     photoUri = contact.photoUri,
-                    phoneContactId = contact.phoneContactId ?: existing.phoneContactId,
-                ),
+                    phoneContactId = contact.phoneContactId ?: existing.phoneContactId
+                )
             )
             existing.id
         }
@@ -232,7 +232,7 @@ abstract class ContactDao {
     @Transaction
     open suspend fun insertCallEventAndTouchContact(
         event: CallEventEntity,
-        contact: ContactEntity,
+        contact: ContactEntity
     ): Long {
         val rowid = insertCallEvent(event)
         update(contact)
@@ -241,8 +241,15 @@ abstract class ContactDao {
 
     // ─── Notes / Ignore / Override surface ──────────────────────────────────
 
-    /** IGNORE-06 — ignored contacts sorted by ignoredAt DESC for SettingsIgnoredScreen. */
-    @Query("SELECT * FROM contacts WHERE isIgnored = 1 ORDER BY ignoredAt DESC")
+    /**
+     * IGNORE-06: ignored contacts sorted by ignoredAt DESC for SettingsIgnoredScreen.
+     *
+     * Archived contacts are excluded here, in the one definition both readers
+     * share: Settings' "{N} ignored" count and the Ignored screen's rows. The
+     * screen used to drop archived rows itself while the count did not, so
+     * "1 ignored" could open onto "No ignored contacts".
+     */
+    @Query("SELECT * FROM contacts WHERE isIgnored = 1 AND isArchived = 0 ORDER BY ignoredAt DESC")
     abstract fun observeIgnored(): Flow<List<ContactEntity>>
 
     /**
@@ -256,13 +263,13 @@ abstract class ContactDao {
             "SET isIgnored = :isIgnored, " +
             "    ignoredAt = :ignoredAt, " +
             "    preIgnoreListMembershipsJson = :preIgnoreListMembershipsJson " +
-            "WHERE id = :id",
+            "WHERE id = :id"
     )
     abstract suspend fun markIgnored(
         id: Long,
         isIgnored: Boolean,
         ignoredAt: Instant?,
-        preIgnoreListMembershipsJson: String?,
+        preIgnoreListMembershipsJson: String?
     ): Int
 
     /** Projection for un-ignore restore — read snapshot without loading the full row. */
@@ -317,7 +324,7 @@ abstract class ContactDao {
             "    isStarred = :isStarred, " +
             "    deviceUpdatedAt = COALESCE(deviceUpdatedAt, :deviceUpdatedAt), " +
             "    isOrphaned = 0 " +
-            "WHERE id = :id",
+            "WHERE id = :id"
     )
     abstract suspend fun refreshMirrorFields(
         id: Long,
@@ -325,7 +332,7 @@ abstract class ContactDao {
         photoUri: String?,
         phoneContactId: Long,
         isStarred: Boolean,
-        deviceUpdatedAt: Instant?,
+        deviceUpdatedAt: Instant?
     ): Int
 
     /**
@@ -361,4 +368,34 @@ abstract class ContactDao {
      */
     @Query("DELETE FROM contact_phones WHERE contactId = :contactId")
     abstract suspend fun deletePhonesForContact(contactId: Long): Int
+
+    // ─── CONTACT-07 re-link merge ───────────────────────────────────────────
+    //
+    // Building blocks for [app.orbit.domain.usecase.RelinkContactUseCase],
+    // which moves a live phone contact's rows onto an orphan and then deletes
+    // the emptied live row. Every table with a `contactId` foreign key is
+    // covered here or in [ListMembershipDao.deleteAllForContact]: a child row
+    // left behind would be cascade-deleted with its parent.
+
+    /** One contact's phone set, for the re-link snapshot and its undo. */
+    @Query("SELECT * FROM contact_phones WHERE contactId = :contactId")
+    abstract suspend fun getPhonesForContact(contactId: Long): List<ContactPhoneEntity>
+
+    /** Re-points every phone row of one contact at another (row ids kept). */
+    @Query("UPDATE contact_phones SET contactId = :toContactId WHERE contactId = :fromContactId")
+    abstract suspend fun reassignPhones(fromContactId: Long, toContactId: Long): Int
+
+    @Query("SELECT id FROM call_events WHERE contactId = :contactId")
+    abstract suspend fun getCallEventIdsForContact(contactId: Long): List<Long>
+
+    /** By id, not by owner, so the re-link undo can hand back exactly the rows it took. */
+    @Query("UPDATE call_events SET contactId = :toContactId WHERE id IN (:ids)")
+    abstract suspend fun reassignCallEvents(ids: List<Long>, toContactId: Long): Int
+
+    @Query("SELECT id FROM notes WHERE contactId = :contactId")
+    abstract suspend fun getNoteIdsForContact(contactId: Long): List<Long>
+
+    /** By id, for the same reason as [reassignCallEvents]. */
+    @Query("UPDATE notes SET contactId = :toContactId WHERE id IN (:ids)")
+    abstract suspend fun reassignNotes(ids: List<Long>, toContactId: Long): Int
 }

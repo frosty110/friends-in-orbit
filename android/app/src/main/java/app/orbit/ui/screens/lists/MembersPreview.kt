@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.lists
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,11 +19,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.Avatar
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 
@@ -62,21 +69,19 @@ fun MembersPreview(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 18.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4),
     ) {
         Text(
-            text = "${members.size} ${if (members.size == 1) "person" else "people"}",
+            text = pluralStringResource(R.plurals.lists_members_count, members.size, members.size),
             style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted),
         )
         if (members.isEmpty()) {
             Text(
-                text = if (isSmart) {
-                    "No one matches this rule right now."
-                } else {
-                    "No one in this list yet."
-                },
+                text = stringResource(
+                    if (isSmart) R.string.lists_members_empty_smart else R.string.lists_members_empty_static,
+                ),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(top = 12.dp),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.x3),
             )
         } else {
             // Visual collapse for long lists. The full list is always available
@@ -86,8 +91,8 @@ fun MembersPreview(
             val collapsed = !expanded && members.size > COLLAPSED_VISIBLE_COUNT
             val visible = if (collapsed) members.take(COLLAPSED_VISIBLE_COUNT) else members
             Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(top = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.x3),
             ) {
                 visible.forEach { snapshot ->
                     MemberRow(
@@ -127,21 +132,25 @@ private fun ShowAllRow(
     totalCount: Int,
     onShowAll: () -> Unit,
 ) {
+    // Resolved here: the semantics block below is not composable.
+    val showAllDescription = pluralStringResource(R.plurals.lists_members_show_all_a11y, totalCount, totalCount)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
             .clickable(onClick = onShowAll)
-            .semantics { contentDescription = "Show all $totalCount members" },
+            .semantics { contentDescription = showAllDescription },
     ) {
         Text(
-            text = "Showing $visibleCount of $totalCount",
+            // A plural keyed on the total (voice.md: plurals wherever a count
+            // appears, even where English does not change).
+            text = pluralStringResource(R.plurals.lists_members_showing, totalCount, visibleCount, totalCount),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgSubtle),
             modifier = Modifier.weight(1f),
         )
         Text(
-            text = "Show all",
+            text = stringResource(R.string.lists_members_show_all),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
         )
     }
@@ -153,16 +162,22 @@ private fun MemberRow(
     showRemove: Boolean,
     onRemove: () -> Unit,
 ) {
+    // PRIV-03: the member's name, initials and face are masked under the
+    // curtain like every other person (they showed through on List settings).
+    val curtain = LocalPrivacyCurtain.current
+    val shownName = if (curtain) stringResource(R.string.components_curtain_contact) else snapshot.displayName
+    // Resolved here: the semantics block below is not composable.
+    val removeDescription = stringResource(R.string.lists_members_remove, shownName)
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
-            .semantics { contentDescription = snapshot.displayName },
+            .semantics { contentDescription = shownName },
     ) {
-        Avatar(name = snapshot.displayName, size = 32.dp)
+        Avatar(name = shownName, size = 32.dp, photoUri = if (curtain) null else snapshot.photoUri)
         Text(
-            text = snapshot.displayName,
+            text = shownName,
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             modifier = Modifier.weight(1f),
         )
@@ -176,7 +191,7 @@ private fun MemberRow(
                     )
                     .clickable(onClick = onRemove)
                     .semantics {
-                        contentDescription = "Remove ${snapshot.displayName} from list"
+                        contentDescription = removeDescription
                     },
             ) {
                 PhIcon(
@@ -194,14 +209,17 @@ private fun AddContactsRow(
     hasMembers: Boolean,
     onAddContacts: () -> Unit,
 ) {
+    // Resolved here: the semantics block below is not composable.
+    val addDescription = stringResource(R.string.lists_members_add_a11y)
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onAddContacts)
-            .padding(top = if (hasMembers) 14.dp else 12.dp, bottom = 4.dp)
-            .semantics { contentDescription = "Add contacts to list" },
+            .heightIn(min = OrbitTheme.spacing.tapMin)
+            .clickable(role = Role.Button, onClick = onAddContacts)
+            .padding(top = if (hasMembers) OrbitTheme.spacing.rowY else OrbitTheme.spacing.x3, bottom = OrbitTheme.spacing.x1)
+            .semantics { contentDescription = addDescription },
     ) {
         Box(
             contentAlignment = Alignment.Center,
@@ -210,12 +228,12 @@ private fun AddContactsRow(
             PhIcon(
                 name = "user-plus",
                 size = 20.dp,
-                tint = OrbitTheme.colors.accent,
+                tint = OrbitTheme.colors.fg,
             )
         }
         Text(
-            text = "Add contacts",
-            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.accent),
+            text = stringResource(R.string.lists_members_add),
+            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
         )
     }
 }
@@ -227,19 +245,19 @@ private fun AddContactsRow(
 private fun MembersPreviewSmartEmptyLightPreview() {
     OrbitTheme(darkTheme = false) {
         Box(
-            modifier = Modifier.background(OrbitTheme.colors.surface).padding(8.dp),
+            modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2),
         ) {
             MembersPreview(members = emptyList(), isSmart = true)
         }
     }
 }
 
-@Preview(name = "MembersPreview — static, empty, dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "MembersPreview — static, empty, dark", showBackground = true)
 @Composable
 private fun MembersPreviewStaticEmptyDarkPreview() {
     OrbitTheme(darkTheme = true) {
         Box(
-            modifier = Modifier.background(OrbitTheme.colors.surface).padding(8.dp),
+            modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2),
         ) {
             MembersPreview(members = emptyList(), isSmart = false)
         }
@@ -251,7 +269,7 @@ private fun MembersPreviewStaticEmptyDarkPreview() {
 private fun MembersPreviewPopulatedLightPreview() {
     OrbitTheme(darkTheme = false) {
         Box(
-            modifier = Modifier.background(OrbitTheme.colors.surface).padding(8.dp),
+            modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2),
         ) {
             MembersPreview(
                 members = listOf(

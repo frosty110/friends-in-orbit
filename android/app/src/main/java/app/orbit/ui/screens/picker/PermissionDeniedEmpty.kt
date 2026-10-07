@@ -1,39 +1,31 @@
 package app.orbit.ui.screens.picker
 
+import android.content.res.Configuration
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import app.orbit.ui.components.OrbitButton
-import app.orbit.ui.components.PhIcon
+import app.orbit.R
+import app.orbit.ui.components.OrbitButtonVariant
+import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.theme.OrbitTheme
 
 /**
  * Permission denied empty state.
  *
- * Centred informational empty + Primary "Open Settings" CTA. Same shape as
- * BrowseListScreen.EmptyShell but with a deep-link to the OS app-detail
- * Settings screen (ACTION_APPLICATION_DETAILS_SETTINGS) so the user can flip
- * READ_CONTACTS back on.
+ * The shared [OrbitScreenMessage] with a Primary "Open phone settings" that
+ * deep-links to the OS app-detail Settings screen
+ * (ACTION_APPLICATION_DETAILS_SETTINGS) so the user can flip READ_CONTACTS
+ * back on.
  *
- * Locked copy:
+ * Copy:
  *   - Heading: "Contacts access is off"
- *   - Body:    "You can turn it on in Settings to add people to your lists."
- *   - Primary: "Open Settings"
+ *   - Body:    "Turn it on in your phone's settings to add people to your
+ *              lists. Your contacts stay on this device."
+ *   - Primary: "Open phone settings"
  *
  * The launcher logic mirrors `SettingsScreen.kt:113-121`.
  * The `[onOpenSettings]` callback is wired via the screen-level `LocalContext`
@@ -44,40 +36,20 @@ fun PermissionDeniedEmpty(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(OrbitTheme.spacing.x6),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        PhIcon(
-            name = "shield-check",
-            size = OrbitTheme.spacing.x7,
-            tint = OrbitTheme.colors.fgMuted,
-        )
-        Spacer(Modifier.height(OrbitTheme.spacing.x3))
-        Text(
-            text = "Contacts access is off",
-            style = OrbitTheme.type.h3,
-            color = OrbitTheme.colors.fg,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(OrbitTheme.spacing.x2))
-        Text(
-            text = "You can turn it on in Settings to add people to your lists.",
-            style = OrbitTheme.type.body,
-            color = OrbitTheme.colors.fgMuted,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.widthIn(max = 280.dp),
-        )
-        Spacer(Modifier.height(OrbitTheme.spacing.x4))
-        OrbitButton(
-            text = "Open Settings",
-            onClick = onOpenSettings,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
+    // The shared people-screen message (2026-10-05). The button is the shared
+    // "Open phone settings" (strings_components.xml, 2026-10-06): one wording
+    // for the phone's page for Orbit everywhere (voice.md glossary; five
+    // screens had five), and it says which settings: the phone's, not Orbit's.
+    OrbitScreenMessage(
+        icon = "shield-check",
+        title = stringResource(R.string.picker_denied_title),
+        body = stringResource(R.string.picker_denied_body),
+        actionLabel = stringResource(R.string.components_action_open_phone_settings),
+        onAction = onOpenSettings,
+        // The only way forward from here, so it takes the screen's accent.
+        actionVariant = OrbitButtonVariant.Primary,
+        modifier = modifier,
+    )
 }
 
 /**
@@ -99,7 +71,7 @@ private fun PermissionDeniedEmptyPreviewLight() {
     }
 }
 
-@Preview(name = "PermissionDeniedEmpty — dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "PermissionDeniedEmpty — dark", showBackground = true)
 @Composable
 private fun PermissionDeniedEmptyPreviewDark() {
     OrbitTheme(darkTheme = true) {

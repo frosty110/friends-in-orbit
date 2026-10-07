@@ -1,8 +1,8 @@
 package app.orbit.ui.components
 
+import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import org.junit.Test
 
 /**
  * Pins the menu-ordering contract every options menu in Orbit renders through
@@ -36,20 +36,20 @@ class OrbitMenuOrderTest {
         val ordered = listOf(
             action("Add people"),
             action("List settings"),
-            action("Mute prompts"),
+            action("Pause nudges"),
             action("Archive", OrbitMenuTone.Destructive),
             action("Delete", OrbitMenuTone.Destructive),
         ).orderedForMenu()
 
         assertEquals(
-            listOf("Add people", "List settings", "Mute prompts", "Archive", "Delete"),
+            listOf("Add people", "List settings", "Pause nudges", "Archive", "Delete"),
             ordered.map { it.label },
         )
     }
 
     @Test
     fun `a menu with no destructive action is left alone`() {
-        val labels = listOf("Browse people", "Add contacts", "Edit list")
+        val labels = listOf("Browse people", "Add people", "List settings")
         assertEquals(labels, labels.map { action(it) }.orderedForMenu().map { it.label })
     }
 

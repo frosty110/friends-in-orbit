@@ -11,14 +11,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
-import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
@@ -34,6 +36,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
@@ -42,13 +51,22 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import app.orbit.R
+import app.orbit.data.entity.ListType
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitListSkeleton
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitScreenMessage
+import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.PhIcon
+import app.orbit.ui.screens.home.HomeSnackbarEvent
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -75,7 +93,20 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
  * deprecated placement-animation API is not used.
  */
 /**
- * BULK-05 wiring: each active list row carries a trailing "Add contacts" "+"
+ * Two destinations leave this screen for one list, so it takes two callbacks
+ * (LIST-23):
+ *  - [onOpenList]: a tap on a row opens the list's deck (`Routes.card`), as
+ *    the same tap does on Home.
+ *  - [onOpenListSettings]: the row menu's "List settings", the archived row's
+ *    settings control, and a successful Create all open List settings
+ *    (`Routes.listConfig`), where a new list gets its name, rhythm and people.
+ *    Until 2026-10-06 the screen had only [onOpenList], so all three opened
+ *    the deck: a brand-new list opened as a deck with nobody in it, and List
+ *    settings was reachable from here only by going back Home.
+ *  It defaults to [onOpenList] so the NavHost keeps compiling until it passes
+ *  the settings route; the NavHost is the only caller that knows routes.
+ *
+ * BULK-05 wiring: each active list row carries a trailing "Add people" "+"
  * affordance whose tap routes via [onAddContacts] → `Routes.pickContacts(listId)`.
  * The NavHost is the only caller that knows about routes, so this screen just
  * surfaces the callback and ListRow renders the icon.
@@ -85,18 +116,20 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 fun ListsManagerScreen(
     onBack: () -> Unit,
     onOpenList: (listId: String) -> Unit,
-    onAddContacts: (listId: String) -> Unit = {},   // BULK-05 — entry to ContactPickerScreen
+    onOpenListSettings: (listId: String) -> Unit = onOpenList,
+    onAddContacts: (listId: String) -> Unit = {}, // BULK-05 — entry to ContactPickerScreen
     // When true, the create-list bottom sheet is expanded on first composition.
     // Used by Home's "Create your first list" / "New list" CTAs (Routes.lists(openCreate = true))
     // so a single tap from Home lands the user directly in the creation form.
     // Subsequent rotations preserve whatever the user did from there via rememberSaveable.
     openCreateOnLaunch: Boolean = false,
-    vm: ListsManagerViewModel = hiltViewModel(),
+    vm: ListsManagerViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
 
     // H4 fix — surface VM mutation failures via the same SnackbarHostState.
     // The collector mirrors the ContactPickerScreen / ContactDetailScreen
@@ -106,20 +139,41 @@ fun ListsManagerScreen(
     // LOW polish (Group 5) — archive Undo lifecycle: the previous screen-side
     // `scope.launch { showSnackbar(...) }` died on screen leave, so the Undo
     // work was lost. We now ride VM-emitted events that carry the listId via
-    // `SnackbarEvent.actionPayload`; tapping Undo dispatches back into the VM
+    // `HomeSnackbarEvent.payloadListId`; tapping Undo dispatches back into the VM
     // (which is bound to viewModelScope, surviving navigation animations).
     //
     // repeatOnLifecycle gates the collect by STARTED. Snackbar emissions while
     // the screen is backgrounded drop on the floor (replay = 0).
+    //
+    // Same contract as HomeScreen's collector (features/home/README.md,
+    // "swallowed-toast trap"): collectLatest + Short so an Undo snackbar never
+    // blocks the next event, and the `finally` commits a deferred delete when
+    // its snackbar is dismissed, superseded, or the screen is left. The commit
+    // is a no-op for a delete that was just undone.
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            vm.snackbarEvents.collect { event ->
-                val result = snackbarHostState.showSnackbar(
-                    message = event.message,
-                    actionLabel = event.actionLabel,
-                )
-                if (result == SnackbarResult.ActionPerformed && event.actionPayload != null) {
-                    vm.onUndoArchive(event.actionPayload)
+            vm.snackbarEvents.collectLatest { event ->
+                try {
+                    val result = snackbarHostState.showSnackbar(
+                        message = event.message.asString(context),
+                        actionLabel = event.actionLabel?.asString(context),
+                        duration = SnackbarDuration.Short
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        when (event.kind) {
+                            HomeSnackbarEvent.Kind.ARCHIVE_UNDO -> event.payloadListId?.let(
+                                vm::onUndoArchive
+                            )
+                            HomeSnackbarEvent.Kind.DELETE_UNDO -> event.payloadListId?.let(
+                                vm::undoDelete
+                            )
+                            HomeSnackbarEvent.Kind.PLAIN -> Unit
+                        }
+                    }
+                } finally {
+                    if (event.kind == HomeSnackbarEvent.Kind.DELETE_UNDO) {
+                        event.payloadListId?.let(vm::commitDelete)
+                    }
                 }
             }
         }
@@ -127,11 +181,12 @@ fun ListsManagerScreen(
 
     // 2026-06-09 #26 — create used to show "List created." and strand the user
     // here. Now the VM emits the new id and we route straight into the new
-    // list's configuration screen; arriving there IS the confirmation.
+    // list's settings screen; arriving there IS the confirmation. Settings,
+    // not the deck: a list made a moment ago has nobody on it to deal.
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             vm.createdListEvents.collect { newListId ->
-                onOpenList(newListId.toString())
+                onOpenListSettings(newListId.toString())
             }
         }
     }
@@ -144,10 +199,12 @@ fun ListsManagerScreen(
     var showSheet by rememberSaveable { mutableStateOf(openCreateOnLaunch) }
 
     ListsManagerContent(
+        onRetry = vm::onRetry,
         state = state,
         snackbarHostState = snackbarHostState,
         onBack = onBack,
         onOpenList = onOpenList,
+        onOpenListSettings = onOpenListSettings,
         onAddContacts = onAddContacts,
         onCreate = { showSheet = true },
         onMove = vm::moveList,
@@ -160,13 +217,12 @@ fun ListsManagerScreen(
         // delegates to ListRepository.updateName via vm::renameList without
         // forcing a drill into List Configuration.
         onRename = vm::renameList,
-        onRestore = { id ->
-            vm.unarchiveList(id)
-            scope.launch {
-                snackbarHostState.showSnackbar("List restored.")
-            }
-        },
-        onToggleArchived = vm::toggleArchivedExpanded,
+        // "List restored." comes from the VM once the write is in, through the
+        // same collector as every other event. The screen used to show it
+        // itself, before the write resolved and whether or not it succeeded.
+        onRestore = vm::unarchiveList,
+        onToggleNudges = vm::toggleNudges,
+        onToggleArchived = vm::toggleArchivedExpanded
     )
 
     if (showSheet) {
@@ -174,8 +230,8 @@ fun ListsManagerScreen(
             sheetState = sheetState,
             onCreate = { template, name ->
                 // 2026-06-09 #26 — no "List created." snackbar: the VM's
-                // createdListEvents collector above navigates to the new
-                // list's config screen instead of stranding the user here.
+                // createdListEvents collector above opens the new list's
+                // settings instead of stranding the user here.
                 vm.createList(template, name)
                 scope.launch { sheetState.hide() }
                     .invokeOnCompletion {
@@ -187,17 +243,21 @@ fun ListsManagerScreen(
                     .invokeOnCompletion {
                         if (!sheetState.isVisible) showSheet = false
                     }
-            },
+            }
         )
     }
 }
 
+// Internal, not private, so ListsManagerScreenTest can drive the stateless
+// layer with a Ready fixture and assert which callback each control fires.
 @Composable
-private fun ListsManagerContent(
+internal fun ListsManagerContent(
+    onRetry: () -> Unit = {},
     state: ListsManagerUiState,
     snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
     onOpenList: (listId: String) -> Unit,
+    onOpenListSettings: (listId: String) -> Unit,
     onAddContacts: (listId: String) -> Unit,
     onCreate: () -> Unit,
     onMove: (Int, Int) -> Unit,
@@ -205,20 +265,39 @@ private fun ListsManagerContent(
     onDelete: (Long) -> Unit,
     onRename: (Long, String) -> Unit,
     onRestore: (Long) -> Unit,
-    onToggleArchived: () -> Unit,
+    onToggleNudges: (Long) -> Unit,
+    onToggleArchived: () -> Unit
 ) {
     OrbitScreen {
+        // LIST-20: one create control per state (rubric D2). The floating "New list"
+        // button when lists exist, the centred button when there are none.
+        // The app bar's "+" was a third, duplicate way in.
         OrbitAppBar(
-            title = "Lists",
-            leading = { OrbitIconButton("arrow-left", onBack, contentDescription = "Back") },
-            trailing = { OrbitIconButton("plus", onCreate, contentDescription = "New list") },
+            title = stringResource(R.string.lists_title),
+            leading = {
+                OrbitIconButton("arrow-left", onBack, contentDescription = stringResource(R.string.components_action_back))
+            },
         )
 
         Box(modifier = Modifier.fillMaxSize()) {
             when (state) {
                 is ListsManagerUiState.Loading -> {
-                    // Compose-level "still hydrating" state. Nothing to draw — the
-                    // Lifecycle aware collection delivers the next emission within ms.
+                    // The first emission waits on a cold Room query, so this is
+                    // the list-screen rule (Browse, Call history): a static
+                    // skeleton shaped like the rows, never a blank body and
+                    // never "No lists yet" before the lists are known. Home and
+                    // Settings keep quiet chrome because their feeds render
+                    // cached data synchronously (ADR 0006, as amended).
+                    OrbitListSkeleton(rows = 4)
+                }
+                is ListsManagerUiState.Error -> {
+                    OrbitScreenMessage(
+                        icon = "warning-circle",
+                        title = stringResource(R.string.lists_error_title),
+                        body = stringResource(R.string.components_error_body),
+                        actionLabel = stringResource(R.string.components_error_retry),
+                        onAction = onRetry,
+                    )
                 }
                 is ListsManagerUiState.Empty -> {
                     EmptyState(onCreate = onCreate)
@@ -227,39 +306,51 @@ private fun ListsManagerContent(
                     ReadyContent(
                         state = state,
                         onOpenList = onOpenList,
+                        onOpenListSettings = onOpenListSettings,
                         onAddContacts = onAddContacts,
                         onMove = onMove,
                         onArchive = onArchive,
                         onDelete = onDelete,
                         onRename = onRename,
                         onRestore = onRestore,
-                        onToggleArchived = onToggleArchived,
+                        onToggleNudges = onToggleNudges,
+                        onToggleArchived = onToggleArchived
                     )
                 }
             }
 
-            // FAB anchored bottom-end; UI-SPEC §"Component Inventory" — terracotta accent.
-            ExtendedFloatingActionButton(
-                onClick = onCreate,
-                containerColor = OrbitTheme.colors.accent,
-                contentColor = OrbitTheme.colors.accentFg,
-                shape = OrbitTheme.shapes.full,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = OrbitTheme.spacing.x1),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(OrbitTheme.spacing.x4),
-            ) {
-                PhIcon(name = "plus", size = OrbitTheme.spacing.x5 - OrbitTheme.spacing.x1, tint = OrbitTheme.colors.accentFg)
-                Spacer(Modifier.fillMaxWidth(0f))
-                Text(
-                    text = " New list",
-                    style = OrbitTheme.type.button.copy(color = OrbitTheme.colors.accentFg),
-                )
+            // FAB anchored bottom-end; UI-SPEC §"Component Inventory", terracotta
+            // accent. Only with lists on screen: the empty state has its own
+            // centred button, and two accents there broke rules.md §Design 5.
+            if (state is ListsManagerUiState.Ready) {
+                ExtendedFloatingActionButton(
+                    onClick = onCreate,
+                    containerColor = OrbitTheme.colors.accent,
+                    contentColor = OrbitTheme.colors.accentFg,
+                    shape = OrbitTheme.shapes.full,
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = OrbitTheme.spacing.x1
+                    ),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(OrbitTheme.spacing.x4)
+                ) {
+                    PhIcon(
+                        name = "plus",
+                        size = OrbitTheme.spacing.x5 - OrbitTheme.spacing.x1,
+                        tint = OrbitTheme.colors.accentFg
+                    )
+                    Spacer(Modifier.width(OrbitTheme.spacing.x2))
+                    Text(
+                        text = stringResource(R.string.lists_new_list),
+                        style = OrbitTheme.type.button.copy(color = OrbitTheme.colors.accentFg)
+                    )
+                }
             }
 
-            SnackbarHost(
+            OrbitSnackbarHost(
                 hostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
     }
@@ -269,13 +360,15 @@ private fun ListsManagerContent(
 private fun ReadyContent(
     state: ListsManagerUiState.Ready,
     onOpenList: (listId: String) -> Unit,
+    onOpenListSettings: (listId: String) -> Unit,
     onAddContacts: (listId: String) -> Unit,
     onMove: (Int, Int) -> Unit,
     onArchive: (Long) -> Unit,
     onDelete: (Long) -> Unit,
     onRename: (Long, String) -> Unit,
     onRestore: (Long) -> Unit,
-    onToggleArchived: () -> Unit,
+    onToggleNudges: (Long) -> Unit,
+    onToggleArchived: () -> Unit
 ) {
     // D-25 — pending delete target. Tap on the trash icon stages an id; the
     // DeleteListDialog reads it to decide whether to render and clears it
@@ -303,7 +396,10 @@ private fun ReadyContent(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = OrbitTheme.spacing.x4),
-        contentPadding = PaddingValues(top = OrbitTheme.spacing.x1, bottom = OrbitTheme.spacing.x10),
+        contentPadding = PaddingValues(
+            top = OrbitTheme.spacing.x1,
+            bottom = OrbitTheme.spacing.x10
+        )
     ) {
         if (state.active.isNotEmpty()) {
             item(key = "active-card-spacer-top") {
@@ -317,7 +413,7 @@ private fun ReadyContent(
                         modifier = Modifier
                             .orbitCardShadow(OrbitTheme.shapes.lg, OrbitTheme.colors.isDark)
                             .clip(OrbitTheme.shapes.lg)
-                            .background(OrbitTheme.colors.surface),
+                            .background(OrbitTheme.colors.surface)
                     ) {
                         ListRow(
                             tile = tile,
@@ -333,14 +429,17 @@ private fun ReadyContent(
                                 pendingRenameName = tile.name
                             },
                             onArchive = { onArchive(tile.id) },
-                            onConfigure = { onOpenList(tile.id.toString()) },
+                            // LIST-23: the row opens the deck; its menu's "List
+                            // settings" opens settings. Two callbacks, two routes.
+                            onConfigure = { onOpenListSettings(tile.id.toString()) },
+                            onToggleNudges = { onToggleNudges(tile.id) },
                             onMoveUp = {
                                 if (idx > 0) onMove(idx, idx - 1)
                             },
                             onMoveDown = {
                                 if (idx in 0 until active.lastIndex) onMove(idx, idx + 1)
                             },
-                            onAddContacts = { onAddContacts(tile.id.toString()) },
+                            onAddContacts = { onAddContacts(tile.id.toString()) }
                         )
                     }
                 }
@@ -353,7 +452,7 @@ private fun ReadyContent(
                 count = state.archived.size,
                 expanded = state.archivedExpanded,
                 onToggle = onToggleArchived,
-                modifier = Modifier.animateItem(),
+                modifier = Modifier.animateItem()
             )
         }
 
@@ -364,14 +463,14 @@ private fun ReadyContent(
                         .padding(top = OrbitTheme.spacing.x1)
                         .orbitCardShadow(OrbitTheme.shapes.lg, OrbitTheme.colors.isDark)
                         .clip(OrbitTheme.shapes.lg)
-                        .background(OrbitTheme.colors.surfaceAlt),
+                        .background(OrbitTheme.colors.surfaceAlt)
                 ) {
                     ArchivedListRow(
                         tile = tile,
                         modifier = Modifier.animateItem(),
                         onRestore = { onRestore(tile.id) },
                         onDelete = { pendingDeleteId = tile.id },
-                        onConfigure = { onOpenList(tile.id.toString()) },
+                        onConfigure = { onOpenListSettings(tile.id.toString()) }
                     )
                 }
             }
@@ -380,12 +479,16 @@ private fun ReadyContent(
         // Footer hint — verbatim copy locked by the copywriting contract.
         item(key = "footer") {
             Text(
-                text = "Drag to reorder. Lists higher up show first on home.",
+                text = stringResource(R.string.lists_footer_hint),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgSubtle),
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = OrbitTheme.spacing.x5, start = OrbitTheme.spacing.x5, end = OrbitTheme.spacing.x5),
+                    .padding(
+                        top = OrbitTheme.spacing.x5,
+                        start = OrbitTheme.spacing.x5,
+                        end = OrbitTheme.spacing.x5
+                    )
             )
         }
     }
@@ -400,7 +503,7 @@ private fun ReadyContent(
                 onDelete(id)
                 pendingDeleteId = null
             },
-            onDismiss = { pendingDeleteId = null },
+            onDismiss = { pendingDeleteId = null }
         )
     }
 
@@ -419,7 +522,7 @@ private fun ReadyContent(
             onDismiss = {
                 pendingRenameId = null
                 pendingRenameName = ""
-            },
+            }
         )
     }
 }
@@ -429,25 +532,38 @@ private fun ArchivedSectionHeader(
     count: Int,
     expanded: Boolean,
     onToggle: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
+    // Resolved here: the semantics block below is not composable.
+    val stateLabel = stringResource(if (expanded) R.string.lists_archived_expanded else R.string.lists_archived_collapsed)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
         modifier = modifier
             .fillMaxWidth()
             .padding(top = OrbitTheme.spacing.x4)
-            .clickable(onClick = onToggle)
-            .padding(vertical = OrbitTheme.spacing.x2),
+            .heightIn(min = OrbitTheme.spacing.tapMin)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = stringResource(
+                    if (expanded) R.string.lists_archived_hide else R.string.lists_archived_show,
+                ),
+                onClick = onToggle
+            )
+            .semantics {
+                heading()
+                stateDescription = stateLabel
+            }
+            .padding(vertical = OrbitTheme.spacing.x2)
     ) {
         PhIcon(
             name = if (expanded) "caret-down" else "caret-right",
             size = OrbitTheme.spacing.x4,
-            tint = OrbitTheme.colors.fgMuted,
+            tint = OrbitTheme.colors.fgMuted
         )
         Text(
-            text = "Archived ($count)",
-            style = OrbitTheme.type.h2.copy(color = OrbitTheme.colors.fg),
+            text = pluralStringResource(R.plurals.lists_archived_header, count, count),
+            style = OrbitTheme.type.h2.copy(color = OrbitTheme.colors.fg)
         )
     }
 }
@@ -459,41 +575,39 @@ private fun EmptyState(onCreate: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .fillMaxSize()
-            .padding(OrbitTheme.spacing.x6),
+            .padding(OrbitTheme.spacing.x6)
     ) {
         Spacer(Modifier.height(OrbitTheme.spacing.x8))
         Text(
-            text = "No lists yet",
-            style = OrbitTheme.type.h2.copy(color = OrbitTheme.colors.fg),
+            text = stringResource(R.string.lists_empty_title),
+            style = OrbitTheme.type.h2.copy(color = OrbitTheme.colors.fg)
         )
         Text(
-            text = "Add a list to start grouping the people you want to stay in touch with.",
+            text = stringResource(R.string.lists_empty_body),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
-            textAlign = TextAlign.Center,
+            textAlign = TextAlign.Center
         )
         OrbitButton(
-            text = "New list",
+            text = stringResource(R.string.lists_new_list),
             onClick = onCreate,
-            leadingIcon = "plus",
+            leadingIcon = "plus"
         )
     }
 }
 
-// Preview fixture for the stateless ListsManagerContent
-// (THEME-04 / THEME-05 — D-06). Empty state renders the CTA without needing
-// a populated list fixture.
-private val previewState: ListsManagerUiState = ListsManagerUiState.Empty
-
-@PreviewLightDark
-@PreviewFontScale
+// One preview per state, so each renders in the screenshot gallery and its
+// a11y and curtain audits see it (the Ready state, with the rows, the drag
+// handles, the FAB and the archived section, had none until 2026-10-06, so
+// the gallery had never checked the screen's main layout).
 @Composable
-private fun ListsManagerContentPreview() {
+private fun ListsManagerPreviewHost(state: ListsManagerUiState) {
     OrbitTheme {
         ListsManagerContent(
-            state = previewState,
+            state = state,
             snackbarHostState = SnackbarHostState(),
             onBack = {},
             onOpenList = {},
+            onOpenListSettings = {},
             onAddContacts = {},
             onCreate = {},
             onMove = { _, _ -> },
@@ -501,7 +615,73 @@ private fun ListsManagerContentPreview() {
             onDelete = {},
             onRename = { _, _ -> },
             onRestore = {},
-            onToggleArchived = {},
+            onToggleNudges = {},
+            onToggleArchived = {}
         )
     }
+}
+
+// Fixture names are in the gallery's FIXTURE_NAMES, so the curtain pass
+// catches a list name that still reaches text or a label.
+private val previewReady = ListsManagerUiState.Ready(
+    active = listOf(
+        ListTileState(
+            id = 1L,
+            name = "Inner orbit",
+            memberCount = 12,
+            type = ListType.STATIC,
+            ruleSummary = UiText.plural(R.plurals.lists_interval_every_days, 7, 7),
+        ),
+        ListTileState(
+            id = 2L,
+            name = "People who ground me",
+            memberCount = 4,
+            type = ListType.STATIC,
+            ruleSummary = UiText.res(R.string.lists_rhythm_late_night),
+            notificationsEnabled = false,
+        ),
+        ListTileState(
+            id = 3L,
+            name = "Recently added, not called",
+            memberCount = 0,
+            type = ListType.SMART,
+            ruleSummary = UiText.plural(R.plurals.lists_rule_summary_recently_added, 30, 30),
+        ),
+    ),
+    archived = listOf(
+        ListTileState(
+            id = 9L,
+            name = "Drifted",
+            memberCount = 3,
+            type = ListType.STATIC,
+            ruleSummary = UiText.plural(R.plurals.lists_interval_every_days, 30, 30),
+        ),
+    ),
+    archivedExpanded = true,
+)
+
+@PreviewLightDark
+@PreviewFontScale
+@Composable
+private fun ListsManagerContentPreview() {
+    ListsManagerPreviewHost(ListsManagerUiState.Empty)
+}
+
+@PreviewLightDark
+@PreviewFontScale
+@Composable
+private fun ListsManagerReadyPreview() {
+    ListsManagerPreviewHost(previewReady)
+}
+
+@PreviewLightDark
+@Composable
+private fun ListsManagerLoadingPreview() {
+    ListsManagerPreviewHost(ListsManagerUiState.Loading)
+}
+
+@PreviewLightDark
+@Composable
+private fun ListsManagerErrorPreview() {
+    ListsManagerPreviewHost(ListsManagerUiState.Error)
 }

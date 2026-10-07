@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.picker
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -8,16 +9,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
@@ -36,22 +38,26 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.orbit.R
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
+import app.orbit.ui.components.OrbitCheckbox
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitListSkeleton
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.theme.OrbitTheme
-import app.orbit.ui.theme.orbitCardShadow
 
 /**
  * Reverse picker (BULK-06).
@@ -61,12 +67,22 @@ import app.orbit.ui.theme.orbitCardShadow
  *
  * Layout ("list of lists is small, < 20 typically"):
  *   - AppBar: "Add to lists" (or "Add {contactName} to lists" once loaded)
- *   - LazyColumn of [ListPickerViewModel.UiState.ListRow] (name + Checkbox)
- *   - Sticky BatchCounter-like footer with locked CTA "Add to N list[s]"
+ *   - LazyColumn of [ListPickerUiState.ListRow] (name + [OrbitCheckbox];
+ *     the row is the checkbox for TalkBack); a list the person is already on
+ *     says "Already added" and is disabled, so it cannot be picked
+ *   - The shared [BatchCounter] docked under the list (PICK-06) with the CTA
+ *     "Add to N list[s]"; it was a floating card that covered the last row
+ *     until 2026-10-06
  *   - No snackbar host — the screen pops on commit, so the result surfaces
  *     via [PickerCommitBus] on the app-level [PickerCommitSnackbarHost]
  *     (identical to the forward picker)
  *   - No filter chips, no search — list count is small
+ *   - Privacy curtain: the person's name leaves the title and list names read
+ *     "List" (ListContextChip's word), as everywhere else (2026-10-05)
+ *   - States: while loading, the shared [OrbitListSkeleton] (never a blank
+ *     page); a failed read shows Retry (PICK-09); no lists yet offers to make
+ *     one; a missing person says so with Go back; every message is the shared
+ *     [OrbitScreenMessage]
  *
  * Pitfalls:
  *   - IME overlap: root carries `Modifier.imePadding()`.
@@ -84,6 +100,7 @@ fun ListPickerScreen(
     ListPickerContent(
         state = state,
         onBack = onBack,
+        onRetry = vm::onRetry,
         onToggleListSelect = vm::onToggleListSelect,
         onClearSelection = vm::onClearSelection,
         onCreateList = vm::onCreateList,
@@ -96,8 +113,9 @@ fun ListPickerScreen(
 
 @Composable
 private fun ListPickerContent(
-    state: ListPickerViewModel.UiState,
+    state: ListPickerUiState,
     onBack: () -> Unit,
+    onRetry: () -> Unit,
     onToggleListSelect: (Long) -> Unit,
     onClearSelection: () -> Unit,
     onCreateList: (String) -> Unit,
@@ -115,11 +133,12 @@ private fun ListPickerContent(
             onDismiss = { showCreateDialog = false },
         )
     }
+    val curtain = LocalPrivacyCurtain.current
     OrbitScreen {
-        val title = if (state.contactName.isNotBlank()) {
-            "Add ${state.contactName} to lists"
+        val title = if (state.contactName.isNotBlank() && !curtain) {
+            stringResource(R.string.picker_lists_title_named, state.contactName)
         } else {
-            "Add to lists"
+            stringResource(R.string.picker_lists_title)
         }
         OrbitAppBar(
             title = title,
@@ -127,7 +146,7 @@ private fun ListPickerContent(
                 OrbitIconButton(
                     icon = "arrow-left",
                     onClick = onBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.components_action_back),
                 )
             },
         )
@@ -138,25 +157,31 @@ private fun ListPickerContent(
                 .imePadding(),
         ) {
             when (state.phase) {
-                ListPickerViewModel.UiState.Phase.Loading -> {
-                    // Silent — combine() emits Ready within ms.
-                }
-                ListPickerViewModel.UiState.Phase.NotFound -> {
-                    // C6: missing/malformed contactId nav arg — terminal empty state.
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = "Contact not found",
-                            style = OrbitTheme.type.h3,
-                            color = OrbitTheme.colors.fg,
-                            modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x6),
-                        )
-                    }
-                }
-                ListPickerViewModel.UiState.Phase.Ready,
-                ListPickerViewModel.UiState.Phase.Committing -> ReadyContent(
+                ListPickerUiState.Phase.Loading ->
+                    // The first combine waits on four Room reads; the shared
+                    // skeleton says "loading", never a blank or a false page.
+                    OrbitListSkeleton()
+                // The route's person is not there: a missing or malformed id,
+                // or a row that is gone (observeById emitted null). The words
+                // Contact detail uses, with Go back as the one thing to do.
+                ListPickerUiState.Phase.NotFound -> OrbitScreenMessage(
+                    title = stringResource(R.string.picker_person_not_found),
+                    body = stringResource(R.string.picker_person_not_found_body),
+                    actionLabel = stringResource(R.string.components_action_go_back),
+                    onAction = onBack,
+                    actionVariant = OrbitButtonVariant.Primary,
+                )
+                ListPickerUiState.Phase.Error -> OrbitScreenMessage(
+                    icon = "warning-circle",
+                    title = stringResource(R.string.picker_lists_error_title),
+                    // The shared error words (rubric D6).
+                    body = stringResource(R.string.components_error_body),
+                    actionLabel = stringResource(R.string.components_error_retry),
+                    onAction = onRetry,
+                    actionVariant = OrbitButtonVariant.Primary,
+                )
+                ListPickerUiState.Phase.Ready,
+                ListPickerUiState.Phase.Committing -> ReadyContent(
                     state = state,
                     onToggleListSelect = onToggleListSelect,
                     onClearSelection = onClearSelection,
@@ -170,70 +195,64 @@ private fun ListPickerContent(
 
 @Composable
 private fun ReadyContent(
-    state: ListPickerViewModel.UiState,
+    state: ListPickerUiState,
     onToggleListSelect: (Long) -> Unit,
     onClearSelection: () -> Unit,
     onNewList: () -> Unit,
     onCommit: () -> Unit,
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (state.lists.isEmpty()) {
-            // "Create a list first, then come back." was a dead-end. The list
-            // is created right here; it appears selected so the next tap is the
-            // commit CTA.
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(OrbitTheme.spacing.x6),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    text = "No lists yet",
-                    style = OrbitTheme.type.h3,
-                    color = OrbitTheme.colors.fg,
+    // The list takes the remaining height and the bar docks under it as the
+    // last sibling, the shape ContactPickerScreen uses (PICK-06), so no row is
+    // ever under the bar. Until 2026-10-06 the bar was a card floating over
+    // the list with a bottom padding (72dp) 16dp short of the card's height
+    // (88dp), so the last row's checkbox sat under it.
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        ) {
+            if (state.lists.isEmpty()) {
+                // "Create a list first, then come back." was a dead-end. The
+                // list is created right here; it appears selected so the next
+                // tap is the commit CTA. The only action here, so it takes the
+                // accent.
+                OrbitScreenMessage(
+                    icon = "list-bullets",
+                    title = stringResource(R.string.picker_lists_empty_title),
+                    body = stringResource(R.string.picker_lists_empty_body),
+                    actionLabel = stringResource(R.string.picker_lists_new_list),
+                    onAction = onNewList,
+                    actionVariant = OrbitButtonVariant.Primary,
                 )
-                Text(
-                    text = "Create one here and add this person in one more tap.",
-                    style = OrbitTheme.type.body,
-                    color = OrbitTheme.colors.fgMuted,
-                    modifier = Modifier.padding(top = OrbitTheme.spacing.x2),
-                )
-                OrbitButton(
-                    text = "New list",
-                    onClick = onNewList,
-                    modifier = Modifier.padding(top = OrbitTheme.spacing.x4),
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = OrbitTheme.spacing.x10),
-            ) {
-                items(
-                    items = state.lists,
-                    key = { it.listId },
-                ) { row ->
-                    val isSelected = row.listId in state.selectedListIds
-                    ListPickerRow(
-                        name = row.name,
-                        isSelected = isSelected,
-                        isMember = row.isMember,
-                        onToggle = { onToggleListSelect(row.listId) },
-                        modifier = Modifier.animateItem(),
-                    )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = OrbitTheme.spacing.x2),
+                ) {
+                    items(
+                        items = state.lists,
+                        key = { it.listId },
+                    ) { row ->
+                        val isSelected = row.listId in state.selectedListIds
+                        ListPickerRow(
+                            name = row.name,
+                            isSelected = isSelected,
+                            isMember = row.isMember,
+                            onToggle = { onToggleListSelect(row.listId) },
+                            modifier = Modifier.animateItem(),
+                        )
+                    }
                 }
             }
         }
 
-        ListPickerFooter(
+        BatchCounter(
             selectionCount = state.selectionCount,
-            isCommitting = state.phase == ListPickerViewModel.UiState.Phase.Committing,
+            ctaLabel = pluralStringResource(R.plurals.picker_lists_commit, state.selectionCount, state.selectionCount),
+            isCommitting = state.phase == ListPickerUiState.Phase.Committing,
             onClear = onClearSelection,
             onCommit = onCommit,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(OrbitTheme.spacing.x4),
         )
     }
 }
@@ -246,11 +265,8 @@ private fun ListPickerRow(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val curtain = LocalPrivacyCurtain.current
     val rowBackground = if (isSelected) OrbitTheme.colors.accentTint else Color.Transparent
-    val rowSemantics = Modifier.semantics {
-        selected = isSelected
-        if (isMember) contentDescription = "$name. Already in this list"
-    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
@@ -258,22 +274,34 @@ private fun ListPickerRow(
             .fillMaxWidth()
             .heightIn(min = OrbitTheme.spacing.tapMin)
             .background(rowBackground)
-            .clickable(onClick = onToggle)
+            // The row is the checkbox (one target, one writer); the mark is
+            // display-only. A list the person is already on cannot be picked:
+            // TalkBack hears "Inner orbit, Already added, checkbox, disabled".
+            // Until 2026-10-06 it could be ticked; the insert was a no-op and
+            // Undo removed the membership the person already had.
+            .toggleable(
+                value = isSelected,
+                enabled = !isMember,
+                role = Role.Checkbox,
+                onValueChange = { onToggle() },
+            )
             .padding(
                 horizontal = OrbitTheme.spacing.x4,
                 vertical = OrbitTheme.spacing.x3,
-            )
-            .then(rowSemantics),
+            ),
     ) {
         Text(
-            text = name,
+            // List names are masked under the privacy curtain (ListContextChip).
+            text = if (curtain) stringResource(R.string.components_curtain_list) else name,
             style = OrbitTheme.type.body,
             color = OrbitTheme.colors.fg,
             modifier = Modifier.weight(1f),
         )
         if (isMember) {
+            // "added" read as "just added" as easily as "already in" (vision
+            // PICK-1), and was lowercase.
             Text(
-                text = "added",
+                text = stringResource(R.string.picker_lists_already_added),
                 style = OrbitTheme.type.meta,
                 color = OrbitTheme.colors.fgMuted,
                 modifier = Modifier
@@ -285,65 +313,34 @@ private fun ListPickerRow(
                     ),
             )
         }
-        Checkbox(
-            checked = isSelected,
-            onCheckedChange = null,
-        )
+        OrbitCheckbox(checked = isSelected)
     }
 }
 
+/**
+ * "Clear" for [BatchCounter]: quiet text with a 48dp target (rules.md
+ * §Design 3; it was about 38dp on both pickers' bars).
+ */
 @Composable
-private fun ListPickerFooter(
-    selectionCount: Int,
-    isCommitting: Boolean,
-    onClear: () -> Unit,
-    onCommit: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    if (selectionCount == 0) return
-
-    val ctaCopy = if (selectionCount == 1) {
-        "Add to 1 list"
-    } else {
-        "Add to $selectionCount lists"
-    }
-
+internal fun ClearSelectionAction(enabled: Boolean, onClear: () -> Unit) {
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .orbitCardShadow(OrbitTheme.shapes.lg, OrbitTheme.colors.isDark)
-            .clip(OrbitTheme.shapes.lg)
-            .background(OrbitTheme.colors.surface)
-            .padding(
-                horizontal = OrbitTheme.spacing.x4,
-                vertical = OrbitTheme.spacing.x3,
-            ),
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .defaultMinSize(minWidth = OrbitTheme.spacing.tapMin, minHeight = OrbitTheme.spacing.tapMin)
+            .clip(OrbitTheme.shapes.md)
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClickLabel = stringResource(R.string.picker_clear_selection),
+                onClick = onClear,
+            )
+            .padding(horizontal = OrbitTheme.spacing.x2),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                text = "$selectionCount selected",
-                style = OrbitTheme.type.body,
-                color = OrbitTheme.colors.fg,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = "Clear",
-                style = OrbitTheme.type.button,
-                color = OrbitTheme.colors.fgMuted,
-                modifier = Modifier
-                    .clickable(enabled = !isCommitting, onClick = onClear)
-                    .padding(horizontal = OrbitTheme.spacing.x2, vertical = OrbitTheme.spacing.x2),
-            )
-            OrbitButton(
-                text = ctaCopy,
-                onClick = onCommit,
-                enabled = !isCommitting,
-            )
-        }
+        Text(
+            text = stringResource(R.string.picker_clear),
+            style = OrbitTheme.type.button,
+            color = OrbitTheme.colors.fgMuted,
+        )
     }
 }
 
@@ -382,7 +379,7 @@ private fun CreateListNameDialog(
         containerColor = OrbitTheme.colors.surface,
         title = {
             Text(
-                text = "New list",
+                text = stringResource(R.string.picker_lists_new_list),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         },
@@ -394,7 +391,7 @@ private fun CreateListNameDialog(
                 textStyle = LocalTextStyle.current.merge(OrbitTheme.type.body),
                 placeholder = {
                     Text(
-                        text = "Name this list",
+                        text = stringResource(R.string.picker_lists_name_hint),
                         style = OrbitTheme.type.body,
                         color = OrbitTheme.colors.fgMuted,
                     )
@@ -411,14 +408,14 @@ private fun CreateListNameDialog(
         },
         confirmButton = {
             OrbitButton(
-                text = "Create",
+                text = stringResource(R.string.picker_lists_create),
                 onClick = { commit() },
                 variant = OrbitButtonVariant.Primary,
             )
         },
         dismissButton = {
             OrbitButton(
-                text = "Cancel",
+                text = stringResource(R.string.components_action_cancel),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
             )
@@ -443,6 +440,7 @@ private fun ListPickerReadyPreviewLight() {
         ListPickerContent(
             state = previewState(selectionCount = 2),
             onBack = {},
+            onRetry = {},
             onToggleListSelect = {},
             onClearSelection = {},
             onCreateList = {},
@@ -451,13 +449,14 @@ private fun ListPickerReadyPreviewLight() {
     }
 }
 
-@Preview(name = "ListPicker — Ready dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "ListPicker — Ready dark", showBackground = true)
 @Composable
 private fun ListPickerReadyPreviewDark() {
     OrbitTheme(darkTheme = true) {
         ListPickerContent(
             state = previewState(selectionCount = 1),
             onBack = {},
+            onRetry = {},
             onToggleListSelect = {},
             onClearSelection = {},
             onCreateList = {},
@@ -466,20 +465,20 @@ private fun ListPickerReadyPreviewDark() {
     }
 }
 
-private fun previewState(selectionCount: Int): ListPickerViewModel.UiState {
+private fun previewState(selectionCount: Int): ListPickerUiState {
     val rows = listOf(
-        ListPickerViewModel.UiState.ListRow(listId = 1L, name = "Inner orbit", isMember = false),
-        ListPickerViewModel.UiState.ListRow(listId = 2L, name = "Late night", isMember = true),
-        ListPickerViewModel.UiState.ListRow(listId = 3L, name = "People who ground me", isMember = false),
-        ListPickerViewModel.UiState.ListRow(listId = 4L, name = "Family", isMember = true),
+        ListPickerUiState.ListRow(listId = 1L, name = "Inner orbit", isMember = false),
+        ListPickerUiState.ListRow(listId = 2L, name = "Late night", isMember = true),
+        ListPickerUiState.ListRow(listId = 3L, name = "People who ground me", isMember = false),
+        ListPickerUiState.ListRow(listId = 4L, name = "Family", isMember = true),
     )
     val selected: Set<Long> = when (selectionCount) {
         0 -> emptySet()
         1 -> setOf(1L)
         else -> setOf(1L, 3L)
     }
-    return ListPickerViewModel.UiState(
-        phase = ListPickerViewModel.UiState.Phase.Ready,
+    return ListPickerUiState(
+        phase = ListPickerUiState.Phase.Ready,
         contactName = "Sarah Levin",
         lists = rows,
         selectedListIds = selected,
@@ -496,10 +495,63 @@ private fun ListPickerContentPreview() {
         ListPickerContent(
             state = previewState(selectionCount = 2),
             onBack = {},
+            onRetry = {},
             onToggleListSelect = {},
             onClearSelection = {},
             onCreateList = {},
             onCommit = {},
         )
     }
+}
+
+// One per state, so each renders in the screenshot gallery and its audits.
+
+@Composable
+private fun ListPickerPreviewHost(state: ListPickerUiState) {
+    OrbitTheme {
+        ListPickerContent(
+            state = state,
+            onBack = {},
+            onRetry = {},
+            onToggleListSelect = {},
+            onClearSelection = {},
+            onCreateList = {},
+            onCommit = {},
+        )
+    }
+}
+
+@PreviewLightDark
+@Composable
+private fun ListPickerLoadingPreview() {
+    ListPickerPreviewHost(
+        previewState(selectionCount = 0).copy(phase = ListPickerUiState.Phase.Loading),
+    )
+}
+
+@PreviewLightDark
+@Composable
+private fun ListPickerNotFoundPreview() {
+    ListPickerPreviewHost(
+        ListPickerUiState(
+            phase = ListPickerUiState.Phase.NotFound,
+            contactName = "",
+            lists = emptyList(),
+            selectedListIds = emptySet(),
+        ),
+    )
+}
+
+@PreviewLightDark
+@Composable
+private fun ListPickerErrorPreview() {
+    ListPickerPreviewHost(
+        previewState(selectionCount = 0).copy(phase = ListPickerUiState.Phase.Error),
+    )
+}
+
+@PreviewLightDark
+@Composable
+private fun ListPickerNoListsPreview() {
+    ListPickerPreviewHost(previewState(selectionCount = 0).copy(lists = emptyList()))
 }

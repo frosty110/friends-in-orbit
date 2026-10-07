@@ -3,6 +3,7 @@ package app.orbit.domain.usecase
 import app.orbit.data.dao.ContactDao
 import app.orbit.data.dao.PausedUntilSnapshot
 import app.orbit.data.db.TransactionRunner
+import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.model.PauseDuration
 import java.time.Instant
@@ -24,6 +25,7 @@ class BulkPauseUseCase @Inject constructor(
     private val txRunner: TransactionRunner,
     private val contactDao: ContactDao,
     private val clock: Clock,
+    private val widgetRefreshTrigger: WidgetRefreshTrigger = WidgetRefreshTrigger { },
 ) {
     /**
      * @property inverse Suspending closure that restores each contact's prior
@@ -31,16 +33,14 @@ class BulkPauseUseCase @Inject constructor(
      *                   dispatches at most one `setPausedUntilBatch` call per
      *                   distinct prior `pausedUntil` (mirrors [BulkIgnoreUseCase]'s
      *                   shape; M8 fix avoids N round trips).
-     * @property label Snackbar copy: "Paused {N} contacts for
-     *                  {duration.displayLabel}" ("1 contact" when the batch is
-     *                  a single row).
+     * @property count How many people the batch paused, for the caller's
+     *                  snackbar ("Paused 3 people for 1 week", a plural per
+     *                  duration in string resources; the domain layer holds
+     *                  no copy).
      */
-    data class Result(val inverse: suspend () -> Unit, val label: String)
+    data class Result(val inverse: suspend () -> Unit, val count: Int)
 
-    suspend operator fun invoke(
-        contactIds: List<Long>,
-        duration: PauseDuration,
-    ): Result {
+    suspend operator fun invoke(contactIds: List<Long>, duration: PauseDuration): Result {
         // PauseDuration.duration is null only for Indefinite; reuse the shared
         // sentinel rather than duplicating it (Instant.MAX would round-trip
         // badly through Room's Long-based InstantTypeConverter).
@@ -52,6 +52,9 @@ class BulkPauseUseCase @Inject constructor(
             contactDao.setPausedUntilBatch(contactIds, pausedUntil)
             before
         }
+        // WIDGET-06: the batch drops these people out of who-is-due; the widgets
+        // follow within the debounce, as IgnoreContactUseCase's forward path does.
+        widgetRefreshTrigger.scheduleRefresh()
         return Result(
             inverse = {
                 txRunner.withTransaction {
@@ -62,11 +65,12 @@ class BulkPauseUseCase @Inject constructor(
                         contactDao.setPausedUntilBatch(rows.map { it.id }, prior)
                     }
                 }
+                // WIDGET-06: undo brings them back into who-is-due, so the widget
+                // must show the restored state, not the paused one. The 30s KEEP
+                // debounce coalesces the forward and undo pair.
+                widgetRefreshTrigger.scheduleRefresh()
             },
-            label = run {
-                val noun = if (contactIds.size == 1) "contact" else "contacts"
-                "Paused ${contactIds.size} $noun for ${duration.displayLabel}"
-            },
+            count = contactIds.size
         )
     }
 }

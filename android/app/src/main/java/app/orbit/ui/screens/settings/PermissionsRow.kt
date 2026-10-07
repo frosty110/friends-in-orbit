@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,8 +11,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -28,7 +31,11 @@ import app.orbit.ui.theme.OrbitTheme
  *     button fires the runtime permission launcher directly.
  *   - [PermissionStatus.PermanentlyDenied] — the OS will silently
  *     auto-deny a launcher request, so the only honest action is the
- *     "Open Android Settings" deep link.
+ *     "Open phone settings" deep link. The row reads this only after the OS
+ *     has been asked once (SET-12), and for Notifications also when the
+ *     app's notifications are switched off in the phone's settings (SET-14),
+ *     which is why [onOpenAndroidSettings] is per row: that row opens the
+ *     app's notification settings, the others its details page.
  *
  * Reused for Contacts and Notifications. The call-log permission still
  * uses [app.orbit.calllog.CallLogPermissionState] at the VM layer for
@@ -44,10 +51,10 @@ fun PermissionsRow(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -55,20 +62,20 @@ fun PermissionsRow(
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             Text(
-                text = status.label,
+                text = stringResource(status.labelRes),
                 style = OrbitTheme.type.meta.copy(color = status.color()),
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
             )
         }
         when (status.rowAction()) {
             PermissionRowAction.None -> Unit
             PermissionRowAction.Request -> OrbitButton(
-                text = "Allow",
+                text = stringResource(R.string.settings_perm_allow),
                 onClick = onRequestPermission,
                 variant = OrbitButtonVariant.Ghost,
             )
             PermissionRowAction.OpenSettings -> OrbitButton(
-                text = "Open Android Settings",
+                text = stringResource(R.string.components_action_open_phone_settings),
                 onClick = onOpenAndroidSettings,
                 variant = OrbitButtonVariant.Ghost,
             )
@@ -82,13 +89,14 @@ fun PermissionsRow(
  * [app.orbit.calllog.CallLogPermissionState] so the existing
  * ContentObserverController plumbing keeps compiling unchanged.
  *
- * `PermanentlyDenied.label` names the recovery path explicitly because the
- * Open-Android-Settings button is the only way out of that state.
+ * `PermanentlyDenied.labelRes` names the recovery path explicitly because the
+ * "Open phone settings" button is the only way out of that state. Labels are
+ * string resources (strings_settings.xml).
  */
-enum class PermissionStatus(val label: String) {
-    Granted("Allowed"),
-    Denied("Not allowed"),
-    PermanentlyDenied("Off in your phone's settings"),
+enum class PermissionStatus(@StringRes val labelRes: Int) {
+    Granted(R.string.settings_perm_status_allowed),
+    Denied(R.string.settings_perm_status_not_allowed),
+    PermanentlyDenied(R.string.settings_perm_status_off),
 }
 
 /** What the trailing slot of a [PermissionsRow] should do. */
@@ -104,9 +112,11 @@ internal fun PermissionStatus.rowAction(): PermissionRowAction = when (this) {
     PermissionStatus.PermanentlyDenied -> PermissionRowAction.OpenSettings
 }
 
+// positiveText, not positive: the status is text, and rules.md Design 4 holds
+// text to 4.5:1, which the fill-tier green does not reach on surface.
 @Composable
 private fun PermissionStatus.color(): Color = when (this) {
-    PermissionStatus.Granted -> OrbitTheme.colors.positive
+    PermissionStatus.Granted -> OrbitTheme.colors.positiveText
     PermissionStatus.Denied,
     PermissionStatus.PermanentlyDenied -> OrbitTheme.colors.fgMuted
 }
@@ -117,19 +127,19 @@ private fun PermissionsRowPreview() {
     OrbitTheme {
         Column {
             PermissionsRow(
-                label = "Contacts",
+                label = stringResource(R.string.settings_perm_contacts),
                 status = PermissionStatus.Granted,
                 onRequestPermission = {},
                 onOpenAndroidSettings = {},
             )
             PermissionsRow(
-                label = "Call log",
+                label = stringResource(R.string.settings_perm_call_log),
                 status = PermissionStatus.Denied,
                 onRequestPermission = {},
                 onOpenAndroidSettings = {},
             )
             PermissionsRow(
-                label = "Notifications",
+                label = stringResource(R.string.settings_perm_notifications),
                 status = PermissionStatus.PermanentlyDenied,
                 onRequestPermission = {},
                 onOpenAndroidSettings = {},

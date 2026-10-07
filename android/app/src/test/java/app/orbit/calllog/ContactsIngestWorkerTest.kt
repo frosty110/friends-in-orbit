@@ -15,13 +15,20 @@ import app.orbit.data.db.TransactionRunner
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.usecase.IngestPhoneContactsUseCase
 import app.orbit.domain.usecase.IngestSummary
+import app.orbit.testutil.newPrefs
 import java.time.Duration
 import java.time.Instant
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -41,13 +48,19 @@ import kotlin.test.assertEquals
  * Pattern mirrors [CallLogSyncWorkerTest]: TestListenableWorkerBuilder + a
  * custom WorkerFactory constructing the worker with a counting
  * [StubIngestUseCase] ([IngestPhoneContactsUseCase] was widened to `open` for
- * exactly this seam). AppPrefs is real (Robolectric DataStore).
+ * exactly this seam). AppPrefs is real, over a DataStore built per test
+ * method (`tmp.newPrefs(storeScope)`, testutil/TestDataStore.kt) and cancelled
+ * in `@After`, so the TTL anchor starts as "never ingested" every time.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = Application::class)
 class ContactsIngestWorkerTest {
 
+    @get:Rule
+    val tmp = TemporaryFolder()
+
     private lateinit var context: android.content.Context
+    private val storeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private lateinit var appPrefs: AppPrefs
     private lateinit var stubIngest: StubIngestUseCase
     private val clock = TestClock(Instant.parse("2026-06-09T12:00:00Z"))
@@ -78,10 +91,13 @@ class ContactsIngestWorkerTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext<Application>()
-        appPrefs = AppPrefs(context)
+        appPrefs = tmp.newPrefs(storeScope)
         stubIngest = StubIngestUseCase(context, clock)
-        // Reset the TTL anchor to "never ingested" between tests.
-        runBlocking { appPrefs.resetAll() }
+    }
+
+    @After
+    fun tearDown() {
+        storeScope.cancel()
     }
 
     private fun buildWorker(inputData: Data = Data.EMPTY): ContactsIngestWorker =
@@ -95,6 +111,8 @@ class ContactsIngestWorkerTest {
                 ): ListenableWorker = ContactsIngestWorker(
                     appContext, workerParameters,
                     stubIngest, clock, appPrefs,
+                    // The resync request is pinned by ContactsIngestWorkerResyncTest.
+                    callLogResync = { },
                 )
             })
             .build()

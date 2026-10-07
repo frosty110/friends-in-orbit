@@ -1,13 +1,16 @@
 package app.orbit.ui.screens.onboarding
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -37,26 +40,26 @@ fun OnboardingSkipDialog(
         containerColor = OrbitTheme.colors.surface,
         title = {
             Text(
-                text = "Skip for now?",
+                text = stringResource(R.string.onb_skip_title),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         },
         text = {
             Text(
-                text = whatsLostCopy(permission),
+                text = stringResource(whatsLostCopy(permission)),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             )
         },
         confirmButton = {
             OrbitButton(
-                text = "Skip",
+                text = stringResource(R.string.onb_skip_confirm),
                 onClick = onConfirm,
                 variant = OrbitButtonVariant.Ghost,
             )
         },
         dismissButton = {
             OrbitButton(
-                text = "Go back",
+                text = stringResource(R.string.components_action_go_back),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
             )
@@ -71,14 +74,11 @@ fun OnboardingSkipDialog(
  */
 enum class SkipPermission { Contacts, CallLog, Notifications }
 
-private fun whatsLostCopy(permission: SkipPermission): String = when (permission) {
-    SkipPermission.Contacts ->
-        "Without contacts access, Orbit can't build your lists from your phone book."
-    SkipPermission.CallLog ->
-        "Without call log access, Orbit can't notice when you've already called someone, " +
-            "so the same person may keep coming up."
-    SkipPermission.Notifications ->
-        "Without notifications, Orbit won't be able to remind you when it's time to reach out."
+@StringRes
+private fun whatsLostCopy(permission: SkipPermission): Int = when (permission) {
+    SkipPermission.Contacts -> R.string.onb_skip_lost_contacts
+    SkipPermission.CallLog -> R.string.onb_skip_lost_call_log
+    SkipPermission.Notifications -> R.string.onb_skip_lost_notifications
 }
 
 @PreviewLightDark

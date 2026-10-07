@@ -4,15 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,24 +19,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.orbit.R
+import app.orbit.ui.components.ImportRangeChipGroup
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
 import kotlinx.coroutines.delay
 
 /**
- * ONB-16/17/18 — blocking call-log sync gate. Sits between the
+ * ONB-16/17/18: blocking call-log sync gate. Sits between the
  * permission rationale screens and the preview / first-list step. Continue is
  * gated on WorkInfo.SUCCEEDED OR a single retry-failed-once "Continue anyway"
  * override.
  *
  * Voice: calm copy; sentence case; no exclamation. Progress renders as an
  * indeterminate LinearProgressIndicator plus a live "Counted N calls over M
- * contacts" line fed by the VM's count flows — a determinate
+ * people" line fed by the VM's count flows; a determinate
  * WorkInfo.progress switch was considered but the live counts carry the
  * feels-alive signal instead.
  */
@@ -59,8 +58,10 @@ fun OnboardingSyncScreen(
     )
 }
 
+// Internal, not private: OnboardingSyncChipsSemanticsTest renders this
+// stateless layer to read the chip row's semantics.
 @Composable
-private fun OnboardingSyncContent(
+internal fun OnboardingSyncContent(
     state: OnboardingSyncUiState,
     onContinue: () -> Unit,
     onRetry: () -> Unit,
@@ -72,39 +73,47 @@ private fun OnboardingSyncContent(
         ready?.syncState is SyncState.Empty ||
         ready?.syncState is SyncState.Skipped
     val retryFailed = (ready?.syncState as? SyncState.Failed)?.retryCount?.let { it >= 1 } ?: false
+    val skipped = ready?.syncState is SyncState.Skipped
+    val title = stringResource(if (skipped) R.string.onb_sync_title_skipped else R.string.onb_sync_title)
 
     OnboardingScaffold(
+        title = title,
         step = OnboardingStep.Sync,
         onBack = null,
         primary = OnboardingAction(
-            label = when {
-                canContinue -> "Continue"
-                retryFailed -> "Continue anyway"
-                else -> "Continue"
-            },
+            label = stringResource(
+                when {
+                    canContinue -> R.string.components_action_continue
+                    retryFailed -> R.string.onb_sync_continue_anyway
+                    else -> R.string.components_action_continue
+                },
+            ),
             onClick = onContinue,
             enabled = canContinue || retryFailed,
         ),
         secondary = if (ready?.syncState is SyncState.Failed) {
             OnboardingAction(
-                label = if (retryFailed) "Try one more time" else "Try again",
+                // The shared "Try again" (strings_components.xml), the same
+                // words every error state uses; the second attempt says so.
+                label = stringResource(if (retryFailed) R.string.onb_sync_try_once_more else R.string.components_error_retry),
                 onClick = onRetry,
             )
         } else {
             null
         },
     ) {
-        val skipped = ready?.syncState is SyncState.Skipped
         Text(
-            text = if (skipped) "Starting fresh" else "Reading your call history",
+            text = title,
             style = OrbitTheme.type.title.copy(color = OrbitTheme.colors.fg),
+            modifier = Modifier.semantics { heading() },
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
             text = if (skipped) {
-                "Without call history, Orbit starts from what you tell it."
+                stringResource(R.string.onb_sync_body_skipped)
             } else {
-                "Reading your last ${ready?.importDays ?: 90} days of calls — never leaves your device."
+                val days = ready?.importDays ?: 90
+                pluralStringResource(R.plurals.onb_sync_body, days, days)
             },
             // Plain body copy reads fgMuted; `info` is reserved
             // for semantic emphasis, not paragraph text.
@@ -150,9 +159,13 @@ private fun SyncProgressCard(state: SyncState, ready: OnboardingSyncUiState.Read
     ) {
         when (state) {
             SyncState.InProgress -> {
+                // Ink, not accent: the bar is not an action, and the footer's
+                // Continue is this screen's one accent element (rules.md
+                // §Design 5). Until 2026-10-06 the bar and the button were
+                // both terracotta for the whole reading phase.
                 LinearProgressIndicator(
-                    color = OrbitTheme.colors.accent,
-                    trackColor = OrbitTheme.colors.accentTint,
+                    color = OrbitTheme.colors.fg,
+                    trackColor = OrbitTheme.colors.bgSubtle,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(OrbitTheme.spacing.x3))
@@ -163,31 +176,32 @@ private fun SyncProgressCard(state: SyncState, ready: OnboardingSyncUiState.Read
             }
             SyncState.Empty -> {
                 Text(
-                    text = "We'll learn as you go.",
+                    text = stringResource(R.string.onb_sync_learn),
                     style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                 )
                 Spacer(Modifier.height(OrbitTheme.spacing.x1))
+                val days = ready?.importDays ?: 90
                 Text(
-                    text = "No calls found in the last ${ready?.importDays ?: 90} days. That's okay.",
+                    text = pluralStringResource(R.plurals.onb_sync_empty, days, days),
                     style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 )
             }
             SyncState.Skipped -> {
                 Text(
-                    text = "We'll learn as you go.",
+                    text = stringResource(R.string.onb_sync_learn),
                     style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
                 )
                 Spacer(Modifier.height(OrbitTheme.spacing.x1))
                 Text(
-                    text = "Orbit doesn't have call history access. You can grant it any time in Settings.",
+                    text = stringResource(R.string.onb_sync_no_access),
                     style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 )
             }
             is SyncState.Failed -> {
                 val (title, sub) = if (state.retryCount >= 1) {
-                    "Couldn't finish the sync." to "We'll try again later in the background."
+                    stringResource(R.string.onb_sync_failed_final) to stringResource(R.string.onb_sync_failed_final_sub)
                 } else {
-                    "Couldn't finish the sync. Try again?" to ""
+                    stringResource(R.string.onb_sync_failed_retry) to ""
                 }
                 Text(text = title, style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg))
                 if (sub.isNotEmpty()) {
@@ -202,21 +216,27 @@ private fun SyncProgressCard(state: SyncState, ready: OnboardingSyncUiState.Read
 @Composable
 private fun FriendlyCount(callCount: Int, contactCount: Int) {
     val callsFragment = pluralStringResource(R.plurals.onb_sync_calls, callCount, callCount)
-    val contactsFragment = pluralStringResource(R.plurals.onb_sync_contacts, contactCount, contactCount)
+    // "people", not "contacts": the glossary keeps "contacts" for the phone's
+    // address book (voice.md).
+    val peopleFragment = pluralStringResource(R.plurals.onb_sync_contacts, contactCount, contactCount)
     Text(
-        text = "Counted $callsFragment over $contactsFragment",
+        text = stringResource(R.string.onb_sync_counted, callsFragment, peopleFragment),
         style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
     )
 }
 
 /**
- * Look-back window selector. Mirrors Settings' `ImportRangeRow` idiom
- * (accentTint selected container, 48dp tap floor) so the two surfaces agree.
+ * Look-back window selector: the question over [ImportRangeChipGroup], the
+ * same radio group Settings' import range row draws, so the same setting
+ * looks, reads and announces the same on both screens. Before 2026-10-06 this
+ * was a Material FilterChip with a colour override that offered three windows
+ * and said "90 days" where Settings offered four and said "3 months" (onb-9);
+ * until 2026-10-07 Settings still drew checkboxes.
+ *
  * Selecting a chip persists `callLogImportDays` and re-runs the import for the
- * new window (VM.onImportDaysSelected) — the default (90) is pre-selected and
+ * new window (VM.onImportDaysSelected); the default (90) is pre-selected and
  * already importing, so the common path stays friction-free.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ImportRangeChips(
     selectedDays: Int,
@@ -224,30 +244,16 @@ private fun ImportRangeChips(
 ) {
     Column(Modifier.fillMaxWidth()) {
         Text(
-            text = "How far back should Orbit look?",
+            text = stringResource(R.string.onb_sync_range_question),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
         )
-        Row(
+        ImportRangeChipGroup(
+            selectedDays = selectedDays,
+            onSelect = onSelect,
             modifier = Modifier.padding(top = OrbitTheme.spacing.x2),
-            horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
-        ) {
-            IMPORT_DAY_OPTIONS.forEach { days ->
-                FilterChip(
-                    selected = selectedDays == days,
-                    onClick = { onSelect(days) },
-                    label = { Text("$days days") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = OrbitTheme.colors.accentTint,
-                        selectedLabelColor = OrbitTheme.colors.fg,
-                    ),
-                    modifier = Modifier.defaultMinSize(minHeight = OrbitTheme.spacing.tapMin),
-                )
-            }
-        }
+        )
     }
 }
-
-private val IMPORT_DAY_OPTIONS: List<Int> = listOf(90, 180, 365)
 
 @Composable
 private fun SlowTipCard() {
@@ -259,8 +265,28 @@ private fun SlowTipCard() {
             .padding(OrbitTheme.spacing.x3),
     ) {
         Text(
-            text = "Some phones have years of call history. We'll get there.",
+            text = stringResource(R.string.onb_sync_slow_tip),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
+        )
+    }
+}
+
+// One preview per state, so each cell of the state matrix renders in the
+// screenshot gallery and its audits (rubric D6). Until 2026-10-06 only
+// InProgress had one.
+@Composable
+private fun OnboardingSyncPreviewBody(syncState: SyncState, callCount: Int = 142, contactCount: Int = 32) {
+    OrbitTheme {
+        OnboardingSyncContent(
+            state = OnboardingSyncUiState.Ready(
+                syncState = syncState,
+                callCount = callCount,
+                contactCount = contactCount,
+                importDays = 90,
+            ),
+            onContinue = {},
+            onRetry = {},
+            onImportDaysSelected = {},
         )
     }
 }
@@ -269,17 +295,36 @@ private fun SlowTipCard() {
 @PreviewFontScale
 @Composable
 private fun OnboardingSyncScreenPreview() {
-    OrbitTheme {
-        OnboardingSyncContent(
-            state = OnboardingSyncUiState.Ready(
-                syncState = SyncState.InProgress,
-                callCount = 142,
-                contactCount = 32,
-                importDays = 90,
-            ),
-            onContinue = {},
-            onRetry = {},
-            onImportDaysSelected = {},
-        )
-    }
+    OnboardingSyncPreviewBody(SyncState.InProgress)
+}
+
+@PreviewLightDark
+@Composable
+private fun OnboardingSyncSucceededPreview() {
+    OnboardingSyncPreviewBody(SyncState.Succeeded)
+}
+
+@PreviewLightDark
+@Composable
+private fun OnboardingSyncEmptyPreview() {
+    OnboardingSyncPreviewBody(SyncState.Empty, callCount = 0, contactCount = 0)
+}
+
+@PreviewLightDark
+@Composable
+private fun OnboardingSyncSkippedPreview() {
+    OnboardingSyncPreviewBody(SyncState.Skipped, callCount = 0, contactCount = 0)
+}
+
+@PreviewLightDark
+@Composable
+private fun OnboardingSyncFailedPreview() {
+    OnboardingSyncPreviewBody(SyncState.Failed(retryCount = 0), callCount = 0, contactCount = 0)
+}
+
+// After one failed retry: "Try one more time" and "Continue anyway" (ONB-18).
+@PreviewLightDark
+@Composable
+private fun OnboardingSyncFailedTwicePreview() {
+    OnboardingSyncPreviewBody(SyncState.Failed(retryCount = 1), callCount = 0, contactCount = 0)
 }

@@ -56,6 +56,7 @@ class ContactDaoIgnoredTest {
         isIgnored: Boolean = false,
         ignoredAt: Instant? = null,
         snapshot: String? = null,
+        isArchived: Boolean = false
     ): Long = contactDao.insert(
         ContactEntity(
             id = id,
@@ -66,8 +67,32 @@ class ContactDaoIgnoredTest {
             isIgnored = isIgnored,
             ignoredAt = ignoredAt,
             preIgnoreListMembershipsJson = snapshot,
-        ),
+            isArchived = isArchived
+        )
     )
+
+    @Test
+    fun `observeIgnored excludes archived contacts`() = runTest {
+        // Regression: Settings counted archived ignored contacts while the
+        // Ignored screen hid them, so the count and the list disagreed.
+        insertContact(1L, isIgnored = true, ignoredAt = Instant.parse("2026-04-01T00:00:00Z"))
+        insertContact(
+            2L,
+            isIgnored = true,
+            ignoredAt = Instant.parse("2026-04-02T00:00:00Z"),
+            isArchived = true
+        )
+
+        val rows = contactDao.observeIgnored().first()
+
+        assertEquals(
+            listOf(1L),
+            rows.map {
+                it.id
+            },
+            "an archived ignored contact must not be counted or listed"
+        )
+    }
 
     @Test
     fun `observeIgnored emits ignored contacts sorted by ignoredAt DESC`() = runTest {
@@ -98,7 +123,7 @@ class ContactDaoIgnoredTest {
             id = 42L,
             isIgnored = true,
             ignoredAt = ignoredAt,
-            preIgnoreListMembershipsJson = snapshot,
+            preIgnoreListMembershipsJson = snapshot
         )
         assertEquals(1, updated, "exactly one row must be updated")
 
@@ -132,10 +157,15 @@ class ContactDaoIgnoredTest {
             55L,
             isIgnored = true,
             ignoredAt = Instant.parse("2026-03-01T00:00:00Z"),
-            snapshot = """{"listIds":[3]}""",
+            snapshot = """{"listIds":[3]}"""
         )
 
-        contactDao.markIgnored(55L, isIgnored = false, ignoredAt = null, preIgnoreListMembershipsJson = null)
+        contactDao.markIgnored(
+            55L,
+            isIgnored = false,
+            ignoredAt = null,
+            preIgnoreListMembershipsJson = null
+        )
 
         val readBack = contactDao.get(55L)
         assertNotNull(readBack)

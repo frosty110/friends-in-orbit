@@ -1,7 +1,7 @@
 # Features — index
 
 **Status:** active
-**Last reviewed:** 2026-06-30
+**Last reviewed:** 2026-10-06
 **Canonical for:** feature-level product and technical specification
 
 ---
@@ -15,13 +15,13 @@ Not features — shared across all work.
 - [`_foundations/development-cycle.md`](_foundations/development-cycle.md) — how a change gets made and verified; the definition of done
 - [`_foundations/voice.md`](_foundations/voice.md) — content rules, "never say" list, tone
 - [`_foundations/stack.md`](_foundations/stack.md) — technical stack summary (defers to `android/gradle/libs.versions.toml`)
-- [`_foundations/ADRs/`](_foundations/ADRs/) — architecture decision records (0001-0004 currently accepted)
+- [`_foundations/ADRs/`](_foundations/ADRs/): architecture decision records (ADRs 0001-0010; 0007 is superseded)
 
 ---
 
 ## Cross-feature views
 
-- [`PAGE_VIEWS.md`](PAGE_VIEWS.md) — index of per-screen page views (one file each under [`page-views/`](page-views/)) capturing the user's feature expectations (what each page is expected to let you see/do). Screen-oriented companion to the feature-oriented map below.
+- [`PAGE_VIEWS.md`](PAGE_VIEWS.md): index of per-screen page views (one file each under [`page-views/`](page-views/)) saying what each screen owes the user: how it is reached, what is on it, every action, menu and state, where it leads, and the tests that pin it. Screen-oriented companion to the feature-oriented map below; its schema is in that file.
 
 ## Feature map
 
@@ -29,9 +29,9 @@ Not features — shared across all work.
 
 | Feature | Status | One line |
 |---|---|---|
-| [home](home/README.md) | in-progress | Mood picker entry; list tiles with due counts, "surprise me", long-press quick actions |
-| [card-view](card-view/README.md) | in-progress | One contact at a time; swipe left/right, tap to call |
-| [browse](browse/README.md) | in-progress | Full list browse, search, long-press quick actions |
+| [home](home/README.md) | in-progress | One card per list with the next person, a 7-day rhythm strip and a quiet call button; long-press quick actions |
+| [card-view](card-view/README.md) | in-progress | One contact at a time; Later, Sooner, and a labelled Call |
+| [browse](browse/README.md) | in-progress | One list's people in queue order, with search and filters; multi-select to move, copy, remove, pause or ignore; Search across everyone |
 | [contact-detail](contact-detail/README.md) | in-progress | Profile, stats, history, notes, per-contact overrides |
 | [call-history](call-history/README.md) | in-progress | In-app chronological log of calls to tracked contacts |
 | [orbit-lists](orbit-lists/README.md) | in-progress | Create, configure, archive lists; cross-list state propagation |
@@ -39,8 +39,8 @@ Not features — shared across all work.
 | [call-detection](call-detection/README.md) | in-progress | CALL_LOG read, 90-day import, manual sync, incoming/outgoing |
 | [contacts-ingestion](contacts-ingestion/README.md) | in-progress | ContactsContract read, delta-sync, multi-number matching, orphan handling |
 | [onboarding](onboarding/README.md) | in-progress | First-run flow: permissions, call-log sync gate, suggested first list |
-| [notifications](notifications/README.md) | stub | Daily digest, time-of-day list prompts, incoming follow-up |
-| [widgets](widgets/README.md) | stub | 2x2 + 4x2 home screen widgets |
+| [notifications](notifications/README.md) | shipped | Scheduled per-list nudges that hand over the list's next person (face, Call), once; nothing private on the lock screen |
+| [widgets](widgets/README.md) | shipped | "Next call" and "Call suggestions" home-screen widgets, every size; launcher shortcuts and the themed icon |
 | [privacy-and-lock](privacy-and-lock/README.md) | in-progress | Quick-hide on focus loss, encrypted-at-rest, encrypted export/import. Biometric lock + minimal mode removed 2026-04-28. |
 | [settings](settings/README.md) | in-progress | App-wide configuration page |
 | [life-right-now](life-right-now/README.md) | stub | App-level season (Quiet / Leaning in) that paces the whole app to the user's life; bends cadence instead of enforcing it |

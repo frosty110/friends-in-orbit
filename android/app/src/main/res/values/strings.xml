@@ -2,15 +2,6 @@
 <resources>
     <string name="app_name">Orbit</string>
 
-    <plurals name="onb_sync_calls">
-        <item quantity="one">%1$d call</item>
-        <item quantity="other">%1$d calls</item>
-    </plurals>
-    <plurals name="onb_sync_contacts">
-        <item quantity="one">%1$d contact</item>
-        <item quantity="other">%1$d contacts</item>
-    </plurals>
-
     <!-- Widget strings — 2×2 widget picker label + description.
          Sentence case, no exclamation marks (voice rules). -->
     <string name="widget_2x2_label">Next call</string>
@@ -19,4 +10,33 @@
     <!-- 4×2 widget picker label + description. -->
     <string name="widget_4x2_label">Call suggestions</string>
     <string name="widget_4x2_description">Shows your next suggestions at a glance.</string>
+
+    <!-- WIDGET-10: the widgets' empty state. Not "caught up": Orbit always
+         recommends someone (HOME-6), so an empty widget is a quiet moment,
+         not a finish line. -->
+    <string name="widget_empty">All quiet for now.</string>
+    <!-- WIDGET-08: the primary person's labelled call control. -->
+    <string name="widget_call">Call</string>
+    <!-- WIDGET-08: TalkBack labels. The name is the one the widget shows. -->
+    <string name="widget_call_person">Call %1$s</string>
+    <string name="widget_open_person">Open %1$s in Orbit</string>
+    <!-- TalkBack label of the empty widget: what it says, then what a tap does. -->
+    <string name="widget_empty_a11y">All quiet for now. Open Orbit</string>
+    <!-- Sample people in the widget picker previews (WIDGET-09). Their
+         avatar colours in colors.xml are the ones the Warm theme gives these
+         names; WidgetPreviewResourcesTest keeps the two in step. -->
+    <string name="widget_preview_name">Kai Nakamura</string>
+    <string name="widget_preview_initials" translatable="false">KN</string>
+    <string name="widget_preview_alt_1">Priya Shah</string>
+    <string name="widget_preview_alt_1_initials" translatable="false">PS</string>
+    <string name="widget_preview_alt_2">Sarah Okafor</string>
+    <string name="widget_preview_alt_2_initials" translatable="false">SO</string>
+
+    <!-- LAUNCH-01: launcher shortcuts. Fixed words only: a long-press menu is
+         readable by anyone holding the unlocked phone, so no person's name
+         and no list name ever appears here. -->
+    <string name="shortcut_call_next_short">Call next</string>
+    <string name="shortcut_call_next_long">Call the next person</string>
+    <string name="shortcut_search_short">Search</string>
+    <string name="shortcut_search_long">Search your people</string>
 </resources>

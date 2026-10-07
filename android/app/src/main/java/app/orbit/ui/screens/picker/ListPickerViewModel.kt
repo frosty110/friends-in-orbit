@@ -3,6 +3,7 @@ package app.orbit.ui.screens.picker
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.dao.ListMembershipDao
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListMembershipEntity
@@ -14,16 +15,22 @@ import app.orbit.data.repository.RuleTemplateRepository
 import app.orbit.di.ApplicationScope
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.undo.UndoStack
+import app.orbit.ui.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -34,8 +41,8 @@ import kotlinx.coroutines.launch
  *   - `@HiltViewModel` with constructor-injected dependencies.
  *   - Reads `contactId` from [SavedStateHandle] (Hilt cannot bind plain
  *     `String` types).
- *   - `combine(...).stateIn(WhileSubscribed(5_000L))` exposes a [UiState]
- *     (ARCH-02 invariant).
+ *   - `combine(...).stateIn(WhileSubscribed(5_000L))` exposes a
+ *     [ListPickerUiState] (ARCH-02 invariant).
  *   - Commit dispatches via [ListMembershipDao] directly (no
  *     `ListMembershipRepository` interface yet — same precedent the
  *     forward picker uses; widening the repo is deferred to the
@@ -46,11 +53,22 @@ import kotlinx.coroutines.launch
  *     shows the result on the caller (picker-commit lifecycle).
  *
  * Selection invariants:
- *   - Picker shows only non-archived lists (filtered post-collect).
- *   - Lists the contact already belongs to are NOT excluded from the row set
- *     — the user can re-tap and the DAO's `OnConflictStrategy.IGNORE` keeps
- *     the operation idempotent (the list of lists is small).
+ *   - Picker shows only non-archived, non-smart lists. A smart list's rows
+ *     are written by SmartListMembershipSync from its rule, so a row added
+ *     here would be removed on the next reconcile with no message; ListRow
+ *     hides "+" on smart lists for the same reason. A smart id that still
+ *     reaches the commit is refused loudly (rules.md Code 3).
+ *   - Lists the contact already belongs to stay in the row set, tagged
+ *     "Already added", but cannot be picked: the row is disabled, the toggle
+ *     refuses the id once the rows are known, the state drops a restored id,
+ *     and the commit snapshots the memberships and writes only the rest.
+ *     Until 2026-10-06 the DAO's `OnConflictStrategy.IGNORE` was relied on
+ *     for idempotence: it made the insert a no-op, but the snackbar still
+ *     counted the list and Undo's removeAll deleted the membership the
+ *     person already had (G1: no lost work). The count and the inverse now
+ *     come from the rows actually inserted, as CopyContactsUseCase does.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class ListPickerViewModel @Inject constructor(
     private val listRepo: ListRepository,
@@ -70,7 +88,7 @@ class ListPickerViewModel @Inject constructor(
     // ─── Nav arg ────────────────────────────────────────────────────────────
     //
     // C6: parse defensively — `toLongOrNull()` over `toLong()` so a malformed
-    // or missing arg routes to the [UiState.Phase.NotFound] empty state instead
+    // or missing arg routes to the [ListPickerUiState.Phase.NotFound] state instead
     // of crashing the VM at construction (Hilt creation failure → black screen).
     private val contactId: Long? =
         savedStateHandle.get<String>("contactId")?.removePrefix("c-")?.toLongOrNull()
@@ -85,6 +103,9 @@ class ListPickerViewModel @Inject constructor(
     )
     private val _isCommitting = MutableStateFlow(false)
 
+    // PICK-09: bumped by [onRetry]; flatMapLatest re-subscribes every source.
+    private val retryCount = MutableStateFlow(0)
+
     init {
         viewModelScope.launch {
             _selectedListIds.collect {
@@ -94,32 +115,16 @@ class ListPickerViewModel @Inject constructor(
     }
 
     // ─── UiState ────────────────────────────────────────────────────────────
-    data class UiState(
-        val phase: Phase,
-        val contactName: String,
-        val lists: List<ListRow>,
-        val selectedListIds: Set<Long>,
-    ) {
-        enum class Phase { Loading, Ready, Committing, NotFound }
+    // The contract lives in ListPickerUiState.kt, beside the other screens'.
 
-        data class ListRow(
-            val listId: Long,
-            val name: String,
-            val isMember: Boolean,
-        )
-
-        val canCommit: Boolean get() = selectedListIds.isNotEmpty() && phase != Phase.Committing
-        val selectionCount: Int get() = selectedListIds.size
-    }
-
-    val uiState: StateFlow<UiState> =
+    val uiState: StateFlow<ListPickerUiState> =
         if (contactId == null) {
-            // C6: terminal NotFound — combine pipeline never starts; emit a
-            // single static state. The screen renders a "Contact not found"
-            // empty surface in this branch.
+            // Terminal NotFound for a missing or malformed id: the combine
+            // pipeline never starts; emit a single static state. The screen
+            // says the person is not in Orbit anymore and offers Go back.
             kotlinx.coroutines.flow.flowOf(
-                UiState(
-                    phase = UiState.Phase.NotFound,
+                ListPickerUiState(
+                    phase = ListPickerUiState.Phase.NotFound,
                     contactName = "",
                     lists = emptyList(),
                     selectedListIds = emptySet(),
@@ -127,44 +132,19 @@ class ListPickerViewModel @Inject constructor(
             ).stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = UiState(
-                    phase = UiState.Phase.NotFound,
+                initialValue = ListPickerUiState(
+                    phase = ListPickerUiState.Phase.NotFound,
                     contactName = "",
                     lists = emptyList(),
                     selectedListIds = emptySet(),
                 ),
             )
         } else {
-            combine(
-                listRepo.observeAll(),
-                contactRepo.observeById(contactId),
-                listRepo.observeMembershipsForContact(contactId),
-                _selectedListIds,
-                _isCommitting,
-            ) { lists, contact, memberships, selected, committing ->
-                val memberListIds: Set<Long> = memberships.map { it.listId }.toSet()
-                UiState(
-                    phase = when {
-                        committing -> UiState.Phase.Committing
-                        else -> UiState.Phase.Ready
-                    },
-                    contactName = contact?.displayName.orEmpty(),
-                    lists = lists
-                        .filter { !it.isArchived }
-                        .map {
-                            UiState.ListRow(
-                                listId = it.id,
-                                name = it.name,
-                                isMember = it.id in memberListIds,
-                            )
-                        },
-                    selectedListIds = selected,
-                )
-            }.stateIn(
+            retryCount.flatMapLatest { listPickerState(contactId) }.stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = UiState(
-                    phase = UiState.Phase.Loading,
+                initialValue = ListPickerUiState(
+                    phase = ListPickerUiState.Phase.Loading,
                     contactName = "",
                     lists = emptyList(),
                     selectedListIds = emptySet(),
@@ -172,8 +152,78 @@ class ListPickerViewModel @Inject constructor(
             )
         }
 
+    /**
+     * PICK-09: a failure in any source becomes [ListPickerUiState.Phase.Error] with
+     * Retry instead of an uncaught exception in viewModelScope, which crashed
+     * the app. No logging here (rules.md Code 4).
+     */
+    private fun listPickerState(contactId: Long): Flow<ListPickerUiState> =
+        combine(
+            listRepo.observeAll(),
+            contactRepo.observeById(contactId),
+            listRepo.observeMembershipsForContact(contactId),
+            _selectedListIds,
+            _isCommitting,
+        ) { lists, contact, memberships, selected, committing ->
+            val memberListIds: Set<Long> = memberships.map { it.listId }.toSet()
+            if (contact == null) {
+                // Room emits null only for a missing row (a stale deep link, a
+                // person removed from another screen), never before the first
+                // read, so this is terminal. Until 2026-10-06 the picker sat
+                // Ready with a blank title and the commit failed late on the
+                // membership's foreign key.
+                ListPickerUiState(
+                    phase = ListPickerUiState.Phase.NotFound,
+                    contactName = "",
+                    lists = emptyList(),
+                    selectedListIds = emptySet(),
+                )
+            } else {
+                ListPickerUiState(
+                    phase = when {
+                        committing -> ListPickerUiState.Phase.Committing
+                        else -> ListPickerUiState.Phase.Ready
+                    },
+                    contactName = contact.displayName,
+                    lists = lists
+                        .filter { !it.isArchived && it.type != ListType.SMART }
+                        .map {
+                            ListPickerUiState.ListRow(
+                                listId = it.id,
+                                name = it.name,
+                                isMember = it.id in memberListIds,
+                            )
+                        },
+                    // A restored selection (SavedStateHandle) can carry a list
+                    // the person has since been added to; it is not pickable,
+                    // so it is not selected.
+                    selectedListIds = selected - memberListIds,
+                )
+            }
+        }.catch {
+            emit(
+                ListPickerUiState(
+                    phase = ListPickerUiState.Phase.Error,
+                    contactName = "",
+                    lists = emptyList(),
+                    selectedListIds = _selectedListIds.value,
+                ),
+            )
+        }
+
     // ─── Public callbacks ───────────────────────────────────────────────────
+
+    /** PICK-09: the Error state's Retry: re-subscribe every source. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
+
     fun onToggleListSelect(id: Long) {
+        // A list the person is already on cannot be picked (its row is
+        // disabled too); refusing here covers a stale tap. The rows are known
+        // only while the screen collects uiState, so the commit re-checks
+        // against a fresh membership snapshot for the restored-selection case.
+        if (uiState.value.lists.any { it.listId == id && it.isMember }) return
         val current = _selectedListIds.value
         _selectedListIds.value = if (id in current) current - id else current + id
     }
@@ -215,7 +265,7 @@ class ListPickerViewModel @Inject constructor(
                 _selectedListIds.value = _selectedListIds.value + newListId
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
-                commitBus.publish(SnackbarEvent("Couldn't create the list"))
+                commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_create_list_failed)))
             }
         }
     }
@@ -229,10 +279,12 @@ class ListPickerViewModel @Inject constructor(
      * as [ContactPickerViewModel.onCommit]: the insert runs on [appScope], NOT
      * viewModelScope, because the caller pops this screen immediately after
      * invoking onCommit (which clears the VM and would cancel the write
-     * mid-flight). The outcome — "Added to N list[s]" with Undo, or "Couldn't
-     * save that" on failure — is published on [PickerCommitBus] so the
-     * app-level [PickerCommitSnackbarHost] shows it on the caller after the
-     * pop. [CancellationException] is rethrown per codebase convention.
+     * mid-flight). The outcome, "Added to N list[s]" with Undo where N counts
+     * the rows actually written, or "Couldn't save that" when nothing could
+     * be (a failure, or only lists the person is already on), is published on
+     * [PickerCommitBus] so the app-level [PickerCommitSnackbarHost] shows it on
+     * the caller after the pop. [CancellationException] is rethrown per
+     * codebase convention.
      */
     fun onCommit() {
         val ids = _selectedListIds.value.toList()
@@ -246,30 +298,44 @@ class ListPickerViewModel @Inject constructor(
         _selectedListIds.value = emptySet()
         appScope.launch {
             try {
-                val now = clock.now()
-                val memberships = ids.map { listId ->
-                    ListMembershipEntity(
-                        listId = listId,
-                        contactId = cId,
-                        addedAt = now,
-                    )
+                // Snapshot inside the write, as CopyContactsUseCase does: only
+                // lists the person is NOT already on are inserted, so the count
+                // says what was written and Undo removes only those rows. A
+                // smart list (rule-derived rows), an archived list or one that
+                // is gone is not a target either.
+                val alreadyOn: Set<Long> =
+                    listRepo.observeMembershipsForContact(cId).first().map { it.listId }.toSet()
+                val toInsert = ids.filter { listId ->
+                    val target = listRepo.getById(listId)
+                    target != null && !target.isArchived && target.type != ListType.SMART && listId !in alreadyOn
                 }
-                listMembershipDao.insertAll(memberships)
-                val label = if (ids.size == 1) {
-                    "Added to 1 list"
+                if (toInsert.isEmpty()) {
+                    // rules.md Code 3: a commit that writes nothing is a failed
+                    // save, not "Added to 1 list".
+                    commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
                 } else {
-                    "Added to ${ids.size} lists"
-                }
-                val inverse: suspend () -> Unit = {
-                    ids.forEach { listId ->
-                        listMembershipDao.removeAll(listId, listOf(cId))
+                    val now = clock.now()
+                    listMembershipDao.insertAll(
+                        toInsert.map { listId ->
+                            ListMembershipEntity(
+                                listId = listId,
+                                contactId = cId,
+                                addedAt = now,
+                            )
+                        },
+                    )
+                    val message = UiText.plural(R.plurals.picker_snackbar_added_to_lists, toInsert.size, toInsert.size)
+                    val inverse: suspend () -> Unit = {
+                        toInsert.forEach { listId ->
+                            listMembershipDao.removeAll(listId, listOf(cId))
+                        }
                     }
+                    undoStack.put(UndoStack.PendingUndo(inverse = inverse))
+                    commitBus.publish(SnackbarEvent.undoable(message))
                 }
-                undoStack.put(UndoStack.PendingUndo(inverse = inverse, label = label))
-                commitBus.publish(SnackbarEvent(label, "Undo"))
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
-                commitBus.publish(SnackbarEvent("Couldn't save that"))
+                commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
             } finally {
                 _isCommitting.value = false
             }

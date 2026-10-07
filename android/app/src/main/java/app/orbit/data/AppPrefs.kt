@@ -2,6 +2,8 @@ package app.orbit.data
 
 import android.Manifest
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -13,24 +15,50 @@ import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
-// Tiny Preferences wrapper for the persisted flags. v0.2 carries onboarding
-// state, call-log import + sync state, picker thresholds, and — re-introduced
-// for WIDGET-04 widget masking only — a minimal-mode flag.
+// Tiny Preferences wrapper for the persisted flags: onboarding state, the
+// call-log import window and last-sync time, picker thresholds, appearance,
+// and (re-introduced for WIDGET-04 widget masking only) a minimal-mode flag.
 // The original minimal-mode + biometric-lock keys were removed 2026-04-28
 // (whole-app review: biometric cut, minimal-mode user-toggle cut). The
 // minimal-mode flag here is scoped entirely to widget rendering: it masks
 // contact names as "Contact" on the home-screen widget surface. There is NO
 // in-app minimal-mode toggle and NO biometric coupling (biometric lock cut on
 // 2026-04-28, ADR 0003 superseded).
+//
+// The call-log "sync enabled" key was removed 2026-10-06: nothing read it.
+// The OS permission is the only switch (ARCH-04), and the two writes that
+// mirrored it into DataStore were the only reason three Settings tests
+// touched the store at all.
 private val Context.dataStore by preferencesDataStore(name = "orbit_prefs")
 
-open class AppPrefs @Inject constructor(@ApplicationContext private val context: Context) {
+/**
+ * The primary constructor takes the store itself; Hilt uses the secondary
+ * one, which hands over the process-wide `orbit_prefs` singleton.
+ *
+ * The seam exists for tests. `preferencesDataStore` creates ONE DataStore
+ * per process and never closes it, and the unit tests fork one JVM per test
+ * class, so every method of a Robolectric test class used to share one
+ * store, one in-memory cache, one actor and one coordinator lock. Whatever
+ * one method left behind, the next inherited, and the suite's 30 second
+ * timeouts surfaced in whichever method ran next (97760b8, c8f1d0a and
+ * 236993e each patched a symptom). A test now builds
+ * `AppPrefs(PreferenceDataStoreFactory.create(scope) { ownFile })` through
+ * `testutil/TestDataStore.kt` and cancels the scope in `@After`, so nothing
+ * can outlive the method that started it. The remaining way to time out, a
+ * collector started while a write is in flight, is DataStore 1.1.1's own
+ * race and is described in that file.
+ */
+open class AppPrefs(private val dataStore: DataStore<Preferences>) {
+
+    @Inject
+    constructor(@ApplicationContext context: Context) : this(context.dataStore)
 
     val isOnboardingComplete: Flow<Boolean> =
-        context.dataStore.data.map { it[KEY_ONBOARDED] ?: false }
+        dataStore.data.map { it[KEY_ONBOARDED] ?: false }
 
     /**
      * F-2 fix (2026-04-30 hot-fix-260430-hs4) — per-permission "we have asked
@@ -46,13 +74,13 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
      * Reset path: [resetAll] clears all DataStore keys (existing behavior).
      */
     val hasAskedContacts: Flow<Boolean> =
-        context.dataStore.data.map { it[KEY_HAS_ASKED_CONTACTS] ?: false }
+        dataStore.data.map { it[KEY_HAS_ASKED_CONTACTS] ?: false }
 
     val hasAskedCallLog: Flow<Boolean> =
-        context.dataStore.data.map { it[KEY_HAS_ASKED_CALL_LOG] ?: false }
+        dataStore.data.map { it[KEY_HAS_ASKED_CALL_LOG] ?: false }
 
     val hasAskedNotifications: Flow<Boolean> =
-        context.dataStore.data.map { it[KEY_HAS_ASKED_NOTIFICATIONS] ?: false }
+        dataStore.data.map { it[KEY_HAS_ASKED_NOTIFICATIONS] ?: false }
 
     /**
      * Convenience accessor — maps an Android permission constant to the
@@ -77,7 +105,20 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
      * completion alongside [setOnboardingComplete].
      */
     val lastOnboardingStep: Flow<String?> =
-        context.dataStore.data.map { it[KEY_LAST_ONBOARDING_STEP] }
+        dataStore.data.map { it[KEY_LAST_ONBOARDING_STEP] }
+
+    /**
+     * Id of the list the in-progress onboarding is building, so the flow can
+     * come back to it instead of creating a second one when the user returns
+     * through Sync (system back from the first-list step, or a cold-start
+     * resume, which lands on Sync because a start destination cannot carry
+     * the id). Written by
+     * [app.orbit.ui.screens.onboarding.OnboardingListStarter]; cleared by
+     * [app.orbit.ui.screens.onboarding.OnboardingDoneViewModel] on completion.
+     * A stale id (list deleted, or a Settings reset) reads as "no list".
+     */
+    val onboardingListId: Flow<Long?> =
+        dataStore.data.map { it[KEY_ONBOARDING_LIST_ID] }
 
     // Call-log-ingestion prefs (CALL-02 / CALL-06).
     //
@@ -89,17 +130,14 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
     // read by `CallLogReconciler` as its `sinceMs` filter for incremental passes.
     // Clamped to ≥0 so a zero means "never synced — import the full window".
     //
-    // `isCallLogSyncEnabled`: master toggle surfaced in Settings. When
-    // false, the ContentObserver and periodic worker are no-ops. Default false so
-    // onboarding remains opt-in (PRD §Privacy).
+    // Whether the call log is read at all is the OS permission's call, not a
+    // stored flag (ARCH-04): the observer and the worker each check
+    // READ_CALL_LOG themselves.
     val callLogImportDays: Flow<Int> =
-        context.dataStore.data.map { it[KEY_CALL_LOG_IMPORT_DAYS] ?: 90 }
+        dataStore.data.map { it[KEY_CALL_LOG_IMPORT_DAYS] ?: 90 }
 
     val lastCallLogSyncAt: Flow<Long> =
-        context.dataStore.data.map { it[KEY_LAST_CALL_LOG_SYNC_AT] ?: 0L }
-
-    val isCallLogSyncEnabled: Flow<Boolean> =
-        context.dataStore.data.map { it[KEY_CALL_LOG_SYNC_ENABLED] ?: false }
+        dataStore.data.map { it[KEY_LAST_CALL_LOG_SYNC_AT] ?: 0L }
 
     /**
      * WIDGET-04 — widget-only contact-name masking flag.
@@ -115,7 +153,7 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
      * Default `false` — real names shown unless the user opts into masking.
      */
     val minimalModeEnabled: Flow<Boolean> =
-        context.dataStore.data.map { it[KEY_MINIMAL_MODE] ?: false }
+        dataStore.data.map { it[KEY_MINIMAL_MODE] ?: false }
 
     /**
      * 5-minute TTL gate for [app.orbit.data.feed.HomeFeed.refreshDueCountsIfStale].
@@ -132,7 +170,7 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
      * without standing up a real DataStore.
      */
     open val lastDueCountRecomputeAt: Flow<Long> =
-        context.dataStore.data.map { it[KEY_LAST_DUE_COUNT_RECOMPUTE_AT] ?: 0L }
+        dataStore.data.map { it[KEY_LAST_DUE_COUNT_RECOMPUTE_AT] ?: 0L }
 
     /**
      * 24h TTL gate for [app.orbit.calllog.ContactsIngestWorker].
@@ -143,7 +181,7 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
      * via this flow inside [doWork] to decide whether to skip a re-run.
      */
     val lastContactsIngestedAt: Flow<Instant?> =
-        context.dataStore.data.map { prefs ->
+        dataStore.data.map { prefs ->
             prefs[KEY_LAST_CONTACTS_INGESTED_AT]?.let { Instant.ofEpochMilli(it) }
         }
 
@@ -160,16 +198,16 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
     // rather than throw, so a future bug in the stepper UI cannot poison the
     // DataStore.
     val commonlyCalledTopPct: Flow<Int> =
-        context.dataStore.data.map { it[KEY_COMMONLY_CALLED_TOP_PCT] ?: 20 }
+        dataStore.data.map { it[KEY_COMMONLY_CALLED_TOP_PCT] ?: 20 }
 
     val rarelyCalledBottomPct: Flow<Int> =
-        context.dataStore.data.map { it[KEY_RARELY_CALLED_BOTTOM_PCT] ?: 50 }
+        dataStore.data.map { it[KEY_RARELY_CALLED_BOTTOM_PCT] ?: 50 }
 
     val recentlyAddedDays: Flow<Int> =
-        context.dataStore.data.map { it[KEY_RECENTLY_ADDED_DAYS] ?: 30 }
+        dataStore.data.map { it[KEY_RECENTLY_ADDED_DAYS] ?: 30 }
 
     val longGapDays: Flow<Int> =
-        context.dataStore.data.map { it[KEY_LONG_GAP_DAYS] ?: 90 }
+        dataStore.data.map { it[KEY_LONG_GAP_DAYS] ?: 90 }
 
     // Convenience aggregate — `ContactPickerViewModel` consumes this inside its
     // `combine()` block so a single threshold change re-fans every filter without
@@ -178,7 +216,7 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
         commonlyCalledTopPct,
         rarelyCalledBottomPct,
         recentlyAddedDays,
-        longGapDays,
+        longGapDays
     ) { top, bottom, recent, gap -> PickerThresholds(top, bottom, recent, gap) }
 
     // Appearance (THEMING 2026-06-22). Stored as raw primitives so the data
@@ -187,16 +225,16 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
     // mirror those enums' DEFAULT (warm + system). accentHue is -1 for "use the
     // theme's own accent"; 0..359 is a dial override.
     val colorTheme: Flow<String> =
-        context.dataStore.data.map { it[KEY_COLOR_THEME] ?: "warm" }
+        dataStore.data.map { it[KEY_COLOR_THEME] ?: "warm" }
 
     val darkMode: Flow<String> =
-        context.dataStore.data.map { it[KEY_DARK_MODE] ?: "system" }
+        dataStore.data.map { it[KEY_DARK_MODE] ?: "system" }
 
     val accentHue: Flow<Int> =
-        context.dataStore.data.map { it[KEY_ACCENT_HUE] ?: -1 }
+        dataStore.data.map { it[KEY_ACCENT_HUE] ?: -1 }
 
     suspend fun setOnboardingComplete(value: Boolean) {
-        context.dataStore.edit { it[KEY_ONBOARDED] = value }
+        dataStore.edit { it[KEY_ONBOARDED] = value }
     }
 
     /**
@@ -209,7 +247,7 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
      * no-op until explicitly mapped.
      */
     suspend fun setHasAsked(permission: String) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             when (permission) {
                 Manifest.permission.READ_CONTACTS -> prefs[KEY_HAS_ASKED_CONTACTS] = true
                 Manifest.permission.READ_CALL_LOG -> prefs[KEY_HAS_ASKED_CALL_LOG] = true
@@ -225,70 +263,99 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
      * [OnboardingDoneViewModel] on completion).
      */
     suspend fun setLastOnboardingStep(stepName: String?) {
-        context.dataStore.edit { prefs ->
-            if (stepName == null) prefs.remove(KEY_LAST_ONBOARDING_STEP)
-            else prefs[KEY_LAST_ONBOARDING_STEP] = stepName
+        dataStore.edit { prefs ->
+            if (stepName == null) {
+                prefs.remove(KEY_LAST_ONBOARDING_STEP)
+            } else {
+                prefs[KEY_LAST_ONBOARDING_STEP] = stepName
+            }
+        }
+    }
+
+    /** Pass `null` to clear. See [onboardingListId]. */
+    suspend fun setOnboardingListId(listId: Long?) {
+        dataStore.edit { prefs ->
+            if (listId == null) {
+                prefs.remove(KEY_ONBOARDING_LIST_ID)
+            } else {
+                prefs[KEY_ONBOARDING_LIST_ID] = listId
+            }
         }
     }
 
     suspend fun setCallLogImportDays(value: Int) {
-        context.dataStore.edit { it[KEY_CALL_LOG_IMPORT_DAYS] = value.coerceIn(1, 3650) }
+        dataStore.edit { it[KEY_CALL_LOG_IMPORT_DAYS] = value.coerceIn(1, 3650) }
     }
 
     suspend fun setLastCallLogSyncAt(value: Long) {
-        context.dataStore.edit { it[KEY_LAST_CALL_LOG_SYNC_AT] = value.coerceAtLeast(0L) }
-    }
-
-    suspend fun setCallLogSyncEnabled(value: Boolean) {
-        context.dataStore.edit { it[KEY_CALL_LOG_SYNC_ENABLED] = value }
+        dataStore.edit { it[KEY_LAST_CALL_LOG_SYNC_AT] = value.coerceAtLeast(0L) }
     }
 
     /** WIDGET-04 — setter companion to [minimalModeEnabled]. */
     suspend fun setMinimalModeEnabled(value: Boolean) {
-        context.dataStore.edit { it[KEY_MINIMAL_MODE] = value }
+        dataStore.edit { it[KEY_MINIMAL_MODE] = value }
     }
 
     /** Setter companion to [lastDueCountRecomputeAt]; written by the staleness gate on success. */
     open suspend fun setLastDueCountRecomputeAt(epochMs: Long) {
-        context.dataStore.edit { it[KEY_LAST_DUE_COUNT_RECOMPUTE_AT] = epochMs.coerceAtLeast(0L) }
+        dataStore.edit { it[KEY_LAST_DUE_COUNT_RECOMPUTE_AT] = epochMs.coerceAtLeast(0L) }
     }
 
     /** Setter companion to [lastContactsIngestedAt]; written by the worker on success. */
     suspend fun setLastContactsIngestedAt(at: Instant) {
-        context.dataStore.edit { it[KEY_LAST_CONTACTS_INGESTED_AT] = at.toEpochMilli() }
+        dataStore.edit { it[KEY_LAST_CONTACTS_INGESTED_AT] = at.toEpochMilli() }
     }
 
     suspend fun setCommonlyCalledTopPct(value: Int) {
-        context.dataStore.edit { it[KEY_COMMONLY_CALLED_TOP_PCT] = value.coerceIn(5, 50) }
+        dataStore.edit { it[KEY_COMMONLY_CALLED_TOP_PCT] = value.coerceIn(5, 50) }
     }
 
     suspend fun setRarelyCalledBottomPct(value: Int) {
-        context.dataStore.edit { it[KEY_RARELY_CALLED_BOTTOM_PCT] = value.coerceIn(10, 90) }
+        dataStore.edit { it[KEY_RARELY_CALLED_BOTTOM_PCT] = value.coerceIn(10, 90) }
     }
 
     suspend fun setRecentlyAddedDays(value: Int) {
-        context.dataStore.edit { it[KEY_RECENTLY_ADDED_DAYS] = value.coerceIn(1, 3650) }
+        dataStore.edit { it[KEY_RECENTLY_ADDED_DAYS] = value.coerceIn(1, 3650) }
     }
 
     suspend fun setLongGapDays(value: Int) {
-        context.dataStore.edit { it[KEY_LONG_GAP_DAYS] = value.coerceIn(1, 3650) }
+        dataStore.edit { it[KEY_LONG_GAP_DAYS] = value.coerceIn(1, 3650) }
     }
 
     /** THEMING — persist the chosen theme id key (OrbitThemeId.key). */
     suspend fun setColorTheme(key: String) {
-        context.dataStore.edit { it[KEY_COLOR_THEME] = key }
+        dataStore.edit { it[KEY_COLOR_THEME] = key }
     }
 
     /** THEMING — persist the dark-mode choice (OrbitDarkMode.key). */
     suspend fun setDarkMode(key: String) {
-        context.dataStore.edit { it[KEY_DARK_MODE] = key }
+        dataStore.edit { it[KEY_DARK_MODE] = key }
     }
 
     /** THEMING — persist the accent-dial hue; null clears the override (-1). */
     suspend fun setAccentHue(hue: Int?) {
-        context.dataStore.edit {
+        dataStore.edit {
             it[KEY_ACCENT_HUE] = hue?.let { h -> ((h % 360) + 360) % 360 } ?: -1
         }
+    }
+
+    /**
+     * NOTIF-15: the contact the most recent nudge for [listId] named, or null
+     * when no nudge for that list has named anyone yet. An id, never a name:
+     * this DataStore is not encrypted (only the Room database is), so it holds
+     * nothing that identifies a person (features/privacy-and-lock/README.md).
+     *
+     * One key per list rather than a map in one key: a list's record is read
+     * and written only by that list's nudge, so per-list keys never contend.
+     * [resetAll] clears them with everything else; a deleted list leaves one
+     * stale long behind, which nothing reads.
+     */
+    suspend fun nudgeLastNamedContactId(listId: Long): Long? =
+        dataStore.data.first()[nudgeLastNamedKey(listId)]
+
+    /** NOTIF-15: setter companion to [nudgeLastNamedContactId]. */
+    suspend fun setNudgeLastNamedContactId(listId: Long, contactId: Long) {
+        dataStore.edit { it[nudgeLastNamedKey(listId)] = contactId }
     }
 
     /**
@@ -300,36 +367,44 @@ open class AppPrefs @Inject constructor(@ApplicationContext private val context:
      * re-enters the welcome screen (F1: reinstall = re-onboard semantics).
      */
     suspend fun resetAll() {
-        context.dataStore.edit { it.clear() }
+        dataStore.edit { it.clear() }
     }
 
     companion object {
         private val KEY_ONBOARDED = booleanPreferencesKey("onboarding_complete")
         private val KEY_CALL_LOG_IMPORT_DAYS = intPreferencesKey("call_log_import_days")
         private val KEY_LAST_CALL_LOG_SYNC_AT = longPreferencesKey("last_call_log_sync_at_ms")
-        private val KEY_CALL_LOG_SYNC_ENABLED = booleanPreferencesKey("call_log_sync_enabled")
+
         // WIDGET-04 — widget-only contact-name masking. Re-introduced
         // scoped to widgets after the in-app toggle was cut (ADR 0003 superseded).
         private val KEY_MINIMAL_MODE = booleanPreferencesKey("minimal_mode_enabled")
-        private val KEY_LAST_DUE_COUNT_RECOMPUTE_AT = longPreferencesKey("last_due_count_recompute_at")
+        private val KEY_LAST_DUE_COUNT_RECOMPUTE_AT =
+            longPreferencesKey("last_due_count_recompute_at")
         private val KEY_LAST_CONTACTS_INGESTED_AT = longPreferencesKey("last_contacts_ingested_at")
         private val KEY_COMMONLY_CALLED_TOP_PCT = intPreferencesKey("commonly_called_top_pct")
         private val KEY_RARELY_CALLED_BOTTOM_PCT = intPreferencesKey("rarely_called_bottom_pct")
         private val KEY_RECENTLY_ADDED_DAYS = intPreferencesKey("recently_added_days")
         private val KEY_LONG_GAP_DAYS = intPreferencesKey("long_gap_days")
+
         // THEMING 2026-06-22 — user-selectable appearance.
         private val KEY_COLOR_THEME = stringPreferencesKey("color_theme")
         private val KEY_DARK_MODE = stringPreferencesKey("dark_mode")
         private val KEY_ACCENT_HUE = intPreferencesKey("accent_hue")
+
         // F-2 fix (2026-04-30 hot-fix-260430-hs4) — per-permission "asked
         // at least once" flags. See [hasAskedContacts] / [setHasAsked].
         private val KEY_HAS_ASKED_CONTACTS = booleanPreferencesKey("has_asked_contacts")
         private val KEY_HAS_ASKED_CALL_LOG = booleanPreferencesKey("has_asked_call_log")
         private val KEY_HAS_ASKED_NOTIFICATIONS = booleanPreferencesKey("has_asked_notifications")
+
         // F-3 fix (2026-04-30 hot-fix-260430-hs4) — last completed onboarding
         // step name for crash-resume hydration. See [lastOnboardingStep] /
         // [setLastOnboardingStep].
         private val KEY_LAST_ONBOARDING_STEP = stringPreferencesKey("last_onboarding_step")
+        private val KEY_ONBOARDING_LIST_ID = longPreferencesKey("onboarding_list_id")
+
+        // NOTIF-15: per-list record of who the last nudge named.
+        private fun nudgeLastNamedKey(listId: Long) = longPreferencesKey("nudge_last_named_$listId")
     }
 }
 
@@ -345,7 +420,7 @@ data class PickerThresholds(
     val commonlyTopPct: Int,
     val rarelyBottomPct: Int,
     val recentlyAddedDays: Int,
-    val longGapDays: Int,
+    val longGapDays: Int
 ) {
     companion object {
         val DEFAULT = PickerThresholds(20, 50, 30, 90)

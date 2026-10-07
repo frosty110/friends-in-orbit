@@ -10,9 +10,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import app.orbit.R
+import app.orbit.ui.components.OrbitMark
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -37,28 +42,34 @@ fun OnboardingWelcomeScreen(
     onContinue: () -> Unit,
 ) {
     OnboardingScaffold(
+        // The app name is the screen's name too: TalkBack announces "Orbit".
+        title = stringResource(R.string.app_name),
         step = null,
         onBack = null,
         primary = OnboardingAction(
-            label = "Let's go",
+            label = stringResource(R.string.onb_welcome_cta),
             onClick = onContinue,
         ),
     ) {
-        Spacer(Modifier.height(OrbitTheme.spacing.x10))
+        Spacer(Modifier.height(OrbitTheme.spacing.x6))
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth(),
         ) {
+            // The brand moment (rubric D12): the mark settles into place once.
+            OrbitMark()
+            Spacer(Modifier.height(OrbitTheme.spacing.x5))
             Text(
-                text = "Orbit",
+                text = stringResource(R.string.app_name),
                 style = OrbitTheme.type.hero.copy(color = OrbitTheme.colors.fg),
                 textAlign = TextAlign.Center,
+                modifier = Modifier.semantics { heading() },
             )
             Spacer(Modifier.height(OrbitTheme.spacing.x6))
             Text(
-                text = "Call the people you keep meaning to call.",
+                text = stringResource(R.string.onb_welcome_tagline),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4),
@@ -68,11 +79,11 @@ fun OnboardingWelcomeScreen(
             // mailto. The mailto was the
             // most colorful element on screen and sold nothing; a Settings
             // placement is a separate decision.
-            ValueBeat("Not all contacts are friends — you choose who matters.")
+            ValueBeat(stringResource(R.string.onb_welcome_beat_choice))
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
-            ValueBeat("One name at a time, with enough context to say yes.")
+            ValueBeat(stringResource(R.string.onb_welcome_beat_loop))
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
-            ValueBeat("Everything stays on your phone — no cloud, no tracking.")
+            ValueBeat(stringResource(R.string.onb_welcome_beat_privacy))
         }
     }
 }

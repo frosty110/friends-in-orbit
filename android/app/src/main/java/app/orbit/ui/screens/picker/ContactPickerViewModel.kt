@@ -7,6 +7,11 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import app.orbit.R
+import app.orbit.calllog.ContactsIngestWorker
+import app.orbit.calllog.ContentObserverController
 import app.orbit.data.AppPrefs
 import app.orbit.data.PickerThresholds
 import app.orbit.data.android.ContactsReader
@@ -14,6 +19,7 @@ import app.orbit.data.dao.ListMembershipDao
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListMembershipEntity
+import app.orbit.data.entity.ListType
 import app.orbit.data.repository.CallAgg
 import app.orbit.data.repository.CallEventRepository
 import app.orbit.data.repository.ContactRepository
@@ -24,12 +30,15 @@ import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.CopyContactsUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MoveContactsUseCase
+import app.orbit.domain.usecase.RelinkContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
+import app.orbit.ui.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.Duration
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,8 +48,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -49,6 +60,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -63,6 +75,12 @@ import kotlinx.coroutines.launch
  *    to read READ_CONTACTS state — same pattern as
  *    [app.orbit.ui.screens.onboarding.OnboardingPermissionsViewModel]
  *    (no PermissionSource interface, no test seam — refresh on init + on result).
+ *  - A grant made on this screen (the rationale's button, or the phone's
+ *    settings and a return) runs the contacts ingest, as the onboarding and
+ *    Settings grants do; see [onPermissionGranted]. Until 2026-10-06 nothing
+ *    did, so with Room still empty the picker resolved Ready and said
+ *    "Everyone in your contacts is already on {list}" to a user whose
+ *    contacts had never been read.
  *  - Exposes [uiState] as a `StateFlow<ContactPickerUiState>` via
  *    `combine(...).stateIn(WhileSubscribed(5_000L))` — ARCH-02 invariant.
  *  - Search debounce lives in the screen (immediate field state, debounced
@@ -96,8 +114,8 @@ import kotlinx.coroutines.launch
  */
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
-class ContactPickerViewModel @Inject constructor(
-    @ApplicationContext private val appContext: Context,
+class ContactPickerViewModel(
+    private val appContext: Context,
     private val contactRepo: ContactRepository,
     private val listRepo: ListRepository,
     private val listMembershipDao: ListMembershipDao,
@@ -105,15 +123,75 @@ class ContactPickerViewModel @Inject constructor(
     private val appPrefs: AppPrefs,
     private val moveUseCase: MoveContactsUseCase,
     private val copyUseCase: CopyContactsUseCase,
+    private val relinkUseCase: RelinkContactUseCase,
     private val ignoreUseCase: IgnoreContactUseCase,
     private val unignoreUseCase: UnignoreContactUseCase,
     private val undoStack: UndoStack,
     private val contactsReader: ContactsReader,
     private val clock: Clock,
     private val commitBus: PickerCommitBus,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
+    // The grant edge's two collaborators (SettingsViewModel is the
+    // precedent): the controller registers the address-book observer and
+    // runs the forced ingest; the WorkManager's WorkInfo says whether that
+    // ingest is still in flight. A test passes the test WorkManager.
+    private val contentObserverController: ContentObserverController,
+    private val workManager: WorkManager,
     savedStateHandle: SavedStateHandle,
+    // The two dispatchers the pipeline hops to: the address-book read and the
+    // candidate reduction. Hilt's constructor below passes the real ones; a
+    // test passes its test dispatcher so [uiState] can be collected
+    // deterministically (PICK-09: Error with the selection kept, then Retry).
+    // Dagger ignores Kotlin default arguments, so this is the same
+    // primary-plus-@Inject-secondary split AppPrefs uses, not a defaulted
+    // parameter on the injected constructor.
+    private val ioDispatcher: CoroutineDispatcher,
+    private val defaultDispatcher: CoroutineDispatcher
 ) : ViewModel() {
+
+    @Inject
+    constructor(
+        @ApplicationContext appContext: Context,
+        contactRepo: ContactRepository,
+        listRepo: ListRepository,
+        listMembershipDao: ListMembershipDao,
+        callEventRepo: CallEventRepository,
+        appPrefs: AppPrefs,
+        moveUseCase: MoveContactsUseCase,
+        copyUseCase: CopyContactsUseCase,
+        relinkUseCase: RelinkContactUseCase,
+        ignoreUseCase: IgnoreContactUseCase,
+        unignoreUseCase: UnignoreContactUseCase,
+        undoStack: UndoStack,
+        contactsReader: ContactsReader,
+        clock: Clock,
+        commitBus: PickerCommitBus,
+        @ApplicationScope appScope: CoroutineScope,
+        contentObserverController: ContentObserverController,
+        savedStateHandle: SavedStateHandle
+    ) : this(
+        appContext = appContext,
+        contactRepo = contactRepo,
+        listRepo = listRepo,
+        listMembershipDao = listMembershipDao,
+        callEventRepo = callEventRepo,
+        appPrefs = appPrefs,
+        moveUseCase = moveUseCase,
+        copyUseCase = copyUseCase,
+        relinkUseCase = relinkUseCase,
+        ignoreUseCase = ignoreUseCase,
+        unignoreUseCase = unignoreUseCase,
+        undoStack = undoStack,
+        contactsReader = contactsReader,
+        clock = clock,
+        commitBus = commitBus,
+        appScope = appScope,
+        contentObserverController = contentObserverController,
+        workManager = WorkManager.getInstance(appContext),
+        savedStateHandle = savedStateHandle,
+        ioDispatcher = Dispatchers.IO,
+        defaultDispatcher = Dispatchers.Default
+    )
 
     // ─── Nav args ───────────────────────────────────────────────────────────────────────
 
@@ -132,6 +210,7 @@ class ContactPickerViewModel @Inject constructor(
         when (savedStateHandle["mode"] ?: "") {
             "move" -> PickerMode.Move
             "copy" -> PickerMode.Copy
+            "relink" -> PickerMode.Relink
             else -> PickerMode.Add
         }
 
@@ -140,6 +219,11 @@ class ContactPickerViewModel @Inject constructor(
     // terminal NotFound phase so the Move commit can never silently no-op.
     private val sourceListId: Long? =
         savedStateHandle.get<String>("sourceListId")?.toLongOrNull()
+
+    // CONTACT-07: the orphan a Relink route re-links. A Relink route has no
+    // target list; this id takes its place, parsed just as defensively.
+    private val relinkContactId: Long? =
+        savedStateHandle.get<String>("relinkContactId")?.toLongOrNull()
 
     // ─── Mutable state flows ───────────────────────────────────────────────────────────
     //
@@ -172,7 +256,7 @@ class ContactPickerViewModel @Inject constructor(
                 scope = viewModelScope,
                 started = SharingStarted.Eagerly,
                 initialValue = savedStateHandle.get<Array<String>>(KEY_ACTIVE_FILTERS)
-                    ?.mapNotNull(::decodePickerFilter)?.toSet().orEmpty(),
+                    ?.mapNotNull(::decodePickerFilter)?.toSet().orEmpty()
             )
 
     private val selectedIdsFlow: StateFlow<Set<Long>> =
@@ -182,7 +266,7 @@ class ContactPickerViewModel @Inject constructor(
                 scope = viewModelScope,
                 started = SharingStarted.Eagerly,
                 initialValue = savedStateHandle.get<LongArray>(KEY_SELECTED_IDS)
-                    ?.toSet().orEmpty(),
+                    ?.toSet().orEmpty()
             )
 
     private val _showIgnored = MutableStateFlow(false)
@@ -190,17 +274,28 @@ class ContactPickerViewModel @Inject constructor(
         MutableStateFlow<ContactPickerUiState.Phase>(ContactPickerUiState.Phase.LoadingPermission)
     private val _isCommitting = MutableStateFlow(false)
 
-    // ONB-21 — UI-side sort mode. Default ByName matches DAO order;
-    // onboarding flips to ByRecency via [setSortBy]. Persists across process
-    // death via SavedStateHandle (KEY_SORT_BY) so the user's chosen order is
-    // preserved through Android's "low memory" reclamation.
+    // PICK-09: bumped by [onRetry]; re-reads the address book and
+    // re-subscribes every Room source.
+    private val retryCount = MutableStateFlow(0)
+
+    /** PICK-09: the Error state's Retry. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
+
+    // UI-side sort mode. Alphabetical (ByName, the DAO's order) by default;
+    // the user changes it from the Sort control via [setSortBy]. Persists
+    // across process death via SavedStateHandle (KEY_SORT_BY) so the chosen
+    // order survives Android's "low memory" reclamation. (Until 2026-10-06
+    // the comments here described an onboarding caller that set ByRecency;
+    // no code ever did.)
     private val _sortBy: MutableStateFlow<PickerSort> = MutableStateFlow(
         when (savedStateHandle.get<String>(KEY_SORT_BY)) {
             SORT_RECENCY -> PickerSort.ByRecency
             SORT_MOST_CALLED -> PickerSort.ByMostCalled
             SORT_RECENTLY_SAVED -> PickerSort.ByRecentlySaved
             else -> PickerSort.ByName
-        },
+        }
     )
 
     init {
@@ -210,7 +305,13 @@ class ContactPickerViewModel @Inject constructor(
         // A Move route without a sourceListId is equally malformed: there is no
         // list to move FROM, so the commit could only be a silent no-op. Make
         // the invalid state unreachable instead.
-        if (targetListId == null || (mode == PickerMode.Move && sourceListId == null)) {
+        // A Relink route needs the orphan's id and nothing else.
+        val routeIsValid = when (mode) {
+            PickerMode.Relink -> relinkContactId != null
+            PickerMode.Move -> targetListId != null && sourceListId != null
+            PickerMode.Add, PickerMode.Copy -> targetListId != null
+        }
+        if (!routeIsValid) {
             _permissionPhase.value = ContactPickerUiState.Phase.NotFound
         } else {
             refreshPermission()
@@ -228,22 +329,70 @@ class ContactPickerViewModel @Inject constructor(
     fun refreshPermission() {
         val granted = ContextCompat.checkSelfPermission(
             appContext,
-            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.READ_CONTACTS
         ) == PackageManager.PERMISSION_GRANTED
-        _permissionPhase.value = if (granted) {
-            ContactPickerUiState.Phase.Ready
-        } else {
-            ContactPickerUiState.Phase.PermissionRationale
-        }
+        movePermissionPhase(
+            if (granted) {
+                ContactPickerUiState.Phase.Ready
+            } else {
+                ContactPickerUiState.Phase.PermissionRationale
+            }
+        )
     }
 
     fun onPermissionResult(granted: Boolean) {
-        _permissionPhase.value = if (granted) {
-            ContactPickerUiState.Phase.Ready
-        } else {
-            ContactPickerUiState.Phase.PermissionDenied
-        }
+        movePermissionPhase(
+            if (granted) {
+                ContactPickerUiState.Phase.Ready
+            } else {
+                ContactPickerUiState.Phase.PermissionDenied
+            }
+        )
     }
+
+    /**
+     * Sets the permission phase and, on the denied-to-granted edge only,
+     * runs [onPermissionGranted]. The edge is a prior PermissionRationale or
+     * PermissionDenied becoming Ready: init's LoadingPermission -> Ready is
+     * not a grant made here (the ingest for that grant ran in onboarding or
+     * Settings), and Ready -> Ready on a resume changes nothing.
+     */
+    private fun movePermissionPhase(next: ContactPickerUiState.Phase) {
+        val prior = _permissionPhase.value
+        _permissionPhase.value = next
+        val wasDenied = prior == ContactPickerUiState.Phase.PermissionRationale ||
+            prior == ContactPickerUiState.Phase.PermissionDenied
+        if (wasDenied && next == ContactPickerUiState.Phase.Ready) onPermissionGranted()
+    }
+
+    /**
+     * What every other READ_CONTACTS grant does (OnboardingPermissionsViewModel,
+     * SettingsViewModel.refreshAllPermissionStates): register the
+     * address-book observer, then run the ingest. The forced, expedited path,
+     * so ContactsIngestWorker's 24h TTL cannot skip it: this user's contacts
+     * have never been read, and the TTL exists to dedupe grant re-runs, not
+     * to defer a first read. Until this ran, the only ways out of the false
+     * empty state were an address-book change or Settings' grant path.
+     */
+    private fun onPermissionGranted() {
+        contentObserverController.start()
+        contentObserverController.enqueueImmediateContactsIngest()
+    }
+
+    /**
+     * Whether the contacts ingest is ENQUEUED or RUNNING (the
+     * SettingsViewModel.contactsSyncInFlight shape). While it is and Room has
+     * no candidates yet, [resolvePickerPhase] keeps the skeleton up instead
+     * of resolving an empty Ready, which would read as "everyone is already
+     * on the list".
+     */
+    private val ingestInFlight: Flow<Boolean> =
+        workManager.getWorkInfosForUniqueWorkFlow(ContactsIngestWorker.UNIQUE_NAME)
+            .map { infos ->
+                infos.any {
+                    it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING
+                }
+            }
 
     // ─── Public callbacks (9 — one per UI event) ──────────────────────────────────────
 
@@ -270,7 +419,13 @@ class ContactPickerViewModel @Inject constructor(
 
     fun onToggleSelect(id: Long) {
         val current = selectedIdsFlow.value
-        val next = if (id in current) current - id else current + id
+        val next = when {
+            id in current -> current - id
+            // CONTACT-07: an orphan re-links to exactly one phone contact, so a
+            // new pick replaces the old one rather than joining it.
+            mode == PickerMode.Relink -> setOf(id)
+            else -> current + id
+        }
         savedStateHandleRef[KEY_SELECTED_IDS] = next.toLongArray()
     }
 
@@ -281,6 +436,10 @@ class ContactPickerViewModel @Inject constructor(
      * would miss rows the LazyColumn hasn't materialized yet.
      */
     fun onSelectAllMatching(filteredIds: Set<Long>) {
+        // The screen never offers select-all in Relink (canSelectAllMatching
+        // is false there); refuse here too so a stale tap cannot stage a
+        // multi-contact merge.
+        if (mode == PickerMode.Relink) return
         val next = selectedIdsFlow.value + filteredIds
         savedStateHandleRef[KEY_SELECTED_IDS] = next.toLongArray()
     }
@@ -294,10 +453,9 @@ class ContactPickerViewModel @Inject constructor(
     }
 
     /**
-     * ONB-21 — change the picker's sort mode. The onboarding flow
-     * calls this once with `PickerSort.ByRecency` after the call-log sync
-     * completes so freshly-synced contacts surface first; standard nav
-     * paths leave it at the default `PickerSort.ByName`.
+     * Change the picker's sort mode from the Sort control. Every route opens
+     * alphabetical; only the user changes it, and the choice is remembered
+     * for the screen's lifetime and across process death.
      */
     fun setSortBy(sort: PickerSort) {
         _sortBy.value = sort
@@ -333,6 +491,10 @@ class ContactPickerViewModel @Inject constructor(
     fun onCommit() {
         val ids = selectedIdsFlow.value.toList()
         if (ids.isEmpty()) return
+        if (mode == PickerMode.Relink) {
+            commitRelink(ids)
+            return
+        }
         // NotFound surface short-circuits commit. The action bar isn't
         // rendered in NotFound, but a race where the surface re-enters Ready
         // momentarily before settling shouldn't dispatch on a null id.
@@ -345,58 +507,125 @@ class ContactPickerViewModel @Inject constructor(
         savedStateHandleRef[KEY_SELECTED_IDS] = LongArray(0)
         appScope.launch {
             try {
-                val targetName = listRepo.getById(listId)?.name.orEmpty()
-                val dispatched: Pair<suspend () -> Unit, String>? = when (mode) {
-                    PickerMode.Add -> {
+                val target = listRepo.getById(listId)
+                val targetName = target?.name.orEmpty()
+                val dispatched: Pair<suspend () -> Unit, UiText>? = when {
+                    // A smart list's rows are written by SmartListMembershipSync
+                    // from its rule, so a row added here would be removed on
+                    // the next reconcile with no message. Every surface hides
+                    // "Add people" on a smart list (the ListRow precedent);
+                    // this is the loud guard for a route that still reaches
+                    // it (rules.md Code 3), surfaced as a failed save below.
+                    target?.type == ListType.SMART -> null
+
+                    mode == PickerMode.Add -> {
                         val now = clock.now()
                         listMembershipDao.insertAll(
                             ids.map { id ->
                                 ListMembershipEntity(
                                     listId = listId,
                                     contactId = id,
-                                    addedAt = now,
+                                    addedAt = now
                                 )
-                            },
+                            }
                         )
-                        val inverse: suspend () -> Unit = { listMembershipDao.removeAll(listId, ids) }
-                        inverse to "Added ${ids.size} to $targetName"
+                        val inverse: suspend () -> Unit = {
+                            listMembershipDao.removeAll(
+                                listId,
+                                ids
+                            )
+                        }
+                        inverse to UiText.plural(R.plurals.picker_snackbar_added, ids.size, ids.size, targetName)
                     }
 
-                    PickerMode.Copy -> {
-                        val r = copyUseCase(listId, ids, targetName)
-                        r.inverse to r.label
+                    mode == PickerMode.Copy -> {
+                        val r = copyUseCase(listId, ids)
+                        // A count of 0 is a short-circuit (missing or archived
+                        // list): a failed save below, never an empty snackbar.
+                        if (r.count == 0) {
+                            null
+                        } else {
+                            r.inverse to UiText.plural(R.plurals.components_snackbar_copied, r.count, r.count, targetName)
+                        }
                     }
 
-                    PickerMode.Move -> {
+                    mode == PickerMode.Move -> {
                         // init routes a Move route without a
                         // sourceListId to NotFound, so `from` is non-null on
                         // every reachable commit; the guard keeps the failure
                         // loud if a future nav change breaks that invariant.
-                        // The use case returns an empty label when it
+                        // The use case returns a count of 0 when it
                         // short-circuited (missing/archived destination,
-                        // same-list move) — surfaced below, never swallowed.
+                        // same-list move): surfaced below, never swallowed.
                         val from = sourceListId
                         if (from == null) {
                             null
                         } else {
-                            val r = moveUseCase(from, listId, ids, targetName)
-                            if (r.label.isEmpty()) null else r.inverse to r.label
+                            val r = moveUseCase(from, listId, ids)
+                            if (r.count == 0) {
+                                null
+                            } else {
+                                r.inverse to UiText.plural(R.plurals.components_snackbar_moved, r.count, r.count, targetName)
+                            }
                         }
                     }
+
+                    // onCommit hands Relink to commitRelink before this point.
+                    else -> null
                 }
 
                 if (dispatched != null) {
-                    val (inverse, label) = dispatched
-                    undoStack.put(UndoStack.PendingUndo(inverse = inverse, label = label))
-                    commitBus.publish(SnackbarEvent(label, "Undo"))
-                } else if (mode == PickerMode.Move) {
-                    // Per project convention "no silent fallbacks": a Move that
-                    // dispatched nothing is a failed save, not a quiet exit.
-                    commitBus.publish(SnackbarEvent("Couldn't save that"))
+                    val (inverse, message) = dispatched
+                    undoStack.put(UndoStack.PendingUndo(inverse = inverse))
+                    commitBus.publish(SnackbarEvent.undoable(message))
+                } else {
+                    // rules.md Code 3 (no silent fallbacks): a commit that
+                    // dispatched nothing, whether a smart target or a Move or
+                    // Copy the use case refused, is a failed save, not a quiet
+                    // exit. (A short-circuited Copy used to publish an empty
+                    // snackbar with Undo.)
+                    commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
                 }
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
-                commitBus.publish(SnackbarEvent("Couldn't save that"))
+                commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
+            } finally {
+                _isCommitting.value = false
+            }
+        }
+    }
+
+    /**
+     * CONTACT-07: re-link the route's orphan to the one picked phone contact
+     * via [RelinkContactUseCase]. Same lifecycle as the list commits above:
+     * [appScope] so the merge survives the pop back to Contact detail, the
+     * inverse on [UndoStack], and the outcome on [PickerCommitBus]. A refused
+     * merge (the use case returns null: the orphan was restored by a sync, or
+     * the pick stopped being a live phone contact) is a failed save, never a
+     * quiet exit.
+     */
+    private fun commitRelink(ids: List<Long>) {
+        val orphanId = relinkContactId ?: return
+        // Single-select is enforced in onToggleSelect; a multi-id selection
+        // here would mean that broke, and merging an arbitrary one of them
+        // would be a guess.
+        val liveId = ids.singleOrNull() ?: return
+        _isCommitting.value = true
+        savedStateHandleRef[KEY_SELECTED_IDS] = LongArray(0)
+        appScope.launch {
+            try {
+                val result = relinkUseCase(orphanId = orphanId, liveId = liveId)
+                if (result == null) {
+                    commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
+                } else {
+                    undoStack.put(UndoStack.PendingUndo(inverse = result.inverse))
+                    commitBus.publish(
+                        SnackbarEvent.undoable(UiText.res(R.string.picker_snackbar_relinked, result.linkedName))
+                    )
+                }
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
             } finally {
                 _isCommitting.value = false
             }
@@ -426,12 +655,14 @@ class ContactPickerViewModel @Inject constructor(
         }
         appScope.launch {
             try {
-                val result = ignoreUseCase(contactId, displayName)
-                undoStack.put(UndoStack.PendingUndo(inverse = result.inverse, label = result.label))
-                commitBus.publish(SnackbarEvent(result.label, "Undo"))
+                val result = ignoreUseCase(contactId)
+                undoStack.put(UndoStack.PendingUndo(inverse = result.inverse))
+                commitBus.publish(
+                    SnackbarEvent.undoable(UiText.res(R.string.components_snackbar_ignored, displayName))
+                )
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
-                commitBus.publish(SnackbarEvent("Couldn't save that"))
+                commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
             }
         }
     }
@@ -447,16 +678,15 @@ class ContactPickerViewModel @Inject constructor(
         appScope.launch {
             try {
                 unignoreUseCase(contactId)
-                undoStack.put(
-                    UndoStack.PendingUndo(
-                        inverse = { ignoreUseCase(contactId, displayName) },
-                        label = "Restored $displayName",
-                    ),
+                undoStack.put(UndoStack.PendingUndo(inverse = { ignoreUseCase(contactId) }))
+                // "Unignored {name}": the glossary's one word for the inverse
+                // of Ignore (voice.md); it read "Restored" until 2026-10-06.
+                commitBus.publish(
+                    SnackbarEvent.undoable(UiText.res(R.string.components_snackbar_unignored, displayName))
                 )
-                commitBus.publish(SnackbarEvent("Restored $displayName", "Undo"))
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
-                commitBus.publish(SnackbarEvent("Couldn't save that"))
+                commitBus.publish(SnackbarEvent(UiText.res(R.string.picker_snackbar_save_failed)))
             }
         }
     }
@@ -465,12 +695,12 @@ class ContactPickerViewModel @Inject constructor(
     //
     // Two staged combines because Kotlin stdlib `combine` arity caps at 5:
     //
-    //  Stage A: pickerContactsFlow — folds the 5 reactive data sources + the
+    //  Stage A: pickerContacts(generation) folds the 5 reactive data sources + the
     //   cached address-book read (`phoneByContactIdFlow`) into a domain
     //   List<PickerContact>: contacts, all-memberships, call events, lists,
     //   thresholds, phone-by-contactId.
     //
-    //  Stage B: uiState — folds (pickerContactsFlow, searchQueryFlow,
+    //  Stage B: uiState folds (pickerContacts(generation), searchQueryFlow,
     //   filterConfigFlow, selectedIds, chromeFlow) into ContactPickerUiState
     //   in ONE construction per emission (no chained .copy() stages; see the
     //   pipeline comment above `filterConfigFlow`).
@@ -488,19 +718,46 @@ class ContactPickerViewModel @Inject constructor(
     // so without `flatMapLatest` here, a denied-then-granted flow would keep
     // serving an empty cached map for the VM's lifetime.
 
-    private val phoneByContactIdFlow: SharedFlow<Map<Long, app.orbit.data.android.PhoneContact>> =
-        _permissionPhase
-            .map { it == ContactPickerUiState.Phase.Ready }
-            .distinctUntilChanged()
-            .flatMapLatest { granted ->
+    //
+    // PICK-09: the read is wrapped in a Result. A failed read (the permission
+    // revoked mid-read, a provider crash) used to throw inside this shareIn,
+    // which fails its viewModelScope coroutine and takes the app down; now the
+    // failure reaches the picker, which shows Retry. Retry re-keys the read,
+    // and each read carries the retry generation it belongs to: the share
+    // replays its last value, so without the tag a retry's fresh pipeline
+    // would first see the old failure and fail again before the new read
+    // landed (see [pickerContacts]).
+    private val phoneByContactIdFlow: SharedFlow<PhoneRead> =
+        combine(
+            _permissionPhase
+                .map { it == ContactPickerUiState.Phase.Ready }
+                .distinctUntilChanged(),
+            retryCount
+        ) { granted, generation -> granted to generation }
+            .flatMapLatest { (granted, generation) ->
                 if (granted) {
-                    flow { emit(contactsReader.readAll().associateBy { it.contactId }) }
-                        .flowOn(Dispatchers.IO)
+                    flow {
+                        val read = try {
+                            Result.success(contactsReader.readAll().associateBy { it.contactId })
+                        } catch (e: CancellationException) {
+                            throw e // rules.md Code 5
+                        } catch (e: Exception) {
+                            Result.failure(e)
+                        }
+                        emit(PhoneRead(generation, read))
+                    }
+                        .flowOn(ioDispatcher)
                 } else {
-                    flowOf(emptyMap())
+                    flowOf(PhoneRead(generation, Result.success(emptyMap())))
                 }
             }
             .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), replay = 1)
+
+    /** One address-book read and the retry generation it was made for. */
+    private data class PhoneRead(
+        val generation: Int,
+        val result: Result<Map<Long, app.orbit.data.android.PhoneContact>>
+    )
 
     // Push the per-contact COUNT + lastAt down into SQL via
     // `observeAggregatesForContacts(ids)`. The id set is derived from the
@@ -513,8 +770,11 @@ class ContactPickerViewModel @Inject constructor(
             .map { contacts -> contacts.map(ContactEntity::id) }
             .distinctUntilChanged()
             .flatMapLatest { ids ->
-                if (ids.isEmpty()) flowOf(emptyMap())
-                else callEventRepo.observeAggregatesForContacts(ids)
+                if (ids.isEmpty()) {
+                    flowOf(emptyMap())
+                } else {
+                    callEventRepo.observeAggregatesForContacts(ids)
+                }
             }
 
     private val rawSourcesFlow = combine(
@@ -522,20 +782,27 @@ class ContactPickerViewModel @Inject constructor(
         listMembershipDao.observeAll(),
         callAggregatesFlow,
         listRepo.observeAll(),
-        appPrefs.pickerThresholds,
+        appPrefs.pickerThresholds
     ) { contacts, memberships, callAggregates, lists, thresholds ->
         RawPickerSources(contacts, memberships, callAggregates, lists, thresholds)
     }
 
-    private val pickerContactsFlow: Flow<List<PickerContact>> =
-        rawSourcesFlow.combine(phoneByContactIdFlow) { raw, phoneById ->
+    // [generation] is the retry generation this pipeline serves; reads from
+    // an earlier generation (the share's replayed value) are skipped.
+    private fun pickerContacts(generation: Int): Flow<List<PickerContact>> =
+        rawSourcesFlow.combine(
+            phoneByContactIdFlow.filter { it.generation >= generation }
+        ) { raw, phoneRead ->
+            // A failed address-book read throws here, inside the cold
+            // pipeline, so [uiState]'s catch turns it into Phase.Error.
+            val phoneById = phoneRead.result.getOrThrow()
             buildPickerContacts(
                 contacts = raw.contacts,
                 memberships = raw.memberships,
                 callAggregates = raw.callAggregates,
                 lists = raw.lists,
                 thresholds = raw.thresholds,
-                phoneByContactId = phoneById,
+                phoneByContactId = phoneById
             )
         }
             // Run the percentile bucketing + cross-ref reduction off
@@ -544,28 +811,32 @@ class ContactPickerViewModel @Inject constructor(
             // 1k+ contacts the `buildPickerContacts` reduction is non-trivial
             // (quantile sort + per-contact membership join) and was previously
             // running on the combine-emitting dispatcher (Main).
-            .flowOn(Dispatchers.Default)
+            .flowOn(defaultDispatcher)
 
-    // When targetListId is null the picker is terminal-NotFound; surface an
-    // empty target name and avoid wiring the observe Flow to a missing id.
-    private val targetListNameFlow: Flow<String> =
-        targetListId?.let { id -> listRepo.observeById(id).map { it?.name.orEmpty() } }
-            ?: kotlinx.coroutines.flow.flowOf("")
+    // The name on the commit button: the target list's, or in Relink mode the
+    // orphan's ("Re-link {name}"). Null means the row is gone. Room emits null
+    // only for a genuinely missing row, never before the first read, so
+    // [chromeFlow] folds it into Phase.NotFound; until 2026-10-06 it mapped to
+    // "" and a stale deep link (or a list deleted from another screen) left a
+    // working-looking picker whose bar read "Add 3 to " and failed at commit.
+    // A malformed route (null id) is NotFound from init already.
+    private val targetNameFlow: Flow<String?> =
+        if (mode == PickerMode.Relink) {
+            relinkContactId?.let { id -> contactRepo.observeById(id).map { it?.displayName } }
+                ?: flowOf<String?>(null)
+        } else {
+            targetListId?.let { id -> listRepo.observeById(id).map { it?.name } }
+                ?: flowOf<String?>(null)
+        }
 
     /**
-     * PICK-01 — non-archived lists for the "In list…"
-     * DropdownMenu chip. Projected to [PickerListSummary] (id + name); the
-     * filter chip never sees the full [app.orbit.data.entity.ListEntity].
+     * PICK-01: the lists the "On a list" filter offers, projected to
+     * [PickerListSummary] (id + name) so the chip never sees the full
+     * [app.orbit.data.entity.ListEntity]. The exclusions are
+     * [availablePickerLists]'s.
      */
     private val availableListsFlow: Flow<List<PickerListSummary>> =
-        listRepo.observeAll().map { lists ->
-            // Exclude the list being built/added-to (targetListId) and, in Move
-            // mode, the source list — filtering by the very list you're editing
-            // is meaningless (Add mode already drops its members from the
-            // candidates, so it could only ever match zero).
-            lists.filter { it.id != targetListId && it.id != sourceListId && !it.isArchived }
-                .map { PickerListSummary(id = it.id, name = it.name) }
-        }
+        listRepo.observeAll().map { lists -> availablePickerLists(lists, targetListId, sourceListId) }
 
     // Single state construction per emission. The previous
     // pipeline chained five `.combine { state.copy(...) }` stages around the
@@ -590,51 +861,45 @@ class ContactPickerViewModel @Inject constructor(
     // contact list always describe the same device snapshot.
     private val deviceEmptyFlow: Flow<Boolean?> =
         phoneByContactIdFlow
-            .map<Map<Long, app.orbit.data.android.PhoneContact>, Boolean?> { it.isEmpty() }
+            // A failed read is "unknown" (null), never "empty".
+            .map<PhoneRead, Boolean?> { it.result.getOrNull()?.isEmpty() }
             .onStart { emit(null) }
             .distinctUntilChanged()
 
-    private val chromeFlow: Flow<PickerChrome> =
-        combine(
-            _permissionPhase,
-            _isCommitting,
-            targetListNameFlow,
-            availableListsFlow,
-            deviceEmptyFlow,
-        ) { phase, committing, name, lists, deviceEmpty ->
-            PickerChrome(phase, committing, name, lists, deviceEmpty)
+    // The permission phase and the ingest flag folded together, since the
+    // chrome combine below is already at arity 5.
+    private val permissionGateFlow: Flow<PermissionGate> =
+        combine(_permissionPhase, ingestInFlight) { phase, ingesting ->
+            PermissionGate(phase, ingesting)
         }
 
-    val uiState: StateFlow<ContactPickerUiState> =
+    private val chromeFlow: Flow<PickerChrome> =
         combine(
-            pickerContactsFlow,
-            // Debounce moved to the screen (immediate field state + debounced
-            // commit). Debouncing here too would double-lag filtering, and
-            // round-tripping a debounced value back to the field is what made
-            // fast typing revert (each recomposition re-applied the stale value).
-            searchQueryFlow,
-            filterConfigFlow,
-            selectedIdsFlow,
-            chromeFlow,
-        ) { allContacts, query, config, selected, chrome ->
-            ContactPickerUiState(
-                phase = resolvePickerPhase(
-                    basePhase = chrome.phase,
-                    isCommitting = chrome.isCommitting,
-                    deviceEmpty = chrome.deviceEmpty,
-                    hasAnyContacts = allContacts.isNotEmpty(),
-                ),
-                mode = mode,
-                targetListName = chrome.targetListName,
-                searchQuery = query,
-                activeFilters = config.activeFilters,
-                showIgnored = config.showIgnored,
-                allContacts = allContacts,
-                selectedIds = selected,
-                availableLists = chrome.availableLists,
-                sortBy = config.sortBy,
+            permissionGateFlow,
+            _isCommitting,
+            targetNameFlow,
+            availableListsFlow,
+            deviceEmptyFlow
+        ) { gate, committing, name, lists, deviceEmpty ->
+            PickerChrome(
+                // A missing target is terminal whatever the permission says.
+                phase = if (name == null) ContactPickerUiState.Phase.NotFound else gate.phase,
+                isCommitting = committing,
+                targetListName = name.orEmpty(),
+                availableLists = lists,
+                deviceEmpty = deviceEmpty,
+                ingesting = gate.ingesting
             )
         }
+
+    /**
+     * PICK-09: a failure anywhere upstream (Room, the address-book read)
+     * becomes [ContactPickerUiState.Phase.Error] with Retry, instead of an
+     * uncaught exception in viewModelScope. The selection survives it. No
+     * logging here (rules.md Code 4).
+     */
+    val uiState: StateFlow<ContactPickerUiState> =
+        retryCount.flatMapLatest { generation -> pickerState(generation) }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
@@ -647,9 +912,56 @@ class ContactPickerViewModel @Inject constructor(
                     showIgnored = false,
                     allContacts = emptyList(),
                     selectedIds = emptySet(),
-                    availableLists = emptyList(),
-                ),
+                    availableLists = emptyList()
+                )
             )
+
+    private fun pickerState(generation: Int): Flow<ContactPickerUiState> =
+        combine(
+            pickerContacts(generation),
+            // Debounce moved to the screen (immediate field state + debounced
+            // commit). Debouncing here too would double-lag filtering, and
+            // round-tripping a debounced value back to the field is what made
+            // fast typing revert (each recomposition re-applied the stale value).
+            searchQueryFlow,
+            filterConfigFlow,
+            selectedIdsFlow,
+            chromeFlow
+        ) { allContacts, query, config, selected, chrome ->
+            ContactPickerUiState(
+                phase = resolvePickerPhase(
+                    basePhase = chrome.phase,
+                    isCommitting = chrome.isCommitting,
+                    deviceEmpty = chrome.deviceEmpty,
+                    hasAnyContacts = allContacts.isNotEmpty(),
+                    ingesting = chrome.ingesting
+                ),
+                mode = mode,
+                targetListName = chrome.targetListName,
+                searchQuery = query,
+                activeFilters = config.activeFilters,
+                showIgnored = config.showIgnored,
+                allContacts = allContacts,
+                selectedIds = selected,
+                availableLists = chrome.availableLists,
+                sortBy = config.sortBy
+            )
+        }
+            .catch {
+                emit(
+                    ContactPickerUiState(
+                        phase = ContactPickerUiState.Phase.Error,
+                        mode = mode,
+                        targetListName = "",
+                        searchQuery = "",
+                        activeFilters = emptySet(),
+                        showIgnored = false,
+                        allContacts = emptyList(),
+                        selectedIds = selectedIdsFlow.value,
+                        availableLists = emptyList()
+                    )
+                )
+            }
 
     // ─── Domain projection ─────────────────────────────────────────────────────────────
 
@@ -670,10 +982,11 @@ class ContactPickerViewModel @Inject constructor(
         callAggregates: Map<Long, CallAgg>,
         lists: List<ListEntity>,
         thresholds: PickerThresholds,
-        phoneByContactId: Map<Long, app.orbit.data.android.PhoneContact>,
+        phoneByContactId: Map<Long, app.orbit.data.android.PhoneContact>
     ): List<PickerContact> {
-        // Skip orphans — strict contact creation.
-        val live = contacts.filterNot { it.isOrphaned }
+        // Who may be offered at all: [pickerCandidateEntities] (no orphans; a
+        // Re-link only the rows the merge accepts).
+        val live = pickerCandidateEntities(contacts, mode, relinkContactId)
         if (live.isEmpty()) return emptyList()
 
         // Per-contact aggregates come from SQL push-down. Ids
@@ -692,14 +1005,27 @@ class ContactPickerViewModel @Inject constructor(
         val nCalled = countsAsc.size
         // top X% — high-count cutoff. Bottom Y% — low-count cutoff (still ≥1 call).
         val commonlyCutoff: Int? =
-            if (nCalled == 0) null
-            else countsAsc[(nCalled - (nCalled * thresholds.commonlyTopPct) / 100).coerceIn(0, nCalled - 1)]
+            if (nCalled == 0) {
+                null
+            } else {
+                countsAsc[
+                    (nCalled - (nCalled * thresholds.commonlyTopPct) / 100).coerceIn(
+                        0,
+                        nCalled - 1
+                    )
+                ]
+            }
         val rarelyCutoff: Int? =
-            if (nCalled == 0) null
-            else countsAsc[((nCalled * thresholds.rarelyBottomPct) / 100).coerceIn(0, nCalled - 1)]
+            if (nCalled == 0) {
+                null
+            } else {
+                countsAsc[((nCalled * thresholds.rarelyBottomPct) / 100).coerceIn(0, nCalled - 1)]
+            }
 
         val now = clock.now()
-        val recentlyAddedThreshold = now.minus(Duration.ofDays(thresholds.recentlyAddedDays.toLong()))
+        val recentlyAddedThreshold = now.minus(
+            Duration.ofDays(thresholds.recentlyAddedDays.toLong())
+        )
         val longGapThreshold = now.minus(Duration.ofDays(thresholds.longGapDays.toLong()))
 
         val built = live.map { c ->
@@ -732,21 +1058,12 @@ class ContactPickerViewModel @Inject constructor(
                 isRarelyCalled = isRarely,
                 isRecentlyAdded = isRecentlyAdded,
                 isLongGap = isLongGap,
-                isStarred = c.isStarred,
+                isStarred = c.isStarred
             )
         }
-        // In Add mode, a contact already on the target list isn't a candidate to
-        // add — exclude it so the picker shows only people you can actually add.
-        // In Move mode, only members of the source list are candidates — moving
-        // someone who isn't on the source list is not a move.
-        // Copy keeps the full set (idempotent).
-        return when {
-            mode == PickerMode.Add && targetListId != null ->
-                built.filterNot { targetListId in it.listIds }
-            mode == PickerMode.Move && sourceListId != null ->
-                built.filter { sourceListId in it.listIds }
-            else -> built
-        }
+        // The mode's narrowing (Add hides the target's members, Move keeps
+        // the source's): [pickerCandidates].
+        return pickerCandidates(built, mode, targetListId, sourceListId)
     }
 
     private companion object {
@@ -756,9 +1073,9 @@ class ContactPickerViewModel @Inject constructor(
         const val KEY_SEARCH_QUERY = "searchQuery"
         const val KEY_ACTIVE_FILTERS = "activeFilters"
 
-        // ONB-21 — sort-mode persistence key + tokens. Round-trip
-        // through SavedStateHandle so the picker remembers the user's
-        // chosen order across process death.
+        // Sort-mode persistence key + tokens. Round-trip through
+        // SavedStateHandle so the picker remembers the user's chosen order
+        // across process death.
         const val KEY_SORT_BY = "sortBy"
         const val SORT_NAME = "ByName"
         const val SORT_RECENCY = "ByRecency"
@@ -770,7 +1087,7 @@ class ContactPickerViewModel @Inject constructor(
         val CALL_FREQUENCY_FILTERS: Set<PickerFilter> = setOf(
             PickerFilter.CommonlyCalled,
             PickerFilter.RarelyCalled,
-            PickerFilter.NeverCalled,
+            PickerFilter.NeverCalled
         )
     }
 
@@ -778,7 +1095,7 @@ class ContactPickerViewModel @Inject constructor(
      * Internal tuple for the staged combine — Kotlin stdlib `combine` arity
      * caps at 5 so the 5 reactive sources are first folded into this record,
      * which is then `.combine`'d with [phoneByContactIdFlow] to produce the
-     * final [pickerContactsFlow]. Lets us keep the address-book read cached
+     * final [pickerContacts]. Lets us keep the address-book read cached
      * (LOW polish, Group 5) without exceeding combine's arity.
      */
     private data class RawPickerSources(
@@ -786,7 +1103,7 @@ class ContactPickerViewModel @Inject constructor(
         val memberships: List<ListMembershipEntity>,
         val callAggregates: Map<Long, CallAgg>,
         val lists: List<ListEntity>,
-        val thresholds: PickerThresholds,
+        val thresholds: PickerThresholds
     )
 
     /**
@@ -796,14 +1113,21 @@ class ContactPickerViewModel @Inject constructor(
     private data class FilterConfig(
         val activeFilters: Set<PickerFilter>,
         val showIgnored: Boolean,
-        val sortBy: PickerSort,
+        val sortBy: PickerSort
+    )
+
+    /** The permission phase with whether the contacts ingest is in flight; see [ingestInFlight]. */
+    private data class PermissionGate(
+        val phase: ContactPickerUiState.Phase,
+        val ingesting: Boolean
     )
 
     /**
      * Low-churn "chrome" inputs (phase, commit flag, target
      * name, list summaries) folded into one record for the same arity reason.
      * [deviceEmpty] (null until the first address-book read completes) lets the
-     * final combine resolve the EmptyDevice phase.
+     * final combine resolve the EmptyDevice phase; [ingesting] keeps the
+     * skeleton up through the first ingest after a grant made on this screen.
      */
     private data class PickerChrome(
         val phase: ContactPickerUiState.Phase,
@@ -811,6 +1135,7 @@ class ContactPickerViewModel @Inject constructor(
         val targetListName: String,
         val availableLists: List<PickerListSummary>,
         val deviceEmpty: Boolean?,
+        val ingesting: Boolean
     )
 }
 
@@ -828,6 +1153,14 @@ class ContactPickerViewModel @Inject constructor(
  *    false`) — call-log-only rows can outlive an emptied address book and
  *    remain honestly pickable.
  *
+ * LoadingPermission (the skeleton) when the base phase is Ready, Room has no
+ * candidates and the contacts ingest is still in flight (`ingesting`): a
+ * grant made on this screen has just asked for the first read of the
+ * address book, and an empty Ready in that window would be worded as
+ * "everyone is already on the list" (rubric G4: an empty state tells the
+ * truth). EmptyDevice wins over it, since a device with no contacts has
+ * nothing to wait for.
+ *
  * Top-level (not VM-private) so the unit test can pin the predicate without
  * collecting the dispatcher-hopping uiState pipeline — same rationale as
  * [countFor].
@@ -837,13 +1170,70 @@ internal fun resolvePickerPhase(
     isCommitting: Boolean,
     deviceEmpty: Boolean?,
     hasAnyContacts: Boolean,
+    ingesting: Boolean
 ): ContactPickerUiState.Phase = when {
     isCommitting -> ContactPickerUiState.Phase.Committing
     basePhase == ContactPickerUiState.Phase.Ready &&
         deviceEmpty == true &&
         !hasAnyContacts -> ContactPickerUiState.Phase.EmptyDevice
+    basePhase == ContactPickerUiState.Phase.Ready &&
+        !hasAnyContacts &&
+        ingesting -> ContactPickerUiState.Phase.LoadingPermission
     else -> basePhase
 }
+
+/**
+ * Which stored rows the picker may offer at all, before the per-row
+ * derivation (PICK-04 flags). Orphans are never candidates (strict contact
+ * creation: a person must exist in the phone's contacts). A Re-link offers
+ * only the rows the merge accepts (CONTACT-07): one definition, shared with
+ * [RelinkContactUseCase.isRelinkTarget], so the picker never offers a pick the
+ * use case refuses. Top-level and pure so `PickerCandidatesTest` pins it
+ * without the dispatcher-hopping pipeline.
+ */
+internal fun pickerCandidateEntities(
+    contacts: List<ContactEntity>,
+    mode: PickerMode,
+    relinkContactId: Long?
+): List<ContactEntity> =
+    if (mode == PickerMode.Relink && relinkContactId != null) {
+        contacts.filter { RelinkContactUseCase.isRelinkTarget(it, relinkContactId) }
+    } else {
+        contacts.filterNot { it.isOrphaned }
+    }
+
+/**
+ * The mode's narrowing of the built rows. In Add mode a person already on the
+ * target list is not a candidate to add, so the row is hidden rather than
+ * greyed (the reverse picker says "Already added" on a list instead, because
+ * there the list is the thing being chosen). In Move mode only members of the
+ * source list can move: moving someone who is not on it is not a move. Copy
+ * and Re-link keep the full set.
+ */
+internal fun pickerCandidates(
+    built: List<PickerContact>,
+    mode: PickerMode,
+    targetListId: Long?,
+    sourceListId: Long?
+): List<PickerContact> = when {
+    mode == PickerMode.Add && targetListId != null -> built.filterNot { targetListId in it.listIds }
+    mode == PickerMode.Move && sourceListId != null -> built.filter { sourceListId in it.listIds }
+    else -> built
+}
+
+/**
+ * PICK-01: the lists the "On a list" filter offers. The target list and, in
+ * Move mode, the source list are left out, because filtering by the very list
+ * being edited is meaningless (Add mode already drops its members from the
+ * candidates, so it could only ever match zero), and so are archived lists.
+ */
+internal fun availablePickerLists(
+    lists: List<ListEntity>,
+    targetListId: Long?,
+    sourceListId: Long?
+): List<PickerListSummary> =
+    lists.filter { it.id != targetListId && it.id != sourceListId && !it.isArchived }
+        .map { PickerListSummary(id = it.id, name = it.name) }
 
 /**
  * Encode a [PickerFilter] to a Bundle-compatible String. The 5 stateless

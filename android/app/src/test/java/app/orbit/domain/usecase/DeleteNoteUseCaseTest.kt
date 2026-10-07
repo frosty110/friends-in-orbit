@@ -21,13 +21,14 @@ class DeleteNoteUseCaseTest {
     )
 
     @Test
-    fun `deletes the note and labels the snackbar`() = runTest {
+    fun `deletes the note`() = runTest {
+        // The snackbar's "Note deleted" is the caller's copy now
+        // (strings_contact.xml; SnackbarCopyTest).
         val repo = FakeNoteRepository(listOf(note))
 
-        val result = DeleteNoteUseCase(repo)(note)
+        DeleteNoteUseCase(repo)(note)
 
         assertEquals(note, repo.deleteCalls.single())
-        assertEquals("Note deleted", result.label)
     }
 
     @Test

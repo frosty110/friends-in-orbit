@@ -1,9 +1,13 @@
 package app.orbit.ui.screens.browse
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
@@ -24,15 +28,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.ChipTone
 import app.orbit.data.Contact
 import app.orbit.data.entity.ContactEntity
@@ -44,13 +54,17 @@ import app.orbit.data.repository.ListRepository
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.search.ContactSearch
 import app.orbit.ui.components.BrowseRow
-import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.components.ListContextChip
 import app.orbit.ui.components.OrbitAppBar
-import app.orbit.ui.components.OrbitChip
+import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitInlineNotice
+import app.orbit.ui.components.OrbitListSkeleton
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSearchField
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
 import app.orbit.ui.util.dialPhoneNumber
 import app.orbit.ui.util.formatRelative
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -60,15 +74,19 @@ import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 
 /**
  * Real GlobalSearch (BROWSE-03). A debounced cross-list search backed by a
@@ -76,35 +94,53 @@ import kotlinx.coroutines.flow.stateIn
  * a sorted result list.
  *
  * Search semantics:
- *   - Empty query → guidance copy "Search people by name."
+ *   - Empty query → guidance: "Find someone", by name or number.
  *   - Non-empty query → [ContactSearch.filterRanked] over ALL contacts
  *     (name with diacritic folding + phone digits; word-start matches rank
  *     before mid-word, before phone hits).
  *   - 250ms debounce in the screen-side `snapshotFlow`.
  *   - Result sort: rank band first, then lastCallAt DESC NULLS LAST within
  *     a band (contacts are recency-sorted before the stable ranked filter).
- *   - No matches → "Nothing matches \"{query}\"." (template matches Browse).
+ *   - No matches → "Nothing matches “{query}”" (template matches Browse).
  *
  * Membership context ("is Maya in my orbit?"): each hit carries the
  * names of the active (non-archived) lists the contact belongs to, derived
  * by combining `ListRepository.observeMembersOfList` across
  * `observeActive()`. Rows render one quiet chip per list, or "Not on any
- * list", plus an "Add to list" affordance that routes to the existing list
- * picker (Routes.PickLists). Picker commits surface on the app-level
- * snackbar host, so navigation alone completes the loop.
+ * list", plus an "Add to lists" affordance (the glossary's one name for the
+ * list picker; it said "Add to list" until 2026-10-06) that routes to the
+ * existing list picker (Routes.PickLists). Picker commits surface on the
+ * app-level snackbar host, so navigation alone completes the loop.
+ *
+ * Call log access (browse-6): the screen pushes the READ_CALL_LOG state on
+ * every ON_RESUME (ARCH-04, the Browse and Card view pattern) and `Ready`
+ * carries it, so rows drop their call-time line and a notice with "Open
+ * settings" sits above the results. Without it every result read "Never
+ * called", the false claim Browse already avoided.
  *
  * Curtain (PRIV-03): names read `LocalPrivacyCurtain.current` transitively
- * via [BrowseRow]; list-name chips are membership labels, not contact PII.
+ * via [BrowseRow]; list names are masked by [ListContextChip], as everywhere.
  */
 
-/** GlobalSearch UiState — local to this file (no cross-file consumers). */
+/**
+ * GlobalSearch UiState: local to this file (no cross-file consumers).
+ *
+ * BROWSE-06: `Loading` is a typed query whose people have not loaded yet. It
+ * used to fall through to the empty query's hint, or to "Nothing matches"
+ * against an empty contact set, both false. `Error` is a failed data stream,
+ * with Retry.
+ */
 @Immutable
 sealed interface SearchUiState {
     @Immutable data object Empty : SearchUiState
+    @Immutable data object Loading : SearchUiState
+    @Immutable data object Error : SearchUiState
     @Immutable
     data class Ready(
         val results: List<SearchHit>,
         val query: String,
+        /** READ_CALL_LOG is denied: rows skip the call-time line, a notice shows. */
+        val callLogPermissionDenied: Boolean = false,
     ) : SearchUiState
     @Immutable data class NoMatches(val query: String) : SearchUiState
 }
@@ -135,6 +171,15 @@ class GlobalSearchViewModel @Inject constructor(
 
     fun onSearchChanged(q: String) {
         savedStateHandle[SEARCH_QUERY_KEY] = q
+    }
+
+    // Pushed from the screen on every ON_RESUME (the Browse precedent), so
+    // returning from Settings clears the notice once access is granted. The VM
+    // stays Android-free so JVM tests drive the denied path directly.
+    private val _callLogDenied = MutableStateFlow(false)
+
+    fun onCallLogPermissionChanged(denied: Boolean) {
+        _callLogDenied.value = denied
     }
 
     // Push the per-contact lastAt down into SQL via
@@ -179,14 +224,59 @@ class GlobalSearchViewModel @Inject constructor(
             }
         }
 
-    val uiState: StateFlow<SearchUiState> = combine(
-        contactRepo.observeAll(),
-        activeListNamesByContactId,
-        callAggregatesFlow,
-        searchQuery,
-    ) { contacts: List<ContactEntity>, listNamesByContactId, aggregates: Map<Long, CallAgg>, query ->
-        val q = query.trim()
-        if (q.isEmpty()) return@combine SearchUiState.Empty
+    /** Everything a search needs besides the query. */
+    private data class SearchData(
+        val contacts: List<ContactEntity>,
+        val listNamesByContactId: Map<Long, List<String>>,
+        val aggregates: Map<Long, CallAgg>,
+    )
+
+    // The newest data, replayed when the flow restarts (WhileSubscribed brings
+    // the screen back after 5s), so a returning user sees their results, not a
+    // skeleton. Null only before the first load.
+    @Volatile private var lastData: SearchData? = null
+
+    private fun dataFlow(): Flow<SearchData?> =
+        combine(
+            contactRepo.observeAll(),
+            activeListNamesByContactId,
+            callAggregatesFlow,
+        ) { contacts, listNames, aggregates ->
+            SearchData(contacts, listNames, aggregates).also { lastData = it }
+        }
+            .map<SearchData, SearchData?> { it }
+            .onStart { emit(lastData) }
+
+    // BROWSE-06: bumped by [onRetry]; flatMapLatest re-subscribes every source.
+    private val retryCount = MutableStateFlow(0)
+
+    /** The Error state's Retry. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
+
+    val uiState: StateFlow<SearchUiState> = retryCount.flatMapLatest {
+        combine(searchQuery, dataFlow(), _callLogDenied) { query, data, callLogDenied ->
+            val q = query.trim()
+            when {
+                // The hint is true whatever the data, so it never waits.
+                q.isEmpty() -> SearchUiState.Empty
+                data == null -> SearchUiState.Loading
+                else -> search(q, data, callLogDenied)
+            }
+        }
+            // No logging here (rules.md Code 4): the state is the report.
+            .catch { emit(SearchUiState.Error) }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000L),
+        initialValue = if (searchQuery.value.isBlank()) SearchUiState.Empty else SearchUiState.Loading,
+    )
+
+    private fun search(q: String, data: SearchData, callLogDenied: Boolean): SearchUiState {
+        val contacts = data.contacts
+        val listNamesByContactId = data.listNamesByContactId
+        val aggregates = data.aggregates
 
         // #16 — shared matcher across ALL contacts (BROWSE-03 distinction from
         // BROWSE-02's per-list scoping). Recency-sort BEFORE the ranked filter:
@@ -211,12 +301,8 @@ class GlobalSearchViewModel @Inject constructor(
             )
         }
 
-        if (hits.isEmpty()) SearchUiState.NoMatches(q) else SearchUiState.Ready(hits, q)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000L),
-        initialValue = SearchUiState.Empty,
-    )
+        return if (hits.isEmpty()) SearchUiState.NoMatches(q) else SearchUiState.Ready(hits, q, callLogDenied)
+    }
 
     /**
      * Helper — overlay a relative-time `lastCalledLabel` on the
@@ -225,7 +311,7 @@ class GlobalSearchViewModel @Inject constructor(
      * comparison + honest singulars, matching Browse and the call log.
      */
     private fun Contact.withLastCallLabel(lastCallAt: Instant?, now: Instant): Contact {
-        if (lastCallAt == null) return copy(lastCalledLabel = "")
+        if (lastCallAt == null) return copy(lastCalledLabel = null)
         return copy(lastCalledLabel = formatRelative(lastCallAt, now, zone))
     }
 
@@ -240,21 +326,36 @@ fun GlobalSearchScreen(
     onBack: () -> Unit,
     onOpenContact: (contactId: String) -> Unit,
     onAddToLists: (contactId: String) -> Unit,
+    // Defaulted so the nav host can wire it in its own change.
+    onOpenSettings: () -> Unit = {},
     vm: GlobalSearchViewModel = hiltViewModel(),
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val initialQuery by vm.searchQuery.collectAsStateWithLifecycle()
-    // Curtain is observed transitively via BrowseRow; reading it here registers
-    // this composable as a consumer for completeness (PRIV-03 audit).
-    @Suppress("UNUSED_VARIABLE") val curtain = LocalPrivacyCurtain.current
+
+    // Real READ_CALL_LOG state, refreshed on every ON_RESUME (ARCH-04; the
+    // Browse and Card view precedent) so returning from Settings clears the
+    // notice once the user grants access.
+    val context = LocalContext.current
+    LifecycleResumeEffect(Unit) {
+        vm.onCallLogPermissionChanged(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_CALL_LOG,
+            ) != PackageManager.PERMISSION_GRANTED,
+        )
+        onPauseOrDispose { }
+    }
 
     GlobalSearchContent(
         state = state,
         initialQuery = initialQuery,
         onSearchChanged = vm::onSearchChanged,
+        onRetry = vm::onRetry,
         onBack = onBack,
         onOpenContact = onOpenContact,
         onAddToLists = onAddToLists,
+        onOpenSettings = onOpenSettings,
     )
 }
 
@@ -262,6 +363,10 @@ fun GlobalSearchScreen(
  * Stateless inner extracted so `@PreviewLightDark` +
  * `@PreviewFontScale` (D-06) can render without `hiltViewModel()` /
  * `collectAsStateWithLifecycle()` at preview time.
+ *
+ * Curtain (PRIV-03): names and photos are masked by [BrowseRow]; list names by
+ * [ListContextChip] (they read "List"), like every other list-name surface.
+ * Before 2026-10-05 the chips here showed real list names under the curtain.
  */
 @OptIn(FlowPreview::class)
 @Composable
@@ -269,9 +374,12 @@ private fun GlobalSearchContent(
     state: SearchUiState,
     initialQuery: String,
     onSearchChanged: (String) -> Unit,
+    onRetry: () -> Unit,
     onBack: () -> Unit,
     onOpenContact: (contactId: String) -> Unit,
     onAddToLists: (contactId: String) -> Unit,
+    onOpenSettings: () -> Unit,
+    autoFocus: Boolean = true,
 ) {
     val context = LocalContext.current
 
@@ -290,17 +398,17 @@ private fun GlobalSearchContent(
     // isn't fought on recomposition.
     val searchFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
-        searchFocusRequester.requestFocus()
+        if (autoFocus) searchFocusRequester.requestFocus()
     }
 
     OrbitScreen {
         OrbitAppBar(
-            title = "Search",
+            title = stringResource(R.string.browse_search_title),
             leading = {
                 OrbitIconButton(
                     icon = "arrow-left",
                     onClick = onBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.components_action_back),
                 )
             },
         )
@@ -316,91 +424,69 @@ private fun GlobalSearchContent(
             OrbitSearchField(
                 query = queryText,
                 onQueryChange = { queryText = it },
-                placeholder = "Search people",
+                placeholder = stringResource(R.string.browse_search_hint),
                 focusRequester = searchFocusRequester,
             )
         }
 
         when (val s = state) {
-            SearchUiState.Empty -> EmptyHint(text = "Search people by name.")
-            is SearchUiState.NoMatches -> EmptyHint(text = "Nothing matches \"${s.query}\".")
-            is SearchUiState.Ready -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = OrbitTheme.spacing.x6),
-            ) {
-                items(
-                    items = s.results,
-                    key = { it.contact.id },
-                    contentType = { "searchHit" },
-                ) { hit ->
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        BrowseRow(
-                            contact = hit.contact,
-                            onTap = { onOpenContact(hit.contact.id) },
+            SearchUiState.Empty -> OrbitScreenMessage(
+                icon = "magnifying-glass",
+                title = stringResource(R.string.browse_search_empty_title),
+                body = stringResource(R.string.browse_search_empty_body),
+            )
+            // BROWSE-06: a typed query waiting on its people: a skeleton,
+            // never a premature "Nothing matches".
+            SearchUiState.Loading -> OrbitListSkeleton(rows = 4)
+            // The shared error body and Retry (strings_components.xml): one
+            // error family across the app (strings-12).
+            SearchUiState.Error -> OrbitScreenMessage(
+                icon = "warning-circle",
+                title = stringResource(R.string.browse_search_error_title),
+                body = stringResource(R.string.components_error_body),
+                actionLabel = stringResource(R.string.components_error_retry),
+                onAction = onRetry,
+                actionVariant = OrbitButtonVariant.Primary,
+            )
+            // The same state as Browse's, with the same way out (browse-11): the
+            // pill's small clear control was the only exit here.
+            is SearchUiState.NoMatches -> OrbitScreenMessage(
+                icon = "magnifying-glass",
+                title = stringResource(R.string.browse_no_matches_title, s.query),
+                body = stringResource(R.string.browse_no_matches_body),
+                actionLabel = stringResource(R.string.browse_clear_search),
+                onAction = { queryText = "" },
+            )
+            is SearchUiState.Ready -> Column(modifier = Modifier.fillMaxSize()) {
+                // Names still render; the rows drop the call-time line, and the
+                // shared strip says why and where the fix is (browse-6).
+                if (s.callLogPermissionDenied) {
+                    OrbitInlineNotice(
+                        text = stringResource(R.string.browse_call_log_denied_notice),
+                        actionLabel = stringResource(R.string.components_action_open_settings),
+                        onAction = onOpenSettings,
+                    )
+                }
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = OrbitTheme.spacing.x6),
+                ) {
+                    items(
+                        items = s.results,
+                        key = { it.contact.id },
+                        contentType = { "searchHit" },
+                    ) { hit ->
+                        SearchHitRow(
+                            hit = hit,
+                            showCallMeta = !s.callLogPermissionDenied,
+                            onOpen = { onOpenContact(hit.contact.id) },
                             onDial = {
                                 if (hit.contact.phone.isNotBlank()) {
                                     context.dialPhoneNumber(hit.contact.phone)
                                 }
                             },
+                            onAddToLists = { onAddToLists(hit.contact.id) },
                         )
-                        // Membership context (#20 — UI-SPEC §BROWSE-03): one
-                        // quiet chip per active list, or "Not on any list",
-                        // plus an "Add to list" affordance routing to the
-                        // existing list picker. Stone tone keeps the screen's
-                        // single terracotta element the dial icon (rules.md
-                        // §Design 5).
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(
-                                    start = OrbitTheme.spacing.x5,
-                                    end = OrbitTheme.spacing.x4,
-                                    bottom = OrbitTheme.spacing.x2,
-                                ),
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(
-                                    OrbitTheme.spacing.x2,
-                                ),
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                if (hit.lists.isEmpty()) {
-                                    Text(
-                                        text = "Not on any list",
-                                        style = OrbitTheme.type.micro,
-                                        color = OrbitTheme.colors.fgMuted,
-                                    )
-                                } else {
-                                    hit.lists.forEach { listName ->
-                                        OrbitChip(
-                                            label = listName,
-                                            tone = ChipTone.Stone,
-                                        )
-                                    }
-                                }
-                            }
-                            // 48dp tap target (rules.md §Design 3); quiet text
-                            // affordance — no terracotta.
-                            Box(
-                                modifier = Modifier
-                                    .defaultMinSize(
-                                        minWidth = OrbitTheme.spacing.tapMin,
-                                        minHeight = OrbitTheme.spacing.tapMin,
-                                    )
-                                    .clickable(
-                                        onClick = { onAddToLists(hit.contact.id) },
-                                    ),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = "Add to list",
-                                    style = OrbitTheme.type.meta,
-                                    color = OrbitTheme.colors.fg,
-                                )
-                            }
-                        }
                     }
                 }
             }
@@ -408,39 +494,173 @@ private fun GlobalSearchContent(
     }
 }
 
+/**
+ * One result: the shared [BrowseRow], then where this person sits in your
+ * orbit (#20, UI-SPEC §BROWSE-03): one quiet chip per active list, or "Not on
+ * any list", and an "Add to lists" control. Stone chips and an ink label keep
+ * the accent off this screen (rules.md §Design 5); the chips wrap rather than
+ * run off a narrow screen.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun EmptyHint(text: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(OrbitTheme.spacing.x8),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            style = OrbitTheme.type.body,
-            color = OrbitTheme.colors.fgMuted,
+private fun SearchHitRow(
+    hit: SearchHit,
+    showCallMeta: Boolean,
+    onOpen: () -> Unit,
+    onDial: () -> Unit,
+    onAddToLists: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        BrowseRow(
+            contact = hit.contact,
+            onTap = onOpen,
+            onDial = onDial,
+            showCallMeta = showCallMeta,
         )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = OrbitTheme.spacing.x5,
+                    end = OrbitTheme.spacing.x4,
+                    bottom = OrbitTheme.spacing.x2,
+                ),
+        ) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
+                verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1),
+                modifier = Modifier.weight(1f),
+            ) {
+                if (hit.lists.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.browse_search_not_on_a_list),
+                        style = OrbitTheme.type.meta,
+                        color = OrbitTheme.colors.fgMuted,
+                    )
+                } else {
+                    hit.lists.forEach { listName ->
+                        ListContextChip(listName = listName, tone = ChipTone.Stone)
+                    }
+                }
+            }
+            // 48dp tap target (rules.md §Design 3); quiet text
+            // affordance: no terracotta.
+            Box(
+                modifier = Modifier
+                    .defaultMinSize(
+                        minWidth = OrbitTheme.spacing.tapMin,
+                        minHeight = OrbitTheme.spacing.tapMin,
+                    )
+                    .clip(OrbitTheme.shapes.md)
+                    .clickable(role = Role.Button, onClick = onAddToLists)
+                    .padding(horizontal = OrbitTheme.spacing.x2),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = stringResource(R.string.browse_search_add_to_lists),
+                    style = OrbitTheme.type.button,
+                    color = OrbitTheme.colors.fg,
+                )
+            }
+        }
     }
 }
 
-// Preview fixture for the stateless GlobalSearchContent.
-// Empty state is the sensible default — renders the "Search people by name."
-// hint without needing a Contact fixture (THEME-04 / THEME-05 — D-06).
-private val previewState: SearchUiState = SearchUiState.Empty
+// ─── Previews ──────────────────────────────────────────────────────────────────
+// One per state, so each renders in the screenshot gallery.
+
+private fun previewHit(id: Long, name: String, lastCalled: UiText?, lists: List<String>) = SearchHit(
+    contact = Contact(
+        id = "c-$id",
+        name = name,
+        phone = "+1 555 0100",
+        lastCalledLabel = lastCalled,
+        avgLengthLabel = null,
+        pickupRateLabel = "",
+        totalCalls = 0,
+        due = false,
+        listIds = emptyList(),
+        bestWindowLabel = null,
+        heat = FloatArray(24) { 0f },
+        history = emptyList(),
+        notes = emptyList(),
+        patternNote = "",
+    ),
+    lists = lists,
+)
+
+@Composable
+private fun SearchPreviewHost(state: SearchUiState, query: String = "") {
+    OrbitTheme {
+        GlobalSearchContent(
+            state = state,
+            initialQuery = query,
+            onSearchChanged = {},
+            onRetry = {},
+            onBack = {},
+            onOpenContact = {},
+            onAddToLists = {},
+            onOpenSettings = {},
+            autoFocus = false,
+        )
+    }
+}
 
 @PreviewLightDark
 @PreviewFontScale
 @Composable
 private fun GlobalSearchContentPreview() {
-    OrbitTheme {
-        GlobalSearchContent(
-            state = previewState,
-            initialQuery = "",
-            onSearchChanged = {},
-            onBack = {},
-            onOpenContact = {},
-            onAddToLists = {},
-        )
-    }
+    SearchPreviewHost(SearchUiState.Empty)
+}
+
+@PreviewLightDark
+@PreviewFontScale
+@Composable
+private fun GlobalSearchResultsPreview() {
+    SearchPreviewHost(
+        SearchUiState.Ready(
+            results = listOf(
+                previewHit(1, "Maya Ahmed", UiText.plural(R.plurals.time_ago_days, 3, 3), listOf("Inner orbit", "Late night")),
+                previewHit(2, "Maya Brooks", null, emptyList()),
+            ),
+            query = "maya",
+        ),
+        query = "maya",
+    )
+}
+
+@PreviewLightDark
+@Composable
+private fun GlobalSearchLoadingPreview() {
+    SearchPreviewHost(SearchUiState.Loading, query = "maya")
+}
+
+@PreviewLightDark
+@Composable
+private fun GlobalSearchNoMatchesPreview() {
+    SearchPreviewHost(SearchUiState.NoMatches("zz"), query = "zz")
+}
+
+@PreviewLightDark
+@Composable
+private fun GlobalSearchErrorPreview() {
+    SearchPreviewHost(SearchUiState.Error, query = "maya")
+}
+
+/** Call log access off: the notice above the results, and no call times on them. */
+@PreviewLightDark
+@Composable
+private fun GlobalSearchCallLogDeniedPreview() {
+    SearchPreviewHost(
+        SearchUiState.Ready(
+            results = listOf(
+                previewHit(1, "Maya Ahmed", UiText.plural(R.plurals.time_ago_days, 3, 3), listOf("Inner orbit")),
+                previewHit(2, "Maya Brooks", null, emptyList()),
+            ),
+            query = "maya",
+            callLogPermissionDenied = true,
+        ),
+        query = "maya",
+    )
 }

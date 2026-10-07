@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import app.orbit.data.AppPrefs
 import app.orbit.data.repository.CallEventRepository
 import app.orbit.data.repository.ContactRepository
+import app.orbit.data.repository.ResetOutcome
+import app.orbit.data.repository.ResetService
 import app.orbit.domain.clock.Clock
 import app.orbit.nav.Routes
 import app.orbit.ui.screens.onboarding.OnboardingStep
@@ -29,6 +31,8 @@ import kotlinx.coroutines.launch
  * in per-screen Hilt view-models. This VM owns:
  *   - start destination (onboarding vs home) — resolved once from [AppPrefs].
  *   - privacy curtain (auto-only — flips on focus loss, restores on focus regain).
+ *   - the reset's outcome ([resetOutcome], SET-06), read from the app-scoped
+ *     [ResetService] so MainActivity can act on it wherever the user is.
  *
  * Hilt constructs this VM via `@AndroidEntryPoint` on MainActivity +
  * `by viewModels<AppViewModel>()`; there is no manual factory companion. The
@@ -46,6 +50,7 @@ class AppViewModel @Inject constructor(
     private val callEventRepo: CallEventRepository,
     private val contactRepo: ContactRepository,
     private val clock: Clock,
+    private val resetService: ResetService,
 ) : ViewModel() {
 
     private val _startDestination = MutableStateFlow<String?>(null)
@@ -64,6 +69,18 @@ class AppViewModel @Inject constructor(
     private val _isForeground = MutableStateFlow(true)
 
     /**
+     * SET-06: how the last Reset Orbit ended, or null. Sticky on the service,
+     * so it is still there when Settings has been popped or the app comes
+     * back from the background; MainActivity collects it while resumed,
+     * restarts the task on Completed, shows the failure on Failed, and calls
+     * [onResetOutcomeHandled] first so the restarted process (the same one)
+     * does not act on it again.
+     */
+    val resetOutcome: StateFlow<ResetOutcome?> = resetService.outcome
+
+    fun onResetOutcomeHandled() = resetService.clearOutcome()
+
+    /**
      * NOTE-02 — post-call banner state.
      *
      * Re-derived imperatively on every app resume (HomeScreen calls
@@ -79,7 +96,7 @@ class AppViewModel @Inject constructor(
     data class PostCallPromptState(
         val callEventId: Long,
         val contactId: Long,
-        val contactName: String,
+        val contactName: String
     )
 
     private val dismissedCallEventIds = mutableSetOf<Long>()
@@ -113,12 +130,12 @@ class AppViewModel @Inject constructor(
             combine(
                 appPrefs.colorTheme,
                 appPrefs.darkMode,
-                appPrefs.accentHue,
+                appPrefs.accentHue
             ) { themeKey, darkKey, hue ->
                 ThemeSettings(
                     themeId = OrbitThemeId.fromKey(themeKey),
                     darkMode = OrbitDarkMode.fromKey(darkKey),
-                    accentHue = if (hue < 0) null else hue,
+                    accentHue = if (hue < 0) null else hue
                 )
             }.collect { _themeSettings.value = it }
         }
@@ -137,25 +154,29 @@ class AppViewModel @Inject constructor(
      * constant. Unknown / null / blank values fall back to
      * [Routes.OnboardWelcome] (defensive — a corrupted DataStore should not
      * strand the user). The OnboardFirstList route requires a `{listId}` path
-     * arg which is NOT recoverable from prefs alone — if the persisted step
+     * arg, which a start destination cannot carry. If the persisted step
      * is `FirstList`, fall back to [Routes.OnboardSync] so the user re-enters
-     * at the sync gate (the closest re-runnable step) and the Preview screen
-     * will re-create a list before re-routing forward.
+     * at the sync gate (the closest re-runnable step). Sync then continues
+     * straight into the list already being built
+     * ([app.orbit.ui.screens.onboarding.OnboardingListStarter.pendingListId]),
+     * so the resume never creates a second one.
      */
     private suspend fun resolveOnboardingResume(): String {
         val name = runCatching { appPrefs.lastOnboardingStep.first() }.getOrNull().orEmpty()
         val step = OnboardingStep.entries.firstOrNull { it.name == name }
         return when (step) {
-            OnboardingStep.PermContacts      -> Routes.OnboardPermContacts
-            OnboardingStep.PermCallLog       -> Routes.OnboardPermCallLog
+            OnboardingStep.PermContacts -> Routes.OnboardPermContacts
+            OnboardingStep.PermCallLog -> Routes.OnboardPermCallLog
             OnboardingStep.PermNotifications -> Routes.OnboardPermNotifs
-            OnboardingStep.Sync              -> Routes.OnboardSync
-            OnboardingStep.FirstList         -> Routes.OnboardSync   // listId not recoverable
-            null                             -> Routes.OnboardWelcome
+            OnboardingStep.Sync -> Routes.OnboardSync
+            OnboardingStep.FirstList -> Routes.OnboardSync // Sync continues into the saved list
+            null -> Routes.OnboardWelcome
         }
     }
 
-    fun onForegroundChanged(foreground: Boolean) { _isForeground.value = foreground }
+    fun onForegroundChanged(foreground: Boolean) {
+        _isForeground.value = foreground
+    }
 
     /**
      * NOTE-02 — re-derive [postCallPrompt] from disk. Called from
@@ -187,7 +208,7 @@ class AppViewModel @Inject constructor(
             _postCallPrompt.value = PostCallPromptState(
                 callEventId = event.id,
                 contactId = event.contactId,
-                contactName = contact.displayName,
+                contactName = contact.displayName
             )
         }
     }

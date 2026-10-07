@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.picker
 
+import android.content.res.Configuration
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -7,7 +8,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -23,8 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,36 +30,47 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import app.orbit.ui.components.PhIcon
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.orbit.R
 import app.orbit.domain.search.ContactSearch
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
-import app.orbit.ui.components.OrbitButton
+import app.orbit.ui.components.OrbitButtonVariant
+import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
+import app.orbit.ui.components.OrbitListSkeleton
+import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSearchField
+import app.orbit.ui.components.PhIcon
+import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 import app.orbit.ui.util.openPhoneContact
 import java.time.Instant
 import kotlinx.coroutines.FlowPreview
@@ -78,17 +87,21 @@ import kotlinx.coroutines.launch
  *   - Inner [ContactPickerContent] is stateless — all callbacks flow in.
  *
  * State-driven branching:
- *   - LoadingPermission   → silent (system dialog covers)
+ *   - LoadingPermission   → [OrbitListSkeleton] (a quiet skeleton, never a blank page)
  *   - PermissionRationale → [RationaleCard]
  *   - PermissionDenied    → [PermissionDeniedEmpty]
- *   - EmptyDevice         → [EmptyDeviceContacts]
- *   - Ready / Committing  → [ReadyContent]: search + chips + select-all + list
+ *   - EmptyDevice         → [EmptyDeviceContacts], only via the phase (the
+ *                           address-book read came back empty)
+ *   - NotFound            → the list or person is gone, with Go back
+ *   - Error (PICK-09)     → the shared message with Retry
+ *   - Ready / Committing  → [ReadyContent]: search + chips + select-all + list,
+ *                           or one honest empty state per
+ *                           [ContactPickerUiState.emptyReason]
  *
  * Pitfalls mitigated:
  *   - Search box that eats keystrokes: the typed text is screen-local state
  *     owned by [ContactPickerContent] — ABOVE the phase `when`, so it survives
- *     a phase flip, and reachable by the app bar's clear-X so there is exactly
- *     one writer. It is debounced on the way DOWN to the VM and never read back
+ *     a phase flip, with exactly one writer (the field and its own clear-X). It is debounced on the way DOWN to the VM and never read back
  *     up. See the long note at its declaration; regression coverage lives in
  *     `androidTest/.../OrbitSearchFieldTest`.
  *   - IME overlap: root Box carries `Modifier.imePadding()`.
@@ -109,15 +122,14 @@ import kotlinx.coroutines.launch
 fun ContactPickerScreen(
     onBack: () -> Unit,
     onCommit: () -> Unit,
-    onSkip: (() -> Unit)? = null,
-    vm: ContactPickerViewModel = hiltViewModel(),
+    vm: ContactPickerViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // Permission launcher — granted boolean callback into the VM.
     val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
+        ActivityResultContracts.RequestPermission()
     ) { granted -> vm.onPermissionResult(granted) }
 
     // Lifecycle-aware permission refresh — same pattern as
@@ -136,6 +148,7 @@ fun ContactPickerScreen(
     ContactPickerContent(
         state = state,
         onBack = onBack,
+        onRetry = vm::onRetry,
         onSearchChanged = vm::onSearchChanged,
         onToggleFilter = vm::onToggleFilter,
         onSetSort = vm::setSortBy,
@@ -156,27 +169,27 @@ fun ContactPickerScreen(
             vm.onCommit()
             onCommit()
         },
-        onSkip = onSkip,
         onPermissionGrant = { permissionLauncher.launch(Manifest.permission.READ_CONTACTS) },
         onOpenSettings = {
             val intent = buildOpenAppSettingsIntent(context.packageName)
             context.startActivity(intent)
-        },
+        }
     )
 }
 
 /**
  * App-bar title per [PickerMode]. Move/Copy carry the live selection count with
- * an honest singular ("Move 1 contact", never "Move 1 contacts"). Pure +
- * internal so the JVM unit test can pin it.
+ * an honest singular ("Move 1 person", never "Move 1 people"), from
+ * `<plurals>` (strings_picker.xml). Pure + internal so the unit test can pin
+ * it. The app says "people", not "contacts", for the people in Orbit (the
+ * title read "Add contacts" until 2026-10-05).
  */
-internal fun pickerModeTitle(mode: PickerMode, selectionCount: Int): String {
-    val noun = if (selectionCount == 1) "contact" else "contacts"
-    return when (mode) {
-        PickerMode.Add -> "Add contacts"
-        PickerMode.Move -> "Move $selectionCount $noun"
-        PickerMode.Copy -> "Copy $selectionCount $noun"
-    }
+internal fun pickerModeTitle(mode: PickerMode, selectionCount: Int): UiText = when (mode) {
+    PickerMode.Add -> UiText.res(R.string.picker_title_add)
+    PickerMode.Move -> UiText.plural(R.plurals.picker_title_move, selectionCount, selectionCount)
+    PickerMode.Copy -> UiText.plural(R.plurals.picker_title_copy, selectionCount, selectionCount)
+    // CONTACT-07: one pick, so no count.
+    PickerMode.Relink -> UiText.res(R.string.picker_title_relink)
 }
 
 @OptIn(FlowPreview::class)
@@ -184,6 +197,7 @@ internal fun pickerModeTitle(mode: PickerMode, selectionCount: Int): String {
 private fun ContactPickerContent(
     state: ContactPickerUiState,
     onBack: () -> Unit,
+    onRetry: () -> Unit,
     onSearchChanged: (String) -> Unit,
     onToggleFilter: (PickerFilter) -> Unit,
     onSetSort: (PickerSort) -> Unit,
@@ -195,9 +209,8 @@ private fun ContactPickerContent(
     onUnignore: (PickerContact) -> Unit,
     onOpenInPhone: (PickerContact) -> Unit,
     onCommit: () -> Unit,
-    onSkip: (() -> Unit)?,
     onPermissionGrant: () -> Unit,
-    onOpenSettings: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     // ── Search box state — ONE source of truth for the typed text.
     //
@@ -211,9 +224,9 @@ private fun ContactPickerContent(
     //     [ReadyContent]. Held inside, it is torn down and re-initialised from
     //     `state.searchQuery` every time the phase leaves the Ready/Committing
     //     branch (a permission re-read on ON_RESUME re-writes the phase on every
-    //     foreground), which silently empties the box mid-search. It also has to
-    //     be reachable by the app bar's clear-X below — a clear that only wrote
-    //     to the VM left the typed text stranded in a box it could no longer
+    //     foreground), which silently empties the box mid-search. Its clear-X
+    //     (inside the field) writes here too; a clear that only wrote to the
+    //     VM once left the typed text stranded in a box it could no longer
     //     clear.
     //
     // `snapshotFlow { … }.debounce(…)` in a single `LaunchedEffect(Unit)` is the
@@ -230,30 +243,20 @@ private fun ContactPickerContent(
 
     OrbitScreen {
         // App-bar title varies with mode and singularizes honestly
-        // ("Move 1 contact").
-        val title: String = pickerModeTitle(state.mode, state.selectionCount)
+        // ("Move 1 person").
+        val title: String = pickerModeTitle(state.mode, state.selectionCount).asString()
         OrbitAppBar(
             title = title,
             leading = {
                 OrbitIconButton(
                     icon = "arrow-left",
                     onClick = onBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.components_action_back)
                 )
             },
-            // Gated on the FIELD's text, not the VM's debounced copy, and it
-            // clears the field — the debounce carries the empty value down to
-            // the VM. Gating on `state.searchQuery` meant the X vanished the
-            // moment the VM was cleared while the box still held text.
-            trailing = if (searchInput.isNotBlank()) {
-                {
-                    OrbitIconButton(
-                        icon = "x",
-                        onClick = { searchInput = "" },
-                        contentDescription = "Clear search",
-                    )
-                }
-            } else null,
+            // No clear-X here: the search field carries its own, gated on the
+            // field's text. Two "Clear search" controls for one field was one
+            // job with two entry points (rubric D2).
         )
 
         // Keeping the soft keyboard from covering the BatchCounter and the
@@ -266,12 +269,16 @@ private fun ContactPickerContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .imePadding(),
+                .imePadding()
         ) {
             when (state.phase) {
-                ContactPickerUiState.Phase.LoadingPermission -> {
-                    // Silent — system dialog covers the surface.
-                }
+                ContactPickerUiState.Phase.LoadingPermission ->
+                    // The first emission waits for the address-book read and
+                    // the Room joins; a large address book showed an app bar
+                    // over nothing for that long (no system dialog is up yet:
+                    // the launcher only fires from the Grant button). The
+                    // shared skeleton, never a blank or a false empty page.
+                    OrbitListSkeleton()
                 ContactPickerUiState.Phase.PermissionRationale ->
                     RationaleCard(onGrant = onPermissionGrant, onDismiss = onBack)
                 ContactPickerUiState.Phase.PermissionDenied ->
@@ -279,7 +286,17 @@ private fun ContactPickerContent(
                 ContactPickerUiState.Phase.EmptyDevice ->
                     EmptyDeviceContacts()
                 ContactPickerUiState.Phase.NotFound ->
-                    NotFoundEmpty()
+                    NotFoundEmpty(mode = state.mode, onBack = onBack)
+                ContactPickerUiState.Phase.Error -> OrbitScreenMessage(
+                    icon = "warning-circle",
+                    title = stringResource(R.string.picker_error_title),
+                    // The shared error words (rubric D6): what is true, that
+                    // nothing is lost, and Try again.
+                    body = stringResource(R.string.components_error_body),
+                    actionLabel = stringResource(R.string.components_error_retry),
+                    onAction = onRetry,
+                    actionVariant = OrbitButtonVariant.Primary
+                )
                 ContactPickerUiState.Phase.Ready,
                 ContactPickerUiState.Phase.Committing -> ReadyContent(
                     state = state,
@@ -295,7 +312,7 @@ private fun ContactPickerContent(
                     onUnignore = onUnignore,
                     onOpenInPhone = onOpenInPhone,
                     onCommit = onCommit,
-                    onSkip = onSkip,
+                    onBack = onBack
                 )
             }
         }
@@ -321,7 +338,8 @@ private fun ReadyContent(
     onUnignore: (PickerContact) -> Unit,
     onOpenInPhone: (PickerContact) -> Unit,
     onCommit: () -> Unit,
-    onSkip: (() -> Unit)?,
+    // The way out of an empty state that has nothing to add.
+    onBack: () -> Unit
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -352,10 +370,10 @@ private fun ReadyContent(
             query = searchInput,
             onQueryChange = onSearchInputChange,
             // The shared matcher also searches phone digits.
-            placeholder = "Search name or number",
+            placeholder = stringResource(R.string.picker_search_hint),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x2),
+                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x2)
         )
 
         Row(
@@ -364,12 +382,12 @@ private fun ReadyContent(
                 .fillMaxWidth()
                 .padding(
                     horizontal = OrbitTheme.spacing.x4,
-                    vertical = OrbitTheme.spacing.x1,
-                ),
+                    vertical = OrbitTheme.spacing.x1
+                )
         ) {
             SortControl(
                 sortBy = state.sortBy,
-                onSetSort = onSetSort,
+                onSetSort = onSetSort
             )
             Spacer(modifier = Modifier.weight(1f))
             // Quiet, reversible entry for the wired showIgnored toggle. Only
@@ -377,7 +395,7 @@ private fun ReadyContent(
             if (state.ignoredCount > 0 || state.showIgnored) {
                 ShowIgnoredControl(
                     showIgnored = state.showIgnored,
-                    onToggle = onShowIgnoredToggle,
+                    onToggle = onShowIgnoredToggle
                 )
             }
         }
@@ -388,20 +406,21 @@ private fun ReadyContent(
         val hasCallHistory = remember(state.allContacts) {
             state.allContacts.any { it.lastCallAt != null }
         }
+        val filterHintNeedsCalls = stringResource(R.string.picker_filters_need_calls)
+        val filterHintGreyed = stringResource(R.string.picker_filters_greyed)
         val filterDisabledHint: String? = run {
             val callDependent = listOf(
                 PickerFilter.CommonlyCalled,
                 PickerFilter.RarelyCalled,
-                PickerFilter.LongGap,
+                PickerFilter.LongGap
             )
             val anyGreyed = callDependent.any {
                 it !in state.activeFilters && it.countFor(state) == 0
             }
             when {
                 !anyGreyed -> null
-                !hasCallHistory ->
-                    "Filters like “long gap” wake up once Orbit has your call history."
-                else -> "Greyed filters have no matches right now."
+                !hasCallHistory -> filterHintNeedsCalls
+                else -> filterHintGreyed
             }
         }
 
@@ -420,7 +439,7 @@ private fun ReadyContent(
                     .forEach { onToggleFilter(it) }
             },
             disabledHint = filterDisabledHint,
-            modifier = Modifier.padding(vertical = OrbitTheme.spacing.x2),
+            modifier = Modifier.padding(vertical = OrbitTheme.spacing.x2)
         )
 
         // Select-all surfaces whenever search OR filters narrow the list; over
@@ -432,19 +451,22 @@ private fun ReadyContent(
                 onClick = { onSelectAllMatching(matchingIds) },
                 modifier = Modifier.padding(
                     horizontal = OrbitTheme.spacing.x4,
-                    vertical = OrbitTheme.spacing.x1,
-                ),
+                    vertical = OrbitTheme.spacing.x1
+                )
             )
         } else if (state.selectAllCapExceeded) {
             Text(
-                text = "Over ${ContactPickerUiState.SELECT_ALL_MAX} matches. " +
-                    "Narrow the search to select them all.",
+                text = pluralStringResource(
+                    R.plurals.picker_select_all_capped,
+                    ContactPickerUiState.SELECT_ALL_MAX,
+                    ContactPickerUiState.SELECT_ALL_MAX,
+                ),
                 style = OrbitTheme.type.meta,
                 color = OrbitTheme.colors.fgMuted,
                 modifier = Modifier.padding(
                     horizontal = OrbitTheme.spacing.x4,
-                    vertical = OrbitTheme.spacing.x1,
-                ),
+                    vertical = OrbitTheme.spacing.x1
+                )
             )
         }
 
@@ -492,31 +514,23 @@ private fun ReadyContent(
                 // resolve to a device contact — a call-log-only row has no
                 // phoneContactId and the intent would dead-end.
                 onOpenInPhone = if (contact.phoneContactId != null) onOpenInPhone else null,
-                modifier = Modifier.animateItem(),
+                modifier = Modifier.animateItem()
             )
         }
 
         // List area takes the remaining height; the bottom bar docks below it
         // (not a floating overlay, so the last row stays reachable).
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            when {
-                state.allContacts.isEmpty() -> EmptyDeviceContacts()
-                state.filteredContacts.isEmpty() -> EmptyState(
-                    heading = if (state.searchQuery.isNotBlank()) {
-                        "Nothing matches \"${state.searchQuery}\""
-                    } else {
-                        "Nothing matches these filters"
-                    },
-                    body = if (state.searchQuery.isNotBlank()) {
-                        "Try a shorter name or remove a filter."
-                    } else {
-                        "Try removing a chip or widening your thresholds in Settings."
-                    },
-                )
-                else -> LazyColumn(
+            // "No contacts on this device" belongs to the EmptyDevice phase
+            // alone (the address-book read came back empty). Until 2026-10-06
+            // an empty candidate set took the same shortcut here, so a user
+            // whose whole address book was already on the list was told the
+            // phone had no contacts; each reason now has its own true words.
+            when (val reason = state.emptyReason) {
+                null -> LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = OrbitTheme.spacing.x2),
+                    contentPadding = PaddingValues(bottom = OrbitTheme.spacing.x2)
                 ) {
                     if (sections.isNotEmpty()) {
                         sections.forEachIndexed { sectionIndex, section ->
@@ -529,16 +543,22 @@ private fun ReadyContent(
                             }
                             items(
                                 items = section.contacts,
-                                key = { it.contactId },
+                                key = { it.contactId }
                             ) { contact -> this.pickerRow(contact) }
                         }
                     } else {
                         items(
                             items = state.filteredContacts,
-                            key = { it.contactId },
+                            key = { it.contactId }
                         ) { contact -> this.pickerRow(contact) }
                     }
                 }
+                else -> PickerEmptyMessage(
+                    reason = reason,
+                    state = state,
+                    onBack = onBack,
+                    onShowIgnored = { onShowIgnoredToggle(true) }
+                )
             }
 
             // Fast-scroll rail; only with 2+ sections to jump between. Letters
@@ -553,14 +573,14 @@ private fun ReadyContent(
                         }
                     },
                     activeIndex = activeSectionIndex,
-                    modifier = Modifier.align(Alignment.CenterEnd),
+                    modifier = Modifier.align(Alignment.CenterEnd)
                 )
             }
         }
 
-        // Docked bottom bar. BatchCounter self-hides at zero selection; the
-        // onboarding "Skip for now" footer fills the slot when nothing is
-        // selected so the flow never dead-ends.
+        // Docked bottom bar (PICK-06); BatchCounter self-hides at zero
+        // selection. Nothing fills the slot for an empty selection: Back is
+        // the way out, and onboarding's first-list step owns its own Skip.
         if (state.selectionCount > 0) {
             Box(modifier = Modifier.onSizeChanged { barHeightPx = it.height }) {
                 BatchCounter(
@@ -569,95 +589,86 @@ private fun ReadyContent(
                     mode = state.mode,
                     isCommitting = state.phase == ContactPickerUiState.Phase.Committing,
                     onClear = onClearSelection,
-                    onCommit = onCommit,
+                    onCommit = onCommit
                 )
             }
-        } else if (onSkip != null) {
-            OrbitButton(
-                text = "Skip for now",
-                onClick = onSkip,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(OrbitTheme.spacing.x4),
-            )
         }
     }
 }
 
 /**
- * Sort control for the picker. A compact pill that opens a [DropdownMenu] with
- * the available sort modes. Default is alphabetical.
+ * Sort control for the picker: a quiet pill that opens the shared
+ * [OrbitDropdownMenu] with the sort modes, the current one ticked. Default is
+ * alphabetical.
+ *
+ * 2026-10-05: the pill was about 36dp tall, under the 48dp floor
+ * (rules.md §Design 3), and opened a stock Material menu whose tick was in the
+ * accent; it now has the floor, a button role with a spoken purpose, and the
+ * Orbit menu with an ink tick (the screen's accent is the commit button).
  */
 @Composable
 private fun SortControl(
     sortBy: PickerSort,
     onSetSort: (PickerSort) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     // Ordered list of the user-facing sort options.
     val options: List<Pair<PickerSort, String>> = listOf(
-        PickerSort.ByName to "Alphabetical",
-        PickerSort.ByMostCalled to "Most called",
+        PickerSort.ByName to stringResource(R.string.picker_sort_alphabetical),
+        PickerSort.ByMostCalled to stringResource(R.string.picker_sort_most_called),
         // "Recently called" — absorbs the intent of the removed "Called recently"
         // filter (surface recent callers by ordering, not by hiding others).
-        PickerSort.ByRecency to "Recently called",
-        PickerSort.ByRecentlySaved to "Recently added",
+        PickerSort.ByRecency to stringResource(R.string.picker_sort_recently_called),
+        PickerSort.ByRecentlySaved to stringResource(R.string.picker_sort_recently_added)
     )
-    val currentLabel = when (sortBy) {
-        PickerSort.ByName -> "Alphabetical"
-        PickerSort.ByMostCalled -> "Most called"
-        PickerSort.ByRecentlySaved -> "Recently added"
-        PickerSort.ByRecency -> "Recently called"
-    }
+    val currentLabel = options.first { it.first == sortBy }.second
 
     Box(modifier = modifier) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
+                .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
                 .clip(OrbitTheme.shapes.full)
-                .clickable { expanded = true }
+                .clickable(
+                    role = Role.Button,
+                    onClickLabel = stringResource(R.string.picker_sort_change)
+                ) { expanded = true }
                 .padding(
                     horizontal = OrbitTheme.spacing.x3,
-                    vertical = OrbitTheme.spacing.x2,
-                ),
+                    vertical = OrbitTheme.spacing.x2
+                )
         ) {
             PhIcon(
                 name = "sliders-horizontal",
                 size = 16.dp,
-                tint = OrbitTheme.colors.fgMuted,
+                tint = OrbitTheme.colors.fgMuted
             )
             Spacer(Modifier.width(OrbitTheme.spacing.x2))
             Text(
-                text = "Sort: $currentLabel",
+                text = stringResource(R.string.picker_sort_label, currentLabel),
                 style = OrbitTheme.type.meta,
-                color = OrbitTheme.colors.fg,
+                color = OrbitTheme.colors.fg
             )
             Spacer(Modifier.width(OrbitTheme.spacing.x1))
             PhIcon(
                 name = "caret-down",
                 size = 12.dp,
-                tint = OrbitTheme.colors.fgMuted,
+                tint = OrbitTheme.colors.fgMuted
             )
         }
-        DropdownMenu(
+        OrbitDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-        ) {
-            options.forEach { (sort, label) ->
-                DropdownMenuItem(
-                    text = { Text(label) },
-                    trailingIcon = if (sort == sortBy) {
-                        { PhIcon(name = "check", size = 16.dp, tint = OrbitTheme.colors.accent) }
-                    } else null,
-                    onClick = {
-                        onSetSort(sort)
-                        expanded = false
-                    },
+            actions = options.map { (sort, label) ->
+                OrbitMenuAction(
+                    label = label,
+                    onClick = { onSetSort(sort) },
+                    selected = sort == sortBy
                 )
             }
-        }
+        )
     }
 }
 
@@ -670,7 +681,7 @@ private fun SortControl(
 private fun ShowIgnoredControl(
     showIgnored: Boolean,
     onToggle: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -678,22 +689,22 @@ private fun ShowIgnoredControl(
             // rules.md Design 3 — 48dp tap floor, even for quiet controls.
             .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
             .clip(OrbitTheme.shapes.full)
-            .clickable { onToggle(!showIgnored) }
+            .clickable(role = Role.Button) { onToggle(!showIgnored) }
             .padding(
                 horizontal = OrbitTheme.spacing.x3,
-                vertical = OrbitTheme.spacing.x2,
-            ),
+                vertical = OrbitTheme.spacing.x2
+            )
     ) {
         PhIcon(
             name = if (showIgnored) "eye" else "eye-slash",
             size = 16.dp,
-            tint = OrbitTheme.colors.fgMuted,
+            tint = OrbitTheme.colors.fgMuted
         )
         Spacer(Modifier.width(OrbitTheme.spacing.x2))
         Text(
-            text = if (showIgnored) "Hide ignored" else "Show ignored",
+            text = stringResource(if (showIgnored) R.string.picker_hide_ignored else R.string.picker_show_ignored),
             style = OrbitTheme.type.meta,
-            color = OrbitTheme.colors.fg,
+            color = OrbitTheme.colors.fg
         )
     }
 }
@@ -709,7 +720,7 @@ private const val SEARCH_DEBOUNCE_MS = 150L
 private data class PickerSection(
     val letter: String,
     val contacts: List<PickerContact>,
-    val headerItemIndex: Int,
+    val headerItemIndex: Int
 )
 
 /**
@@ -741,7 +752,7 @@ private fun buildPickerSections(contacts: List<PickerContact>): List<PickerSecti
         val section = PickerSection(
             letter = letter,
             contacts = members,
-            headerItemIndex = itemIndex,
+            headerItemIndex = itemIndex
         )
         itemIndex += 1 + members.size
         section
@@ -749,69 +760,96 @@ private fun buildPickerSections(contacts: List<PickerContact>): List<PickerSecti
 }
 
 /**
- * Sticky alphabetical header. Opaque [OrbitTheme.colors.bg] (the OrbitScreen
- * surface) so rows scrolling beneath never bleed through.
+ * Sticky alphabetical header: the shared [SectionLabel] (a heading for
+ * TalkBack) on an opaque [OrbitTheme.colors.bg] (the OrbitScreen surface) so
+ * rows scrolling beneath never bleed through.
  */
 @Composable
 private fun SectionHeader(letter: String) {
-    Text(
+    SectionLabel(
         text = letter,
-        style = OrbitTheme.type.eyebrow,
-        color = OrbitTheme.colors.fgMuted,
         modifier = Modifier
             .fillMaxWidth()
             .background(OrbitTheme.colors.bg)
             .padding(
                 horizontal = OrbitTheme.spacing.x4,
-                vertical = OrbitTheme.spacing.x1,
-            ),
+                vertical = OrbitTheme.spacing.x1
+            )
     )
 }
 
+/**
+ * Terminal state when the route's list or person is not there: the id was
+ * malformed, or the row is gone. The shared message with Go back as its one
+ * action (rubric G4: every empty state offers the next step; it had none and
+ * told the user to "go back" in words). A Re-link route carries a person, so
+ * it uses the words Contact detail uses for a missing person (voice.md:
+ * people, not contacts; it said "Contact not found" until 2026-10-06).
+ */
 @Composable
-private fun EmptyState(heading: String, body: String) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
-            modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x6),
-        ) {
-            Text(
-                text = heading,
-                style = OrbitTheme.type.h3,
-                color = OrbitTheme.colors.fg,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = body,
-                style = OrbitTheme.type.body,
-                color = OrbitTheme.colors.fgMuted,
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
+private fun NotFoundEmpty(mode: PickerMode, onBack: () -> Unit) {
+    val relink = mode == PickerMode.Relink
+    OrbitScreenMessage(
+        title = stringResource(if (relink) R.string.picker_person_not_found else R.string.picker_list_not_found),
+        body = stringResource(if (relink) R.string.picker_person_not_found_body else R.string.picker_list_not_found_body),
+        actionLabel = stringResource(R.string.components_action_go_back),
+        onAction = onBack,
+        // The only thing to do on the screen, so it takes the accent.
+        actionVariant = OrbitButtonVariant.Primary
+    )
 }
 
 /**
- * C6 — terminal empty state when the `targetListId` nav arg is missing or
- * unparseable. Same shape as [PermissionDeniedEmpty] (centred text, no
- * actions). Keeps copy terse and sentence-case per voice rules.
+ * One honest message per [ContactPickerUiState.EmptyReason], each with its
+ * next step (rubric G4). Secondary actions only: the commit button owns the
+ * screen's accent, and here nothing is selected.
  */
 @Composable
-private fun NotFoundEmpty() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "List not found",
-            style = OrbitTheme.type.h3,
-            color = OrbitTheme.colors.fg,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x6),
+private fun PickerEmptyMessage(
+    reason: ContactPickerUiState.EmptyReason,
+    state: ContactPickerUiState,
+    onBack: () -> Unit,
+    onShowIgnored: () -> Unit
+) {
+    when (reason) {
+        ContactPickerUiState.EmptyReason.EveryoneOnList -> {
+            // PRIV-03: the list's name reads "List" under the curtain, as it
+            // does on the commit bar.
+            val listName = if (LocalPrivacyCurtain.current) {
+                stringResource(R.string.components_curtain_list)
+            } else {
+                state.targetListName
+            }
+            OrbitScreenMessage(
+                icon = "users",
+                title = stringResource(R.string.picker_everyone_on_list_title, listName),
+                actionLabel = stringResource(R.string.components_action_go_back),
+                onAction = onBack
+            )
+        }
+        ContactPickerUiState.EmptyReason.NoRelinkTargets -> OrbitScreenMessage(
+            icon = "users",
+            title = stringResource(R.string.picker_relink_none_title),
+            actionLabel = stringResource(R.string.components_action_go_back),
+            onAction = onBack
+        )
+        ContactPickerUiState.EmptyReason.EveryoneIgnored -> OrbitScreenMessage(
+            icon = "eye-slash",
+            title = stringResource(R.string.picker_everyone_ignored_title),
+            actionLabel = stringResource(R.string.picker_show_ignored),
+            onAction = onShowIgnored
+        )
+        // Plain words: "chip" and "thresholds" were developer vocabulary on a
+        // user-facing line (rubric D7).
+        ContactPickerUiState.EmptyReason.NoSearchMatches -> OrbitScreenMessage(
+            icon = "magnifying-glass",
+            title = stringResource(R.string.picker_no_matches_query_title, state.searchQuery),
+            body = stringResource(R.string.picker_no_matches_query_body)
+        )
+        ContactPickerUiState.EmptyReason.NoFilterMatches -> OrbitScreenMessage(
+            icon = "magnifying-glass",
+            title = stringResource(R.string.picker_no_matches_filters_title),
+            body = stringResource(R.string.picker_no_matches_filters_body)
         )
     }
 }
@@ -825,6 +863,7 @@ private fun ContactPickerReadyPreviewLight() {
         ContactPickerContent(
             state = previewReadyState(darkSelectionDemo = false),
             onBack = {},
+            onRetry = {},
             onSearchChanged = {},
             onToggleFilter = {},
             onSetSort = {},
@@ -836,20 +875,20 @@ private fun ContactPickerReadyPreviewLight() {
             onUnignore = {},
             onOpenInPhone = {},
             onCommit = {},
-            onSkip = null,
             onPermissionGrant = {},
-            onOpenSettings = {},
+            onOpenSettings = {}
         )
     }
 }
 
-@Preview(name = "ContactPicker — Ready dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "ContactPicker — Ready dark", showBackground = true)
 @Composable
 private fun ContactPickerReadyPreviewDark() {
     OrbitTheme(darkTheme = true) {
         ContactPickerContent(
             state = previewReadyState(darkSelectionDemo = true),
             onBack = {},
+            onRetry = {},
             onSearchChanged = {},
             onToggleFilter = {},
             onSetSort = {},
@@ -861,9 +900,8 @@ private fun ContactPickerReadyPreviewDark() {
             onUnignore = {},
             onOpenInPhone = {},
             onCommit = {},
-            onSkip = null,
             onPermissionGrant = {},
-            onOpenSettings = {},
+            onOpenSettings = {}
         )
     }
 }
@@ -874,9 +912,10 @@ private fun ContactPickerRationalePreviewLight() {
     OrbitTheme(darkTheme = false) {
         ContactPickerContent(
             state = previewReadyState().copy(
-                phase = ContactPickerUiState.Phase.PermissionRationale,
+                phase = ContactPickerUiState.Phase.PermissionRationale
             ),
             onBack = {},
+            onRetry = {},
             onSearchChanged = {},
             onToggleFilter = {},
             onSetSort = {},
@@ -888,9 +927,8 @@ private fun ContactPickerRationalePreviewLight() {
             onUnignore = {},
             onOpenInPhone = {},
             onCommit = {},
-            onSkip = null,
             onPermissionGrant = {},
-            onOpenSettings = {},
+            onOpenSettings = {}
         )
     }
 }
@@ -901,9 +939,10 @@ private fun ContactPickerDeniedPreviewLight() {
     OrbitTheme(darkTheme = false) {
         ContactPickerContent(
             state = previewReadyState().copy(
-                phase = ContactPickerUiState.Phase.PermissionDenied,
+                phase = ContactPickerUiState.Phase.PermissionDenied
             ),
             onBack = {},
+            onRetry = {},
             onSearchChanged = {},
             onToggleFilter = {},
             onSetSort = {},
@@ -915,9 +954,8 @@ private fun ContactPickerDeniedPreviewLight() {
             onUnignore = {},
             onOpenInPhone = {},
             onCommit = {},
-            onSkip = null,
             onPermissionGrant = {},
-            onOpenSettings = {},
+            onOpenSettings = {}
         )
     }
 }
@@ -939,7 +977,7 @@ private fun previewReadyState(darkSelectionDemo: Boolean = false): ContactPicker
             isCommonlyCalled = true,
             isRarelyCalled = false,
             isRecentlyAdded = false,
-            isLongGap = false,
+            isLongGap = false
         ),
         PickerContact(
             contactId = 2L,
@@ -955,7 +993,7 @@ private fun previewReadyState(darkSelectionDemo: Boolean = false): ContactPicker
             isCommonlyCalled = false,
             isRarelyCalled = false,
             isRecentlyAdded = true,
-            isLongGap = false,
+            isLongGap = false
         ),
         PickerContact(
             contactId = 3L,
@@ -971,8 +1009,8 @@ private fun previewReadyState(darkSelectionDemo: Boolean = false): ContactPicker
             isCommonlyCalled = false,
             isRarelyCalled = true,
             isRecentlyAdded = false,
-            isLongGap = true,
-        ),
+            isLongGap = true
+        )
     )
     return ContactPickerUiState(
         phase = ContactPickerUiState.Phase.Ready,
@@ -982,7 +1020,122 @@ private fun previewReadyState(darkSelectionDemo: Boolean = false): ContactPicker
         activeFilters = if (darkSelectionDemo) setOf(PickerFilter.LongGap) else emptySet(),
         showIgnored = false,
         allContacts = sample,
-        selectedIds = if (darkSelectionDemo) setOf(1L, 2L) else setOf(1L),
+        selectedIds = if (darkSelectionDemo) setOf(1L, 2L) else setOf(1L)
+    )
+}
+
+/** One host for the state previews, so each state renders in the gallery and its audits. */
+@Composable
+private fun ContactPickerPreviewHost(state: ContactPickerUiState) {
+    OrbitTheme {
+        ContactPickerContent(
+            state = state,
+            onBack = {},
+            onRetry = {},
+            onSearchChanged = {},
+            onToggleFilter = {},
+            onSetSort = {},
+            onToggleSelect = {},
+            onSelectAllMatching = {},
+            onClearSelection = {},
+            onShowIgnoredToggle = {},
+            onIgnore = {},
+            onUnignore = {},
+            onOpenInPhone = {},
+            onCommit = {},
+            onPermissionGrant = {},
+            onOpenSettings = {}
+        )
+    }
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerLoadingPreview() {
+    ContactPickerPreviewHost(previewReadyState().copy(phase = ContactPickerUiState.Phase.LoadingPermission))
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerErrorPreview() {
+    ContactPickerPreviewHost(previewReadyState().copy(phase = ContactPickerUiState.Phase.Error))
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerListNotFoundPreview() {
+    ContactPickerPreviewHost(previewReadyState().copy(phase = ContactPickerUiState.Phase.NotFound))
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerPersonNotFoundPreview() {
+    ContactPickerPreviewHost(
+        previewReadyState().copy(phase = ContactPickerUiState.Phase.NotFound, mode = PickerMode.Relink)
+    )
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerNoSearchMatchesPreview() {
+    ContactPickerPreviewHost(previewReadyState().copy(searchQuery = "zq", selectedIds = emptySet()))
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerNoFilterMatchesPreview() {
+    // Nobody in the fixture is starred.
+    ContactPickerPreviewHost(
+        previewReadyState().copy(activeFilters = setOf(PickerFilter.Starred), selectedIds = emptySet())
+    )
+}
+
+// Static: the bar is disabled while the write is in flight, nothing animates.
+@PreviewLightDark
+@Composable
+private fun ContactPickerCommittingPreview() {
+    ContactPickerPreviewHost(previewReadyState().copy(phase = ContactPickerUiState.Phase.Committing))
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerEveryoneOnListPreview() {
+    ContactPickerPreviewHost(previewReadyState().copy(allContacts = emptyList(), selectedIds = emptySet()))
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerEveryoneIgnoredPreview() {
+    val ready = previewReadyState()
+    ContactPickerPreviewHost(
+        ready.copy(allContacts = ready.allContacts.map { it.copy(isIgnored = true) }, selectedIds = emptySet())
+    )
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerRelinkPreview() {
+    val ready = previewReadyState()
+    ContactPickerPreviewHost(
+        ready.copy(
+            mode = PickerMode.Relink,
+            targetListName = "Sarah Levin",
+            allContacts = ready.allContacts.map { it.copy(phoneContactId = it.contactId) },
+            selectedIds = setOf(2L)
+        )
+    )
+}
+
+@PreviewLightDark
+@Composable
+private fun ContactPickerNoRelinkTargetsPreview() {
+    ContactPickerPreviewHost(
+        previewReadyState().copy(
+            mode = PickerMode.Relink,
+            targetListName = "Sarah Levin",
+            allContacts = emptyList(),
+            selectedIds = emptySet()
+        )
     )
 }
 
@@ -996,6 +1149,7 @@ private fun ContactPickerContentPreview() {
         ContactPickerContent(
             state = previewReadyState(),
             onBack = {},
+            onRetry = {},
             onSearchChanged = {},
             onToggleFilter = {},
             onSetSort = {},
@@ -1007,9 +1161,8 @@ private fun ContactPickerContentPreview() {
             onUnignore = {},
             onOpenInPhone = {},
             onCommit = {},
-            onSkip = null,
             onPermissionGrant = {},
-            onOpenSettings = {},
+            onOpenSettings = {}
         )
     }
 }

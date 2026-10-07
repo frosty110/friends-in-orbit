@@ -1,9 +1,11 @@
 package app.orbit.data.mappers
 
+import app.orbit.R
 import app.orbit.data.Contact
 import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.CallSource
 import app.orbit.data.entity.ContactEntity
+import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatDuration
 import app.orbit.ui.util.formatRelative
 import java.time.Instant
@@ -30,18 +32,18 @@ fun ContactEntity.toUiContact(): Contact = Contact(
     id = "c-$id",
     name = displayName,
     phone = phoneNumber,
-    lastCalledLabel = "",
-    avgLengthLabel = "",
+    lastCalledLabel = null,
+    avgLengthLabel = null,
     pickupRateLabel = "",
     totalCalls = 0,
     due = false,
     listIds = emptyList(),
-    bestWindowLabel = "",
+    bestWindowLabel = null,
     heat = FloatArray(24) { 0f },
     history = emptyList(),
     notes = emptyList(),
     patternNote = "",
-    photoUri = photoUri,
+    photoUri = photoUri
 )
 
 /**
@@ -50,7 +52,7 @@ fun ContactEntity.toUiContact(): Contact = Contact(
  *   - `lastCalledLabel` — relative-time formatting of the most recent
  *     CONNECTION (e.g. "today", "7 days ago"). ATTEMPT events (reach-outs
  *     that didn't connect — voicemail / no answer) are excluded: a voicemail
- *     must never read as "you talked today". Empty when there is no connection
+ *     must never read as "you talked today". Null when there is no connection
  *     so [ContactDetailScreen] falls through to the "Never called" rendering.
  *   - `totalCalls` — count of CONNECTIONS (CALL_LOG + MANUAL; ATTEMPT excluded —
  *     an attempt is not a call that happened).
@@ -58,11 +60,16 @@ fun ContactEntity.toUiContact(): Contact = Contact(
  *     (`durationSeconds > 0`), formatted via [formatDuration]. Zero-duration
  *     events are unverified manual marks, not measured calls — averaging
  *     them in dragged a 22-min average to 19 after one logged connection.
- *     When no measured calls exist the label renders
- *     "—" (the [formatDuration] zero case). The screen gates display on
- *     `totalCalls >= 3` to avoid surfacing a meaningless mean from one or
- *     two calls; the field is still populated here so other consumers
- *     can decide their own gating threshold.
+ *     When no measured calls exist the label is null: there is no average to
+ *     state, and each screen says so in its own words (it used to be the em
+ *     dash [formatDuration] returned for zero).
+ *   - `measuredCalls`: how many connections fed that mean. Contact detail
+ *     gates "Average length" on `measuredCalls >= 3`, not `totalCalls >= 3`:
+ *     the two counts differ by the zero-length MANUAL rows, so gating on the
+ *     total let one measured call plus two logged connections show that
+ *     single call's length as an average (CONTACT-02). The label is still
+ *     populated below three so other consumers can decide their own gate
+ *     (Card view reads it ungated).
  *
  * Per-direction breakdowns (`pickupRateLabel`) are out of scope here —
  * `call_events` stores connected calls only (the reconciler drops MISSED /
@@ -80,12 +87,13 @@ fun Contact.withCallStats(events: List<CallEventEntity>, now: Instant): Contact 
     // Zero-duration events (MANUAL marks) are excluded from the
     // average; they still count toward totalCalls and lastCalledLabel.
     val measured = connections.filter { it.durationSeconds > 0 }
-    val avgSeconds =
-        if (measured.isEmpty()) 0 else measured.map { it.durationSeconds }.average().toInt()
+    val avgSeconds: Int? =
+        if (measured.isEmpty()) null else measured.map { it.durationSeconds }.average().toInt()
     return copy(
-        lastCalledLabel = mostRecent?.let { formatRelative(it.occurredAt, now) } ?: "",
+        lastCalledLabel = mostRecent?.let { formatRelative(it.occurredAt, now) },
         totalCalls = connections.size,
-        avgLengthLabel = formatDuration(avgSeconds),
+        measuredCalls = measured.size,
+        avgLengthLabel = avgSeconds?.let(::formatDuration)
     )
 }
 
@@ -117,7 +125,7 @@ fun Contact.withCallPatterns(events: List<CallEventEntity>, zoneId: ZoneId): Con
     if (peak == 0) return this
     return copy(
         heat = FloatArray(24) { h -> hourCounts[h].toFloat() / peak },
-        bestWindowLabel = bestWindowLabel(hourCounts),
+        bestWindowLabel = bestWindowLabel(hourCounts)
     )
 }
 
@@ -127,14 +135,15 @@ private const val MIN_CALLS_FOR_PATTERNS: Int = 3
 /**
  * Coarse day-part label for the stat slot next to the heat strip. Buckets the
  * hour histogram into four windows and names the heaviest one. Sentence case
- * plural ("Evenings") matches the legacy Card View register.
+ * plural ("Evenings") matches the legacy Card View register; the words live
+ * in strings_time.xml.
  */
-private fun bestWindowLabel(hourCounts: IntArray): String {
-    val windows: List<Pair<String, List<Int>>> = listOf(
-        "Mornings" to (5..11).toList(),
-        "Afternoons" to (12..16).toList(),
-        "Evenings" to (17..21).toList(),
-        "Late nights" to listOf(22, 23, 0, 1, 2, 3, 4),
+private fun bestWindowLabel(hourCounts: IntArray): UiText {
+    val windows: List<Pair<Int, List<Int>>> = listOf(
+        R.string.time_daypart_mornings to (5..11).toList(),
+        R.string.time_daypart_afternoons to (12..16).toList(),
+        R.string.time_daypart_evenings to (17..21).toList(),
+        R.string.time_daypart_late_nights to listOf(22, 23, 0, 1, 2, 3, 4)
     )
-    return windows.maxBy { (_, hours) -> hours.sumOf { hourCounts[it] } }.first
+    return UiText.res(windows.maxBy { (_, hours) -> hours.sumOf { hourCounts[it] } }.first)
 }

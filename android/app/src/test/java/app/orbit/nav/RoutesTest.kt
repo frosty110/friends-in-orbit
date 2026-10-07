@@ -1,6 +1,7 @@
 package app.orbit.nav
 
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import org.junit.Test
 
 /**
@@ -38,11 +39,11 @@ class RoutesTest {
         assertEquals("contact/9?focusNote=1", Routes.contactWithFocus("9", focusNote = true))
         assertEquals(
             "contact/9?scrollToCallEventId=42",
-            Routes.contactWithFocus("9", scrollToCallEventId = 42L),
+            Routes.contactWithFocus("9", scrollToCallEventId = 42L)
         )
         assertEquals(
             "contact/9?focusNote=1&scrollToCallEventId=42",
-            Routes.contactWithFocus("9", focusNote = true, scrollToCallEventId = 42L),
+            Routes.contactWithFocus("9", focusNote = true, scrollToCallEventId = 42L)
         )
     }
 
@@ -55,7 +56,17 @@ class RoutesTest {
     fun `pickContacts includes sourceListId only when provided (move)`() {
         assertEquals(
             "pick/contacts?targetListId=3&mode=move&sourceListId=1",
-            Routes.pickContacts("3", mode = "move", sourceListId = "1"),
+            Routes.pickContacts("3", mode = "move", sourceListId = "1")
         )
+    }
+
+    @Test
+    fun `relinkContact carries the orphan as relinkContactId, never as a list id`() {
+        // Regression: Re-link used pickContacts(contactId, mode = "relink"), so
+        // the contact id travelled as targetListId and picked people were
+        // added to whichever list happened to share that number.
+        val route = Routes.relinkContact("7")
+        assertEquals("pick/contacts?mode=relink&relinkContactId=7", route)
+        assertFalse("targetListId" in route)
     }
 }

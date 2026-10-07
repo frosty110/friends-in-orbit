@@ -14,8 +14,9 @@ data class OrbitShapes(
     val xl: RoundedCornerShape,
     val full: RoundedCornerShape,
     // Material3 ModalBottomSheet top-rounded shape token. Eliminates
-    // RoundedCornerShape literals in PauseSheet, CreateListBottomSheet, and any
-    // other bottom-sheet composables. Top corners 24dp, bottom corners 0dp.
+    // RoundedCornerShape literals in PauseDurationSheet (ui/components),
+    // LogConnectionSheet, ListSelectorSheet and any other bottom-sheet
+    // composables. Top corners 24dp, bottom corners 0dp.
     val bottomSheet: RoundedCornerShape,
 )
 

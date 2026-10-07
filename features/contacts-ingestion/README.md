@@ -1,7 +1,7 @@
 # contacts-ingestion
 
 **Status:** in-progress
-**Last reviewed:** 2026-06-09
+**Last reviewed:** 2026-10-06
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/data/android/ContactsReader.kt`, `android/app/src/main/java/app/orbit/domain/usecase/IngestPhoneContactsUseCase.kt` (delta-sync), `android/app/src/main/java/app/orbit/calllog/ContactsIngestWorker.kt` (background trigger), `android/app/src/main/java/app/orbit/data/entity/ContactPhoneEntity.kt` (`contact_phones`)
 - Tests: `android/app/src/test/java/app/orbit/domain/usecase/IngestPhoneContactsUseCaseTest.kt`, `android/app/src/test/java/app/orbit/calllog/ContactsIngestWorkerTest.kt`
@@ -24,18 +24,18 @@ As a user during onboarding, I multi-select people from my phone contacts and ad
 
 **Metadata layer.** Keyed to normalized phone numbers (unique `contacts.normalizedPhone` plus the per-number `contact_phones` table); `phoneContactId` is carried for device linkage but matching is number-first.
 
-**Bulk add.** Multi-select picker with search and filter. Used during onboarding and when adding to existing lists. Shows name, photo, primary number. Filter chips AND together by default; the call-frequency triplet (Commonly called / Rarely called / Never called) behaves as a single-select toggle group because the predicates are mutually exclusive — tapping one switches groups in a single tap.
+**Bulk add.** The contact picker (`ui/screens/picker/`), specified as PICK-01 to PICK-09 under "Pickers" in [orbit-lists](../orbit-lists/README.md) and described screen by screen in [Add people](../page-views/picker-contacts.md). Multi-select with search and filters, opened from onboarding's first-list step and when adding people to an existing list. One row per person (PICK-04): avatar, name, a call line ("Last called 3 days ago · 4 calls", or "Never called"), the lists they are already on, and a check mark; the number is searched (PICK-05) but not shown. Filter chips AND together (PICK-02); the call-frequency triplet (Commonly called / Rarely called / Never called) behaves as a single-select toggle group because the predicates are mutually exclusive, so tapping one switches groups in a single tap. People already on the target list are not candidates and are hidden (resolved below). When nothing is left to show, the picker says why: everyone in your contacts is already on the list, everyone here is ignored, or nothing matches the search or the filters; "No contacts on this device" is said only when the address-book read itself came back empty.
 
 **Rename handling.** Auto-match by number; the delta-sync refreshes `displayName` (and photo/starred flag) in place, so a rename propagates on the next ingest pass. If no number matches, the Orbit contact orphans (`isOrphaned`) — surfaced in contact-detail with a manual re-link path.
 
-**Deletion handling.** Keep app data (notes, history, list memberships), flag contact as orphaned (`isOrphaned = true`); the flag flips back automatically if the device contact returns. User can archive permanently or re-link to a different phone contact.
+**Deletion handling.** Keep app data (notes, history, list memberships), flag contact as orphaned (`isOrphaned = true`); the flag flips back automatically if the device contact returns. User can archive permanently or re-link to a different phone contact. Re-link is a manual pick (the picker's Relink mode) followed by a merge: the picked phone contact has almost always been mirrored already as its own row, so `RelinkContactUseCase` moves that row's calls, notes, numbers and memberships onto the orphan, gives the orphan its device identity (number, name, photo, starred flag, `phoneContactId`), clears `isOrphaned` and deletes the emptied row. The next ingest then matches the merged row by number, with no duplicate. Full behavior: CONTACT-07 in `features/contact-detail/README.md`.
 
 **Contact creation strictness (decision per PRD §Open Decisions).** Currently spec'd as **strict** — a contact must exist in phone contacts to be added to Orbit. Soft mode (adding to Orbit also creates a phone contact) is deferred.
 
 ### Acceptance criteria
 
 - [ ] Bulk-add picker scrolls smoothly with 500+ contacts (virtualized list).
-- [ ] Search matches by name and by number.
+- [x] Search matches by name and by number (the shared `ContactSearch` matcher, PICK-05; pinned by `ContactPickerUiStateTest.search_matches_phone_digits` and `search_folds_diacritics`).
 - [ ] Deleting a phone contact → Orbit shows disconnected badge, preserves all metadata.
 - [ ] Renaming a phone contact → Orbit reflects new name within one app session.
 - [ ] Data Safety form justifies `READ_CONTACTS` in terms this feature alone satisfies.
@@ -51,8 +51,8 @@ As a user during onboarding, I multi-select people from my phone contacts and ad
 ### Open product questions
 
 - PRD §Open Decisions: strict vs soft contact creation. Currently strict; soft mode deferred.
-- Re-link UX for orphaned contacts: manual picker, or fuzzy-match suggestions? Leaning manual for v1.
-- Should the bulk-add picker show contacts already on the target list (greyed out), or hide them? Leaning show-greyed for clarity.
+- ~~Re-link UX for orphaned contacts: manual picker, or fuzzy-match suggestions?~~ Resolved: manual picker for v1. Re-link opens the contact picker in Relink mode and merges the pick into the orphan (CONTACT-07); no fuzzy-match suggestions.
+- ~~Should the bulk-add picker show contacts already on the target list (greyed out), or hide them? Leaning show-greyed for clarity.~~ Resolved 2026-10-06: hidden in Add mode, because they are not candidates to add (`pickerCandidates` in `ContactPickerViewModel.kt`, pinned by `PickerCandidatesTest`); when that leaves nobody, the picker says "Everyone in your contacts is already on {list}". The reverse picker (one person into lists) keeps such a list in its rows, tags it "Already added" and does not let it be picked.
 
 ---
 
@@ -62,7 +62,7 @@ As a user during onboarding, I multi-select people from my phone contacts and ad
 
 - `ContactsReader` — ContentResolver wrapper; pure Android. Silently returns empty when `READ_CONTACTS` is not granted.
 - `IngestPhoneContactsUseCase` — the delta-sync. One pass, single transaction: (1) **insert** device contacts with no matching Room row; (2) **refresh** matched rows whose `displayName` / `photoUri` / `phoneContactId` / `isStarred` drifted, clearing `isOrphaned`; (3) **sync the phone set** — `contact_phones` rows replaced when the device number set or primary changed; (4) **flag orphans** (`isOrphaned = true`) for mirrored rows with no device match. Rows are never deleted — notes and history survive an address-book deletion. An empty read (permission revoked or truly empty) returns without orphaning anything. Emits a non-PII `IngestSummary` (inserted/refreshed/orphaned/restored).
-- `ContactsIngestWorker` — runs the use case off the cold-start path. Triggered by (a) the `READ_CONTACTS` grant transition and (b) a `ContactsContract` `ContentObserver` fire (via `ContentObserverController`). A 24h DataStore TTL dedupes grant-path re-runs; observer fires set `force = true` and bypass the TTL ("the address book changed right now" must not wait a day).
+- `ContactsIngestWorker` — runs the use case off the cold-start path. Triggered by (a) the `READ_CONTACTS` grant transition in onboarding or Settings, (b) a `ContactsContract` `ContentObserver` fire (via `ContentObserverController`), and (c) a `READ_CONTACTS` grant made from the contact picker (its rationale's "Grant access", or the phone's settings and a return), which runs the forced, expedited path and keeps the picker on its skeleton until the work is done, so the picker never says everyone is already on the list before the address book has been read (added 2026-10-06: until then nothing on that path enqueued an ingest). A 24h DataStore TTL dedupes grant-path re-runs; observer fires and the picker grant set `force = true` and bypass the TTL ("the address book changed right now" and "this address book has never been read" must not wait a day).
 
 ### Data model
 

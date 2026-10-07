@@ -14,11 +14,18 @@ import app.orbit.data.android.CallLogReader
 import app.orbit.data.android.CallRow
 import app.orbit.domain.JsonProvider
 import app.orbit.domain.clock.Clock
+import app.orbit.testutil.newPrefs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
@@ -33,7 +40,9 @@ import kotlin.test.assertTrue
  * Test pattern: TestListenableWorkerBuilder + a custom WorkerFactory that
  * constructs the worker with a [FakeReconciler] (overrides reconcile to
  * capture sinceMs) and a [FakeCallLogReader] (overrides readAll to return
- * canned rows). The injected [AppPrefs] is real (Robolectric DataStore).
+ * canned rows). The injected [AppPrefs] is real, over a DataStore built per
+ * test method (`tmp.newPrefs(storeScope)`, testutil/TestDataStore.kt) and
+ * cancelled in `@After`, so lastCallLogSyncAt starts from its default every time.
  *
  * @Config(application = Application::class) bypasses OrbitApp.onCreate so we
  * don't need a Hilt graph for the test. @Config(sdk = [33]) avoids
@@ -48,7 +57,11 @@ import kotlin.test.assertTrue
 @Config(sdk = [33], application = Application::class)
 class CallLogSyncWorkerTest {
 
+    @get:Rule
+    val tmp = TemporaryFolder()
+
     private lateinit var context: android.content.Context
+    private val storeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private lateinit var appPrefs: AppPrefs
     private val fakeReconciler = FakeReconciler()
     private val fakeReader = FakeCallLogReader()
@@ -56,13 +69,16 @@ class CallLogSyncWorkerTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext<Application>()
-        appPrefs = AppPrefs(context)
+        appPrefs = tmp.newPrefs(storeScope)
         // Reset capture state between tests
         fakeReconciler.callCount = 0
         fakeReconciler.lastSinceMs = -1L
         fakeReader.rows = emptyList()
-        // Reset prefs to a known baseline
-        runBlocking { appPrefs.setLastCallLogSyncAt(0L) }
+    }
+
+    @After
+    fun tearDown() {
+        storeScope.cancel()
     }
 
     private fun buildWorker(inputData: Data = Data.EMPTY): CallLogSyncWorker =

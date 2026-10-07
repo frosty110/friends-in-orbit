@@ -3,7 +3,10 @@ package app.orbit.ui.screens.settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -28,29 +31,28 @@ fun ImportConfirmDialog(
         containerColor = OrbitTheme.colors.surface,
         title = {
             Text(
-                text = "Restore this backup?",
+                text = stringResource(R.string.settings_import_confirm_title),
                 style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             )
         },
         text = {
-            val lists = if (listCount == 1) "1 list" else "$listCount lists"
-            val contacts = if (contactCount == 1) "1 contact" else "$contactCount contacts"
+            val lists = pluralStringResource(R.plurals.settings_import_confirm_lists, listCount, listCount)
+            val contacts = pluralStringResource(R.plurals.settings_import_confirm_people, contactCount, contactCount)
             Text(
-                text = "This replaces everything in Orbit with the backup — " +
-                    "$lists and $contacts. What's on this phone now will be erased.",
+                text = stringResource(R.string.settings_import_confirm_body, lists, contacts),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             )
         },
         confirmButton = {
             OrbitButton(
-                text = "Replace",
+                text = stringResource(R.string.settings_import_confirm_replace),
                 onClick = onConfirm,
                 variant = OrbitButtonVariant.Destructive,
             )
         },
         dismissButton = {
             OrbitButton(
-                text = "Cancel",
+                text = stringResource(R.string.components_action_cancel),
                 onClick = onDismiss,
                 variant = OrbitButtonVariant.Ghost,
             )

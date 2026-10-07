@@ -19,6 +19,11 @@ data class OrbitSpacing(
     val x9: Dp = 56.dp,
     val x10: Dp = 72.dp,
     val tapMin: Dp = 48.dp,
+    // Named off-grid steps the app uses on purpose (--space-hair, --space-row-y).
+    // Screens used them as raw dp; naming them keeps rules.md Design 1 ("tokens
+    // only") true without moving a pixel.
+    val hair: Dp = 2.dp,
+    val rowY: Dp = 14.dp,
 )
 
 internal val LocalOrbitSpacing = staticCompositionLocalOf { OrbitSpacing() }

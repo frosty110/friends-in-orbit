@@ -1,42 +1,68 @@
 package app.orbit.ui.screens.settings
 
 import android.app.Application
+import android.app.NotificationManager
+import android.content.Context
+import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.testing.SynchronousExecutor
 import androidx.work.testing.WorkManagerTestInitHelper
+import app.orbit.R
 import app.orbit.calllog.CallLogPermissionState
+import app.orbit.calllog.ContactsIngestWorker
 import app.orbit.calllog.ContentObserverController
 import app.orbit.data.AppPrefs
 import app.orbit.data.dao.PreIgnoreSnapshot
 import app.orbit.data.db.OrbitDatabase
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.repository.ContactRepository
+import app.orbit.data.repository.ResetOutcome
 import app.orbit.data.repository.ResetService
+import app.orbit.domain.FakeContactRepository
+import app.orbit.domain.clock.TestClock
+import app.orbit.domain.contactFixture
 import app.orbit.testutil.MainDispatcherRule
+import app.orbit.testutil.awaitValue
+import app.orbit.testutil.newFailingStore
+import app.orbit.testutil.newPrefs
+import app.orbit.ui.theme.OrbitDarkMode
+import app.orbit.ui.theme.OrbitThemeId
+import app.orbit.ui.util.UiText
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 
 /**
@@ -44,37 +70,56 @@ import org.robolectric.annotation.Config
  *
  * Fixture pattern:
  *   - Robolectric's [ApplicationProvider.getApplicationContext] supplies a real
- *     [android.content.Context] so the production [AppPrefs] constructor runs
- *     unchanged.
- *   - DataStore auto-creates its backing preferences file under the
- *     Robolectric-managed files dir; the `@After` hook wipes it so tests
- *     don't leak persisted state across @Test methods.
+ *     [Context] for the OS permission reads and WorkManager.
+ *   - Each method gets its own DataStore file and scope
+ *     (`testutil/TestDataStore.kt`), cancelled in `@After`, so no method can
+ *     see another's writes or wait on a write another method stranded. The
+ *     class used to share the process-wide `orbit_prefs` singleton across
+ *     methods and reset it by hand, which is where the suite's 30 second
+ *     timeouts came from.
  *   - [MainDispatcherRule] swaps `Dispatchers.Main` for `UnconfinedTestDispatcher`
  *     so `viewModelScope` + `stateIn` run on the test dispatcher.
  *
- * Pattern divergence from CardViewViewModelTest: DataStore's
- * internal IO dispatcher is NOT swapped by `MainDispatcherRule`, so the first
- * Turbine emission is Loading (the stateIn initialValue), followed by the
- * terminal Ready when DataStore delivers its first read. Tests 1–3 use
+ * DataStore's internal IO dispatcher is NOT swapped by `MainDispatcherRule`,
+ * so the first emission is Loading (the stateIn initialValue), followed by the
+ * terminal Ready when DataStore delivers its first read. Tests use
  * `uiState.filterIsInstance<Ready>().first()` to skip the Loading gate
- * deterministically; Test 4 exercises the Loading invariant in isolation via
+ * deterministically; the Loading test exercises the invariant in isolation via
  * StandardTestDispatcher + direct StateFlow.value snapshot.
+ *
+ * The permission side effects (`start()`, `stop()`, the enqueues) run on the
+ * caller's thread before the VM method returns, since nothing is written to
+ * DataStore first any more, so the tests assert them directly. The one path
+ * that still follows a DataStore write ([SettingsViewModel.onImportDaysChanged])
+ * is observed through [CountingController.syncRequests], a channel the
+ * controller feeds, never through the write it follows.
+ *
+ * Waiting for a DataStore write is done by polling (`awaitValue`), never by a
+ * collector started after the write: DataStore 1.1.1 can hand such a
+ * collector the old value stamped with the new version and then drop the
+ * update (see `testutil/TestDataStore.kt`). The `uiState` predicates below are
+ * only ever awaited after a plain `awaitReady()` made the upstream combine
+ * hot, so its DataStore collectors were subscribed before the write.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-// Stock Application class — avoids OrbitApp.onCreate (which schedules
-// WorkManager + the Hilt graph that isn't set up for JVM tests). We only
-// need the Context to back AppPrefs' DataStore.
+// Stock Application class: avoids OrbitApp.onCreate (which schedules
+// WorkManager + the Hilt graph that isn't set up for JVM tests).
 @Config(sdk = [33], application = Application::class)
 class SettingsViewModelTest {
 
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private val context: android.content.Context get() =
-        ApplicationProvider.getApplicationContext()
+    @get:Rule
+    val tmp = TemporaryFolder()
 
-    private fun buildAppPrefs(): AppPrefs = AppPrefs(context)
+    private val context: Context get() = ApplicationProvider.getApplicationContext()
+
+    private val storeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val prefs: AppPrefs by lazy { tmp.newPrefs(storeScope) }
+    private val clock = TestClock(Instant.parse("2026-10-06T10:00:00Z"))
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     @Before
     fun initWorkManager() {
@@ -91,30 +136,39 @@ class SettingsViewModelTest {
         WorkManagerTestInitHelper.initializeTestWorkManager(context, config)
     }
 
+    @After
+    fun tearDown() {
+        storeScope.cancel()
+        appScope.cancel()
+    }
+
     private fun buildController(): ContentObserverController =
         ContentObserverController(context)
 
     /**
      * Test double for [ContentObserverController] that counts start/stop
-     * invocations without registering against the real ContentResolver.
+     * invocations without registering against the real ContentResolver, and
+     * records every [enqueueImmediateSync] (its `fullResync` flag) on a channel
+     * so a test can await the request instead of racing the DataStore write it
+     * follows. Contacts ingests still go to the real WorkManager.
      * ContentObserverController is an `open class` + `open fun start/stop` to
      * enable this subclass.
      */
-    private class CountingController(ctx: android.content.Context) :
-        ContentObserverController(ctx) {
-        var startCount: Int = 0
-        var stopCount: Int = 0
+    private class CountingController(ctx: Context) : ContentObserverController(ctx) {
+        @Volatile var startCount: Int = 0
+        @Volatile var stopCount: Int = 0
+        val syncRequests = Channel<Boolean>(Channel.UNLIMITED)
         override fun start() { startCount++ }
         override fun stop() { stopCount++ }
+        override fun enqueueImmediateSync(fullResync: Boolean) { syncRequests.trySend(fullResync) }
     }
 
     /**
-     * Fixture support — minimal [ContactRepository] stub that emits an empty
+     * Fixture support: a minimal [ContactRepository] stub that emits an empty
      * ignored list. The Settings combine folds
      * `contactRepo.observeIgnored().map { it.size }` to drive the "{N} ignored"
-     * subtitle. Settings tests never assert on the count, so the empty-flow
-     * stub is sufficient — the live VM still combines the value, the
-     * assertion-relevant fields (digest / call-log) propagate unchanged.
+     * subtitle. Most tests never assert on the count, so the empty-flow stub is
+     * sufficient; the count itself is pinned against [FakeContactRepository].
      */
     private object EmptyIgnoredContactRepository : ContactRepository {
         override fun observeAll(): Flow<List<ContactEntity>> = flowOf(emptyList())
@@ -139,18 +193,30 @@ class SettingsViewModelTest {
         override suspend fun setArchived(id: Long, archived: Boolean) {}
     }
 
+    /** SET-11 fixture: the ignored query fails on its first subscription, then passes. */
+    private class FlakyIgnoredContactRepository : ContactRepository by EmptyIgnoredContactRepository {
+        var failuresLeft: Int = 1
+        override fun observeIgnored(): Flow<List<ContactEntity>> = flow {
+            if (failuresLeft > 0) {
+                failuresLeft--
+                throw IllegalStateException("disk")
+            }
+            emit(emptyList())
+        }
+    }
+
     /**
-     * Minimal [ResetService] stub. Most Settings tests do
-     * not exercise the destructive-reset path; this anonymous subclass
-     * overrides [resetAll] to a counting no-op so we do not need to stand up a
-     * real [OrbitDatabase] fixture (the full reset behavior is pinned by
-     * [app.orbit.data.repository.ResetServiceTest]). The constructor still
-     * requires real dependency instances per the [ResetService] @Inject
-     * signature — it takes the application Context and the
-     * [ContentObserverController].
+     * Minimal [ResetService] stub. Most Settings tests do not exercise the
+     * destructive-reset path; this subclass replaces the wipe (`performReset`)
+     * with a counting stand-in so we do not need to stand up a real one (the
+     * full reset behavior is pinned by [app.orbit.data.repository.ResetServiceTest]),
+     * while `resetAll` keeps the service's own outcome bookkeeping. [gate],
+     * when set, holds the reset open so a test can clear the ViewModel
+     * mid-way; [failWith] makes it throw. The constructor still requires real
+     * dependency instances per the [ResetService] @Inject signature.
      */
     private class RecordingResetService(
-        ctx: android.content.Context,
+        ctx: Context,
         db: OrbitDatabase,
         prefs: AppPrefs,
         controller: ContentObserverController,
@@ -160,12 +226,18 @@ class SettingsViewModelTest {
         appPrefs = prefs,
         contentObserverController = controller,
     ) {
-        var resetCount: Int = 0
-        override suspend fun resetAll() { resetCount++ }
+        @Volatile var resetCount: Int = 0
+        var gate: CompletableDeferred<Unit>? = null
+        var failWith: Throwable? = null
+        override suspend fun performReset() {
+            gate?.await()
+            failWith?.let { throw it }
+            resetCount++
+        }
     }
 
     private fun buildResetService(
-        prefs: AppPrefs = buildAppPrefs(),
+        prefs: AppPrefs = this.prefs,
     ): RecordingResetService {
         val db = androidx.room.Room
             .inMemoryDatabaseBuilder(context, OrbitDatabase::class.java)
@@ -175,7 +247,7 @@ class SettingsViewModelTest {
     }
 
     private fun buildVm(
-        prefs: AppPrefs = buildAppPrefs(),
+        prefs: AppPrefs = this.prefs,
         controller: ContentObserverController = buildController(),
         contactRepo: ContactRepository = EmptyIgnoredContactRepository,
         resetService: ResetService = buildResetService(prefs),
@@ -186,33 +258,29 @@ class SettingsViewModelTest {
             contentObserverController = controller,
             contactRepo = contactRepo,
             resetService = resetService,
+            clock = clock,
+            appScope = appScope,
         )
-
-    @After
-    fun clearDataStore() {
-        // DataStore persists to the Robolectric file system AND caches a
-        // process-wide singleton per Context+name (see AppViewModelTest for
-        // the same pattern). Explicitly reset every flag this class writes
-        // before wiping the on-disk file so neighbouring test classes see
-        // fresh defaults regardless of runner ordering. The daily-digest-hour
-        // key was dropped — only call-log keys remain.
-        runBlocking {
-            val prefs = buildAppPrefs()
-            prefs.setCallLogImportDays(90)
-            prefs.setCallLogSyncEnabled(false)
-        }
-        val prefsDir = java.io.File(context.filesDir.parentFile, "datastore")
-        if (prefsDir.exists()) prefsDir.deleteRecursively()
-    }
 
     private suspend fun StateFlow<SettingsUiState>.awaitReady(): SettingsUiState.Ready =
         (this as Flow<SettingsUiState>).filterIsInstance<SettingsUiState.Ready>().first()
 
+    private suspend fun StateFlow<SettingsUiState>.awaitReady(
+        matching: (SettingsUiState.Ready) -> Boolean,
+    ): SettingsUiState.Ready = withTimeout(30_000L) {
+        (this@awaitReady as Flow<SettingsUiState>).filterIsInstance<SettingsUiState.Ready>().filter(matching).first()
+    }
+
+    private fun grant(vararg permissions: String) {
+        Shadows.shadowOf(context as Application).grantPermissions(*permissions)
+    }
+
+    private fun idleMain() {
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+    }
+
     // ============================================================================
-    // Test 1 — fresh AppPrefs emits Ready with AppPrefs defaults
-    // (call-log import 90 days; permissions not granted under Robolectric).
-    // The daily-digest-hour assertion (Test 1's digest variant + Test 3
-    // entirely) was retired when the field was dropped.
+    // Defaults and the Loading gate.
     // ============================================================================
 
     @Test
@@ -220,14 +288,12 @@ class SettingsViewModelTest {
         val vm = buildVm()
         val ready = vm.uiState.awaitReady()
         assertEquals(90, ready.callLogImportDays)
+        assertEquals(clock.now(), ready.now, "the sync rows word their time against the state's clock")
     }
 
-    // ============================================================================
-    // Test 4 — Loading is the structural initialValue before the scheduler
-    // drains the upstream pipeline (idiom: StandardTestDispatcher +
-    // synchronous StateFlow.value read).
-    // ============================================================================
-
+    // Loading is the structural initialValue before the scheduler drains the
+    // upstream pipeline (idiom: StandardTestDispatcher + synchronous
+    // StateFlow.value read).
     @Test
     fun `initial StateFlow value is Loading before scheduler drains`() {
         mainDispatcherRule.withMainDispatcher(StandardTestDispatcher()) {
@@ -235,19 +301,15 @@ class SettingsViewModelTest {
             assertEquals(
                 SettingsUiState.Loading,
                 vm.uiState.value,
-                "stateIn(initialValue = Loading) contract — first observable value",
+                "stateIn(initialValue = Loading) contract: first observable value",
             )
         }
     }
 
-    // ============================================================================
-    // Call-log Settings UI tests (CALL-01/02/04/06).
-    // ============================================================================
-
-    // Test 5 — default state reflects 90-day window + Denied permission +
-    // sync-not-in-flight. Robolectric grants no permission by default; with
-    // shouldShowRequestPermissionRationale=false (no Activity bound), the VM
-    // computes PermanentlyDenied. We assert "not Granted" + numeric defaults.
+    // Robolectric grants no permission by default; with
+    // shouldShowRequestPermissionRationale=false (no Activity bound) the raw
+    // reading is PermanentlyDenied, and never-asked resolves it to Denied
+    // (SET-12). We assert "not Granted" + numeric defaults.
     @Test
     fun `default state has 90-day import and not-granted permission`() = runTest {
         val vm = buildVm()
@@ -260,80 +322,248 @@ class SettingsViewModelTest {
         assertEquals(false, ready.callLogSyncInFlight)
     }
 
-    // Test 6 — onPermissionResult(Granted) writes isCallLogSyncEnabled=true
-    // AND enqueues full-resync work via the unique-work name.
-    //
-    // Uses `runBlocking` (real time) — DataStore writes hop to a real IO
-    // dispatcher that does NOT cooperate with `runTest`'s virtual scheduler
-    // (known lesson: "Turbine's test(timeout) uses real time, not runTest
-    // virtual clock; withTimeout collapses under virtual clock").
-    //
-    // We wait for BOTH a non-empty WorkInfo emission (proves the enqueue
-    // happened) and the prefs flag flip (proves the side-effect chain ran)
-    // — observing each side independently avoids racing on the fact that
-    // setCallLogSyncEnabled + enqueueImmediateSync run sequentially in the
-    // same launch but resume on different dispatchers.
+    // ============================================================================
+    // SET-11: a failing source shows Error, and Try again recovers.
+    // ============================================================================
+
     @Test
-    fun `onPermissionResult Granted enables sync and enqueues work`() = runBlocking {
-        val prefs = buildAppPrefs()
-        val controller = buildController()
-        val vm = buildVm(prefs, controller)
-        val wm = WorkManager.getInstance(context)
+    fun `a failing source shows Error, and Retry recovers`() = runBlocking {
+        val vm = buildVm(contactRepo = FlakyIgnoredContactRepository())
+
+        val error = withTimeout(30_000L) {
+            vm.uiState.filterIsInstance<SettingsUiState.Error>().first()
+        }
+        assertEquals(SettingsUiState.Error, error)
+
+        vm.onRetry()
+
+        val ready = withTimeout(30_000L) { vm.uiState.awaitReady() }
+        assertEquals(0, ready.ignoredContactCount)
+    }
+
+    // ============================================================================
+    // Row subtitles and appearance write-throughs.
+    // ============================================================================
+
+    // "{N} ignored" equals the rows the Ignored screen lists: both read
+    // observeIgnored(), which excludes archived people.
+    @Test
+    fun `ignored count matches the ignored query and skips archived people`() = runTest {
+        val repo = FakeContactRepository(
+            listOf(
+                contactFixture(id = 1L, isIgnored = true),
+                contactFixture(id = 2L, isIgnored = true),
+                contactFixture(id = 3L, isIgnored = true, isArchived = true),
+            ),
+        )
+        val vm = buildVm(contactRepo = repo)
+        val ready = vm.uiState.awaitReady()
+        assertEquals(2, ready.ignoredContactCount)
+        assertEquals(repo.observeIgnored().first().size, ready.ignoredContactCount)
+    }
+
+    @Test
+    fun `appearance choices persist and read back, and a negative hue reads as no override`() = runBlocking {
+        val vm = buildVm()
+        vm.uiState.awaitReady()
+
+        vm.onSelectTheme(OrbitThemeId.PLUM)
+        vm.onSelectDarkMode(OrbitDarkMode.DARK)
+        vm.onAccentHue(200)
+        val custom = vm.uiState.awaitReady { it.colorTheme == OrbitThemeId.PLUM && it.darkMode == OrbitDarkMode.DARK && it.accentHue == 200 }
+        assertEquals(200, custom.accentHue)
+
+        // null clears the override: AppPrefs stores -1, the VM maps it back to null.
+        vm.onAccentHue(null)
+        val cleared = vm.uiState.awaitReady { it.accentHue == null }
+        assertEquals(OrbitThemeId.PLUM, cleared.colorTheme, "clearing the hue keeps the theme")
+    }
+
+    // ============================================================================
+    // SET-12: "Off in your phone's settings" only after the OS was asked once.
+    // ============================================================================
+
+    @Test
+    fun `a permission never asked for reads Denied, and PermanentlyDenied once asked`() = runBlocking {
+        val vm = buildVm()
+        // The screen's ON_RESUME refresh: not granted, no rationale (the OS
+        // cannot tell never-asked from refused-for-good).
+        vm.refreshAllPermissionStates(callLogRationale = false, contactsRationale = false, notifsRationale = false)
+
+        val fresh = vm.uiState.awaitReady()
+        assertEquals(PermissionStatus.Denied, fresh.contactsPermissionState, "never asked: the row offers Allow")
+        assertEquals(CallLogPermissionState.Denied, fresh.callLogPermissionState)
+        assertEquals(PermissionStatus.Denied, fresh.notificationsPermissionState)
+
+        // The launcher fired once for Contacts; the OS still reports no rationale.
+        vm.onLauncherFired(android.Manifest.permission.READ_CONTACTS)
+
+        val asked = vm.uiState.awaitReady { it.contactsPermissionState == PermissionStatus.PermanentlyDenied }
+        assertEquals(CallLogPermissionState.Denied, asked.callLogPermissionState, "the call log was never asked")
+        assertEquals(PermissionStatus.Denied, asked.notificationsPermissionState, "notifications were never asked")
+    }
+
+    @Test
+    fun `a refusal that still allows a rationale reads Denied whether or not it was asked`() = runBlocking {
+        val vm = buildVm()
+        vm.onLauncherFired(android.Manifest.permission.READ_CALL_LOG)
+        awaitValue(true) { prefs.hasAskedCallLog.first() }
+
+        vm.refreshAllPermissionStates(callLogRationale = true, contactsRationale = true, notifsRationale = true)
+
+        val ready = vm.uiState.awaitReady { it.callLogPermissionState == CallLogPermissionState.Denied }
+        assertEquals(PermissionStatus.Denied, ready.contactsPermissionState)
+    }
+
+    // ============================================================================
+    // SET-14: Notifications are Granted only when Android will show them.
+    // ============================================================================
+
+    @Test
+    @Config(sdk = [31])
+    fun `on 31 with the app's notifications switched off, the row reads PermanentlyDenied`() = runTest {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        Shadows.shadowOf(nm).setNotificationsEnabled(false)
+        try {
+            val vm = buildVm()
+            val ready = vm.uiState.awaitReady()
+            // No runtime permission below 33, so there is nothing to ask for:
+            // the only way back on is the phone's settings.
+            assertEquals(PermissionStatus.PermanentlyDenied, ready.notificationsPermissionState)
+        } finally {
+            Shadows.shadowOf(nm).setNotificationsEnabled(true)
+        }
+    }
+
+    @Test
+    @Config(sdk = [31])
+    fun `on 31 with notifications enabled, the row reads Granted`() = runTest {
+        val vm = buildVm()
+        assertEquals(PermissionStatus.Granted, vm.uiState.awaitReady().notificationsPermissionState)
+    }
+
+    @Test
+    fun `on 33 the permission held but notifications switched off reads PermanentlyDenied even if never asked`() = runTest {
+        grant(android.Manifest.permission.POST_NOTIFICATIONS)
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        Shadows.shadowOf(nm).setNotificationsEnabled(false)
+        try {
+            val vm = buildVm()
+            val ready = vm.uiState.awaitReady()
+            assertEquals(PermissionStatus.PermanentlyDenied, ready.notificationsPermissionState)
+        } finally {
+            Shadows.shadowOf(nm).setNotificationsEnabled(true)
+        }
+    }
+
+    @Test
+    fun `on 33 the permission held and notifications enabled reads Granted`() = runTest {
+        grant(android.Manifest.permission.POST_NOTIFICATIONS)
+        val vm = buildVm()
+        assertEquals(PermissionStatus.Granted, vm.uiState.awaitReady().notificationsPermissionState)
+    }
+
+    // ============================================================================
+    // Call-log Settings UI tests (CALL-01/02/04/06).
+    // ============================================================================
+
+    // onPermissionResult(Granted) starts the observer and enqueues a full
+    // resync, on the caller's thread, before it returns.
+    @Test
+    fun `onPermissionResult Granted starts the observer and enqueues a full resync`() = runBlocking {
+        val controller = CountingController(context)
+        val vm = buildVm(controller = controller)
 
         vm.onPermissionResult(CallLogPermissionState.Granted)
 
-        // Wait for the WorkManager flow to surface at least one WorkInfo.
-        kotlinx.coroutines.withTimeout(30_000L) {
-            wm.getWorkInfosForUniqueWorkFlow(ContentObserverController.UNIQUE_NAME_SYNC)
-                .filter { it.isNotEmpty() }
-                .first()
-        }
-
-        // Wait for the prefs flow to settle on `true`.
-        kotlinx.coroutines.withTimeout(30_000L) {
-            prefs.isCallLogSyncEnabled.filter { it }.first()
-        }
-
-        // Sanity: idle the main looper so any straggler work transitions
-        // settle before we read the synchronous WorkInfo list.
-        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
-
-        val works = wm
-            .getWorkInfosForUniqueWork(ContentObserverController.UNIQUE_NAME_SYNC)
-            .get()
-        assertTrue(works.isNotEmpty(), "expected at least one WorkInfo for unique work")
+        assertEquals(1, controller.startCount, "start() must run on grant (Pitfall 5)")
+        assertEquals(true, controller.syncRequests.tryReceive().getOrNull(), "the grant imports the window: fullResync = true")
     }
 
-    // Test 7 — onImportDaysChanged writes through to AppPrefs and the value
-    // is observable via the prefs flow. See Test 6 for the runBlocking
-    // rationale (DataStore + virtual time don't mix).
+    // onImportDaysChanged writes through to AppPrefs and the value is
+    // observable via the prefs flow. runBlocking (real time): DataStore writes
+    // hop to a real IO dispatcher that does not cooperate with runTest's
+    // virtual scheduler.
     @Test
     fun `onImportDaysChanged writes through to prefs`() = runBlocking {
-        val prefs = buildAppPrefs()
-        val vm = buildVm(prefs)
+        val vm = buildVm()
 
         vm.onImportDaysChanged(30)
-        delay(100)
-        assertEquals(30, prefs.callLogImportDays.first())
+        awaitValue(30) { prefs.callLogImportDays.first() }
 
         vm.onImportDaysChanged(365)
-        delay(100)
+        awaitValue(365) { prefs.callLogImportDays.first() }
         assertEquals(365, prefs.callLogImportDays.first())
     }
 
-    // Test 8 — onManualResync no-ops when permission state is not Granted,
-    // then enqueues work after onPermissionResult(Granted) flips it. See
-    // Test 6 for the runBlocking + flow-wait rationale.
+    // SET-04: widening the window with the call log readable runs a full
+    // resync (the incremental worker would never reach back); narrowing does
+    // not. The request is observed on the controller's channel, which is fed
+    // AFTER the write, so the assertion cannot run ahead of the side effect.
+    @Test
+    fun `widening the import window with the call log readable runs a full resync, narrowing does not`() = runBlocking {
+        grant(android.Manifest.permission.READ_CALL_LOG)
+        val controller = CountingController(context)
+        val vm = buildVm(controller = controller)
+        assertTrue(vm.permissionState.value is CallLogPermissionState.Granted)
+
+        // 90 → 30: narrowing. The write lands, nothing is enqueued.
+        vm.onImportDaysChanged(30)
+        awaitValue(30) { prefs.callLogImportDays.first() }
+
+        // 30 → 365: widening.
+        vm.onImportDaysChanged(365)
+        val request = withTimeout(30_000L) { controller.syncRequests.receive() }
+        assertEquals(true, request, "widening must run a FULL resync")
+        assertTrue(controller.syncRequests.tryReceive().isFailure, "narrowing must not have enqueued anything")
+    }
+
+    // rules.md Code 3: a failed DataStore write tells the user and schedules
+    // nothing. The resync sits inside the guarded block, after the write, so a
+    // window that was not saved is never imported; the saved value is unchanged.
+    @Test
+    fun `a failed import-window write tells the user and runs no resync`() = runBlocking {
+        grant(android.Manifest.permission.READ_CALL_LOG)
+        val failingPrefs = AppPrefs(tmp.newFailingStore(storeScope))
+        val controller = CountingController(context)
+        val vm = buildVm(prefs = failingPrefs, controller = controller)
+        vm.uiState.awaitReady()
+        val snackbar = async { withTimeout(30_000L) { vm.snackbarEvents.first() } }
+        delay(50)
+
+        vm.onImportDaysChanged(365)
+
+        assertEquals(UiText.res(R.string.components_snackbar_save_failed), snackbar.await())
+        delay(100)
+        assertTrue(controller.syncRequests.tryReceive().isFailure, "no resync, nothing was saved")
+        assertEquals(90, failingPrefs.callLogImportDays.first(), "the saved window is unchanged")
+    }
+
+    @Test
+    fun `widening the import window without the call log does not resync`() = runBlocking {
+        val controller = CountingController(context)
+        val vm = buildVm(controller = controller)
+
+        vm.onImportDaysChanged(365)
+        awaitValue(365) { prefs.callLogImportDays.first() }
+        // Give any (wrong) enqueue a moment to land on the channel.
+        delay(100)
+
+        assertTrue(controller.syncRequests.tryReceive().isFailure, "no permission, no sync")
+    }
+
+    // onManualResync no-ops when permission state is not Granted, then
+    // enqueues work after onPermissionResult(Granted) flips it. Uses the real
+    // controller so the WorkManager record itself is asserted.
     @Test
     fun `onManualResync requires granted permission`() = runBlocking {
-        val prefs = buildAppPrefs()
         val controller = buildController()
-        val vm = buildVm(prefs, controller)
+        val vm = buildVm(controller = controller)
         val wm = WorkManager.getInstance(context)
 
-        // Default permission state is not-Granted — resync should no-op.
+        // Default permission state is not-Granted, so resync should no-op.
         vm.onManualResync()
-        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        idleMain()
         val worksBefore = wm
             .getWorkInfosForUniqueWork(ContentObserverController.UNIQUE_NAME_SYNC)
             .get()
@@ -344,15 +574,15 @@ class SettingsViewModelTest {
 
         // Flip to Granted via the VM path (this also enqueues full-resync).
         vm.onPermissionResult(CallLogPermissionState.Granted)
-        kotlinx.coroutines.withTimeout(30_000L) {
+        withTimeout(30_000L) {
             wm.getWorkInfosForUniqueWorkFlow(ContentObserverController.UNIQUE_NAME_SYNC)
                 .filter { it.isNotEmpty() }
                 .first()
         }
 
-        // Trigger another resync — REPLACE policy keeps a single unique work.
+        // Trigger another resync: REPLACE policy keeps a single unique work.
         vm.onManualResync()
-        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        idleMain()
         val worksAfter = wm
             .getWorkInfosForUniqueWork(ContentObserverController.UNIQUE_NAME_SYNC)
             .get()
@@ -373,20 +603,20 @@ class SettingsViewModelTest {
         }
     }
 
-    // Test 8b — onManualContactsResync no-ops without READ_CONTACTS, and
-    // enqueues forced contacts-ingest work once the permission is held. The
-    // VM reads contacts-permission state from the OS at construction, so the
-    // grant is applied before buildVm. See Test 6 for the runBlocking rationale.
+    // onManualContactsResync no-ops without READ_CONTACTS, and enqueues forced
+    // contacts-ingest work once the permission is held. The VM reads
+    // contacts-permission state from the OS at construction, so the grant is
+    // applied before buildVm.
     @Test
     fun `onManualContactsResync requires granted contacts permission`() = runBlocking {
         val wm = WorkManager.getInstance(context)
 
-        // Default (denied) — VM built without the grant should no-op.
+        // Default (denied): a VM built without the grant should no-op.
         val deniedVm = buildVm()
         deniedVm.onManualContactsResync()
-        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        idleMain()
         val before = wm
-            .getWorkInfosForUniqueWork(app.orbit.calllog.ContactsIngestWorker.UNIQUE_NAME)
+            .getWorkInfosForUniqueWork(ContactsIngestWorker.UNIQUE_NAME)
             .get()
         assertTrue(
             before.isEmpty(),
@@ -394,127 +624,183 @@ class SettingsViewModelTest {
         )
 
         // Grant READ_CONTACTS, then a freshly-built VM resolves Granted and enqueues.
-        org.robolectric.Shadows.shadowOf(context as android.app.Application)
-            .grantPermissions(android.Manifest.permission.READ_CONTACTS)
+        grant(android.Manifest.permission.READ_CONTACTS)
         val grantedVm = buildVm()
         grantedVm.onManualContactsResync()
-        kotlinx.coroutines.withTimeout(30_000L) {
-            wm.getWorkInfosForUniqueWorkFlow(app.orbit.calllog.ContactsIngestWorker.UNIQUE_NAME)
+        withTimeout(30_000L) {
+            wm.getWorkInfosForUniqueWorkFlow(ContactsIngestWorker.UNIQUE_NAME)
                 .filter { it.isNotEmpty() }
                 .first()
         }
         val after = wm
-            .getWorkInfosForUniqueWork(app.orbit.calllog.ContactsIngestWorker.UNIQUE_NAME)
+            .getWorkInfosForUniqueWork(ContactsIngestWorker.UNIQUE_NAME)
             .get()
         assertTrue(after.isNotEmpty(), "expected contacts ingest to enqueue when Granted")
     }
 
     // ============================================================================
-    // Permission revocation cleanup. The grant path was already covered
-    // by Test 6; these tests lock in the inverse contract: any Denied or
-    // PermanentlyDenied result clears the persisted `isCallLogSyncEnabled` flag
-    // AND stops the observer. Plus the OS-mediated revocation (user toggling via
-    // system Settings while backgrounded) detected by `refreshPermissionState`.
+    // Permission transitions noticed on refresh (SET-07). A flip made in the
+    // phone's settings while Orbit was backgrounded behaves like one made from
+    // the row: a revocation stops the observer, a grant starts it and imports.
     // ============================================================================
 
     @Test
-    fun `onPermissionResult Denied clears pref and stops observer`() = runBlocking {
-        val prefs = buildAppPrefs()
+    fun `onPermissionResult Denied stops the observer`() {
         val controller = CountingController(context)
-        val vm = buildVm(prefs, controller)
-
-        // Seed the "previously enabled" state so we can observe the flip-to-false.
-        prefs.setCallLogSyncEnabled(true)
+        val vm = buildVm(controller = controller)
 
         vm.onPermissionResult(CallLogPermissionState.Denied)
 
-        kotlinx.coroutines.withTimeout(30_000L) {
-            prefs.isCallLogSyncEnabled.filter { !it }.first()
-        }
-        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
-
-        assertEquals(false, prefs.isCallLogSyncEnabled.first())
-        assertTrue(controller.stopCount >= 1, "stop() must be called on Denied result")
+        assertEquals(1, controller.stopCount, "stop() must be called on Denied result")
     }
 
     @Test
-    fun `onPermissionResult PermanentlyDenied clears pref and stops observer`() = runBlocking {
-        val prefs = buildAppPrefs()
+    fun `onPermissionResult PermanentlyDenied stops the observer`() {
         val controller = CountingController(context)
-        val vm = buildVm(prefs, controller)
-        // Seed the "previously enabled" state and wait for the DataStore
-        // commit to land before triggering the VM. Without this await the
-        // VM's clear-pref write can race the seed under suite contention —
-        // if the clear lands first the seed eventually emits `true` and the
-        // `.filter { !it }.first()` below times out (a documented flake from
-        // an earlier seeding pattern).
-        prefs.setCallLogSyncEnabled(true)
-        kotlinx.coroutines.withTimeout(30_000L) {
-            prefs.isCallLogSyncEnabled.filter { it }.first()
-        }
+        val vm = buildVm(controller = controller)
 
         vm.onPermissionResult(CallLogPermissionState.PermanentlyDenied)
 
-        kotlinx.coroutines.withTimeout(30_000L) {
-            prefs.isCallLogSyncEnabled.filter { !it }.first()
-        }
-        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
-
-        assertEquals(false, prefs.isCallLogSyncEnabled.first())
-        assertTrue(controller.stopCount >= 1, "stop() must be called on PermanentlyDenied result")
+        assertEquals(1, controller.stopCount, "stop() must be called on PermanentlyDenied result")
     }
 
     @Test
-    fun `refreshPermissionState Granted to Denied clears pref and stops observer`() = runBlocking {
-        val prefs = buildAppPrefs()
+    fun `refreshPermissionState Granted to Denied stops the observer`() {
         val controller = CountingController(context)
-        val vm = buildVm(prefs, controller)
+        val vm = buildVm(controller = controller)
 
-        // Drive prior state to Granted via the public path; this also seeds prefs=true.
+        // Drive prior state to Granted via the public path.
         vm.onPermissionResult(CallLogPermissionState.Granted)
-        kotlinx.coroutines.withTimeout(30_000L) {
-            prefs.isCallLogSyncEnabled.filter { it }.first()
-        }
         val stopBefore = controller.stopCount
 
         // Robolectric default: READ_CALL_LOG is not granted. With
-        // rationalePending=true the VM resolves Denied — i.e. a Granted→Denied
+        // rationalePending=true the VM resolves Denied, that is a Granted→Denied
         // transition that must trigger cleanup.
         vm.refreshPermissionState(rationalePending = true)
 
-        kotlinx.coroutines.withTimeout(30_000L) {
-            prefs.isCallLogSyncEnabled.filter { !it }.first()
-        }
-        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertEquals(stopBefore + 1, controller.stopCount, "stop() must be called on Granted→Denied transition")
+    }
 
-        assertEquals(false, prefs.isCallLogSyncEnabled.first())
-        assertTrue(
-            controller.stopCount > stopBefore,
-            "stop() must be called on Granted→Denied transition",
-        )
+    @Test
+    fun `a call-log grant noticed on refresh starts the observer and runs a full resync`() {
+        val controller = CountingController(context)
+        val vm = buildVm(controller = controller)
+        vm.refreshAllPermissionStates(callLogRationale = false, contactsRationale = false, notifsRationale = false)
+        assertEquals(0, controller.startCount)
+
+        // The user allowed the call log in the phone's settings and came back.
+        grant(android.Manifest.permission.READ_CALL_LOG)
+        vm.refreshAllPermissionStates(callLogRationale = false, contactsRationale = false, notifsRationale = false)
+
+        assertEquals(1, controller.startCount, "a grant noticed on resume registers the observer")
+        assertEquals(true, controller.syncRequests.tryReceive().getOrNull(), "and imports the window")
+
+        // Already Granted: a second refresh is not a second import.
+        vm.refreshAllPermissionStates(callLogRationale = false, contactsRationale = false, notifsRationale = false)
+        assertEquals(1, controller.startCount)
+        assertTrue(controller.syncRequests.tryReceive().isFailure)
+    }
+
+    @Test
+    fun `a contacts grant noticed on refresh starts the observer and runs one ingest`() = runBlocking {
+        val controller = CountingController(context)
+        val vm = buildVm(controller = controller)
+        val wm = WorkManager.getInstance(context)
+        vm.refreshAllPermissionStates(callLogRationale = false, contactsRationale = false, notifsRationale = false)
+        assertEquals(0, controller.startCount)
+        assertTrue(wm.getWorkInfosForUniqueWork(ContactsIngestWorker.UNIQUE_NAME).get().isEmpty())
+
+        // The user allowed Contacts (from the row's launcher, or in the phone's
+        // settings) and the screen refreshed.
+        grant(android.Manifest.permission.READ_CONTACTS)
+        vm.refreshAllPermissionStates(callLogRationale = false, contactsRationale = false, notifsRationale = false)
+
+        assertEquals(1, controller.startCount, "a Contacts grant registers the contacts observer")
+        withTimeout(30_000L) {
+            wm.getWorkInfosForUniqueWorkFlow(ContactsIngestWorker.UNIQUE_NAME).filter { it.isNotEmpty() }.first()
+        }
+
+        // Already Granted: a second refresh does not re-register.
+        vm.refreshAllPermissionStates(callLogRationale = false, contactsRationale = false, notifsRationale = false)
+        assertEquals(1, controller.startCount)
     }
 
     // ============================================================================
-    // Reset completion event. After ResetService.resetAll()
-    // returns, the VM emits on resetCompleteEvents so the screen can restart
-    // the task into onboarding (the user must not be stranded in a ghost app).
+    // Reset (SET-06). The reset runs on the app scope, so it finishes even when
+    // the ViewModel that started it is cleared mid-way. Its outcome is sticky
+    // state on ResetService, read by MainActivity after the fact (the Settings
+    // screen may be gone); this ViewModel only marks it as in flight. A failure
+    // is the service's to report, never this ViewModel's snackbar, which has no
+    // collector once Settings is popped.
     // ============================================================================
 
     @Test
-    fun `onResetConfirmed runs reset and emits completion event`() = runBlocking {
+    fun `onResetConfirmed runs the reset once and its outcome can be read after the fact`() =
+        runBlocking {
         val resetService = buildResetService()
         val vm = buildVm(resetService = resetService)
 
-        // Subscribe BEFORE triggering — resetCompleteEvents has no replay.
-        val received = async {
-            kotlinx.coroutines.withTimeout(30_000L) { vm.resetCompleteEvents.first() }
+        vm.onResetConfirmed()
+
+        // Nobody was collecting when the reset finished; the outcome is still there.
+        awaitValue(ResetOutcome.Completed) { resetService.outcome.value }
+        assertEquals(1, resetService.resetCount, "resetAll must run exactly once")
+        assertEquals(ResetOutcome.Completed, resetService.outcome.first(), "seen late")
+    }
+
+    @Test
+    fun `the reset reads as in flight from the confirmation until it returns`() = runBlocking {
+        val resetService = buildResetService().apply { gate = CompletableDeferred() }
+        val vm = buildVm(resetService = resetService)
+        assertEquals(false, vm.uiState.awaitReady().isResetting)
+
+        vm.onResetConfirmed()
+        assertTrue(vm.uiState.awaitReady { it.isResetting }.isResetting, "rows wait, Back is held")
+        assertEquals(0, resetService.resetCount, "still held at the gate")
+
+        resetService.gate!!.complete(Unit)
+
+        assertEquals(false, vm.uiState.awaitReady { !it.isResetting }.isResetting)
+        awaitValue(ResetOutcome.Completed) { resetService.outcome.value }
+    }
+
+    @Test
+    fun `a reset outlives the ViewModel that started it`() = runBlocking {
+        val resetService = buildResetService().apply { gate = CompletableDeferred() }
+        val vm = buildVm(resetService = resetService)
+
+        vm.onResetConfirmed()
+        // The user leaves Settings while the tables are being cleared:
+        // ViewModelStore.clear() cancels viewModelScope.
+        ViewModelStore().apply {
+            put("settings", vm)
+            clear()
         }
-        // Let the collector attach before the emit races it.
+        delay(50)
+        assertEquals(0, resetService.resetCount, "the reset is still held at the gate")
+
+        resetService.gate!!.complete(Unit)
+
+        awaitValue(ResetOutcome.Completed) { resetService.outcome.value }
+        assertEquals(1, resetService.resetCount, "the reset must finish after the ViewModel is gone")
+    }
+
+    @Test
+    fun `a failing reset yields Failed on the service and nothing on this ViewModel's snackbar`() =
+        runBlocking {
+        val resetService = buildResetService().apply { failWith = IllegalStateException("db locked") }
+        val vm = buildVm(resetService = resetService)
+        val seen = mutableListOf<UiText>()
+        val collector = launch { vm.snackbarEvents.collect { seen += it } }
         delay(50)
 
         vm.onResetConfirmed()
 
-        received.await()
-        assertEquals(1, resetService.resetCount, "resetAll must run exactly once")
+        awaitValue(ResetOutcome.Failed) { resetService.outcome.value }
+        assertEquals(false, vm.uiState.awaitReady { !it.isResetting }.isResetting, "not in flight")
+        delay(100)
+        assertTrue(seen.isEmpty(), "the failure is MainActivity's to show, wherever the user is")
+        assertEquals(0, resetService.resetCount)
+        collector.cancel()
     }
 }

@@ -1,26 +1,54 @@
 package app.orbit.notify
 
 import android.app.Application
+import android.app.Notification
 import android.app.NotificationManager
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.ListenableWorker
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.workDataOf
+import app.orbit.data.AppPrefs
+import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.repository.ListRepository
+import app.orbit.domain.FakeCallEventRepository
+import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
+import app.orbit.domain.FakeRuleTemplateRepository
+import app.orbit.domain.JsonProvider
+import app.orbit.domain.clock.TestClock
+import app.orbit.domain.contactFixture
+import app.orbit.domain.membershipFixture
+import app.orbit.domain.ruleTemplateFixture
+import app.orbit.domain.usecase.SurfaceNextUseCase
+import app.orbit.testutil.newPrefs
+import java.time.Instant
 import java.time.LocalTime
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * [ListPromptWorker] fire-time gate assertions — NOTIF-01, NOTIF-03, NOTIF-06.
@@ -38,20 +66,51 @@ import kotlin.test.assertEquals
  *   LocalTime for the midnight-spanning active-hours gate tests.
  * - Robolectric grants POST_NOTIFICATIONS via [grantNotificationPermission] for
  *   the all-gates-pass branch; revoked by default for the NOTIF-01 gate test.
+ * - The nudge's person comes from a real [SurfaceNextUseCase] over the same
+ *   fakes, so "the person the nudge names" is "the person Card view shows
+ *   first" by construction, and [AppPrefs] is a real DataStore (NOTIF-15),
+ *   one per test method on a scope the test cancels (testutil/TestDataStore.kt).
+ *
+ * NOTIF-13 / NOTIF-14 / NOTIF-15 are pinned at the bottom of the class.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = Application::class)
 class ListPromptWorkerTest {
 
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    private val storeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
     private lateinit var context: Application
     private lateinit var fakeLists: FakeListRepository
+    private lateinit var fakeContacts: FakeContactRepository
+    private lateinit var surfaceNext: SurfaceNextUseCase
+    private lateinit var appPrefs: AppPrefs
     private lateinit var recordingScheduler: RecordingNudgeScheduler
+
+    private val t0: Instant = Instant.parse("2026-01-01T12:00:00Z")
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext<Application>()
         fakeLists = FakeListRepository()
+        fakeContacts = FakeContactRepository()
+        surfaceNext = SurfaceNextUseCase(
+            contactRepo = fakeContacts,
+            listRepo = fakeLists,
+            callEventRepo = FakeCallEventRepository(),
+            ruleTemplateRepo = FakeRuleTemplateRepository(listOf(ruleTemplateFixture(id = 1L))),
+            clock = TestClock(t0),
+            json = JsonProvider.json,
+        )
+        appPrefs = tmp.newPrefs(storeScope)
         recordingScheduler = RecordingNudgeScheduler(context, fakeLists)
+    }
+
+    @After
+    fun tearDown() {
+        storeScope.cancel()
     }
 
     // ─── Helper: build a worker at a fixed LocalTime ──────────────────────────
@@ -71,6 +130,7 @@ class ListPromptWorkerTest {
                 ): ListenableWorker {
                     return ControlledWorker(
                         appContext, workerParameters, recordingScheduler, fakeLists,
+                        surfaceNext, appPrefs,
                         fixedNow = fixedNow,
                         stubbedDndBlocking = dndBlocking,
                     )
@@ -188,7 +248,7 @@ class ListPromptWorkerTest {
             "notification title must be list name",
         )
         assertEquals(
-            NotificationCopy.nudgeBody(listName, 3),
+            NotificationCopy.nudgeBody(listName, 3).asString(context),
             postedNotif.notification.extras.getString("android.text"),
             "notification body must follow D-18 format",
         )
@@ -280,6 +340,35 @@ class ListPromptWorkerTest {
         )
     }
 
+    // ─── Gate 0: archived list (NOTIF-11) ─────────────────────────────────────
+
+    /**
+     * Archiving cancels the chain, but a slot already running (or one enqueued
+     * before the archiving surface learned to cancel) still fires, and
+     * `getById` returns archived rows. The worker must neither post for a
+     * list the user put away nor keep the chain alive: unarchiving schedules a
+     * fresh one.
+     */
+    @Test
+    fun worker_skipsAndEndsChain_whenListArchived() = runBlocking {
+        val listId = 8L
+        fakeLists.seedList(
+            ListEntity(
+                id = listId, name = "Put away", sortOrder = 0,
+                isArchived = true,
+                notificationsEnabled = true,
+                nudgeScheduleJson = NudgeSchedule.DEFAULT_JSON,
+            )
+        )
+        fakeLists.stubbedDueCount = 2
+
+        val result = buildWorker(listId).doWork()
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertEquals(0, activeNotificationCount(), "no notification for an archived list")
+        assertEquals(0, recordingScheduler.scheduleFromEntityCalls.size, "an archived list's chain ends instead of re-enqueueing")
+    }
+
     // ─── Gate: list not found (deleted between schedule and fire) ─────────────
 
     @Test
@@ -294,6 +383,174 @@ class ListPromptWorkerTest {
         assertEquals(0, activeNotificationCount(), "no notification when list is gone")
         // re-enqueue does NOT fire (list gone = no schedule to re-enqueue)
         assertEquals(0, recordingScheduler.scheduleFromEntityCalls.size)
+    }
+
+    // ─── NOTIF-13: lock-screen version ─────────────────────────────────────────
+
+    /**
+     * Every nudge is private with a public version, and the public version is
+     * built from constants: no list name, no person, no face, no actions.
+     * Checked on the name-free nudge here and on the named one below.
+     */
+    @Test
+    fun everyNudge_isPrivate_withANameFreePublicVersion() = runBlocking {
+        val listId = 10L
+        fakeLists.seedList(
+            ListEntity(
+                id = listId, name = "Recovery support", sortOrder = 0,
+                notificationsEnabled = true,
+                nudgeScheduleJson = NudgeSchedule.DEFAULT_JSON,
+            )
+        )
+        fakeLists.stubbedDueCount = 1
+
+        buildWorker(listId).doWork()
+
+        val posted = postedNotification()
+        assertEquals(Notification.VISIBILITY_PRIVATE, posted.visibility)
+        assertEquals(Notification.CATEGORY_REMINDER, posted.category)
+        assertLockScreenSafe(posted, forbidden = listOf("Recovery support"))
+    }
+
+    // ─── NOTIF-14: the nudge names the list's next person ──────────────────────
+
+    @Test
+    fun nudge_namesTheListsNextPerson_withFaceAndCallAction() = runBlocking {
+        registerDialer()
+        val listId = 11L
+        seedListWithMembers(listId, "Family", contactFixture(id = 7L, displayName = "Kai Nakamura"))
+
+        buildWorker(listId).doWork()
+
+        val posted = postedNotification()
+        assertEquals("Family", posted.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
+        assertEquals(NotificationCopy.nudgeNamedBody("Kai").asString(context), bodyOf(posted))
+        assertNotNull(posted.getLargeIcon(), "the nudge carries the person's face")
+        val action = posted.actions?.singleOrNull()
+        assertNotNull(action, "exactly one action: Call")
+        assertEquals("Call Kai", action.title.toString())
+        assertLockScreenSafe(posted, forbidden = listOf("Family", "Kai", "Nakamura"))
+        assertEquals(7L, appPrefs.nudgeLastNamedContactId(listId), "who was named is remembered (NOTIF-15)")
+    }
+
+    @Test
+    fun nudge_offersNoCallAction_whenThereIsNoDialer() = runBlocking {
+        val listId = 12L
+        seedListWithMembers(listId, "Family", contactFixture(id = 7L, displayName = "Kai Nakamura"))
+
+        buildWorker(listId).doWork()
+
+        val posted = postedNotification()
+        assertEquals(NotificationCopy.nudgeNamedBody("Kai").asString(context), bodyOf(posted))
+        assertTrue(posted.actions.isNullOrEmpty(), "no button that does nothing on a dialer-less device")
+    }
+
+    // ─── NOTIF-15: a name is said once ────────────────────────────────────────
+
+    @Test
+    fun nextNudge_goesOutWithoutAName_whenTheSamePersonIsStillNext() = runBlocking {
+        registerDialer()
+        val listId = 13L
+        seedListWithMembers(listId, "Family", contactFixture(id = 7L, displayName = "Kai Nakamura"))
+
+        buildWorker(listId).doWork()
+        buildWorker(listId).doWork()
+
+        val posted = postedNotification()
+        assertEquals(NotificationCopy.nudgeBody("Family", 1).asString(context), bodyOf(posted))
+        assertNull(posted.getLargeIcon(), "no face when the name is held back")
+        assertTrue(posted.actions.isNullOrEmpty(), "no Call action when the name is held back")
+        assertLockScreenSafe(posted, forbidden = listOf("Family", "Kai"))
+        assertEquals(7L, appPrefs.nudgeLastNamedContactId(listId), "the record still names the last person named")
+    }
+
+    @Test
+    fun nextNudge_namesSomeoneNew_onceTheDeckHasMovedOn() = runBlocking {
+        registerDialer()
+        val listId = 14L
+        val kai = contactFixture(id = 7L, displayName = "Kai Nakamura")
+        val priya = contactFixture(id = 8L, displayName = "Priya Shah")
+        seedListWithMembers(listId, "Family", kai, priya)
+
+        buildWorker(listId).doWork()
+        // Kai was called: the deck now leads with Priya.
+        fakeLists.updateMemberships { rows ->
+            rows.map {
+                if (it.contactId == kai.id) it.copy(nextDueAt = t0.plusSeconds(86_400L * 14)) else it
+            }
+        }
+        buildWorker(listId).doWork()
+
+        val posted = postedNotification()
+        assertEquals(NotificationCopy.nudgeNamedBody("Priya").asString(context), bodyOf(posted))
+        assertEquals("Call Priya", posted.actions?.single()?.title.toString())
+        assertEquals(8L, appPrefs.nudgeLastNamedContactId(listId))
+    }
+
+    // ─── Helpers for the nudge-content tests ──────────────────────────────────
+
+    private fun seedListWithMembers(listId: Long, name: String, vararg members: ContactEntity) {
+        fakeLists.seedList(
+            ListEntity(
+                id = listId, name = name, sortOrder = 0,
+                notificationsEnabled = true,
+                ruleTemplateId = 1L,
+                nudgeScheduleJson = NudgeSchedule.DEFAULT_JSON,
+            )
+        )
+        // Due in member order: the first is the deck's head.
+        fakeLists.seedMemberships(
+            members.mapIndexed { i, contact ->
+                membershipFixture(
+                    contactId = contact.id,
+                    listId = listId,
+                    nextDueAt = t0.minusSeconds(3_600L * (members.size - i)),
+                )
+            }
+        )
+        fakeContacts.seed(members.toList())
+        fakeLists.stubbedDueCount = members.size
+    }
+
+    private fun bodyOf(posted: Notification): String =
+        posted.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+
+    private fun postedNotification(): Notification {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val active = Shadows.shadowOf(nm).getActiveNotifications()
+        assertEquals(1, active.size, "one nudge per list")
+        return active.single().notification
+    }
+
+    /**
+     * NOTIF-13: the lock-screen version exists, carries the fixed copy, and
+     * nothing that names a person or a list, shows a face, or acts.
+     */
+    private fun assertLockScreenSafe(posted: Notification, forbidden: List<String>) {
+        val public = assertNotNull(posted.publicVersion, "a public version for the lock screen")
+        val title = public.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        val text = public.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
+        assertEquals(NotificationCopy.PUBLIC_TITLE.asString(context), title)
+        assertEquals(NotificationCopy.PUBLIC_BODY.asString(context), text)
+        forbidden.forEach { word ->
+            assertFalse(title.contains(word) || text.contains(word), "lock screen must not show '$word'")
+        }
+        assertNull(public.getLargeIcon(), "no face on the lock screen")
+        assertTrue(public.actions.isNullOrEmpty(), "no actions on the lock screen")
+    }
+
+    /** Robolectric has no dialer; register one so ACTION_DIAL resolves. */
+    private fun registerDialer() {
+        val pm = Shadows.shadowOf(context.packageManager)
+        val dialer = ComponentName("com.example.dialer", "com.example.dialer.DialActivity")
+        pm.addActivityIfNotPresent(dialer)
+        pm.addIntentFilterForActivity(
+            dialer,
+            IntentFilter(Intent.ACTION_DIAL).apply {
+                addCategory(Intent.CATEGORY_DEFAULT)
+                addDataScheme("tel")
+            },
+        )
     }
 }
 
@@ -326,9 +583,11 @@ private class ControlledWorker(
     params: WorkerParameters,
     nudgeScheduler: NudgeScheduler,
     listRepo: ListRepository,
+    surfaceNext: SurfaceNextUseCase,
+    appPrefs: AppPrefs,
     private val fixedNow: LocalTime?,
     private val stubbedDndBlocking: Boolean = false,
-) : ListPromptWorker(appContext, params, nudgeScheduler, listRepo) {
+) : ListPromptWorker(appContext, params, nudgeScheduler, listRepo, surfaceNext, appPrefs) {
     override fun currentLocalTime(): LocalTime = fixedNow ?: LocalTime.now()
     override fun dndBlocking(): Boolean = stubbedDndBlocking
 }

@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.lists
 
+import android.content.res.Configuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,14 +14,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.data.entity.ListType
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 
 /**
  * Archived row composable for the collapsible "Archived (N)" section in Lists
@@ -28,8 +34,14 @@ import app.orbit.ui.theme.OrbitTheme
  * order is fixed (sortOrder DESC = most-recently-archived first).
  *
  * Layout: name (fg) + ruleSummary? (fgMuted) on the left, "Restore" ghost
- * button + "List settings" icon button on the right. 48dp tap targets enforced
- * via OrbitTheme.spacing.tapMin.
+ * button, a delete control and a "List settings for {list}" control on the
+ * right. 48dp tap targets enforced via OrbitTheme.spacing.tapMin.
+ *
+ * [onConfigure] opens List settings for the archived list (the screen wires
+ * it to its `onOpenListSettings`, not to the row-tap `onOpenList` that opens
+ * a deck); an archived list has no deck to open, only settings to review
+ * before restoring it. [onRestore] flips it back; the ViewModel confirms with
+ * "List restored." once the write is in.
  */
 @Composable
 fun ArchivedListRow(
@@ -39,6 +51,12 @@ fun ArchivedListRow(
     onDelete: () -> Unit,
     onConfigure: () -> Unit,
 ) {
+    // PRIV-03: the list's name, text and TalkBack labels alike, reads "List"
+    // under the privacy curtain (it showed through on Lists until 2026-10-05).
+    val shownName = if (LocalPrivacyCurtain.current) stringResource(R.string.components_curtain_list) else tile.name
+    // Resolved here: the semantics blocks below are not composable.
+    val deleteDescription = stringResource(R.string.lists_archived_delete, shownName)
+    val settingsDescription = stringResource(R.string.lists_archived_settings, shownName)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
@@ -47,12 +65,12 @@ fun ArchivedListRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = tile.name,
+                text = shownName,
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             )
             if (tile.ruleSummary != null) {
                 Text(
-                    text = tile.ruleSummary,
+                    text = tile.ruleSummary.asString(),
                     style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgSubtle),
                     modifier = Modifier.padding(top = OrbitTheme.spacing.x1 / 2),
                 )
@@ -60,7 +78,7 @@ fun ArchivedListRow(
         }
         Spacer(Modifier.width(OrbitTheme.spacing.x2))
         OrbitButton(
-            text = "Restore",
+            text = stringResource(R.string.lists_archived_restore),
             onClick = onRestore,
             variant = OrbitButtonVariant.Ghost,
         )
@@ -73,7 +91,7 @@ fun ArchivedListRow(
             modifier = Modifier
                 .defaultMinSize(minWidth = OrbitTheme.spacing.tapMin, minHeight = OrbitTheme.spacing.tapMin)
                 .clickable(onClick = onDelete)
-                .semantics { contentDescription = "Delete ${tile.name}" },
+                .semantics { contentDescription = deleteDescription },
         ) {
             PhIcon(
                 name = "trash",
@@ -87,7 +105,7 @@ fun ArchivedListRow(
             modifier = Modifier
                 .defaultMinSize(minWidth = OrbitTheme.spacing.tapMin, minHeight = OrbitTheme.spacing.tapMin)
                 .clickable(onClick = onConfigure)
-                .semantics { contentDescription = "List settings for ${tile.name}" },
+                .semantics { contentDescription = settingsDescription },
         ) {
             PhIcon(
                 name = "sliders-horizontal",
@@ -117,7 +135,7 @@ private fun ArchivedListRowPreviewLight() {
     }
 }
 
-@Preview(name = "ArchivedListRow — dark")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "ArchivedListRow — dark")
 @Composable
 private fun ArchivedListRowPreviewDark() {
     app.orbit.ui.theme.OrbitTheme(darkTheme = true) {
@@ -127,7 +145,7 @@ private fun ArchivedListRowPreviewDark() {
                 name = "Recently added, not called",
                 memberCount = 0,
                 type = ListType.SMART,
-                ruleSummary = "Recently added · 30 days",
+                ruleSummary = UiText.plural(R.plurals.lists_rule_summary_recently_added, 30, 30),
             ),
             onRestore = {},
             onDelete = {},

@@ -270,6 +270,13 @@ open class ContentObserverController @Inject constructor(
      * the deck immediately rather than waiting on the debounced observer / the
      * TTL-gated resume sync. Expedited + no debounce = runs now; incremental
      * (`fullResync = false`) so it only reads rows since the last-sync watermark.
+     *
+     * [ContactsIngestWorker] calls it with `fullResync = true` after inserting
+     * people, because the reconciler skips calls whose person is not in Room
+     * yet and an incremental pass would never see them again. During
+     * onboarding that REPLACE supersedes the sync the gate started, so the
+     * gate's WorkInfo goes back to ENQUEUED and the screen stays "reading"
+     * until the ordered pass finishes (OnboardingSyncViewModel).
      */
     override fun enqueueImmediateSync(fullResync: Boolean) {
         val request = OneTimeWorkRequestBuilder<CallLogSyncWorker>()

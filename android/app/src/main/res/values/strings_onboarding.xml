@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Onboarding: welcome, the permission asks, reading call history, the first list, done.
+    Keys are area_what (features/_foundations/voice.md, "Where copy lives").
+    Calm and unpressured: every ask can be skipped, and says what is lost without it.
+-->
+<resources>
+
+    <!-- Welcome. -->
+    <string name="onb_welcome_cta">Let\'s go</string>
+    <string name="onb_welcome_tagline">Call the people you keep meaning to call.</string>
+    <!-- Three short value lines under the tagline. -->
+    <string name="onb_welcome_beat_choice">Not every contact is a friend. You choose who matters.</string>
+    <string name="onb_welcome_beat_loop">One name at a time, with enough context to say yes.</string>
+    <string name="onb_welcome_beat_privacy">Everything stays on your phone: no cloud, no tracking.</string>
+
+    <!-- Step counter in the app bar. %1$d: this step, %2$d: how many steps; the quantity is
+         the number of steps. -->
+    <plurals name="onb_progress">
+        <item quantity="one">%1$d of %2$d</item>
+        <item quantity="other">%1$d of %2$d</item>
+    </plurals>
+
+    <!-- Confirmation before skipping a permission. -->
+    <string name="onb_skip_title">Skip for now?</string>
+    <string name="onb_skip_confirm">Skip</string>
+    <string name="onb_skip_lost_contacts">Without contacts access, Orbit can\'t build your lists from your phone book.</string>
+    <string name="onb_skip_lost_call_log">Without call log access, Orbit can\'t notice when you\'ve already called someone, so the same person may keep coming up.</string>
+    <string name="onb_skip_lost_notifications">Without notifications, Orbit won\'t be able to nudge you when it\'s time to reach out.</string>
+
+    <!-- Permission screens: buttons. The "Open phone settings" button is the shared
+         components_action_open_phone_settings. -->
+    <string name="onb_perm_allow">Allow access</string>
+    <string name="onb_perm_continue_without">Continue without it</string>
+    <!-- Shown after the phone refused twice: where to turn the permission on later. One
+         sentence that names no permission, because the same banner serves every permission
+         screen (ONB-14). -->
+    <string name="onb_perm_denied_banner">To turn this on later, open your phone\'s settings for Orbit and allow it under Permissions.</string>
+    <string name="onb_perm_allowed">Allowed</string>
+    <!-- Card title in that state. -->
+    <string name="onb_perm_denied_title">Turned off in your phone\'s settings</string>
+    <!-- Card title promising that the data stays on the phone. -->
+    <string name="onb_perm_promise_on_device">Stays on your device</string>
+
+    <!-- Contacts permission. -->
+    <string name="onb_perm_contacts_title">Build lists from your people</string>
+    <string name="onb_perm_contacts_body">Orbit reads your phone contacts so you can pick who goes on each list by name.</string>
+    <string name="onb_perm_contacts_promise">We don\'t upload your address book.</string>
+    <string name="onb_perm_contacts_denied">You can still create lists. To add people, allow access in your phone\'s settings.</string>
+
+    <!-- Call log permission. -->
+    <string name="onb_perm_call_log_title">Read your call history</string>
+    <string name="onb_perm_call_log_body">Orbit looks at when you last called or were called by each person, so it knows who\'s been quiet.</string>
+    <string name="onb_perm_call_log_promise">Read-only: Orbit can\'t make calls or change your call history.</string>
+    <string name="onb_perm_call_log_denied">You can still create lists. To use call history, allow access in your phone\'s settings.</string>
+
+    <!-- Notifications permission. Glossary: the notifications Orbit sends are "nudges". -->
+    <string name="onb_perm_notifications_title">Stay in the loop</string>
+    <string name="onb_perm_notifications_body">Orbit can let you know when it\'s time to reach out to someone.</string>
+    <string name="onb_perm_notifications_promise_title">Quiet by design</string>
+    <string name="onb_perm_notifications_promise">One quiet nudge per list per day. You can change this any time.</string>
+    <string name="onb_perm_notifications_denied">You can still use Orbit. To get nudges, allow notifications in your phone\'s settings.</string>
+
+    <!-- Reading call history. The first "Try again" is the shared components_error_retry. -->
+    <string name="onb_sync_continue_anyway">Continue anyway</string>
+    <string name="onb_sync_try_once_more">Try one more time</string>
+    <string name="onb_sync_title">Reading your call history</string>
+    <!-- Title when call log access was skipped. -->
+    <string name="onb_sync_title_skipped">Starting fresh</string>
+    <string name="onb_sync_body_skipped">Without call history, Orbit starts from what you tell it.</string>
+    <plurals name="onb_sync_body">
+        <item quantity="one">Reading your last %1$d day of calls (never leaves your device).</item>
+        <item quantity="other">Reading your last %1$d days of calls (never leaves your device).</item>
+    </plurals>
+    <string name="onb_sync_learn">We\'ll learn as you go.</string>
+    <plurals name="onb_sync_empty">
+        <item quantity="one">No calls found in the last %1$d day. That\'s okay.</item>
+        <item quantity="other">No calls found in the last %1$d days. That\'s okay.</item>
+    </plurals>
+    <string name="onb_sync_no_access">Orbit doesn\'t have call history access. You can grant it any time in Settings.</string>
+    <string name="onb_sync_failed_final">Couldn\'t finish the sync.</string>
+    <string name="onb_sync_failed_final_sub">We\'ll try again later in the background.</string>
+    <string name="onb_sync_failed_retry">Couldn\'t finish the sync. Try again?</string>
+    <!-- Live count while reading. %1$s: "142 calls", %2$s: "32 people". -->
+    <string name="onb_sync_counted">Counted %1$s over %2$s</string>
+    <plurals name="onb_sync_calls">
+        <item quantity="one">%1$d call</item>
+        <item quantity="other">%1$d calls</item>
+    </plurals>
+    <!-- The people in Orbit are "people" (voice.md glossary); "contacts" is only the phone's
+         address book. -->
+    <plurals name="onb_sync_contacts">
+        <item quantity="one">%1$d person</item>
+        <item quantity="other">%1$d people</item>
+    </plurals>
+    <!-- The range chips under this question are the shared settings_import_range_* words
+         ("1 month", "3 months", "6 months", "1 year"), so Settings and onboarding agree. -->
+    <string name="onb_sync_range_question">How far back should Orbit look?</string>
+    <string name="onb_sync_slow_tip">Some phones have years of call history. We\'ll get there.</string>
+
+    <!-- Suggested first list from recent calls. -->
+    <string name="onb_preview_accept">Make this my first list</string>
+    <string name="onb_preview_start_blank">Start blank</string>
+    <!-- No count in the heading: the screen shows 3 to 10 people, and the rows say how many. -->
+    <string name="onb_preview_title">Here are the people you\'ve been in touch with</string>
+    <string name="onb_preview_body">Untick anyone you\'d rather not include. You can edit anything before saving.</string>
+    <plurals name="onb_preview_selected">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <string name="onb_preview_select_all">Select all</string>
+    <string name="onb_preview_deselect_all">Deselect all</string>
+    <!-- Under each suggested person. %1$s: how long ago, for example "4 days ago". -->
+    <string name="onb_preview_called">Called %1$s</string>
+    <!-- The suggested first list's starting name; the user can rename it. -->
+    <string name="onb_preview_default_name">In touch</string>
+    <!-- The suggestions could not be read. Shown with the shared "Try again" and "Start blank". -->
+    <string name="onb_preview_error_title">Orbit couldn\'t load your suggestions</string>
+
+    <!-- First list. -->
+    <!-- TalkBack's name for the step; the visible headings are the section labels. -->
+    <string name="onb_first_list_title">Make your first list</string>
+    <string name="onb_first_list_add_another">Add another list</string>
+    <!-- The list could not be read; shown with the shared "Try again". -->
+    <string name="onb_first_list_error_title">Orbit couldn\'t load this list</string>
+    <!-- The list is gone (deleted or archived between steps). The title is the shared
+         missing-list wording, "List not found", which List settings owns
+         (lists_config_not_found); the body is this step's own because it explains its
+         "Start again" action, which returns to Reading your call history and continues
+         into a fresh list. -->
+    <string name="onb_first_list_not_found_title">List not found</string>
+    <string name="onb_first_list_not_found_body">Start again and Orbit will set up a fresh one.</string>
+    <string name="onb_first_list_start_again">Start again</string>
+    <!-- Helper above the list settings while Done is not yet available. -->
+    <string name="onb_first_list_helper_threshold">Add a name and pick at least 3 people to finish.</string>
+    <string name="onb_first_list_helper_no_contacts">You can add people once Orbit can see your contacts. Grant access any time in Settings.</string>
+    <string name="onb_first_list_helper_no_contacts_no_name">Give your list a name to finish. You can add people once Orbit can see your contacts.</string>
+
+    <!-- Done. -->
+    <string name="onb_done_cta">Open Orbit</string>
+    <string name="onb_done_title">You\'re set up.</string>
+    <string name="onb_done_body">Orbit hands you one name at a time. Call them, or choose Later and they\'ll come back around.</string>
+    <string name="onb_done_nudge_ask">Want a gentle nudge when someone is worth a call?</string>
+    <string name="onb_done_nudge_on">Nudges are on. Each list can change when they come.</string>
+    <string name="onb_done_nudge_declined">No nudges for now. You can turn them on in Settings.</string>
+    <string name="onb_done_allow_nudges">Allow nudges</string>
+    <!-- Screen-reader text for the small swipe picture (Later on the left, Sooner on the right). -->
+    <string name="onb_done_swipe_a11y">Swipe left for later, swipe right for sooner.</string>
+
+</resources>

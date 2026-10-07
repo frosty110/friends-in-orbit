@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WIDGET-09: the sample lead person's avatar circle in the picker previews. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/widget_preview_avatar_lead_bg" />
+</shape>

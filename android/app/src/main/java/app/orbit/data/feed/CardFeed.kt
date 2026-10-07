@@ -9,6 +9,7 @@ import app.orbit.data.repository.ListRepository
 import app.orbit.data.repository.NoteRepository
 import app.orbit.di.ApplicationScope
 import app.orbit.domain.clock.Clock
+import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.domain.usecase.SurfaceNextUseCase
 import app.orbit.domain.usecase.SurfaceQueueUseCase
 import app.orbit.domain.usecase.SurfaceResult
@@ -17,11 +18,13 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -50,6 +53,22 @@ import kotlinx.coroutines.flow.stateIn
  *   - `upNext` — soonest future-due visible member, so the NothingEligible
  *     empty state can say who comes up next instead of a false
  *     "paused or out of reach" line.
+ *
+ * Two flags on the snapshot keep the UI honest about what the feed knows
+ * (2026-10-06):
+ *   - `loaded` is false only on the `stateIn` placeholder, so the ViewModel
+ *     can hold Loading until the combine has answered. The placeholder used
+ *     to be a real-looking NothingEligible, and a cold first open flashed
+ *     "All quiet for now." before the data arrived (CARD-05 says that only
+ *     when it is true).
+ *   - `error` carries a failed upstream read. The per-list flow catches it
+ *     here, before `stateIn`, because an exception that escapes an Eagerly
+ *     started flow on @ApplicationScope has no handler and crashes the app;
+ *     a StateFlow never throws to its collectors, so the ViewModel's own
+ *     `.catch` could not see it (CARD-07). The cache entry is evicted in the
+ *     same breath so Try again rebuilds the subscription (the BrowseFeed /
+ *     BROWSE-06 precedent); no logging, the snapshot is the report
+ *     (rules.md Code 4).
  *
  * **Layering note (Option B fallback chosen):** the
  * `NoteEntity → NoteRow` mapping that needs `formatRelative` /
@@ -125,26 +144,38 @@ open class CardFeed @Inject constructor(
                 )
             }.combine(upNextFor(id)) { snapshot, hint ->
                 snapshot.copy(upNext = hint)
+            }.catch { t ->
+                // rules.md Code 5: cancellation is structured concurrency's,
+                // never an error state.
+                if (t is CancellationException) throw t
+                perListCache.remove(id)
+                emit(CardSnapshot.placeholder(error = t))
             }.stateIn(
                 scope = scope,
                 started = SharingStarted.Eagerly,
-                initialValue = CardSnapshot(
-                    surface = SurfaceResult.NothingEligible,
-                    listEntity = null,
-                    recentNotes = emptyList(),
-                    recentCalls = emptyList(),
-                    queueSize = 0,
-                    upNext = null,
-                ),
+                // Distinguishable from any real snapshot by `loaded = false`, so
+                // the ViewModel renders Loading, never a false empty deck.
+                initialValue = CardSnapshot.placeholder(),
             )
         }
 
     /**
-     * Soonest future-due visible member of [listId] — the NothingEligible
-     * empty state's "{name} comes up {when}" hint. Visible = neither archived
-     * nor ignored (matches [SurfaceNextUseCase]'s membership filter). Members
-     * with no persisted `nextDueAt` are cold-start (due now), so they never
-     * feed the future hint. Emits null when nobody has a future due.
+     * The visible member of [listId] who comes back soonest, which is the
+     * NothingEligible empty state's "{name} comes up {when}" hint. Visible =
+     * neither archived nor ignored, the same membership filter as
+     * [SurfaceNextUseCase].
+     *
+     * A paused person is announced for when the pause lifts, not for their
+     * stale `nextDueAt`: since the tide marker, NothingEligible is reached
+     * almost only when everyone is paused, and the hint used to say "Sarah
+     * comes up on Tuesday" while her pause ran for weeks (CARD-05 names who
+     * comes up next *and when*; a wrong "when" is worse than none). A pause
+     * "until you unpause" is the sentinel in [PauseContactUseCase], not a
+     * date, so that person is skipped rather than announced for the year
+     * 9999. A paused member with no schedule yet is due the moment the pause
+     * ends, so the pause end is their date. Members with no `nextDueAt` and
+     * no pause are cold-start (due now) and never feed the future hint.
+     * Emits null when nobody has a date to give.
      */
     private fun upNextFor(listId: Long): Flow<UpNextHint?> =
         combine(
@@ -156,9 +187,12 @@ open class CardFeed @Inject constructor(
             memberships.mapNotNull { membership ->
                 val contact = contactsById[membership.contactId] ?: return@mapNotNull null
                 if (contact.isIgnored || contact.isArchived) return@mapNotNull null
-                val due = membership.nextDueAt ?: return@mapNotNull null
-                if (!due.isAfter(now)) return@mapNotNull null
-                UpNextHint(displayName = contact.displayName, dueAt = due)
+                val pausedUntil = contact.pausedUntil?.takeIf { it.isAfter(now) }
+                if (pausedUntil != null && PauseContactUseCase.isIndefinite(pausedUntil)) return@mapNotNull null
+                val due = membership.nextDueAt ?: pausedUntil ?: return@mapNotNull null
+                val comesBack = if (pausedUntil != null) maxOf(due, pausedUntil) else due
+                if (!comesBack.isAfter(now)) return@mapNotNull null
+                UpNextHint(displayName = contact.displayName, dueAt = comesBack)
             }.minByOrNull { it.dueAt }
         }
 
@@ -175,6 +209,10 @@ open class CardFeed @Inject constructor(
  * real due-now `queueSize`, and the `upNext` hint for the NothingEligible
  * empty state. `recentNotes` / `recentCalls` are raw entity rows; the VM does
  * all presentation-side formatting (Option B layering — see CardFeed KDoc).
+ *
+ * [loaded] is false only on the pre-emission placeholder and [error] is set
+ * only on a failed read (CardFeed KDoc, "Two flags"); the other fields of
+ * those two snapshots carry nothing and the VM must not read them as data.
  */
 data class CardSnapshot(
     val surface: SurfaceResult,
@@ -183,7 +221,23 @@ data class CardSnapshot(
     val recentCalls: List<CallEventEntity>,
     val queueSize: Int,
     val upNext: UpNextHint?,
-)
+    val loaded: Boolean = true,
+    val error: Throwable? = null,
+) {
+    companion object {
+        /** The not-yet-loaded snapshot, or with [error], the failed one. */
+        fun placeholder(error: Throwable? = null): CardSnapshot = CardSnapshot(
+            surface = SurfaceResult.NothingEligible,
+            listEntity = null,
+            recentNotes = emptyList(),
+            recentCalls = emptyList(),
+            queueSize = 0,
+            upNext = null,
+            loaded = false,
+            error = error,
+        )
+    }
+}
 
 /** Soonest future-due visible member of the list — see [CardFeed.upNextFor]. */
 data class UpNextHint(

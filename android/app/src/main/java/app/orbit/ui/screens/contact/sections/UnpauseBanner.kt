@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.contact.sections
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -15,8 +16,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
@@ -29,12 +33,19 @@ import app.orbit.ui.theme.OrbitTheme
  * `AnimatedVisibility`.
  *
  * Tap-anywhere on the banner clears the pause. The dismiss-x is the
- * explicit affordance for the same action — both call `onUnpause()`. Voice
- * rule: the user isn't dismissing the EVENT (unpause already happened);
- * they're acknowledging the notice. Sentence case copy is locked.
+ * explicit affordance for the same action; both call `onUnpause()`. The
+ * row announces as a button named for what it does ("Dismiss unpause
+ * notice"), the same words as the x: until 2026-10-06 it was a bare
+ * clickable, so TalkBack read the copy and then "double tap to activate"
+ * with no hint of what activating did (rules.md §Design 7). Voice rule: the
+ * user isn't dismissing the EVENT (unpause already happened); they're
+ * acknowledging the notice, and the body says they will "come up again on
+ * their lists", not "surface" (the engine's word) on "this list" (the page
+ * is not list-scoped). Sentence case copy is locked.
  *
  * Privacy curtain (PRIV-03): when `curtain` is true, heading reads
- * "Contact is unpaused" — generic, no contact-specific phrasing.
+ * "Contact is unpaused": generic, no contact-specific phrasing. Copy lives in
+ * strings_contact.xml.
  *
  * Shape language matches OrphanBanner shell: `shapes.lg`, `bgSubtle`,
  * `x4` padding.
@@ -44,37 +55,42 @@ fun UnpauseBanner(
     contactName: String,
     curtain: Boolean,
     onUnpause: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
-    val displayHeading = if (curtain) "Contact is unpaused" else "$contactName is unpaused"
+    val displayHeading = if (curtain) {
+        stringResource(R.string.contact_unpaused_heading)
+    } else {
+        stringResource(R.string.contact_unpaused_heading_named, contactName)
+    }
+    val dismissLabel = stringResource(R.string.contact_unpaused_dismiss)
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(
                 horizontal = OrbitTheme.spacing.x6,
-                vertical = OrbitTheme.spacing.x4,
+                vertical = OrbitTheme.spacing.x4
             )
             .clip(OrbitTheme.shapes.lg)
             .background(OrbitTheme.colors.bgSubtle)
-            .clickable { onUnpause() }
+            .clickable(role = Role.Button, onClickLabel = dismissLabel) { onUnpause() }
             .padding(OrbitTheme.spacing.x4),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.Top
     ) {
         PhIcon(
             name = "phone-pause",
             size = 18.dp,
-            tint = OrbitTheme.colors.fgMuted,
+            tint = OrbitTheme.colors.fgMuted
         )
         Spacer(Modifier.width(OrbitTheme.spacing.x3))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = displayHeading,
-                style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
+                style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg)
             )
             Spacer(Modifier.height(OrbitTheme.spacing.x1))
             Text(
-                text = "They'll surface again on this list.",
-                style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
+                text = stringResource(R.string.contact_unpaused_body),
+                style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted)
             )
         }
         // Note: the OrbitIconButton signature is
@@ -86,7 +102,7 @@ fun UnpauseBanner(
         OrbitIconButton(
             icon = "x",
             onClick = onUnpause,
-            contentDescription = "Dismiss unpause notice",
+            contentDescription = dismissLabel
         )
     }
 }
@@ -101,13 +117,13 @@ private fun UnpauseBannerLightPreview() {
             UnpauseBanner(
                 contactName = "Alex Chen",
                 curtain = false,
-                onUnpause = {},
+                onUnpause = {}
             )
         }
     }
 }
 
-@Preview(name = "UnpauseBanner — dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "UnpauseBanner — dark", showBackground = true)
 @Composable
 private fun UnpauseBannerDarkPreview() {
     OrbitTheme(darkTheme = true) {
@@ -115,7 +131,7 @@ private fun UnpauseBannerDarkPreview() {
             UnpauseBanner(
                 contactName = "Alex Chen",
                 curtain = false,
-                onUnpause = {},
+                onUnpause = {}
             )
         }
     }
@@ -129,7 +145,7 @@ private fun UnpauseBannerCurtainPreview() {
             UnpauseBanner(
                 contactName = "Alex Chen",
                 curtain = true,
-                onUnpause = {},
+                onUnpause = {}
             )
         }
     }

@@ -1,6 +1,8 @@
 <!-- Docsify navigation sidebar -->
 
 - [Overview](README.md)
+- [Flows: clickable prototype](flows/flows.md)
+- [UX rubric: what world class means](ux-rubric.md)
 
 - **The core loop**
   - [00 · Home](00-home/00-home.md)

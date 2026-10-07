@@ -62,7 +62,11 @@ class WidgetSurfaceUseCase @Inject constructor(
         // penalty (0 inside the window / no window). This is the only place the
         // penalty reorders anything: it differentiates contacts surfaced by
         // lists with *different* windows.
-        data class Candidate(val contact: ContactEntity, val effectiveKey: java.time.Instant)
+        data class Candidate(
+            val contact: ContactEntity,
+            val effectiveKey: java.time.Instant,
+            val listId: Long,
+        )
 
         val candidates = mutableListOf<Candidate>()
 
@@ -75,7 +79,7 @@ class WidgetSurfaceUseCase @Inject constructor(
                     activeHoursStart = list.activeHoursStart,
                     activeHoursEnd = list.activeHoursEnd,
                 )
-                candidates += Candidate(result.contact, result.nextDueAt.plus(penalty))
+                candidates += Candidate(result.contact, result.nextDueAt.plus(penalty), list.id)
             }
         }
 
@@ -89,9 +93,14 @@ class WidgetSurfaceUseCase @Inject constructor(
             .sortedWith(compareBy<Candidate> { it.effectiveKey }.thenBy { it.contact.id })
             .distinctBy { it.contact.id }
 
+        val shown = sorted.take(3)
         return WidgetSurfaceData(
-            primary      = sorted.firstOrNull()?.contact,
-            alternatives = sorted.drop(1).take(2).map { it.contact },
+            primary      = shown.firstOrNull()?.contact,
+            alternatives = shown.drop(1).map { it.contact },
+            // The list that surfaced each person: the one where they rank
+            // earliest, which `distinctBy` above kept. Tapping them opens that
+            // list's deck, where they are the head.
+            listIdByContactId = shown.associate { it.contact.id to it.listId },
         )
     }
 }
@@ -107,9 +116,18 @@ class WidgetSurfaceUseCase @Inject constructor(
  *
  * Both fields are deduped: the same contact can only appear once across
  * [primary] and [alternatives] combined.
+ *
+ * [listIdByContactId] maps each shown person to the list that surfaced them.
  */
 @Immutable
 data class WidgetSurfaceData(
     val primary: ContactEntity?,
     val alternatives: List<ContactEntity>,
+    /**
+     * The list each shown person was surfaced by, keyed by contact id. A tap on
+     * a person (widget body, the "Call next" shortcut) opens that list's deck
+     * with them on top (WIDGET-08, LAUNCH-01). Empty for callers that only
+     * need names.
+     */
+    val listIdByContactId: Map<Long, Long> = emptyMap(),
 )

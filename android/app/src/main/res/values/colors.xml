@@ -2,5 +2,31 @@
 <resources>
     <color name="cream">#FAF6F0</color>
     <color name="charcoal">#1F1C1A</color>
-    <color name="terracotta">#C8654A</color>
+    <color name="terracotta">#B85338</color>
+
+    <!--
+        WIDGET-09: colours for the widget picker previews and the widget's
+        first-frame loading layout. Like the splash colours above, these are
+        drawn by Android from XML before any Orbit code runs, so they cannot
+        come from OrbitColors (DESIGN.md, the splash boundary D-09). Each one
+        copies a Warm theme token, named in its comment, and
+        WidgetPreviewResourcesTest fails if a token moves without them.
+        Dark values live in values-night/colors.xml.
+    -->
+    <color name="widget_preview_surface">#FFFFFF</color>     <!-- surface -->
+    <color name="widget_preview_fg">#211E1C</color>          <!-- fg -->
+    <color name="widget_preview_fg_muted">#6B6560</color>    <!-- fgMuted -->
+    <color name="widget_preview_line">#E5DDD1</color>        <!-- line -->
+    <color name="widget_preview_accent">#B85338</color>      <!-- accent -->
+    <color name="widget_preview_on_accent">#FFFFFF</color>   <!-- accentFg -->
+
+    <!-- The Warm avatar palette each sample name hashes to
+         (OrbitTones.avatarPalette). Warm's avatar tones are the same in light
+         and dark, so these have no night variant. -->
+    <color name="widget_preview_avatar_lead_bg">#D8E3D6</color>
+    <color name="widget_preview_avatar_lead_fg">#4E6A4B</color>
+    <color name="widget_preview_avatar_alt_1_bg">#F2E2BF</color>
+    <color name="widget_preview_avatar_alt_1_fg">#8B6821</color>
+    <color name="widget_preview_avatar_alt_2_bg">#EDD6CE</color>
+    <color name="widget_preview_avatar_alt_2_fg">#9B4A32</color>
 </resources>

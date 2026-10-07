@@ -99,31 +99,50 @@ internal data class AccentSet(
 
 /**
  * Generate an accessible accent family from a single hue. This is the guard
- * that makes the user-facing accent dial unbreakable: we fix a tasteful,
- * low-saturation S/L (Orbit is never fully saturated — see README "Visual
- * foundations") then lower lightness until white-on-accent clears AA. The tint
- * is a soft, high-lightness wash for selected/pill backgrounds.
+ * that makes the user-facing accent dial (and the Cool, Forest, Plum and
+ * Wallpaper themes) unbreakable: we fix a tasteful, low-saturation S/L (Orbit
+ * is never fully saturated, see README "Visual foundations") then move
+ * lightness until every way the accent is used clears 4.5:1, because the
+ * accent is a button fill under a text label AND a text colour on the page
+ * ("Match theme", list names, a snackbar's action).
  *
- * Light mode: mid-tone accent, white foreground. Dark mode: lifted accent so
- * it reads on charcoal; foreground chosen by contrast (white or warm ink).
+ * Light mode: darken until the accent reads as text on cream (which also
+ * puts white labels on the fill above 4.5). Press and hover go darker still.
+ *
+ * Dark mode: lighten until the accent reads as text on charcoal and on the
+ * raised graphite surface; the label is then warm ink, which only gains
+ * contrast as the fill lightens. Press and hover go lighter, so the label
+ * never drops below 4.5 while a finger is down. Before 2026-10-05 dark mode
+ * darkened toward a white label too, which left dark accents at about 3.7:1
+ * as text.
  */
 internal fun accentForHue(hue: Float, isDark: Boolean): AccentSet {
     val saturation = if (isDark) 0.52f else 0.48f
     var lightness = if (isDark) 0.60f else 0.46f
+    val step = if (isDark) 0.02f else -0.02f
 
-    // Lower lightness until white text clears AA on the accent fill. White is
-    // the brand accent-fg; darkening the fill monotonically raises contrast.
+    fun readable(c: Color): Boolean = if (isDark) {
+        contrastRatio(c, DarkColors.bg) >= MIN_TEXT &&
+            contrastRatio(c, DarkColors.surface) >= MIN_TEXT &&
+            contrastRatio(c, OrbitPrimitives.Ink) >= MIN_TEXT
+    } else {
+        contrastRatio(c, LightColors.bg) >= MIN_TEXT &&
+            contrastRatio(c, Color.White) >= MIN_TEXT
+    }
+
     var accent = hsl(hue, saturation, lightness)
     var guard = 0
-    while (contrastRatio(accent, Color.White) < 4.5f && lightness > 0.18f && guard < 40) {
-        lightness -= 0.02f
+    while (!readable(accent) && lightness in 0.18f..0.90f && guard < 40) {
+        lightness += step
         accent = hsl(hue, saturation, lightness)
         guard++
     }
 
-    val accentFg = bestForeground(accent)
-    val press = hsl(hue, saturation, (lightness - 0.10f).coerceAtLeast(0.10f))
-    val hover = hsl(hue, saturation, (lightness - 0.05f).coerceAtLeast(0.12f))
+    // Fixed per mode, not "best of": the press and hover steps move away from
+    // this label, so it must be the one the loop above guaranteed.
+    val accentFg = if (isDark) OrbitPrimitives.Ink else Color.White
+    val press = hsl(hue, saturation, (lightness + step * 5).coerceIn(0.10f, 0.92f))
+    val hover = hsl(hue, saturation, (lightness + step * 2.5f).coerceIn(0.12f, 0.90f))
     val tint = if (isDark) hsl(hue, 0.38f, 0.22f) else hsl(hue, 0.34f, 0.88f)
 
     return AccentSet(
@@ -134,3 +153,6 @@ internal fun accentForHue(hue: Float, isDark: Boolean): AccentSet {
         accentFg = accentFg,
     )
 }
+
+/** WCAG AA for normal-size text. */
+private const val MIN_TEXT = 4.5f

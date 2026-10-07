@@ -69,13 +69,22 @@ interface ListMembershipDao {
     suspend fun deleteByPair(contactId: Long, listId: Long): Int
 
     /**
+     * CONTACT-07 re-link: clears one contact's memberships so the merged set
+     * can be written back in one insert. Callers snapshot the rows first.
+     */
+    @Query("DELETE FROM list_memberships WHERE contactId = :contactId")
+    suspend fun deleteAllForContact(contactId: Long): Int
+
+    /**
      * H6 — atomic single-column write for `nextDueAt`. Used by [SurfaceSoonerUseCase]
      * to advance a membership's surfacing time without polluting `skipCount`
      * (a "sooner" is a negative skip; reusing `incrementSkipCount` was semantically
      * wrong). Returns the row count so the repository layer can distinguish a
      * race-with-delete from a successful no-op.
      */
-    @Query("UPDATE list_memberships SET nextDueAt = :nextDueAt WHERE contactId = :contactId AND listId = :listId")
+    @Query(
+        "UPDATE list_memberships SET nextDueAt = :nextDueAt WHERE contactId = :contactId AND listId = :listId"
+    )
     suspend fun updateNextDueAt(contactId: Long, listId: Long, nextDueAt: Instant?): Int
 
     /** Bulk delete memberships from a list. Used by Move (remove leg) and BulkRemove. */
@@ -100,7 +109,9 @@ interface ListMembershipDao {
     suspend fun moveAll(fromListId: Long, toListId: Long, ids: List<Long>, nowMs: Long) {
         removeAll(fromListId, ids)
         val now = Instant.ofEpochMilli(nowMs)
-        insertAll(ids.map { ListMembershipEntity(listId = toListId, contactId = it, addedAt = now) })
+        insertAll(
+            ids.map { ListMembershipEntity(listId = toListId, contactId = it, addedAt = now) }
+        )
     }
 
     /**
@@ -113,8 +124,12 @@ interface ListMembershipDao {
      * (listId), the other tags the value (memberCount).
      */
     @Query("SELECT listId, COUNT(*) AS memberCount FROM list_memberships GROUP BY listId")
-    fun observeMemberCountsByListId(): Flow<Map<
-        @MapColumn(columnName = "listId") Long,
-        @MapColumn(columnName = "memberCount") Int,
-        >>
+    fun observeMemberCountsByListId(): Flow<
+        Map<
+            @MapColumn(columnName = "listId")
+            Long,
+            @MapColumn(columnName = "memberCount")
+            Int
+            >
+        >
 }

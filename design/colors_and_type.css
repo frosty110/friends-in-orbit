@@ -34,13 +34,18 @@
 }
 
 :root {
+  /* 2026-10-05: colour values follow android/app/src/main/java/app/orbit/ui/theme/Color.kt
+     after the contrast work (rules.md Design 4: 4.5:1 for every text token, button labels
+     and subtle text included). DESIGN.md makes this file canonical for token values and the
+     Kotlin ground truth for what renders, so the two must carry the same numbers. */
   /* ---------- COLOR: PRIMITIVES (light mode defaults) ---------- */
 
   /* Brand */
-  --orbit-terracotta:        #C8654A;   /* primary CTA */
-  --orbit-terracotta-dark:   #9B4A32;   /* pressed / dark-mode accent */
+  --orbit-terracotta:        #B85338;   /* primary CTA. Deepened 2026-10-05 from #C8654A: white on it was 3.88:1, now 4.85:1 */
+  --orbit-terracotta-dark:   #90412C;   /* pressed, light mode */
   --orbit-terracotta-tint:   #EDD6CE;   /* soft pill / selected bg */
-  --orbit-sage:              #87A383;   /* positive "you're caught up" */
+  --orbit-sage:              #87A383;   /* positive status: dots and fills only (2.76:1 on paper) */
+  --orbit-sage-text:         #5D7859;   /* positive status as text ("Allowed"), 4.5:1 */
   --orbit-sage-tint:         #D8E3D6;
   /* Overdue — cooled toward olive so it reads distinctly from terracotta */
   --orbit-olive:             #B49A3A;   /* overdue / important (v2 cooler) */
@@ -50,6 +55,7 @@
   --orbit-amber-tint:        #F2E2BF;
   /* Destructive — pulled toward brown, less red. Reserved for truly final actions. */
   --orbit-clay:              #8E5141;   /* destructive / delete-from-all */
+  --orbit-clay-soft:         #D9836F;   /* destructive on dark surfaces: clay reads 2.4:1 there, this ~5.4:1 */
   /* Soft destructive — stone-gray for gentle actions like Pause */
   --orbit-stone-deep:        #524B45;
 
@@ -58,6 +64,15 @@
   --orbit-slate:             #6B7570;
   --orbit-slate-tint:         #DCE1DE;
 
+  /* Call direction (HOME-8: the rim on a rhythm bar). Deliberately cool and outside every
+     theme's warm range: a bar's fill is the person, its rim is the direction, and the two
+     channels must never be confusable. Violet and blue are ~65 degrees apart and differ in
+     lightness, so the pair survives a colour-vision deficiency at 2px. */
+  --orbit-violet:            #5E3D96;   /* outgoing, light: you reached out */
+  --orbit-blue:              #2F84B8;   /* incoming, light: they reached you */
+  --orbit-violet-soft:       #B49BEA;   /* outgoing, dark */
+  --orbit-blue-soft:         #6FBBE0;   /* incoming, dark */
+
   /* Neutrals — warm, not gray */
   --orbit-cream:             #FAF6F0;   /* light bg */
   --orbit-cream-deep:        #F2ECE2;   /* subtle zone, hover bg */
@@ -65,7 +80,7 @@
   --orbit-ink:               #211E1C;   /* text primary (light) */
   --orbit-ink-soft:          #3A3531;   /* text strong alt */
   --orbit-stone:             #6B6560;   /* text secondary */
-  --orbit-stone-soft:        #9A928B;   /* text tertiary / hints */
+  --orbit-stone-soft:        #716A63;   /* text tertiary / hints. Was #9A928B (2.84:1 on cream); 4.5:1 on cream-deep since 2026-10-05 */
   --orbit-line:              #E5DDD1;   /* hairline on cream */
   --orbit-line-soft:         #EFE8DC;   /* lighter hairline */
 
@@ -91,12 +106,13 @@
   --line-soft:     var(--orbit-line-soft);
 
   --accent:        var(--orbit-terracotta);
-  --accent-hover:  #B85A40;
+  --accent-hover:  #A44A32;
   --accent-press:  var(--orbit-terracotta-dark);
   --accent-tint:   var(--orbit-terracotta-tint);
   --accent-fg:     #FFFFFF;
 
   --positive:      var(--orbit-sage);
+  --positive-text: var(--orbit-sage-text);   /* status words; --positive is too light to read */
   --positive-tint: var(--orbit-sage-tint);
   /* Overdue now points at cooled olive (v2). Amber still available for urgency. */
   --warning:       var(--orbit-olive);
@@ -110,6 +126,13 @@
   /* Informational cool slot — sync state, read-only, offline */
   --info:          var(--orbit-slate);
   --info-tint:     var(--orbit-slate-tint);
+  /* Rhythm-bar direction rims (HOME-8). Semantic, not personality: every theme keeps this pair. */
+  --direction-outgoing: var(--orbit-violet);
+  --direction-incoming: var(--orbit-blue);
+  /* Swipe ghosts (the hint under a dragged card). Later is muted ink, never the danger family;
+     Sooner is the positive sage. */
+  --swipe-ghost-later:  var(--orbit-ink-soft);
+  --swipe-ghost-sooner: var(--orbit-sage);
 
   /* ---------- TYPOGRAPHY ---------- */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -117,13 +140,17 @@
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
 
   /* Type scale (mobile-first, 16sp min body) */
-  --fs-hero:      32px;   /* contact name on card view */
+  --fs-hero:      32px;   /* Contact detail's name and the Welcome wordmark */
+  --fs-contact-name: 28px; /* the name on the card face (32px only on Contact detail and Welcome) */
+  --fs-list-tile: 17px;   /* a list card's name on Home, Medium */
   --fs-title:     24px;   /* screen titles */
   --fs-h2:        20px;   /* section headers */
   --fs-h3:        18px;   /* list row primary */
   --fs-body:      16px;   /* minimum body, non-negotiable */
   --fs-meta:      14px;   /* timestamps, secondary */
-  --fs-micro:     12px;   /* badges, captions */
+  --fs-stat-value: 14px;  /* stat values on the card foot, SemiBold, tabular figures */
+  --fs-badge:     13px;   /* count badges, Medium, tabular figures */
+  --fs-micro:     12px;   /* captions, eyebrows */
 
   --fw-regular: 400;
   --fw-medium:  500;
@@ -138,7 +165,8 @@
   --tracking-tight: -0.01em;
   --tracking-normal: 0;
   --tracking-wide:   0.01em;
-  --tracking-caps:   0.08em;
+  --tracking-caps:   0.08em;   /* genuine all-caps only; nothing in the app is set in caps today */
+  --tracking-eyebrow: 0.03em;  /* eyebrows are sentence case (voice.md); 0.08em made lowercase words look loose */
 
   /* ---------- SHAPE ---------- */
   --radius-xs:  4px;
@@ -146,6 +174,7 @@
   --radius-md:  12px;   /* buttons */
   --radius-lg:  16px;   /* cards */
   --radius-xl:  24px;   /* hero / contact card */
+  --radius-sheet: 24px 24px 0 0;   /* bottom sheets: top corners only */
   --radius-full: 999px;
 
   /* ---------- SPACING (4px base) ---------- */
@@ -159,6 +188,9 @@
   --space-8:  40px;
   --space-9:  56px;
   --space-10: 72px;
+  /* Named off-grid steps the app uses deliberately (2026-10-05). */
+  --space-hair:  2px;   /* title to its subtitle */
+  --space-row-y: 14px;  /* vertical padding inside a settings-style row */
 
   /* Tap target */
   --tap-min: 48px;
@@ -190,14 +222,22 @@
   --fg-strong:   var(--orbit-cream-text);
   --fg-soft:     #DDD5CC;
   --fg-muted:    var(--orbit-cream-dim);
-  --fg-subtle:   #8F887F;
+  --fg-subtle:   #9D978F;  /* was #8F887F (4.23:1 on graphite); 4.5:1 on graphite-deep */
   --line:        var(--orbit-line-dark);
   --line-soft:   #332E2A;
 
   --accent:      #D87560;  /* slightly lifted for dark bg */
   --accent-hover:#E18670;
-  --accent-press:var(--orbit-terracotta-dark);
+  --accent-press:#D3654D;  /* deeper than the lifted accent, still 4.5:1 under the ink label */
   --accent-tint: #4A2D24;
+  --accent-fg:   var(--orbit-ink);   /* an ink label on the lifted accent (5.2:1); white on it was 3.17:1 */
+
+  --positive-text: var(--orbit-sage);   /* sage itself clears 4.5:1 on the dark surfaces */
+  --danger:        var(--orbit-clay-soft);
+  --direction-outgoing: var(--orbit-violet-soft);
+  --direction-incoming: var(--orbit-blue-soft);
+  --swipe-ghost-later:  #DDD5CC;   /* dark fg-soft */
+  --swipe-ghost-sooner: var(--orbit-sage);
 
   --positive-tint: #344035;
   --warning-tint:  #4A3E25;
@@ -264,17 +304,19 @@ p, .body {
   letter-spacing: var(--tracking-wide);
 }
 .eyebrow {
+  /* Sentence case, like every other label (voice.md). Until 2026-10-05 this was uppercase
+     with caps tracking; the app never rendered it that way. */
   font-size: var(--fs-micro);
   font-weight: var(--fw-medium);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
   color: var(--fg-muted);
 }
 
-/* Contact-name treatment — the hero of card view */
+/* Contact-name treatment: the hero of the card face. 28px here; Contact detail's name and the
+   Welcome wordmark use --fs-hero (32px) through h1. */
 .contact-name {
   font-family: var(--font-display);
-  font-size: var(--fs-hero);
+  font-size: var(--fs-contact-name);
   font-weight: var(--fw-semi);
   letter-spacing: -0.005em;
   line-height: var(--lh-tight);

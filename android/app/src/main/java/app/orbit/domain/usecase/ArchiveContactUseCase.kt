@@ -28,15 +28,15 @@ class ArchiveContactUseCase @Inject constructor(
     /**
      * @property inverse Suspending closure that flips `isArchived` back to
      *                   false — undo within the snackbar window.
-     * @property label Snackbar copy: "Archived {contactName}".
+     *                   The snackbar's words ("Archived Sam") are the
+     *                   caller's, from string resources.
      */
-    data class Result(val inverse: suspend () -> Unit, val label: String)
+    data class Result(val inverse: suspend () -> Unit)
 
-    suspend operator fun invoke(contactId: Long, contactName: String): Result {
+    suspend operator fun invoke(contactId: Long): Result {
         contactRepo.setArchived(contactId, true)
         return Result(
             inverse = { contactRepo.setArchived(contactId, false) },
-            label = "Archived $contactName",
         )
     }
 }

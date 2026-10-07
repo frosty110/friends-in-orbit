@@ -1,12 +1,15 @@
 package app.orbit.ui.screens.onboarding
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -14,6 +17,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -22,24 +27,34 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import app.orbit.R
 import app.orbit.data.entity.ListType
 import app.orbit.data.entity.RuleKind
 import app.orbit.domain.JsonProvider
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
-import app.orbit.notify.NudgeSchedule
+import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.screens.lists.ListConfigBody
 import app.orbit.ui.screens.lists.ListConfigContactSnapshot
 import app.orbit.ui.screens.lists.ListConfigUiState
 import app.orbit.ui.screens.lists.ListConfigViewModel
 import app.orbit.ui.screens.lists.SettingGroup
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.asString
 import java.time.LocalTime
 
 /**
- * ONB-20 — first-list creation reusing the production List
+ * ONB-20: first-list creation reusing the production List
  * Configuration screen. Wraps [ListConfigBody] inside [OnboardingScaffold]
  * so the user lands directly in the same UI they'll use forever.
+ *
+ * Non-Ready states (see [firstListFallback]): Loading keeps the skeleton;
+ * Error says the list could not be read and offers Try again; NotFound (the
+ * list was deleted or archived between steps) offers "Start again", which
+ * [onStartAgain] routes back to the Sync step, whose Continue reads a missing
+ * list as no list and sets up a fresh one (README, Mid-flow resume). Until
+ * 2026-10-06 both rendered the loading skeleton under two disabled CTAs with
+ * no back arrow: a screen that said "loading" for ever (G4).
  *
  * Activation gate (E5 / ONB-24): with contacts
  * access granted, the primary "Done" CTA is enabled only when the list has
@@ -51,7 +66,8 @@ import java.time.LocalTime
  * Add-another (ONB-09): the secondary CTA "Add another list" exits this
  * screen by navigating to a freshly-created list and re-entering this
  * route — the next press of Done finishes onboarding. The actual list
- * creation for "Add another" happens in OrbitNavHost.
+ * creation for "Add another" happens in OrbitNavHost, via
+ * [OnboardingListStarter.startAnother].
  *
  * The ViewModel is the production [ListConfigViewModel] — `listId` flows
  * through `SavedStateHandle` exactly as the production path. This means
@@ -67,19 +83,32 @@ fun OnboardingFirstListScreen(
     onDone: () -> Unit,
     onAddAnother: () -> Unit,
     onAddContacts: () -> Unit,
+    // NotFound's "Start again": pop back to the Sync step. Defaulted so the
+    // nav graph can wire it in its own change.
+    onStartAgain: () -> Unit = {},
     vm: ListConfigViewModel = hiltViewModel(),
-    permVm: OnboardingPermissionsViewModel = hiltViewModel(),
+    permVm: OnboardingPermissionsViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    // Snackbar copy is UiText (strings_lists.xml); resolved when shown.
+    val context = LocalContext.current
+    // Same handling as the production ListConfigScreen: Short, and an Undo
+    // tap (member remove) pops the VM's UndoStack. The host is passed to
+    // OnboardingScaffold below; without one on screen, the first showSnackbar
+    // suspended forever, so "Removed {name}" never appeared and every later
+    // message stalled behind it.
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             vm.snackbarEvents.collect { event ->
-                snackbarHostState.showSnackbar(
-                    message = event.message,
-                    actionLabel = event.actionLabel,
+                val result = snackbarHostState.showSnackbar(
+                    message = event.message.asString(context),
+                    actionLabel = event.actionLabel?.asString(context),
+                    duration = SnackbarDuration.Short,
+                    withDismissAction = false
                 )
+                if (result == SnackbarResult.ActionPerformed) vm.onUndo()
             }
         }
     }
@@ -103,10 +132,10 @@ fun OnboardingFirstListScreen(
     val canFinish = ready != null && firstListCanFinish(
         name = ready.name,
         memberCount = ready.members.size,
-        hasContactsPermission = hasContacts,
+        hasContactsPermission = hasContacts
     )
 
-    // 2026-06-09 — the list arrives from createOnboardingFirstList
+    // 2026-06-09: the list arrives from OnboardingListStarter
     // with ruleTemplateId = null, so the Cadence picker rendered with nothing
     // selected. Pre-seed the "Keep in touch" template once the entity loads;
     // the Room write re-emits with ruleKind set, so the effect self-quiesces.
@@ -118,19 +147,33 @@ fun OnboardingFirstListScreen(
         }
     }
 
+    val fallback = firstListFallback(state)
+    if (fallback != null) {
+        FirstListFallbackContent(
+            fallback = fallback,
+            onAction = when (fallback.action) {
+                FirstListFallbackAction.Retry -> vm::onRetry
+                FirstListFallbackAction.StartAgain -> onStartAgain
+            }
+        )
+        return
+    }
+
     OnboardingScaffold(
+        title = stringResource(R.string.onb_first_list_title),
         step = OnboardingStep.FirstList,
         onBack = null, // first list is required (E1)
         primary = OnboardingAction(
-            label = "Done",
+            label = stringResource(R.string.components_action_done),
             onClick = onDone,
-            enabled = canFinish,
+            enabled = canFinish
         ),
         secondary = OnboardingAction(
-            label = "Add another list",
+            label = stringResource(R.string.onb_first_list_add_another),
             onClick = onAddAnother,
-            enabled = canFinish,
+            enabled = canFinish
         ),
+        snackbarHostState = snackbarHostState
     ) {
         if (ready == null) {
             // 2026-06-09 — arriving from the preview commit can
@@ -147,12 +190,12 @@ fun OnboardingFirstListScreen(
         firstListHelperText(
             name = ready.name,
             memberCount = ready.members.size,
-            hasContactsPermission = hasContacts,
+            hasContactsPermission = hasContacts
         )?.let { helper ->
             Text(
-                text = helper,
+                text = stringResource(helper),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4),
+                modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4)
             )
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
         }
@@ -165,7 +208,7 @@ fun OnboardingFirstListScreen(
             onRuleTemplateChange = vm::setRuleTemplate,
             onRuleParamsChange = { params ->
                 vm.setRuleParamsOverrideJson(
-                    JsonProvider.json.encodeToString(RuleParams.serializer(), params),
+                    JsonProvider.json.encodeToString(RuleParams.serializer(), params)
                 )
             },
             onActiveHoursChange = vm::setActiveHours,
@@ -182,7 +225,7 @@ fun OnboardingFirstListScreen(
             onNudgeScheduleChange = {},
             onSmartRuleChange = { rule ->
                 vm.setSmartRuleJson(
-                    JsonProvider.json.encodeToString(SmartListRule.serializer(), rule),
+                    JsonProvider.json.encodeToString(SmartListRule.serializer(), rule)
                 )
             },
             onConfirmConvert = vm::confirmConvert,
@@ -191,7 +234,7 @@ fun OnboardingFirstListScreen(
             // the list was reopened from Lists Manager. Wire them to the same VM
             // path production uses; onAddContacts navigates to the picker.
             onRemoveMember = vm::onRemoveMember,
-            onAddContacts = onAddContacts,
+            onAddContacts = onAddContacts
         )
     }
 }
@@ -208,45 +251,108 @@ fun OnboardingFirstListScreen(
 internal fun firstListCanFinish(
     name: String,
     memberCount: Int,
-    hasContactsPermission: Boolean,
+    hasContactsPermission: Boolean
 ): Boolean = name.isNotBlank() && (!hasContactsPermission || memberCount >= 3)
 
+/** What a non-Ready, non-Loading first-list state offers the user. */
+internal enum class FirstListFallbackAction { Retry, StartAgain }
+
 /**
- * Helper line rendered above the list-config body. Null = nothing to say
- * (gate satisfied, contacts granted). In the denied state the helper sets
- * the expectation for the empty members picker instead of nudging toward a
- * threshold the user cannot meet.
+ * The message and the one action for a state that cannot show the list:
+ * [ListConfigUiState.Error] and [ListConfigUiState.NotFound]. Null for Loading
+ * (the skeleton) and Ready (the body). Pure, so `OnboardingFirstListGateTest`
+ * can pin that no fallback branch leaves the user without a visible action,
+ * the dead end this screen had until 2026-10-06.
  */
+internal fun firstListFallback(state: ListConfigUiState): FirstListFallback? = when (state) {
+    ListConfigUiState.Error -> FirstListFallback(
+        titleRes = R.string.onb_first_list_error_title,
+        bodyRes = R.string.components_error_body,
+        actionLabelRes = R.string.components_error_retry,
+        action = FirstListFallbackAction.Retry
+    )
+    ListConfigUiState.NotFound -> FirstListFallback(
+        titleRes = R.string.onb_first_list_not_found_title,
+        bodyRes = R.string.onb_first_list_not_found_body,
+        actionLabelRes = R.string.onb_first_list_start_again,
+        action = FirstListFallbackAction.StartAgain
+    )
+    ListConfigUiState.Loading, is ListConfigUiState.Ready -> null
+}
+
+internal data class FirstListFallback(
+    @StringRes val titleRes: Int,
+    @StringRes val bodyRes: Int,
+    @StringRes val actionLabelRes: Int,
+    val action: FirstListFallbackAction
+)
+
+/**
+ * Error and NotFound: the footer's Primary is the fallback's one action (the
+ * screen's single accent); the message carries the words. Not scrollable:
+ * OrbitScreenMessage scrolls itself at large text, and a scroll nested in the
+ * scaffold's scroll is the F-1 hazard below.
+ */
+@Composable
+private fun FirstListFallbackContent(fallback: FirstListFallback, onAction: () -> Unit) {
+    OnboardingScaffold(
+        title = stringResource(fallback.titleRes),
+        step = OnboardingStep.FirstList,
+        onBack = null,
+        primary = OnboardingAction(
+            label = stringResource(fallback.actionLabelRes),
+            onClick = onAction
+        ),
+        scrollable = false
+    ) {
+        OrbitScreenMessage(
+            icon = "warning-circle",
+            title = stringResource(fallback.titleRes),
+            body = stringResource(fallback.bodyRes)
+        )
+    }
+}
+
+/**
+ * Helper line rendered above the list-config body, as a string resource id.
+ * Null = nothing to say (gate satisfied, contacts granted). In the denied
+ * state the helper sets the expectation for the empty members picker instead
+ * of nudging toward a threshold the user cannot meet.
+ */
+@StringRes
 internal fun firstListHelperText(
     name: String,
     memberCount: Int,
-    hasContactsPermission: Boolean,
-): String? = when {
-    !hasContactsPermission && name.isBlank() ->
-        "Give your list a name to finish. You can add people once Orbit can see your contacts."
-    !hasContactsPermission ->
-        "You can add people once Orbit can see your contacts — grant access any time in Settings."
-    name.isBlank() || memberCount < 3 ->
-        "Add a name and pick at least 3 people to finish."
+    hasContactsPermission: Boolean
+): Int? = when {
+    !hasContactsPermission && name.isBlank() -> R.string.onb_first_list_helper_no_contacts_no_name
+    !hasContactsPermission -> R.string.onb_first_list_helper_no_contacts
+    name.isBlank() || memberCount < 3 -> R.string.onb_first_list_helper_threshold
     else -> null
 }
 
 /**
- * Quiet placeholder rendered while [ListConfigUiState.Loading] — the section
- * labels the real body will use, each over a muted bar, so the screen reads
- * as settling rather than broken.
+ * Quiet placeholder rendered while [ListConfigUiState.Loading]: the section
+ * labels the real body will use (the same string resources), each over a
+ * muted bar, so the screen reads as settling rather than broken.
  */
 @Composable
 private fun FirstListLoadingSkeleton() {
-    listOf("Name", "Cadence", "Active hours", "Notifications", "Members preview").forEach { title ->
-        SettingGroup(title = title) {
+    listOf(
+        R.string.lists_section_name,
+        R.string.lists_section_rhythm,
+        R.string.lists_section_active_hours,
+        R.string.lists_section_nudges,
+        R.string.lists_section_members,
+    ).forEach { title ->
+        SettingGroup(title = stringResource(title)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(OrbitTheme.spacing.x3)
                     .height(OrbitTheme.spacing.x6)
                     .clip(OrbitTheme.shapes.md)
-                    .background(OrbitTheme.colors.bgSubtle),
+                    .background(OrbitTheme.colors.bgSubtle)
             )
         }
     }
@@ -264,29 +370,38 @@ private fun FirstListLoadingSkeleton() {
 @Composable
 private fun OnboardingFirstListScreenPreviewBody(
     state: ListConfigUiState.Ready,
-    hasContactsPermission: Boolean = true,
+    hasContactsPermission: Boolean = true
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val canFinish = firstListCanFinish(
         name = state.name,
         memberCount = state.members.size,
-        hasContactsPermission = hasContactsPermission,
+        hasContactsPermission = hasContactsPermission
     )
     OnboardingScaffold(
+        title = stringResource(R.string.onb_first_list_title),
         step = OnboardingStep.FirstList,
         onBack = null,
-        primary = OnboardingAction(label = "Done", onClick = {}, enabled = canFinish),
-        secondary = OnboardingAction(label = "Add another list", onClick = {}, enabled = canFinish),
+        primary = OnboardingAction(
+            label = stringResource(R.string.components_action_done),
+            onClick = {},
+            enabled = canFinish,
+        ),
+        secondary = OnboardingAction(
+            label = stringResource(R.string.onb_first_list_add_another),
+            onClick = {},
+            enabled = canFinish,
+        )
     ) {
         firstListHelperText(
             name = state.name,
             memberCount = state.members.size,
-            hasContactsPermission = hasContactsPermission,
+            hasContactsPermission = hasContactsPermission
         )?.let { helper ->
             Text(
-                text = helper,
+                text = stringResource(helper),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4),
+                modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4)
             )
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
         }
@@ -302,7 +417,7 @@ private fun OnboardingFirstListScreenPreviewBody(
             onNotificationsToggle = {},
             onNudgeScheduleChange = {},
             onSmartRuleChange = {},
-            onConfirmConvert = {},
+            onConfirmConvert = {}
         )
     }
 }
@@ -312,10 +427,19 @@ private fun OnboardingFirstListScreenPreviewBody(
 private fun OnboardingFirstListLoadingPreview() {
     OrbitTheme {
         OnboardingScaffold(
+            title = stringResource(R.string.onb_first_list_title),
             step = OnboardingStep.FirstList,
             onBack = null,
-            primary = OnboardingAction(label = "Done", onClick = {}, enabled = false),
-            secondary = OnboardingAction(label = "Add another list", onClick = {}, enabled = false),
+            primary = OnboardingAction(
+                label = stringResource(R.string.components_action_done),
+                onClick = {},
+                enabled = false,
+            ),
+            secondary = OnboardingAction(
+                label = stringResource(R.string.onb_first_list_add_another),
+                onClick = {},
+                enabled = false,
+            )
         ) {
             FirstListLoadingSkeleton()
         }
@@ -342,9 +466,9 @@ private fun OnboardingFirstListScreenPreview() {
                 members = listOf(
                     ListConfigContactSnapshot(id = 1L, displayName = "Sarah", photoUri = null),
                     ListConfigContactSnapshot(id = 2L, displayName = "Marcus", photoUri = null),
-                    ListConfigContactSnapshot(id = 3L, displayName = "Priya", photoUri = null),
-                ),
-            ),
+                    ListConfigContactSnapshot(id = 3L, displayName = "Priya", photoUri = null)
+                )
+            )
         )
     }
 }
@@ -367,9 +491,27 @@ private fun OnboardingFirstListContactsDeniedPreview() {
                 activeHoursEnd = null,
                 notificationsEnabled = true,
                 nudgeSchedule = null,
-                members = emptyList(),
+                members = emptyList()
             ),
-            hasContactsPermission = false,
+            hasContactsPermission = false
         )
+    }
+}
+
+// The list could not be read: Try again is the footer's one accent.
+@PreviewLightDark
+@Composable
+private fun OnboardingFirstListErrorPreview() {
+    OrbitTheme {
+        FirstListFallbackContent(fallback = firstListFallback(ListConfigUiState.Error)!!, onAction = {})
+    }
+}
+
+// The list is gone: "Start again" returns to the Sync step for a fresh one.
+@PreviewLightDark
+@Composable
+private fun OnboardingFirstListNotFoundPreview() {
+    OrbitTheme {
+        FirstListFallbackContent(fallback = firstListFallback(ListConfigUiState.NotFound)!!, onAction = {})
     }
 }

@@ -34,4 +34,37 @@ class WidgetColorsTest {
     fun `light error maps to LightColors danger`() {
         assertEquals(LightColors.danger, WidgetLightScheme.error)
     }
+
+    // WIDGET-11: a widget avatar's day and night colours are the ones the app
+    // gives the same name in light and dark, under the same mode override.
+    // Cool is used because its avatar tones differ by mode (Warm's do not).
+
+    @Test
+    fun `avatar tones follow the system mode by default`() {
+        val settings = ThemeSettings(themeId = OrbitThemeId.COOL, darkMode = OrbitDarkMode.SYSTEM)
+        val colors = orbitWidgetAvatarTones(settings).forName("Kai Nakamura")
+        val day = OrbitThemes.resolve(settings, isDark = false).tones.avatarPalette("Kai Nakamura")
+        val night = OrbitThemes.resolve(settings, isDark = true).tones.avatarPalette("Kai Nakamura")
+        assertEquals(day.first, colors.backgroundDay)
+        assertEquals(day.second, colors.foregroundDay)
+        assertEquals(night.first, colors.backgroundNight)
+        assertEquals(night.second, colors.foregroundNight)
+    }
+
+    @Test
+    fun `avatar tones stay light when the app is set to light`() {
+        val settings = ThemeSettings(themeId = OrbitThemeId.COOL, darkMode = OrbitDarkMode.LIGHT)
+        val colors = orbitWidgetAvatarTones(settings).forName("Kai Nakamura")
+        assertEquals(colors.backgroundDay, colors.backgroundNight)
+        assertEquals(colors.foregroundDay, colors.foregroundNight)
+    }
+
+    @Test
+    fun `avatar tones stay dark when the app is set to dark`() {
+        val settings = ThemeSettings(themeId = OrbitThemeId.COOL, darkMode = OrbitDarkMode.DARK)
+        val colors = orbitWidgetAvatarTones(settings).forName("Kai Nakamura")
+        val night = OrbitThemes.resolve(settings, isDark = true).tones.avatarPalette("Kai Nakamura")
+        assertEquals(night.first, colors.backgroundDay)
+        assertEquals(night.first, colors.backgroundNight)
+    }
 }

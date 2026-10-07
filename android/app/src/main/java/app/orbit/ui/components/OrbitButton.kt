@@ -20,16 +20,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.orbit.ui.theme.OrbitPressIndication
 import app.orbit.ui.theme.OrbitTheme
 
 enum class OrbitButtonVariant { Primary, Secondary, Ghost, Destructive }
 
 // 48dp minimum per PRD accessibility baseline. 12dp radius per shape tokens.
-// Press = fill darkens ~8-10% via press overlay (no ripple, per design brief).
+// Press = fill darkens (no ripple, per design brief): Primary swaps to the
+// authored accentPress fill; every variant also takes the theme's quiet
+// overlay (OrbitPressIndication), which is what shows keyboard focus and gives
+// the other variants their press. Secondary used to "press" to bgSubtle, its
+// own resting fill, so it gave no feedback at all.
 @Composable
 fun OrbitButton(
     text: String,
@@ -49,9 +55,8 @@ fun OrbitButton(
     }
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val pressTint = if (pressed) {
-        if (variant == OrbitButtonVariant.Primary) c.accentPress else c.bgSubtle
-    } else bg
+    val primary = variant == OrbitButtonVariant.Primary
+    val pressTint = if (pressed && primary) c.accentPress else bg
     val alpha = if (enabled) 1f else 0.4f
     // Never re-alpha a transparent container: Color.Transparent is black at
     // alpha 0, so `.copy(alpha = 1f)` turns Ghost/Destructive fills into a
@@ -59,7 +64,7 @@ fun OrbitButton(
     val container = if (pressTint == Color.Transparent) pressTint else pressTint.copy(alpha = alpha)
 
     Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             // Min height only — a hard .height() pin clipped two-line labels
@@ -72,10 +77,11 @@ fun OrbitButton(
             .clickable(
                 enabled = enabled,
                 interactionSource = interaction,
-                indication = null,
+                indication = OrbitPressIndication,
+                role = Role.Button,
                 onClick = onClick,
             )
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = OrbitTheme.spacing.x5),
     ) {
         if (leadingIcon != null) PhIcon(name = leadingIcon, size = 18.dp, tint = fg)
         Text(text = text, style = OrbitTheme.type.button.copy(color = fg.copy(alpha = alpha)))
@@ -96,7 +102,7 @@ fun OrbitIconButton(
         modifier = modifier
             .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
             .clip(OrbitTheme.shapes.md)
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .then(
                 if (contentDescription != null)
                     Modifier.semantics { this.contentDescription = contentDescription }

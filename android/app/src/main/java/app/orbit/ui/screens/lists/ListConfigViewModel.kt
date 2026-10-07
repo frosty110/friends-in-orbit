@@ -3,6 +3,7 @@ package app.orbit.ui.screens.lists
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListType
@@ -20,22 +21,26 @@ import app.orbit.domain.usecase.BulkRemoveFromListUseCase
 import app.orbit.notify.NudgeSchedule
 import app.orbit.notify.NudgeScheduler
 import app.orbit.ui.screens.picker.SnackbarEvent
+import app.orbit.ui.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.LocalTime
-import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalTime
+import javax.inject.Inject
 
 /**
  * List Configuration ViewModel.
@@ -70,7 +75,7 @@ class ListConfigViewModel @Inject constructor(
     private val bulkRemoveFromListUseCase: BulkRemoveFromListUseCase,
     private val undoStack: UndoStack,
     private val nudgeScheduler: NudgeScheduler,
-    savedStateHandle: SavedStateHandle,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val json = JsonProvider.json
@@ -85,15 +90,32 @@ class ListConfigViewModel @Inject constructor(
 
     // H4 fix — VM-owned snackbar surface so [runMutation] can emit a failure
     // toast when a setter throws. The screen subscribes via [snackbarEvents].
-    private val _snackbarEvents = MutableSharedFlow<SnackbarEvent>(extraBufferCapacity = 1)
+    // More than one slot so a second event in the same turn is kept, not
+    // dropped by tryEmit (ListsManagerViewModel explains why one slot hid the
+    // ungated convert confirmation).
+    private val _snackbarEvents = MutableSharedFlow<SnackbarEvent>(extraBufferCapacity = SNACKBAR_EVENT_BUFFER)
     val snackbarEvents: SharedFlow<SnackbarEvent> = _snackbarEvents.asSharedFlow()
 
+    // LIST-22: bumped by [onRetry] to re-subscribe after a failure.
+    private val retryCount = MutableStateFlow(0)
+
+    /** The Error state's Try again. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<ListConfigUiState> =
-        sourceFlow()
+        retryCount.flatMapLatest {
+            sourceFlow().catch { t ->
+                if (t is CancellationException) throw t
+                emit(ListConfigUiState.Error)
+            }
+        }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = ListConfigUiState.Loading,
+                initialValue = ListConfigUiState.Loading
             )
 
     // ────────────────────────────────────────────────────────────────────────
@@ -140,7 +162,15 @@ class ListConfigViewModel @Inject constructor(
             // MembersPreview report "20 people" for a 50-person list and left
             // rows 21+ unremovable. The full list flows down; MembersPreview
             // owns the (honestly labeled) visual collapse.
-            flowOf(buildReady(entity, ruleTemplate = templateLookup(entity), members = members.map { it.toUiSnapshot() }))
+            flowOf(
+                buildReady(
+                    entity,
+                    ruleTemplate = templateLookup(entity),
+                    members = members.map {
+                        it.toUiSnapshot()
+                    }
+                )
+            )
         }
     }
 
@@ -150,18 +180,17 @@ class ListConfigViewModel @Inject constructor(
      * count must be the true total and every member must be removable;
      * [MembersPreview] handles the visual collapse with an honest label.
      */
-    private fun staticProjection(entity: ListEntity): Flow<ListConfigUiState> =
-        combine(
-            listRepo.observeMembersOfList(entity.id),
-            contactRepo.observeAll(),
-        ) { memberships, contacts ->
-            val byId = contacts.associateBy { it.id }
-            val members = memberships
-                .mapNotNull { byId[it.contactId] }
-                .sortedBy { it.id }
-                .map { it.toUiSnapshot() }
-            buildReady(entity, ruleTemplate = templateLookup(entity), members = members)
-        }
+    private fun staticProjection(entity: ListEntity): Flow<ListConfigUiState> = combine(
+        listRepo.observeMembersOfList(entity.id),
+        contactRepo.observeAll()
+    ) { memberships, contacts ->
+        val byId = contacts.associateBy { it.id }
+        val members = memberships
+            .mapNotNull { byId[it.contactId] }
+            .sortedBy { it.id }
+            .map { it.toUiSnapshot() }
+        buildReady(entity, ruleTemplate = templateLookup(entity), members = members)
+    }
 
     // The template lookup is suspend-only on the repository; we resolve
     // synchronously on each emission inside `combine`/`flatMapLatest` via a
@@ -175,7 +204,7 @@ class ListConfigViewModel @Inject constructor(
     private suspend fun buildReady(
         entity: ListEntity,
         ruleTemplate: RuleTemplateEntity?,
-        members: List<ListConfigContactSnapshot>,
+        members: List<ListConfigContactSnapshot>
     ): ListConfigUiState {
         val ruleParams: RuleParams? = resolveRuleParams(entity, ruleTemplate)
         val smartRule: SmartListRule? = entity.smartRuleJson?.let { decodeSmartRule(it) }
@@ -194,23 +223,33 @@ class ListConfigViewModel @Inject constructor(
             activeHoursEnd = entity.activeHoursEnd,
             notificationsEnabled = entity.notificationsEnabled,
             nudgeSchedule = nudgeSchedule,
-            members = members,
+            members = members
         )
     }
 
+    /**
+     * The per-list override, else the template's defaults, through the
+     * resolver this screen shares with the Lists row (the top-level
+     * [resolveRuleParams] in RuleParamsResolution.kt). Nothing configured and
+     * a blob that does not decode both come back null here: How often has
+     * nothing honest to show for either, and the Lists row is where the
+     * unreadable case is named ("Couldn't read this list's rhythm"). The
+     * domain's `OverrideResolver.resolveParamsFor` decodes the same JSON
+     * without a catch and throws, so a list whose override is unreadable
+     * here also fails to surface anyone in the deck and the queue.
+     */
     private fun resolveRuleParams(
         entity: ListEntity,
-        ruleTemplate: RuleTemplateEntity?,
+        ruleTemplate: RuleTemplateEntity?
     ): RuleParams? {
-        entity.ruleParamsOverrideJson?.let { override ->
-            return runCatching {
-                json.decodeFromString(RuleParams.serializer(), override)
-            }.getOrNull()
-        }
-        return ruleTemplate?.paramsJson?.let { paramsJson ->
-            runCatching {
-                json.decodeFromString(RuleParams.serializer(), paramsJson)
-            }.getOrNull()
+        val resolved = resolveRuleParams(
+            overrideJson = entity.ruleParamsOverrideJson,
+            templateParamsJson = ruleTemplate?.paramsJson,
+            json = json
+        )
+        return when (resolved) {
+            is RuleParamsResolution.Decoded -> resolved.params
+            RuleParamsResolution.None, RuleParamsResolution.Unreadable -> null
         }
     }
 
@@ -218,12 +257,11 @@ class ListConfigViewModel @Inject constructor(
         json.decodeFromString(SmartListRule.serializer(), jsonText)
     }.getOrNull()
 
-    private fun ContactEntity.toUiSnapshot(): ListConfigContactSnapshot =
-        ListConfigContactSnapshot(
-            id = id,
-            displayName = displayName,
-            photoUri = photoUri,
-        )
+    private fun ContactEntity.toUiSnapshot(): ListConfigContactSnapshot = ListConfigContactSnapshot(
+        id = id,
+        displayName = displayName,
+        photoUri = photoUri
+    )
 
     // ────────────────────────────────────────────────────────────────────────
     // Save-on-change setters (LIST-04, LIST-05, LIST-06, SMART-04, SMART-06)
@@ -240,8 +278,8 @@ class ListConfigViewModel @Inject constructor(
      * mirrored the seed-insert order) and an unknown id silently returned.
      * Resolving through [RuleTemplateRepository.getByKind] makes an unknown id
      * structurally impossible; the only remaining failure (seed never ran) is
-     * thrown and surfaces as the [runMutation] "Couldn't update list" snackbar
-     * — never a silent return.
+     * thrown and surfaces as the [runMutation] "Couldn't save your change"
+     * snackbar, never a silent return.
      *
      * Rule-correctness fix — switching to a *different* template also clears
      * `ruleParamsOverrideJson`. The override is interval tuning for the
@@ -291,7 +329,14 @@ class ListConfigViewModel @Inject constructor(
     fun setActiveHours(start: LocalTime?, end: LocalTime?) {
         val id = listId ?: return
         viewModelScope.launch {
-            runMutation { listRepo.updateActiveHours(id, start, end) }
+            runMutation {
+                listRepo.updateActiveHours(id, start, end)
+                // The effective nudge schedule depends on the window (D-09: a slot at
+                // the window start only when no chosen time lands inside it), so a
+                // window edit re-anchors the chain instead of leaving the old slot
+                // queued until the next fire or cold start.
+                listRepo.getById(id)?.let { nudgeScheduler.scheduleFromEntity(it) }
+            }
         }
     }
 
@@ -307,10 +352,8 @@ class ListConfigViewModel @Inject constructor(
      * NOTIF-10/11 — save-on-change setter for the per-list nudge schedule.
      *
      * Encodes [schedule] to JSON, persists via [ListRepository.setNudgeScheduleJson],
-     * then calls [NudgeScheduler.schedule] with the list's current [activeHoursStart]
-     * forwarded so the D-09 implicit active-hours slot survives a config save. Using
-     * the 3-arg overload (schedule + activeHoursStart) is required — calling the
-     * 2-arg overload would drop the injected slot until the next cold-start reAnchorAll.
+     * then calls [NudgeScheduler.schedule] with the list's current active-hours
+     * window forwarded so the D-09 slot is decided against the saved window.
      */
     fun onNudgeScheduleChange(schedule: NudgeSchedule) {
         val id = listId ?: return
@@ -318,9 +361,14 @@ class ListConfigViewModel @Inject constructor(
             runMutation {
                 val encoded = json.encodeToString(NudgeSchedule.serializer(), schedule)
                 listRepo.setNudgeScheduleJson(id, encoded)
-                // Re-read the entity to obtain the authoritative activeHoursStart for D-09.
+                // Re-read the entity to obtain the authoritative window for D-09.
                 val entity = listRepo.getById(id) ?: return@runMutation
-                nudgeScheduler.schedule(id, schedule, entity.activeHoursStart)
+                nudgeScheduler.schedule(
+                    id,
+                    schedule,
+                    entity.activeHoursStart,
+                    entity.activeHoursEnd
+                )
             }
         }
     }
@@ -351,23 +399,41 @@ class ListConfigViewModel @Inject constructor(
      *
      * No local mutation: writing through the repository is the single source of
      * truth. No-op when `listId` is null (sentinel route, e.g. `"new"`).
+     *
+     * A converted list keeps a cadence. Smart lists used to have none, so a
+     * converted one landed with Cadence unselected and surfaced no one until
+     * the user noticed; it now inherits Keep in touch when it has no rhythm.
+     *
+     * "This is now a regular list." is emitted here, only once the write is
+     * in. The body used to show it the moment the dialog was confirmed, so a
+     * failed convert said "Couldn't save your change" and then that the list
+     * was regular (rules.md Code 3).
      */
     fun confirmConvert() {
         val id = listId ?: return
         viewModelScope.launch {
-            runMutation { listRepo.convertSmartToStatic(id) }
+            val saved = runMutation {
+                listRepo.convertSmartToStatic(id)
+                if (listRepo.getById(id)?.ruleTemplateId == null) {
+                    val keepInTouch = ruleTemplateRepo.getByKind(RuleKind.KEEP_IN_TOUCH)
+                        ?: error("KEEP_IN_TOUCH seed row missing")
+                    listRepo.updateRuleTemplate(id, keepInTouch.id)
+                }
+            }
+            if (saved) _snackbarEvents.tryEmit(SnackbarEvent(UiText.res(R.string.lists_converted_snackbar)))
         }
     }
 
     /**
      * ONB-11 / ONB-24 — atomic single-column write of the list name.
      * Mirrors the H3-fix setter family ([setRuleTemplate], [setActiveHours],
-     * [setNotificationsEnabled]). Used by the onboarding first-list wrapper's
-     * name TextField so the onboarding flow can satisfy ONB-11 (no empty/
-     * unnamed lists can leave onboarding) without a getById → copy → update
-     * round trip. Production callers don't invoke this directly — production
-     * list names are set inline by `CreateListBottomSheet.commit` before
-     * navigation to ListConfig.
+     * [setNotificationsEnabled]). Two callers: the onboarding first-list
+     * wrapper's name TextField, so the onboarding flow can satisfy ONB-11 (no
+     * empty/unnamed lists can leave onboarding) without a getById → copy →
+     * update round trip; and List settings' inline rename row (F-12,
+     * `ListNameRenameRow`), which commits on IME Done, focus loss or the check.
+     * The create sheet also names a list, but through `createList`, before
+     * this screen opens.
      */
     fun setName(name: String) {
         val id = listId ?: return
@@ -389,15 +455,19 @@ class ListConfigViewModel @Inject constructor(
         val id = listId ?: return
         viewModelScope.launch {
             runMutation {
-                val sourceListName = listRepo.getById(id)?.name.orEmpty()
                 val result = bulkRemoveFromListUseCase(
                     listId = id,
                     contactIds = listOf(contactId),
-                    sourceListName = sourceListName,
                 )
-                undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
+                undoStack.put(UndoStack.PendingUndo(result.inverse))
                 _snackbarEvents.tryEmit(
-                    SnackbarEvent("Removed ${contactName.ifBlank { "contact" }}", "Undo"),
+                    SnackbarEvent.undoable(
+                        if (contactName.isBlank()) {
+                            UiText.res(R.string.lists_snackbar_member_removed_unnamed)
+                        } else {
+                            UiText.res(R.string.lists_snackbar_member_removed, contactName)
+                        }
+                    )
                 )
             }
         }
@@ -412,22 +482,36 @@ class ListConfigViewModel @Inject constructor(
 
     /**
      * H4 fix — wraps a mutation block with a uniform try/catch + snackbar
-     * surface. Without this, an exception inside `viewModelScope.launch` is
-     * silently dropped (the coroutine's uncaught handler on a viewModelScope is
-     * a no-op for non-Throwable types) and the UI shows stale optimistic state.
-     * `CancellationException` is rethrown so structured concurrency cancellation
-     * still propagates correctly when the screen leaves the back stack.
+     * surface. Without it an exception inside `viewModelScope.launch` is not
+     * dropped: viewModelScope installs no CoroutineExceptionHandler, so the
+     * exception reaches the thread's uncaught handler and crashes the app.
+     * The wrapper exists so a failed write tells the user instead (rules.md
+     * Code 3). `CancellationException` is rethrown so structured concurrency
+     * cancellation still propagates correctly when the screen leaves the back
+     * stack.
+     *
+     * The failure copy is the shared "Couldn't save your change"
+     * (strings_components.xml), the same words Home and Lists use for the same
+     * kind of failure; this screen had its own "Couldn't update list" until
+     * 2026-10-06. Returns true when [block] completed, false when it threw, so
+     * a caller announces success only when there was one (rules.md Code 3).
      */
     private suspend fun runMutation(
-        failureLabel: String = "Couldn't update list",
-        block: suspend () -> Unit,
-    ) {
-        try {
+        failureLabel: UiText = UiText.res(R.string.components_snackbar_save_failed),
+        block: suspend () -> Unit
+    ): Boolean {
+        return try {
             block()
+            true
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
             _snackbarEvents.tryEmit(SnackbarEvent(failureLabel))
+            false
         }
     }
 
+    private companion object {
+        /** Snackbar events a turn can queue before tryEmit drops one; see [_snackbarEvents]. */
+        const val SNACKBAR_EVENT_BUFFER = 8
+    }
 }

@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.lists
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,10 +11,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
@@ -27,14 +30,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitSwitch
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.TimeStyle
+import app.orbit.ui.util.axisTickLabels
+import app.orbit.ui.util.formatClockTime
 import java.time.LocalTime
 
 /**
@@ -45,8 +54,10 @@ import java.time.LocalTime
  * [ActiveHoursRangeBar] that draws TWO segments when `end < start` (overnight
  * list). Replaces an earlier buggy negative-width single-segment bar.
  *
- * Pure formatter helpers ([activeHoursReadout], [spansMidnight]) are tested by
- * `ActiveHoursFormatterTest`. Token-clean — no inline color hex literals, no
+ * The pure helper [spansMidnight] is tested by `ActiveHoursFormatterTest`.
+ * (An `activeHoursReadout` formatter and its three strings lived here until
+ * 2026-10-06 with no composable caller; the editor itself says "9am to 5pm"
+ * with `lists_hours_to`.) Token-clean: no inline color hex literals, no
  * RoundedCornerShape, no fontSize literals.
  *
  * Consumed by the `ListConfigScreen` rewrite.
@@ -69,10 +80,10 @@ fun ActiveHoursEditor(
         )
         if (start != null && end != null) {
             HairlineDivider()
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
+            Column(Modifier.padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     TimeChip(
@@ -82,7 +93,7 @@ fun ActiveHoursEditor(
                         modifier = Modifier.weight(1f),
                     )
                     Text(
-                        text = "to",
+                        text = stringResource(R.string.lists_hours_to),
                         style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                     )
                     TimeChip(
@@ -92,24 +103,24 @@ fun ActiveHoursEditor(
                         modifier = Modifier.weight(1f),
                     )
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(OrbitTheme.spacing.x3))
                 ActiveHoursRangeBar(start = start, end = end)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(OrbitTheme.spacing.x2))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    listOf("12a", "6a", "12p", "6p", "12a").forEach { tick ->
+                    axisTickLabels().forEach { tick ->
                         Text(
-                            text = tick,
+                            text = stringResource(tick),
                             style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
                         )
                     }
                 }
                 if (spansMidnight(start, end)) {
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(OrbitTheme.spacing.x3))
                     Text(
-                        text = "Overnight list — active across midnight.",
+                        text = stringResource(R.string.lists_hours_overnight),
                         style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                     )
                 }
@@ -145,8 +156,14 @@ fun ActiveHoursEditor(
 private enum class TimeEditTarget { Start, End }
 
 /**
- * When `end < start`, draws TWO terracotta segments
- * (start→right edge AND left edge→end) separated by the inactive midnight gap.
+ * The active window on a 24-hour track. When `end < start`, draws TWO
+ * segments (start→right edge AND left edge→end) separated by the inactive
+ * midnight gap.
+ *
+ * The fill is ink (`colors.fg`) on a `bgSubtle` track, like OrbitSlider's
+ * track: a setting's display is cluster tier and spends no accent (rules.md
+ * §Design 5, LIST-21). Until 2026-10-06 the segments were terracotta, which
+ * put a third accent element on List settings beside the two Dones.
  *
  * An earlier `ActiveRangeBar` computed
  * `trackWidth * ((end - start) / 24f)` which produces a NEGATIVE width for
@@ -164,10 +181,10 @@ fun ActiveHoursRangeBar(
             .fillMaxWidth()
             .height(6.dp)
             .clip(OrbitTheme.shapes.full)
-            .background(OrbitTheme.colors.lineSoft),
+            .background(OrbitTheme.colors.bgSubtle),
     ) {
         val trackWidth = maxWidth
-        val accent = OrbitTheme.colors.accent
+        val ink = OrbitTheme.colors.fg
         val shapeFull = OrbitTheme.shapes.full
 
         if (alwaysActive) {
@@ -175,7 +192,7 @@ fun ActiveHoursRangeBar(
                 modifier = Modifier
                     .size(width = trackWidth, height = 6.dp)
                     .clip(shapeFull)
-                    .background(accent),
+                    .background(ink),
             )
             return@BoxWithConstraints
         }
@@ -184,7 +201,7 @@ fun ActiveHoursRangeBar(
         val endFraction = hourFraction(end)
 
         if (start == end) {
-            // Zero-range — no fill, entire track stays lineSoft.
+            // Zero-range: no fill; the entire track stays the muted track colour.
             return@BoxWithConstraints
         }
 
@@ -197,7 +214,7 @@ fun ActiveHoursRangeBar(
                     .offset(x = segAOffset)
                     .size(width = segAWidth, height = 6.dp)
                     .clip(shapeFull)
-                    .background(accent),
+                    .background(ink),
             )
             // Segment B: 0.0 (left edge) → end
             val segBWidth = trackWidth * endFraction
@@ -205,7 +222,7 @@ fun ActiveHoursRangeBar(
                 modifier = Modifier
                     .size(width = segBWidth, height = 6.dp)
                     .clip(shapeFull)
-                    .background(accent),
+                    .background(ink),
             )
         } else {
             val leftOffset = trackWidth * startFraction
@@ -215,7 +232,7 @@ fun ActiveHoursRangeBar(
                     .offset(x = leftOffset)
                     .size(width = fillWidth, height = 6.dp)
                     .clip(shapeFull)
-                    .background(accent),
+                    .background(ink),
             )
         }
     }
@@ -228,27 +245,29 @@ fun TimePickerDialogOrbit(
     onConfirm: (LocalTime) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // The dial follows the phone's 12 or 24 hour setting, like every clock
+    // time beside it (it was always 12-hour until 2026-10-05).
     val state = rememberTimePickerState(
         initialHour = initial.hour,
         initialMinute = initial.minute,
-        is24Hour = false,
+        is24Hour = TimeStyle.is24Hour,
     )
     Dialog(onDismissRequest = onDismiss) {
         Card(shape = OrbitTheme.shapes.lg) {
-            Column(Modifier.padding(24.dp)) {
+            Column(Modifier.padding(OrbitTheme.spacing.x6)) {
                 TimePicker(state = state)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(OrbitTheme.spacing.x2))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                    horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3, Alignment.End),
                 ) {
                     OrbitButton(
-                        text = "Cancel",
+                        text = stringResource(R.string.components_action_cancel),
                         onClick = onDismiss,
                         variant = OrbitButtonVariant.Ghost,
                     )
                     OrbitButton(
-                        text = "OK",
+                        text = stringResource(R.string.lists_hours_ok),
                         onClick = { onConfirm(LocalTime.of(state.hour, state.minute)) },
                     )
                 }
@@ -266,21 +285,21 @@ private fun AlwaysActiveToggleRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onChange(!alwaysActive) }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .toggleable(value = alwaysActive, role = Role.Switch, onValueChange = onChange)
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY),
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                text = "Always active",
+                text = stringResource(R.string.lists_hours_always_active),
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
             Text(
-                text = "Suggest at any time of day",
+                text = stringResource(R.string.lists_hours_always_active_sub),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
             )
         }
-        OrbitSwitch(checked = alwaysActive, onCheckedChange = onChange)
+        OrbitSwitch(checked = alwaysActive, onCheckedChange = null)
     }
 }
 
@@ -293,13 +312,15 @@ private fun TimeChip(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
         modifier = modifier
-            .height(48.dp)
+            // The tap floor from the token (rules.md §Design 3), as a minimum
+            // so the chip grows with a two-line time at 200% (§Design 2).
+            .heightIn(min = OrbitTheme.spacing.tapMin)
             .clip(OrbitTheme.shapes.md)
             .background(OrbitTheme.colors.bgSubtle)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = OrbitTheme.spacing.rowY),
     ) {
         PhIcon(
             name = leadingIcon,
@@ -323,26 +344,16 @@ private fun HairlineDivider() {
     )
 }
 
-// region Pure formatter helpers — tested by ActiveHoursFormatterTest
+// region Pure helpers, tested by ActiveHoursFormatterTest
 
 internal fun spansMidnight(start: LocalTime, end: LocalTime): Boolean = end < start
 
-internal fun activeHoursReadout(start: LocalTime?, end: LocalTime?): String {
-    if (start == null || end == null) return "Always"
-    val s = formatHour12(start)
-    val e = formatHour12(end)
-    return if (spansMidnight(start, end)) "$s – $e (overnight)" else "$s – $e"
-}
-
-internal fun formatHour12(t: LocalTime): String {
-    val h12 = when {
-        t.hour == 0 -> 12
-        t.hour > 12 -> t.hour - 12
-        else -> t.hour
-    }
-    val ampm = if (t.hour >= 12) "pm" else "am"
-    return if (t.minute == 0) "$h12$ampm" else String.format("%d:%02d%s", h12, t.minute, ampm)
-}
+/**
+ * A time of day in the phone's 12/24-hour style. Delegates to the app's one
+ * clock formatter ([formatClockTime]); the name is kept for its callers and
+ * tests, which pin the 12-hour form (JVM tests default to 12-hour).
+ */
+internal fun formatHour12(t: LocalTime): String = formatClockTime(t)
 
 private fun hourFraction(t: LocalTime): Float =
     (t.hour + t.minute / 60f) / 24f
@@ -355,7 +366,7 @@ private fun hourFraction(t: LocalTime): Float =
 @Composable
 private fun ActiveHoursEditorLightNormalPreview() {
     OrbitTheme(darkTheme = false) {
-        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(8.dp)) {
+        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2)) {
             ActiveHoursEditor(
                 start = LocalTime.of(9, 0),
                 end = LocalTime.of(17, 0),
@@ -366,11 +377,11 @@ private fun ActiveHoursEditorLightNormalPreview() {
     }
 }
 
-@Preview(name = "ActiveHoursEditor — dark, overnight", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "ActiveHoursEditor — dark, overnight", showBackground = true)
 @Composable
 private fun ActiveHoursEditorDarkOvernightPreview() {
     OrbitTheme(darkTheme = true) {
-        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(8.dp)) {
+        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2)) {
             ActiveHoursEditor(
                 start = LocalTime.of(21, 0),
                 end = LocalTime.of(2, 0),
@@ -385,7 +396,7 @@ private fun ActiveHoursEditorDarkOvernightPreview() {
 @Composable
 private fun ActiveHoursEditorAlwaysActivePreview() {
     OrbitTheme(darkTheme = false) {
-        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(8.dp)) {
+        Box(modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2)) {
             ActiveHoursEditor(
                 start = null,
                 end = null,

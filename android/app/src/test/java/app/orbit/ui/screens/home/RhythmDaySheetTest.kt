@@ -1,8 +1,14 @@
 package app.orbit.ui.screens.home
 
+import android.app.Application
+import androidx.test.core.app.ApplicationProvider
 import app.orbit.data.entity.CallDirection
+import app.orbit.ui.util.formatDuration
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * HOME-8 — the rhythm day sheet's summary line.
@@ -11,8 +17,15 @@ import org.junit.Test
  * directions must read symmetrically (same verb shape, same weight, no
  * "only"), a zero side must be omitted rather than printed, and no ratio or
  * target may appear. See `vision/00-home/00-home.md` §HOME-8.
+ *
+ * The copy lives in string resources (strings_home.xml), so the summary is a
+ * UiText resolved here against real resources under Robolectric.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33], application = Application::class)
 class RhythmDaySheetTest {
+
+    private val context = ApplicationProvider.getApplicationContext<Application>()
 
     private fun call(id: Long, direction: CallDirection) = RhythmCall(
         callEventId = id,
@@ -21,13 +34,15 @@ class RhythmDaySheetTest {
         photoUri = null,
         durationSeconds = 600,
         direction = direction,
-        durationLabel = "10 min",
+        durationLabel = formatDuration(600),
         timeLabel = "4:30pm",
     )
 
+    private fun summary(calls: List<RhythmCall>): String = directionSummary(calls).asString(context)
+
     @Test
     fun `both directions render symmetrically`() {
-        val summary = directionSummary(
+        val summary = summary(
             listOf(
                 call(1L, CallDirection.OUTGOING),
                 call(2L, CallDirection.OUTGOING),
@@ -39,13 +54,13 @@ class RhythmDaySheetTest {
 
     @Test
     fun `all-outgoing day omits the empty half instead of printing a zero`() {
-        val summary = directionSummary(listOf(call(1L, CallDirection.OUTGOING)))
+        val summary = summary(listOf(call(1L, CallDirection.OUTGOING)))
         assertEquals("You called 1", summary)
     }
 
     @Test
     fun `all-incoming day omits the empty half instead of printing a zero`() {
-        val summary = directionSummary(listOf(call(1L, CallDirection.INCOMING)))
+        val summary = summary(listOf(call(1L, CallDirection.INCOMING)))
         assertEquals("They called 1", summary)
     }
 
@@ -55,12 +70,12 @@ class RhythmDaySheetTest {
      */
     @Test
     fun `empty day reads as a fact, not a shortfall`() {
-        assertEquals("No calls", directionSummary(emptyList()))
+        assertEquals("No calls", summary(emptyList()))
     }
 
     @Test
     fun `direction words are the same shape for both sides`() {
-        assertEquals("You called", directionWord(CallDirection.OUTGOING))
-        assertEquals("They called", directionWord(CallDirection.INCOMING))
+        assertEquals("You called", context.getString(directionWord(CallDirection.OUTGOING)))
+        assertEquals("They called", context.getString(directionWord(CallDirection.INCOMING)))
     }
 }

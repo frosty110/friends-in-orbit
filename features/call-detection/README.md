@@ -1,7 +1,7 @@
 # call-detection
 
 **Status:** in-progress
-**Last reviewed:** 2026-06-09
+**Last reviewed:** 2026-10-06 (attempts, the encrypted store, where the type filter runs)
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/calllog/` (`CallLogSyncWorker`, `CallLogReconciler`, `ContentObserverController`, `PhoneNumberNormalizer`), `android/app/src/main/java/app/orbit/data/android/CallLogReader.kt`
 - Tests: `android/app/src/test/java/app/orbit/calllog/` (`CallLogSyncWorkerTest`, `CallLogReconcilerTest`, `ContentObserverControllerTest`, `PhoneNumberNormalizerTest`)
@@ -28,7 +28,7 @@ As a user, I grant CALL_LOG permission during onboarding. From then on, the app 
 
 **Resume sync.** On every app foreground the call log is re-read incrementally (TTL-gated) so a call completed while the app was backgrounded/killed still surfaces without a manual tap. See `real-time-detection-exploration.md` for why live in-call detection is deliberately not built.
 
-**Filter.** Missed calls, declined calls, and voicemails are NOT counted — not in the domain model. Only completed calls (incoming answered, outgoing connected) get ingested.
+**Filter.** Inbound non-events are not counted and never enter the domain model: missed calls, declined calls, voicemails and blocked calls, because the user did not reach out. An incoming call is ingested once it was answered (a duration of 1 second or more). An outgoing call is always ingested: one that connected (1 second or more) as a call (`source = CALL_LOG`), and one nobody answered (under 1 second) as an attempt (`source = ATTEMPT`), a reach-out the user placed that Call history shows as "Attempted" and the stats leave out (`features/call-history/README.md`, the glossary's "Attempt" in `voice.md`). `CallLogReconciler.isIngestable` and `toCallSource` are the mechanism. Until 2026-10-06 this paragraph said unanswered calls were never ingested, which the reconciler had not done for some time.
 
 **Direction.** Outgoing and incoming stored separately.
 
@@ -41,10 +41,10 @@ As a user, I grant CALL_LOG permission during onboarding. From then on, the app 
 ### Acceptance criteria
 
 - [ ] First-run import of 90 days completes in < 5s on a test device with ~1000 call log rows.
-- [ ] Missed / declined / voicemail filtered at query level, not post-hoc.
+- [x] Missed, declined, voicemail and blocked rows never reach Room. The filter runs in Kotlin after the read, not in the query: `CallLogReader` selects by date only, and `CallLogReconciler.isIngestable` drops those types (and an incoming call under 1 second) before anything is written (`CallLogReconcilerTest.type_mapping_skips_missed_rejected_voicemail_blocked`, `outgoing_no_answer_is_an_attempt_incoming_zero_duration_is_skipped`).
 - [ ] Resync is idempotent — running twice produces identical state.
 - [ ] Permission denial produces a usable degraded app; no dead-end UX.
-- [ ] All call history persisted through encrypted Room per ADR 0002.
+- [x] All call history persisted through encrypted Room per ADR 0002 (`DatabaseFactory` opens the store with SQLCipher's `SupportOpenHelperFactory`; `features/call-history/README.md` checks the same fact).
 - [ ] Data Safety form justification for `READ_CALL_LOG` matches actual usage.
 
 ### Not in scope
@@ -81,7 +81,8 @@ contactId: Long,            // non-null — unmatched numbers are not persisted
 occurredAt: Instant,
 direction: CallDirection,   // OUTGOING | INCOMING
 durationSeconds: Int,
-source: CallSource          // CALL_LOG | MANUAL (manual "log a connection" entries)
+source: CallSource          // CALL_LOG (a connected call) | MANUAL (a connection logged by hand)
+                            // | ATTEMPT (an unanswered outgoing call, or "Couldn't reach them" logged by hand)
 ```
 
 No `CallStatEntity` — stats (last-call, count, avg-duration, longest-gap) are computed in Kotlin from `CallEventEntity` rows.

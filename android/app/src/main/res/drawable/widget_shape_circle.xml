@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WIDGET-11: an avatar's circle on a widget. White so the widget can tint it
+     with the avatar's day and night palette colours (Glance tints a drawable
+     background per mode on Android 12+); a real oval, so the circle does not
+     depend on the host clipping to an outline. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@android:color/white" />
+</shape>

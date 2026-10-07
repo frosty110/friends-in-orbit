@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Card view: one person at a time from a list, with Call, Later and Sooner.
+    Keys are area_what (features/_foundations/voice.md, "Where copy lives").
+    Glossary: "Later" moves a person further out on this list, "Sooner" brings them forward.
+-->
+<resources>
+
+    <!-- The three-dots button that opens the list's menu, named for the list it acts on, as
+         every overflow button is (voice.md glossary). %1$s: the list's name. -->
+    <string name="card_list_options">More actions for %1$s</string>
+    <!-- The same button while the list's name is not known (the deck failed to load). -->
+    <string name="card_list_options_unnamed">More actions for this list</string>
+    <!-- App bar menu of list actions. The same words as Home's list menu. -->
+    <string name="card_menu_browse">Browse people</string>
+    <string name="card_menu_add_people">Add people</string>
+    <string name="card_menu_list_settings">List settings</string>
+
+    <!-- Notice while the call log permission is off. Its action is the shared
+         components_action_open_settings. -->
+    <string name="card_call_log_denied">Orbit can\'t see your calls, so cards won\'t move on by themselves.</string>
+
+    <!-- Empty list. -->
+    <string name="card_no_members_heading">No one is in this list yet.</string>
+    <string name="card_no_members_body">Add a few people to start surfacing names.</string>
+    <string name="card_add_people">Add people</string>
+    <string name="card_go_home">Go home</string>
+
+    <!-- Nobody to suggest right now. Calm, never "caught up". -->
+    <string name="card_quiet_heading">All quiet for now.</string>
+    <!-- %1$s: the person's name, %2$s: when, for example "tomorrow" or "in 2 weeks". -->
+    <string name="card_quiet_body_up_next">%1$s comes up %2$s.</string>
+    <string name="card_quiet_body">No one needs a call right now.</string>
+    <string name="card_browse_list">Browse this list</string>
+
+    <!-- The deck could not be read (CARD-07). The body and "Try again" are the shared
+         components_error_body and components_error_retry. -->
+    <string name="card_error_heading">Something\'s off here.</string>
+
+    <!-- The Call button and its screen-reader action. %1$s: the person's first name. -->
+    <string name="card_call">Call %1$s</string>
+    <string name="card_later">Later</string>
+    <string name="card_sooner">Sooner</string>
+
+    <!-- Small label above the person's name: a fact about the rhythm, never a deadline
+         (voice.md never says "due"). "Up now" when their time has come, "Coming up" before it. -->
+    <string name="card_due_today">Up now</string>
+    <string name="card_not_due_yet">Coming up</string>
+
+    <!-- The user's most recent note about this person, in quotation marks. Use your
+         language's quotation marks. %1$s: the note. -->
+    <string name="card_last_note_quoted">“%1$s”</string>
+    <!-- %1$s: when the note was written, for example "12 days ago". -->
+    <string name="card_last_note_meta">Your note, %1$s</string>
+
+    <!-- In place of the "Usually answers" panel until there are three connected calls to
+         read a pattern from. True beside "Total calls 2", which "No call history yet" was not. -->
+    <string name="card_pattern_not_enough_calls">Not enough calls yet to see a pattern</string>
+    <!-- When this person tends to pick up, from past calls. -->
+    <string name="card_usually_answers">Usually answers</string>
+    <string name="card_usually_tooltip">Based on when you usually answer or call this person.</string>
+    <string name="card_usually_tooltip_label">About usually answers</string>
+    <string name="card_answer_good">Good time to call</string>
+    <string name="card_answer_sometimes">Sometimes answers now</string>
+    <string name="card_answer_rarely">Rarely answers now</string>
+
+    <!-- Three small stats at the foot of the card, the glossary's labels (voice.md: "Last
+         call", "Average length", "Total calls"). A stat with nothing to say uses the shared
+         components_stat_never_called / components_stat_not_enough_calls, never a dash. -->
+    <string name="card_stat_last_called">Last call</string>
+    <string name="card_stat_avg_length">Average length</string>
+    <string name="card_stat_calls">Total calls</string>
+
+    <!-- Snackbar action after a call: open the person to write a note. -->
+    <string name="card_snackbar_add_note">Add a note</string>
+
+    <!-- Snackbars after Later or Sooner. %1$s: the person's first name, %2$s: when they come
+         back, for example "tomorrow", "on Tuesday" or "in 2 weeks". The "They" versions are
+         for when the name isn't known. -->
+    <string name="card_later_named_when">%1$s will come up again %2$s.</string>
+    <string name="card_later_unnamed_when">They will come up again %1$s.</string>
+    <string name="card_later_named">%1$s moved to later.</string>
+    <string name="card_later_unnamed">They moved to later.</string>
+    <string name="card_sooner_named_when">%1$s comes up %2$s.</string>
+    <string name="card_sooner_unnamed_when">They come up %1$s.</string>
+    <string name="card_sooner_named">%1$s moved sooner.</string>
+    <string name="card_sooner_unnamed">They moved sooner.</string>
+
+    <!-- Failures, with what to do. %1$s: the person's first name. -->
+    <string name="card_later_failed_named">Couldn\'t move %1$s to later. Try again.</string>
+    <string name="card_later_failed_unnamed">Couldn\'t move them to later. Try again.</string>
+    <string name="card_sooner_failed_named">Couldn\'t move %1$s sooner. Try again.</string>
+    <string name="card_sooner_failed_unnamed">Couldn\'t move them sooner. Try again.</string>
+    <string name="card_undo_failed">Couldn\'t undo that. Try again.</string>
+
+    <!-- After the call log confirms a call placed from the card. %1$s: first name. -->
+    <string name="card_called_named">Called %1$s</string>
+    <string name="card_call_logged">Call logged</string>
+
+    <!-- Lowercase phrases for when someone comes back; they slot into the sentences above. -->
+    <string name="card_due_later_today">later today</string>
+    <string name="card_due_tomorrow">tomorrow</string>
+    <!-- %1$s: a weekday, for example "on Tuesday". -->
+    <string name="card_due_on_day">on %1$s</string>
+    <!-- %1$s: a span, for example "in 3 weeks". -->
+    <string name="card_due_in_span">in %1$s</string>
+
+    <!-- "Why now" line under the name: when you last spoke, as a fact, never blame ("N days
+         since" is the shame framing voice.md never says). Home's words for the same gap
+         (home_why_today, home_why_ago), with a full stop. -->
+    <string name="card_why_today">You spoke today.</string>
+    <string name="card_why_yesterday">You spoke yesterday.</string>
+    <!-- %1$s: how long ago, for example "3 weeks ago". -->
+    <string name="card_why_ago">You spoke %1$s.</string>
+    <!-- Joins the line above with the rhythm line below it. -->
+    <string name="card_why_two_lines" translatable="false">%1$s\n%2$s</string>
+
+    <!-- The pair's usual gap between calls, stated as a fact, never a deadline. -->
+    <string name="card_rhythm_daily">You usually talk about every day.</string>
+    <string name="card_rhythm_weekly">You usually talk about every week.</string>
+    <plurals name="card_rhythm_days">
+        <item quantity="one">You usually talk about every %1$d day.</item>
+        <item quantity="other">You usually talk about every %1$d days.</item>
+    </plurals>
+    <plurals name="card_rhythm_weeks">
+        <item quantity="one">You usually talk about every %1$d week.</item>
+        <item quantity="other">You usually talk about every %1$d weeks.</item>
+    </plurals>
+    <plurals name="card_rhythm_months">
+        <item quantity="one">You usually talk about every %1$d month.</item>
+        <item quantity="other">You usually talk about every %1$d months.</item>
+    </plurals>
+
+</resources>

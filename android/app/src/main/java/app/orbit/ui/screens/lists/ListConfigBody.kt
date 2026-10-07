@@ -1,12 +1,13 @@
 package app.orbit.ui.screens.lists
 
+import androidx.annotation.PluralsRes
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.ui.layout.Layout
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,42 +21,45 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import app.orbit.R
 import app.orbit.data.entity.ListType
 import app.orbit.data.entity.RuleKind
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeSchedule
+import app.orbit.ui.components.CurtainMask
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
+import app.orbit.ui.components.OrbitSlider
+import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 import java.time.LocalTime
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 
 /**
  * ONB-20 — production-and-onboarding body for List Configuration.
@@ -79,14 +83,17 @@ import kotlinx.coroutines.launch
  *     The onboarding branch instead uses `fillMaxWidth().imePadding()` and
  *     lets the OnboardingScaffold scroll container be the only scroll parent.
  *   - An [OutlinedTextField] for the list name renders at the top of the
- *     body (BLOCKER 1 / ONB-11). Production path skips the field — the
- *     production list name is set inline by `CreateListBottomSheet` before
- *     navigation to ListConfig.
+ *     body (BLOCKER 1 / ONB-11). The production path renders the name as an
+ *     inline rename row instead (F-12, [ListNameRenameRow]: static text with
+ *     a pencil, a field while editing); both commit through `onNameChange`.
  *
  * Save-on-change semantics — every control commits via a VM setter (LIST-04);
- * the body never holds editable form state of its own. The name field's value
- * mirrors `state.name` and emits to the `onNameChange` setter on every
- * keystroke (the VM coalesces inside `runMutation`; v1 ships with no debounce).
+ * the body never holds editable form state of its own beyond a typing buffer.
+ * The onboarding name field emits to `onNameChange` on every keystroke (the VM
+ * coalesces inside `runMutation`; v1 ships with no debounce); the rename row
+ * commits once, on IME Done, focus loss or the check. Confirmations ("This is
+ * now a regular list.") come from the ViewModel through the screen's one
+ * snackbar collector, so they say only what was saved.
  */
 @Composable
 internal fun ListConfigBody(
@@ -109,10 +116,9 @@ internal fun ListConfigBody(
     onSmartRuleChange: (SmartListRule) -> Unit,
     onConfirmConvert: () -> Unit,
     onRemoveMember: (Long, String) -> Unit = { _, _ -> },
-    onAddContacts: () -> Unit = {},
+    onAddContacts: () -> Unit = {}
 ) {
     var showConvertDialog by rememberSaveable { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     if (isOnboarding) {
         // F-1 fix (2026-04-30 hot-fix-260430-hs4): drop the inner
@@ -126,8 +132,8 @@ internal fun ListConfigBody(
             modifier = Modifier
                 .fillMaxWidth()
                 .imePadding()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .padding(bottom = 32.dp),
+                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x1)
+                .padding(bottom = OrbitTheme.spacing.x7)
         ) {
             ListConfigBodySections(
                 state = state,
@@ -143,7 +149,7 @@ internal fun ListConfigBody(
                 onSmartRuleChange = onSmartRuleChange,
                 onShowConvertDialog = { showConvertDialog = true },
                 onRemoveMember = onRemoveMember,
-                onAddContacts = onAddContacts,
+                onAddContacts = onAddContacts
             )
         }
     } else {
@@ -151,8 +157,8 @@ internal fun ListConfigBody(
             val scrollModifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .padding(bottom = 32.dp)
+                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x1)
+                .padding(bottom = OrbitTheme.spacing.x7)
 
             Column(modifier = scrollModifier) {
                 ListConfigBodySections(
@@ -169,13 +175,13 @@ internal fun ListConfigBody(
                     onSmartRuleChange = onSmartRuleChange,
                     onShowConvertDialog = { showConvertDialog = true },
                     onRemoveMember = onRemoveMember,
-                    onAddContacts = onAddContacts,
+                    onAddContacts = onAddContacts
                 )
             }
 
-            SnackbarHost(
+            OrbitSnackbarHost(
                 hostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
     }
@@ -186,13 +192,12 @@ internal fun ListConfigBody(
             firstNames = state.members.map { it.displayName },
             onConfirm = {
                 showConvertDialog = false
-                triggerConvertExtracted(
-                    onConfirmConvert = onConfirmConvert,
-                    scope = scope,
-                    snackbarHostState = snackbarHostState,
-                )
+                // The VM confirms with "This is now a regular list." once the
+                // write is in; the body announced it here, before and
+                // regardless of the write, until 2026-10-06.
+                onConfirmConvert()
             },
-            onDismiss = { showConvertDialog = false },
+            onDismiss = { showConvertDialog = false }
         )
     }
 }
@@ -218,30 +223,35 @@ private fun ColumnScope.ListConfigBodySections(
     onSmartRuleChange: (SmartListRule) -> Unit,
     onShowConvertDialog: () -> Unit,
     onRemoveMember: (Long, String) -> Unit,
-    onAddContacts: () -> Unit,
+    onAddContacts: () -> Unit
 ) {
     if (isOnboarding) {
         // BLOCKER 1 fix — name editor is required so onboarding
         // can satisfy ONB-11 ("no empty/unnamed lists can leave
-        // onboarding"). Production path skips this — the production
-        // list name is set by CreateListBottomSheet before nav.
-        SettingGroup(title = "Name") {
+        // onboarding"). The production branch below renders the name as
+        // an inline rename row instead (F-12), since a list arrives there
+        // already named by the create sheet.
+        SettingGroup(title = stringResource(R.string.lists_section_name)) {
             // Local typing buffer prevents the async VM round-trip
             // from racing the IME — without it, fast typing drops the
             // first keystroke (Room write → Flow emit → recompose lags
             // the next IME event, and Compose's value= prop overwrites
             // the live buffer with the stale state.name).
             var nameText by rememberSaveable { mutableStateOf(state.name) }
+            // PRIV-03: under the curtain the field draws "List" over the
+            // user's buffer, which it leaves alone (CurtainMask).
+            val curtainList = stringResource(R.string.components_curtain_list)
             OutlinedTextField(
                 value = nameText,
                 onValueChange = {
                     nameText = it
                     onNameChange(it)
                 },
+                visualTransformation = if (LocalPrivacyCurtain.current) CurtainMask(curtainList) else VisualTransformation.None,
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x2)
             )
         }
     } else {
@@ -250,26 +260,32 @@ private fun ColumnScope.ListConfigBodySections(
         // into an OutlinedTextField. Save paths: IME "Done", focus loss,
         // or trailing check icon. Empty names revert silently — the VM
         // setter is never invoked when the trimmed buffer is blank.
-        SettingGroup(title = "Name") {
+        SettingGroup(title = stringResource(R.string.lists_section_name)) {
             ListNameRenameRow(
                 currentName = state.name,
-                onCommit = onNameChange,
+                onCommit = onNameChange
             )
         }
     }
 
-    if (state.type == ListType.STATIC) {
-        SettingGroup(title = "Cadence") {
+    // Cadence applies to smart lists too: their members surface on the card
+    // like anyone else's, so they need a rhythm. This used to be static-only,
+    // which left a smart list with no way to get one.
+    run {
+        // LIST-21: "Rhythm", not "Cadence" (voice.md glossary); no accent spent
+        // on settings in this body. The app bar's "Done" is the screen's one
+        // accent; the foot-of-form Done below is Secondary for that reason.
+        SettingGroup(title = stringResource(R.string.lists_section_rhythm)) {
             RuleTemplatePicker(
                 currentKind = state.ruleKind,
                 templates = emptyList(),
-                onSelect = onRuleTemplateChange,
+                onSelect = onRuleTemplateChange
             )
         }
 
         val keepInTouch = state.ruleParams as? RuleParams.KeepInTouch
         if (keepInTouch != null) {
-            SettingGroup(title = "Interval") {
+            SettingGroup(title = stringResource(R.string.lists_section_how_often)) {
                 IntervalSliderLocal(
                     currentHours = keepInTouch.cooldownMinHours,
                     onCommit = { hours ->
@@ -279,7 +295,7 @@ private fun ColumnScope.ListConfigBodySections(
                         // cap silently turn "aim for every 30 days" into every
                         // 14 (see RuleParams.KeepInTouch.withIntervalHours KDoc).
                         onRuleParamsChange(keepInTouch.withIntervalHours(hours))
-                    },
+                    }
                 )
             }
         } else {
@@ -288,34 +304,35 @@ private fun ColumnScope.ListConfigBodySections(
             // read as something missing.
             val note = state.ruleKind?.let { rhythmNoteFor(it) }
             if (note != null) {
-                SettingGroup(title = "Interval") {
+                SettingGroup(title = stringResource(R.string.lists_section_how_often)) {
                     Text(
-                        text = note,
+                        text = stringResource(note),
                         style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY)
                     )
                 }
             }
         }
     }
 
-    SettingGroup(title = "Active hours") {
+    SettingGroup(title = stringResource(R.string.lists_section_active_hours)) {
         ActiveHoursEditor(
             start = state.activeHoursStart,
             end = state.activeHoursEnd,
             onAlwaysActiveToggled = onAlwaysActiveToggled,
-            onTimesChanged = onActiveHoursChange,
+            onTimesChanged = onActiveHoursChange
         )
     }
 
-    SettingGroup(title = "Notifications") {
+    // One word for these notifications: "nudges" (voice.md glossary).
+    SettingGroup(title = stringResource(R.string.lists_section_nudges)) {
         ToggleRow(
-            label = "Reminders",
-            sub = "Notify me when I should reach out.",
+            label = stringResource(R.string.lists_send_nudges),
+            sub = stringResource(R.string.lists_send_nudges_sub),
             value = state.notificationsEnabled,
-            onChange = onNotificationsToggle,
+            onChange = onNotificationsToggle
         )
         // Onboarding hides the full nudge editor (below) to stay lean, but the
         // nudge is on by default — so state its schedule here, where the list is
@@ -331,11 +348,11 @@ private fun ColumnScope.ListConfigBodySections(
     // disabled, not alpha-hidden — so it is unreachable via keyboard or a11y
     // before setup completes (Pitfall 8).
     if (!isOnboarding) {
-        SettingGroup(title = "Nudges") {
+        SettingGroup(title = stringResource(R.string.lists_section_when_to_nudge)) {
             NudgeScheduleSection(
                 schedule = state.nudgeSchedule,
                 notificationsEnabled = state.notificationsEnabled,
-                onScheduleChange = onNudgeScheduleChange,
+                onScheduleChange = onNudgeScheduleChange
             )
         }
     }
@@ -343,70 +360,55 @@ private fun ColumnScope.ListConfigBodySections(
     if (state.type == ListType.SMART) {
         val rule = state.smartRule
         if (rule != null) {
-            SettingGroup(title = "Smart rule") {
+            SettingGroup(title = stringResource(R.string.lists_section_smart_rule)) {
                 SmartRuleEditor(
                     rule = rule,
-                    onChange = onSmartRuleChange,
+                    onChange = onSmartRuleChange
                 )
             }
         }
     }
 
-    SettingGroup(title = "Members preview") {
+    SettingGroup(title = stringResource(R.string.lists_section_members)) {
         MembersPreview(
             members = state.members,
             isSmart = state.type == ListType.SMART,
             onRemoveMember = onRemoveMember,
-            onAddContacts = onAddContacts,
+            onAddContacts = onAddContacts
         )
     }
 
     if (state.type == ListType.SMART) {
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(OrbitTheme.spacing.x2))
         OrbitButton(
-            text = "Convert to static list",
+            text = stringResource(R.string.lists_convert_button),
             onClick = onShowConvertDialog,
             variant = OrbitButtonVariant.Destructive,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
         )
         Text(
-            text = "One-time action. The rule will be cleared and current members locked in.",
+            text = stringResource(R.string.lists_convert_note),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgSubtle),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 10.dp, start = 20.dp, end = 20.dp),
+                .padding(top = OrbitTheme.spacing.x3, start = OrbitTheme.spacing.x5, end = OrbitTheme.spacing.x5)
         )
     }
 
     // 2026-08-15 UAT — the create flow ended here with no way to say "done",
     // only a back arrow. Everything above is already saved, so this closes the
     // screen and returns to wherever the list was opened from (Lists Manager,
-    // for a list that was just created).
+    // for a list that was just created). Secondary, not Primary: the app bar's
+    // Done is the screen's one accent (LIST-21, rules.md §Design 5), and two
+    // accent Dones on one screen said neither was the primary action.
     if (onDone != null) {
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(OrbitTheme.spacing.x6))
         OrbitButton(
-            text = "Done",
+            text = stringResource(R.string.components_action_done),
             onClick = onDone,
-            modifier = Modifier.fillMaxWidth(),
+            variant = OrbitButtonVariant.Secondary,
+            modifier = Modifier.fillMaxWidth()
         )
-    }
-}
-
-/**
- * Local copy of the convert side-effect — kept private to ListConfigBody.kt
- * so visibility on the production helper stays unchanged. Atomicity is
- * owned by `ListRepository.convertSmartToStatic` (`db.withTransaction`); the
- * upstream Flow re-emission flips `Ready.type` → STATIC and the body
- * re-renders without the Smart-rule and Convert sections.
- */
-private fun triggerConvertExtracted(
-    onConfirmConvert: () -> Unit,
-    scope: CoroutineScope,
-    snackbarHostState: SnackbarHostState,
-) {
-    onConfirmConvert()
-    scope.launch {
-        snackbarHostState.showSnackbar("List converted — membership locked.")
     }
 }
 
@@ -414,28 +416,28 @@ private fun triggerConvertExtracted(
  * Local interval slider — moved from `ListConfigScreen.kt` along with the
  * Cadence body. Identical behavior; the production path imports it via
  * `ListConfigBody` rather than directly.
+ *
+ * One sentence over the slider ("Aim for every 14 days"), with the interval
+ * as its argument, rather than a label on the left and the value on the
+ * right: a translator can then put the words in their language's order
+ * (voice.md, "keep a sentence whole"). Contact detail's custom schedule uses
+ * the same sentence.
  */
 @Composable
-private fun IntervalSliderLocal(
-    currentHours: Int,
-    onCommit: (Int) -> Unit,
-) {
+private fun IntervalSliderLocal(currentHours: Int, onCommit: (Int) -> Unit) {
     val initialDays = (currentHours / 24f).coerceAtLeast(1f)
     var days by remember(currentHours) { mutableFloatStateOf(initialDays) }
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
-        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = "Aim for every",
-                style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                modifier = Modifier.weight(1f),
-            )
-            val rounded = days.toInt().coerceAtLeast(1)
-            Text(
-                text = "$rounded ${if (rounded == 1) "day" else "days"}",
-                style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.accentPress),
-            )
-        }
-        Slider(
+    Column(Modifier.padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4)) {
+        val rounded = days.toInt().coerceAtLeast(1)
+        Text(
+            text = stringResource(
+                R.string.lists_interval_aim,
+                pluralStringResource(R.plurals.lists_interval_days, rounded, rounded),
+            ),
+            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
+            modifier = Modifier.fillMaxWidth()
+        )
+        OrbitSlider(
             value = days,
             onValueChange = { days = it },
             onValueChangeFinished = {
@@ -443,14 +445,13 @@ private fun IntervalSliderLocal(
                 onCommit(intDays * 24)
             },
             valueRange = 1f..60f,
-            colors = SliderDefaults.colors(
-                thumbColor = OrbitTheme.colors.accent,
-                activeTrackColor = OrbitTheme.colors.accent,
-                inactiveTrackColor = OrbitTheme.colors.line,
-            ),
-            modifier = Modifier.padding(top = 4.dp),
+            label = stringResource(R.string.lists_interval_label),
+            valueDescription = days.toInt().coerceAtLeast(1).let { d ->
+                pluralStringResource(R.plurals.lists_interval_every_days, d, d)
+            },
+            modifier = Modifier.padding(top = OrbitTheme.spacing.x1)
         )
-        IntervalScaleLabels(modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+        IntervalScaleLabels(modifier = Modifier.fillMaxWidth().padding(top = OrbitTheme.spacing.x1))
     }
 }
 
@@ -466,11 +467,15 @@ private fun IntervalSliderLocal(
 private const val INTERVAL_MIN_DAY = 1
 private const val INTERVAL_MAX_DAY = 60
 
-private val INTERVAL_TICKS: List<Pair<String, Int>> = listOf(
-    "1d" to 1,
-    "2w" to 14,
-    "1m" to 30,
-    "2m" to 60,
+/** One tick under the interval slider: where it sits, and its words. */
+private data class IntervalTick(val day: Int, @PluralsRes val label: Int, val count: Int)
+
+private val INTERVAL_TICKS: List<IntervalTick> = listOf(
+    // Words, not "1d / 2w / 1m / 2m" (rubric D7).
+    IntervalTick(day = 1, label = R.plurals.lists_interval_days, count = 1),
+    IntervalTick(day = 14, label = R.plurals.lists_interval_tick_weeks, count = 2),
+    IntervalTick(day = 30, label = R.plurals.lists_interval_tick_months, count = 1),
+    IntervalTick(day = 60, label = R.plurals.lists_interval_tick_months, count = 2)
 )
 
 /**
@@ -490,20 +495,24 @@ private fun IntervalScaleLabels(modifier: Modifier = Modifier) {
     Layout(
         modifier = modifier,
         content = {
-            INTERVAL_TICKS.forEach { (label, _) ->
+            INTERVAL_TICKS.forEach { tick ->
                 Text(
-                    text = label,
-                    style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
+                    text = pluralStringResource(tick.label, tick.count, tick.count),
+                    style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle)
                 )
             }
-        },
+        }
     ) { measurables, constraints ->
-        val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
+        val placeables = measurables.map {
+            it.measure(
+                constraints.copy(minWidth = 0, minHeight = 0)
+            )
+        }
         val width = constraints.maxWidth
         val height = placeables.maxOfOrNull { it.height } ?: 0
         layout(width, height) {
             placeables.forEachIndexed { index, p ->
-                val day = INTERVAL_TICKS[index].second
+                val day = INTERVAL_TICKS[index].day
                 val fraction = intervalLabelFraction(day, INTERVAL_MIN_DAY, INTERVAL_MAX_DAY)
                 val centered = (fraction * width).toInt() - p.width / 2
                 val x = centered.coerceIn(0, (width - p.width).coerceAtLeast(0))
@@ -525,10 +534,11 @@ private fun IntervalScaleLabels(modifier: Modifier = Modifier) {
  * with the strongest call-driven resets. Returns null for keep in touch,
  * which renders the slider instead.
  */
-private fun rhythmNoteFor(kind: RuleKind): String? = when (kind) {
+@StringRes
+private fun rhythmNoteFor(kind: RuleKind): Int? = when (kind) {
     RuleKind.KEEP_IN_TOUCH -> null
-    RuleKind.LATE_NIGHT -> "This list keeps the late night rhythm on its own — slower and more patient, with nothing to set."
-    RuleKind.ENERGIZE -> "This list keeps the energize rhythm on its own — quicker, with nothing to set."
+    RuleKind.LATE_NIGHT -> R.string.lists_rhythm_note_late_night
+    RuleKind.ENERGIZE -> R.string.lists_rhythm_note_energize
 }
 
 /**
@@ -547,10 +557,9 @@ private fun rhythmNoteFor(kind: RuleKind): String? = when (kind) {
  * touches the DAO directly.
  */
 @Composable
-private fun ListNameRenameRow(
-    currentName: String,
-    onCommit: (String) -> Unit,
-) {
+private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
+    val curtain = LocalPrivacyCurtain.current
+    val curtainList = stringResource(R.string.components_curtain_list)
     var editing by rememberSaveable { mutableStateOf(false) }
     // Guards the focus-loss commit below. onFocusChanged fires once with
     // isFocused=false the moment the field enters composition — before the
@@ -565,6 +574,9 @@ private fun ListNameRenameRow(
     var nameText by rememberSaveable(editing) { mutableStateOf(currentName) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    // Resolved here: the semantics blocks below are not composable.
+    val saveDescription = stringResource(R.string.lists_name_save)
+    val renameDescription = stringResource(R.string.lists_name_rename)
 
     fun commit() {
         val trimmed = nameText.trim()
@@ -586,6 +598,9 @@ private fun ListNameRenameRow(
         OutlinedTextField(
             value = nameText,
             onValueChange = { nameText = it },
+            // PRIV-03: drawn as "List" under the curtain; the buffer, which
+            // saves on focus loss, is untouched (CurtainMask).
+            visualTransformation = if (curtain) CurtainMask(curtainList) else VisualTransformation.None,
             singleLine = true,
             textStyle = LocalTextStyle.current.merge(OrbitTheme.type.body),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -601,19 +616,19 @@ private fun ListNameRenameRow(
                             commit()
                             focusManager.clearFocus()
                         }
-                        .semantics { contentDescription = "Save list name" },
-                    contentAlignment = Alignment.Center,
+                        .semantics { contentDescription = saveDescription },
+                    contentAlignment = Alignment.Center
                 ) {
                     PhIcon(
                         name = "check",
                         size = 20.dp,
-                        tint = OrbitTheme.colors.accent,
+                        tint = OrbitTheme.colors.fg
                     )
                 }
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x2)
                 .focusRequester(focusRequester)
                 .onFocusChanged { focusState ->
                     if (focusState.isFocused) {
@@ -621,7 +636,7 @@ private fun ListNameRenameRow(
                     } else if (hasFocused && editing) {
                         commit()
                     }
-                },
+                }
         )
     } else {
         Row(
@@ -629,24 +644,24 @@ private fun ListNameRenameRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { editing = true }
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY)
         ) {
             Text(
-                text = currentName.ifBlank { "Unnamed list" },
+                text = if (curtain) curtainList else currentName.ifBlank { stringResource(R.string.lists_name_unnamed) },
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
             )
             Box(
                 modifier = Modifier
                     .size(OrbitTheme.spacing.tapMin)
                     .clickable { editing = true }
-                    .semantics { contentDescription = "Rename list" },
-                contentAlignment = Alignment.Center,
+                    .semantics { contentDescription = renameDescription },
+                contentAlignment = Alignment.Center
             ) {
                 PhIcon(
                     name = "pencil-simple",
                     size = 18.dp,
-                    tint = OrbitTheme.colors.fgMuted,
+                    tint = OrbitTheme.colors.fgMuted
                 )
             }
         }

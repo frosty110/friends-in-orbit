@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.home
 
+import android.content.res.Resources
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -13,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,7 +31,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
@@ -44,13 +46,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.Dp
@@ -62,6 +70,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import app.orbit.AppViewModel
+import app.orbit.R
 import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.ListType
 import app.orbit.ui.components.Avatar
@@ -73,34 +82,42 @@ import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.OrbitScreen
+import app.orbit.ui.components.OrbitScreenMessage
+import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.PostCallBanner
 import app.orbit.ui.screens.lists.DeleteListDialog
+import app.orbit.ui.theme.LocalReducedMotion
 import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
+import app.orbit.ui.util.dialPhoneNumber
 import app.orbit.ui.util.formatDayHeader
-import coil.compose.SubcomposeAsyncImage
+import app.orbit.ui.util.formatDuration
+import app.orbit.ui.util.formatAgo
+import kotlinx.coroutines.flow.collectLatest
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
-import kotlinx.coroutines.flow.collectLatest
 
 /**
- * Home (mood picker) screen — the always-on recommender (vision/00-home).
+ * Home screen: the always-on recommender (vision/00-home).
  *
  * **Two-layer pattern**: Hilt-wired outer + stateless inner. The outer collects
  * ViewModel state, then forwards everything to the stateless [HomeContent].
  *
- * **Redesign (HOME-3/5/6/7):**
+ * **Redesign (HOME-3/5/6/7/9):**
  *   - HOME-6: no "due / N ready / caught up" framing. The header is a calm date,
  *     never a count or a completion state.
  *   - HOME-5: full-width, single-column tonal cards — a tinted header band over a
  *     lighter graph wash, both shades of the list's own [OrbitTones] colour.
  *   - HOME-3: each card shows "Next up" — the head of that list's queue (reused
  *     from `SurfaceNextUseCase` via `HomeFeed.enrichment`) — with a warm recency
- *     line. The whole card taps through to Card View; there is no call button.
+ *     line. The card taps through to Card View; the row's one other target is
+ *     HOME-9's quiet, labelled call button ("Call Kai"), which opens the dialer.
  *   - HOME-7: a 7-day rhythm strip per card, bars scaled relative to the list's
  *     own busiest day (125% headroom), coloured per person.
  *   - PRIV-03: list and contact names mask under the privacy curtain.
@@ -124,6 +141,7 @@ fun HomeScreen(
     val curtain = LocalPrivacyCurtain.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     // Long-press menu snackbar surface (archive/delete Undo, mute confirmation,
     // mutation failures). collectLatest so the newest action's snackbar
@@ -137,8 +155,8 @@ fun HomeScreen(
             vm.snackbarEvents.collectLatest { event ->
                 try {
                     val result = snackbarHostState.showSnackbar(
-                        message = event.message,
-                        actionLabel = event.actionLabel,
+                        message = event.message.asString(context),
+                        actionLabel = event.actionLabel?.asString(context),
                         duration = SnackbarDuration.Short,
                     )
                     if (result == SnackbarResult.ActionPerformed) {
@@ -157,17 +175,32 @@ fun HomeScreen(
         }
     }
 
+    // HOME-12: the day Home is showing, derived once per resume. Home is the
+    // root destination and stays composed across the dialer round-trip and
+    // across midnight; a `LocalDate.now()` read once at composition left the
+    // header on yesterday's date and the strip's letters a day behind the
+    // feed's buckets. One value, one writer (rules.md Code 7), passed down to
+    // the header, the strip and the day sheet so they can never disagree.
+    var today by remember { mutableStateOf(LocalDate.now()) }
+
     // NOTE-02 — `LifecycleResumeEffect` re-fires on every resume, so the
     // dialer→app return path always re-derives the post-call prompt. (See git
-    // history for why `LaunchedEffect(Unit)` is insufficient here.)
+    // history for why `LaunchedEffect(Unit)` is insufficient here.) The same
+    // resume refreshes `today` and tells the feed (HOME-12), so the letters
+    // and the buckets move to the new day together.
     LifecycleResumeEffect(key1 = Unit, lifecycleOwner = lifecycleOwner) {
+        today = LocalDate.now()
+        vm.onResumed()
         appVm.checkPostCallPrompt()
         onPauseOrDispose { /* prompt state lives in the VM; nothing to clean up */ }
     }
 
     HomeContent(
         state = state,
+        today = today,
+        onRetry = vm::onRetry,
         snackbarHostState = snackbarHostState,
+        onCallNextUp = { phone -> context.dialPhoneNumber(phone) },
         onOpenList = onOpenList,
         onOpenSearch = onOpenSearch,
         onOpenSettings = onOpenSettings,
@@ -193,15 +226,25 @@ fun HomeScreen(
     )
 }
 
+/**
+ * Stateless Home. `internal` so HomeContentTest can compose it with fixtures
+ * and a fixed [today]; previews and the screen pass their own.
+ */
 @Composable
-private fun HomeContent(
+internal fun HomeContent(
     state: HomeUiState,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    // HOME-12: the date the header, the strip's letters and the day sheet
+    // mean by "today". The screen refreshes it on resume; a preview or a test
+    // fixes it.
+    today: LocalDate = remember { LocalDate.now() },
     onOpenList: (listId: String) -> Unit,
     onOpenSearch: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenLists: () -> Unit,
     onCreateList: () -> Unit,
+    onRetry: () -> Unit = {},
+    onCallNextUp: (phone: String) -> Unit = {},
     // Long-press quick-actions — Long listId so the renderer can bind per tile.
     onAddPeople: (Long) -> Unit = {},
     onToggleMute: (listId: Long, currentlyEnabled: Boolean) -> Unit = { _, _ -> },
@@ -223,32 +266,36 @@ private fun HomeContent(
         // Loading = pre-first-database-answer window (slow SQLCipher cold open).
         // Renders as quiet chrome — app bar over background, no list, never the
         // first-install CTA (ADR 0006 §Skeleton policy).
-        HomeUiState.Loading, HomeUiState.Empty -> emptyList()
+        HomeUiState.Loading, HomeUiState.Empty, HomeUiState.Error -> emptyList()
         is HomeUiState.Ready -> state.lists
     }
     val isEmpty = state is HomeUiState.Empty
     val isLoading = state is HomeUiState.Loading
+    val isError = state is HomeUiState.Error
+    val reducedMotion = LocalReducedMotion.current
 
     Box(modifier = Modifier.fillMaxSize()) {
       OrbitScreen {
         OrbitAppBar(
-            title = "Orbit",
+            title = stringResource(R.string.app_name),
             trailing = {
                 Row {
                     OrbitIconButton(
                         icon = "magnifying-glass",
                         onClick = onOpenSearch,
-                        contentDescription = "Search",
+                        contentDescription = stringResource(R.string.home_action_search),
                     )
+                    // A bulleted list, as in the design: the plain hamburger
+                    // also meant "list options" on Card view (rubric D2).
                     OrbitIconButton(
-                        icon = "list",
+                        icon = "list-bullets",
                         onClick = onOpenLists,
-                        contentDescription = "Lists",
+                        contentDescription = stringResource(R.string.home_action_lists),
                     )
                     OrbitIconButton(
                         icon = "gear",
                         onClick = onOpenSettings,
-                        contentDescription = "Settings",
+                        contentDescription = stringResource(R.string.home_action_settings),
                     )
                 }
             },
@@ -280,13 +327,16 @@ private fun HomeContent(
         // HOME-6 — calm date orientation only. No count, no "caught up": Home is
         // an always-on recommender, not an inbox. Header shows only in Ready;
         // Loading is quiet chrome, Empty carries the first-install CTA.
-        if (!isLoading && !isEmpty) {
-            val dateLabel = remember {
-                LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault()))
+        if (!isLoading && !isEmpty && !isError) {
+            val datePattern = stringResource(R.string.home_date_pattern)
+            // Keyed on `today` (HOME-12): keyed on the pattern alone, the
+            // header still said yesterday after a midnight in the background.
+            val dateLabel = remember(datePattern, today) {
+                today.format(DateTimeFormatter.ofPattern(datePattern, Locale.getDefault()))
             }
-            Column(Modifier.padding(horizontal = OrbitTheme.spacing.x5, vertical = 0.dp)) {
+            Column(Modifier.padding(horizontal = OrbitTheme.spacing.x5)) {
                 Text(
-                    text = "Today",
+                    text = stringResource(R.string.home_date_eyebrow),
                     style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted),
                 )
                 Text(
@@ -300,10 +350,21 @@ private fun HomeContent(
             }
         }
 
-        // HOME-04: the genuine first-install state gets a primary-weight CTA,
+        // HOME-11: the genuine first-install state gets a primary-weight CTA,
         // centered, with one warm line above it. Routes to Lists Manager with
-        // the create-list bottom sheet auto-opened.
-        if (isEmpty) {
+        // the create-list bottom sheet auto-opened. Only when no list exists:
+        // Loading never renders it (ADR 0006), so it cannot flash at a user
+        // who has lists.
+        if (isError) {
+            // HOME-10: say what happened and offer Try again.
+            OrbitScreenMessage(
+                icon = "warning-circle",
+                title = stringResource(R.string.home_error_title),
+                body = stringResource(R.string.components_error_body),
+                actionLabel = stringResource(R.string.components_error_retry),
+                onAction = onRetry,
+            )
+        } else if (isEmpty) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
@@ -312,19 +373,22 @@ private fun HomeContent(
                     .padding(horizontal = OrbitTheme.spacing.x6),
             ) {
                 Text(
-                    text = "Start with the people you keep meaning to call.",
+                    text = stringResource(R.string.home_empty_body),
                     style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.height(OrbitTheme.spacing.x5))
-                OrbitButton(text = "Create your first list", onClick = onCreateList)
+                OrbitButton(text = stringResource(R.string.home_empty_cta), onClick = onCreateList)
             }
         } else {
             // HOME-5 — single column of full-width tonal cards.
+            // 12dp side margins below 380dp (16dp otherwise), so seven
+            // rhythm days get 48dp each on a 360dp phone.
+            val sideMargin = if (LocalConfiguration.current.screenWidthDp < 380) OrbitTheme.spacing.x3 else OrbitTheme.spacing.x4
             LazyColumn(
                 contentPadding = PaddingValues(
-                    start = OrbitTheme.spacing.x4,
-                    end = OrbitTheme.spacing.x4,
+                    start = sideMargin,
+                    end = sideMargin,
                     top = OrbitTheme.spacing.x3,
                     bottom = OrbitTheme.spacing.x6,
                 ),
@@ -335,9 +399,14 @@ private fun HomeContent(
                 // until the database answers (never the first-install CTA).
                 if (!isLoading) {
                     itemsIndexed(tiles, key = { _, tile -> tile.id }) { index, tile ->
+                        // Cards slide and fade when a list is archived, deleted,
+                        // restored or reordered, instead of popping (rubric D5);
+                        // still when the system's animations are off.
+                        Box(if (reducedMotion) Modifier else Modifier.animateItem()) {
                         ListTile(
                             tile = tile,
                             toneIndex = index,
+                            today = today,
                             menuOpen = menuAnchorListId == tile.id,
                             onClick = { onOpenList(tile.id.toString()) },
                             onLongPress = { menuAnchorListId = tile.id },
@@ -348,16 +417,18 @@ private fun HomeContent(
                             onArchive = { onArchive(tile.id) },
                             onDelete = { pendingDeleteId = tile.id },
                             onOpenContact = onOpenContact,
+                            onCallNextUp = onCallNextUp,
                         )
+                        }
                     }
-                    item { CreateListTile(label = "New list", onClick = onCreateList) }
+                    item { CreateListTile(label = stringResource(R.string.home_new_list), onClick = onCreateList) }
                     item { ReflectionFooter() }
                 }
             }
         }
       }
 
-      SnackbarHost(
+      OrbitSnackbarHost(
           hostState = snackbarHostState,
           modifier = Modifier.align(Alignment.BottomCenter),
       )
@@ -381,6 +452,7 @@ private fun HomeContent(
 private fun ListTile(
     tile: ListTileState,
     toneIndex: Int,
+    today: LocalDate,
     onClick: () -> Unit,
     menuOpen: Boolean = false,
     onLongPress: () -> Unit = {},
@@ -391,6 +463,7 @@ private fun ListTile(
     onArchive: () -> Unit = {},
     onDelete: () -> Unit = {},
     onOpenContact: (contactId: Long) -> Unit = {},
+    onCallNextUp: (phone: String) -> Unit = {},
 ) {
     val curtain = LocalPrivacyCurtain.current
     val isDark = OrbitTheme.colors.isDark
@@ -398,7 +471,7 @@ private fun ListTile(
     val tone = OrbitTheme.tones.listTone(toneIndex.toLong())
     // List names stay masked under the curtain (user-authored, relationship-
     // revealing); the neutral noun for a list is "List".
-    val displayName = if (curtain) "List" else tile.name
+    val displayName = if (curtain) stringResource(R.string.components_curtain_list) else tile.name
     val haptic = LocalHapticFeedback.current
     // HOME-8 — which rhythm day the user tapped open (index into tile.rhythm,
     // 0 = six days ago). rememberSaveable so a rotation mid-sheet doesn't drop
@@ -411,11 +484,14 @@ private fun ListTile(
             .orbitCardShadow(shape = OrbitTheme.shapes.lg, isDark = isDark)
             .clip(OrbitTheme.shapes.lg)
             .background(tone.wash)
-            // Tap routes to Card View (the whole tile is one target — no call
-            // button); long-press opens the manage-this-list quick-actions menu.
+            // Tap routes to Card View; long-press opens the manage-this-list
+            // quick-actions menu. The card carries two smaller targets of its
+            // own, HOME-9's call button and HOME-8's day columns, each with
+            // its own label.
             .combinedClickable(
                 onClick = onClick,
-                onLongClickLabel = "Quick actions",
+                onClickLabel = stringResource(R.string.home_tile_open_list),
+                onLongClickLabel = stringResource(R.string.home_tile_quick_actions),
                 onLongClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onLongPress()
@@ -426,39 +502,30 @@ private fun ListTile(
         // [OrbitDropdownMenu]: everyday actions first, archive/delete last in
         // danger. Archive used to render in plain fg here — it is reversible,
         // but it still takes the list off home, so it reads as destructive.
+        // Built by [homeTileMenuActions] so HomeTileMenuTest pins the order.
         OrbitDropdownMenu(
             expanded = menuOpen,
             onDismissRequest = onDismissMenu,
-            actions = listOf(
-                OrbitMenuAction(label = "Add people", onClick = onAddPeople),
-                OrbitMenuAction(label = "List settings", onClick = onListSettings),
-                OrbitMenuAction(
-                    label = if (tile.notificationsEnabled) "Mute prompts" else "Unmute prompts",
-                    onClick = onToggleMute,
-                ),
-                OrbitMenuAction(
-                    label = "Archive",
-                    onClick = onArchive,
-                    tone = OrbitMenuTone.Destructive,
-                ),
-                OrbitMenuAction(
-                    label = "Delete",
-                    onClick = onDelete,
-                    tone = OrbitMenuTone.Destructive,
-                ),
+            actions = homeTileMenuActions(
+                resources = LocalContext.current.resources,
+                listName = displayName,
+                notificationsEnabled = tile.notificationsEnabled,
+                type = tile.type,
+                onAddPeople = onAddPeople,
+                onListSettings = onListSettings,
+                onToggleNudges = onToggleMute,
+                onArchive = onArchive,
+                onDelete = onDelete,
             ),
         )
 
         Column(Modifier.fillMaxWidth()) {
-            // Zone 1 — tinted header band: list name + Next up, in one row.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(tone.band)
-                    .padding(OrbitTheme.spacing.x4),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.width(118.dp)) {
+            // Zone 1: tinted header band, list name beside Next up. At large
+            // font scales the two stack instead: side by side, the name sat in
+            // a fixed 118dp column and clipped at 200% (rubric gate G3).
+            val largeText = LocalDensity.current.fontScale > 1.3f
+            val nameBlock: @Composable (Modifier) -> Unit = { blockModifier ->
+                Column(blockModifier) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = displayName,
@@ -468,20 +535,68 @@ private fun ListTile(
                             modifier = Modifier.weight(1f, fill = false),
                         )
                         // LIST-07 — smart-list type cue. Type isn't a name, so it
-                        // stays visible under the privacy curtain.
+                        // stays visible under the privacy curtain. PhIcon is
+                        // decorative by design, so the meaning is said here:
+                        // Lists Manager exposes the same fact as a "Smart list"
+                        // chip, and TalkBack had no way to tell the two list
+                        // kinds apart on Home (WCAG 1.1.1).
                         if (tile.type == ListType.SMART) {
-                            Spacer(Modifier.width(4.dp))
-                            PhIcon(name = "shuffle-angular", size = 13.dp, tint = tone.nameFg)
+                            val smartLabel = stringResource(R.string.lists_row_smart_chip)
+                            Spacer(Modifier.width(OrbitTheme.spacing.x1))
+                            PhIcon(
+                                name = "shuffle-angular",
+                                size = 13.dp,
+                                tint = tone.nameFg,
+                                modifier = Modifier.semantics { contentDescription = smartLabel },
+                            )
                         }
                     }
+                    // Full strength, not faded: a 72% alpha member count fell
+                    // under 4.5:1 on the tinted band.
                     Text(
                         text = memberLabel(tile.memberCount),
-                        style = OrbitTheme.type.meta.copy(color = tone.nameFg.copy(alpha = 0.72f)),
-                        modifier = Modifier.padding(top = 3.dp),
+                        style = OrbitTheme.type.meta.copy(color = tone.nameFg),
+                        modifier = Modifier.padding(top = OrbitTheme.spacing.x1),
                     )
                 }
-                Spacer(Modifier.width(OrbitTheme.spacing.x3))
-                NextUpRow(nextUp = tile.nextUp, curtain = curtain, modifier = Modifier.weight(1f))
+            }
+            val nextUpRow: @Composable (Modifier) -> Unit = { rowModifier ->
+                NextUpRow(
+                    nextUp = tile.nextUp,
+                    curtain = curtain,
+                    onCall = onCallNextUp,
+                    modifier = rowModifier,
+                )
+            }
+            // Also stacked on a narrow card: on a 360dp phone, side by side
+            // left "Next up" about 54dp for its text, so "3 weeks since you
+            // last spoke" truncated to "3 week..." (found rendering at w360dp).
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val stacked = largeText || maxWidth < NARROW_CARD
+                if (stacked) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(tone.band)
+                            .padding(OrbitTheme.spacing.x4),
+                        verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
+                    ) {
+                        nameBlock(Modifier.fillMaxWidth())
+                        nextUpRow(Modifier.fillMaxWidth())
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(tone.band)
+                            .padding(OrbitTheme.spacing.x4),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        nameBlock(Modifier.width(NAME_COLUMN_WIDTH))
+                        Spacer(Modifier.width(OrbitTheme.spacing.x3))
+                        nextUpRow(Modifier.weight(1f))
+                    }
+                }
             }
             // Zone 2 — lighter wash under the 7-day rhythm.
             Column(
@@ -489,15 +604,18 @@ private fun ListTile(
                     .fillMaxWidth()
                     .background(tone.wash)
                     .padding(
-                        start = OrbitTheme.spacing.x4,
-                        end = OrbitTheme.spacing.x4,
                         top = OrbitTheme.spacing.x3,
                         bottom = OrbitTheme.spacing.x4,
                     ),
             ) {
+                // The day columns span the card's full width (the header row
+                // keeps its inset), so each day is a wider target: 42dp per
+                // day on a 360dp phone was under the 48dp floor.
                 RhythmStrip(
                     rhythm = tile.rhythm,
+                    today = today,
                     onDayClick = { index -> openDayIndex = index },
+                    headerPadding = OrbitTheme.spacing.x4,
                 )
             }
         }
@@ -514,7 +632,7 @@ private fun ListTile(
             LaunchedEffect(index) { openDayIndex = null }
         } else {
             RhythmDaySheet(
-                dayLabel = rhythmDayLabel(index, tile.rhythm.size),
+                dayLabel = rhythmDayLabel(index, tile.rhythm.size, today),
                 calls = day.calls,
                 curtain = curtain,
                 onOpenContact = { contactId ->
@@ -529,24 +647,89 @@ private fun ListTile(
 
 /**
  * "Today" / "Yesterday" / "Wednesday 3 June" for rhythm index [index], where
- * the last index is today. Derived from the same trailing-7-day window the
- * strip's weekday letters use, so the sheet title and the tapped column can
- * never disagree about which day they mean.
+ * the last index is [today]. Derived from the same trailing-7-day window the
+ * strip's weekday letters and spoken labels use, so the sheet title, the
+ * tapped column and what TalkBack said about it can never disagree about
+ * which day they mean.
  */
 @Composable
-private fun rhythmDayLabel(index: Int, size: Int): String = remember(index, size) {
-    val today = LocalDate.now()
+private fun rhythmDayLabel(index: Int, size: Int, today: LocalDate): String = remember(index, size, today) {
     formatDayHeader(today.minusDays((size - 1 - index).toLong()), today)
+}.asString()
+
+/**
+ * The card's long-press menu, as data so the ordering contract is
+ * unit-testable (`HomeTileMenuTest`), the shape `listRowMenuActions` and
+ * `browseRowMenuActions` share. Labels come from [resources] because
+ * [OrbitMenuAction] carries resolved text. [listName] is the name as shown,
+ * so under the privacy curtain it is already "List" (PRIV-03).
+ *
+ * "Add people" is left out (not disabled) for a smart list: its members are
+ * what its rule matches (features/orbit-lists), and anyone added by hand was
+ * removed by the next reconcile with no message, the silent fallback
+ * rules.md Code 3 forbids. Lists Manager hides its "+" for the same reason
+ * (`ListRow.kt`), so the two surfaces offer the same actions.
+ *
+ * Archive carries the same supporting line as the Lists row ("Hides {list}
+ * from home. You can restore it."): the same action read as a warned,
+ * explained step there and a bare word here.
+ */
+internal fun homeTileMenuActions(
+    resources: Resources,
+    listName: String,
+    notificationsEnabled: Boolean,
+    type: ListType,
+    onAddPeople: () -> Unit,
+    onListSettings: () -> Unit,
+    onToggleNudges: () -> Unit,
+    onArchive: () -> Unit,
+    onDelete: () -> Unit,
+): List<OrbitMenuAction> = buildList {
+    if (type != ListType.SMART) {
+        add(OrbitMenuAction(label = resources.getString(R.string.home_menu_add_people), onClick = onAddPeople))
+    }
+    add(OrbitMenuAction(label = resources.getString(R.string.home_menu_list_settings), onClick = onListSettings))
+    add(
+        OrbitMenuAction(
+            // Glossary (voice.md): these notifications are "nudges", and a
+            // list's are paused and resumed; the list itself is not paused.
+            label = resources.getString(
+                if (notificationsEnabled) R.string.home_menu_pause_nudges else R.string.home_menu_resume_nudges,
+            ),
+            onClick = onToggleNudges,
+        ),
+    )
+    add(
+        OrbitMenuAction(
+            label = resources.getString(R.string.components_action_archive),
+            onClick = onArchive,
+            tone = OrbitMenuTone.Destructive,
+            supporting = resources.getString(R.string.components_menu_archive_supporting, listName),
+        ),
+    )
+    add(
+        OrbitMenuAction(
+            label = resources.getString(R.string.components_action_delete),
+            onClick = onDelete,
+            tone = OrbitMenuTone.Destructive,
+        ),
+    )
 }
 
 /** HOME-3 — the recommendation half of the header band. */
 @Composable
-private fun NextUpRow(nextUp: NextUp?, curtain: Boolean, modifier: Modifier = Modifier) {
+private fun NextUpRow(
+    nextUp: NextUp?,
+    curtain: Boolean,
+    onCall: (phone: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         if (nextUp == null) {
             // Rare: list has members but nobody surfaceable right now.
+            // HOME-6: calm, never "caught up" or "no one due".
             Text(
-                text = "No one up next",
+                text = stringResource(R.string.home_next_up_quiet),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 modifier = Modifier.weight(1f),
             )
@@ -555,13 +738,14 @@ private fun NextUpRow(nextUp: NextUp?, curtain: Boolean, modifier: Modifier = Mo
         // Contact names mask under the curtain (PRIV-03). The avatar keeps the
         // full name (initials / photo); the line shows just the first name — the
         // warm "one name" feel (HOME-3).
-        val avatarName = if (curtain) "Someone" else nextUp.name
-        val firstName = if (curtain) "Someone" else nextUp.name.substringBefore(' ').ifBlank { nextUp.name }
-        NextUpAvatar(photoUri = if (curtain) null else nextUp.photoUri, name = avatarName, size = 44.dp)
+        val someone = stringResource(R.string.components_curtain_someone)
+        val avatarName = if (curtain) someone else nextUp.name
+        val firstName = if (curtain) someone else nextUp.name.substringBefore(' ').ifBlank { nextUp.name }
+        Avatar(name = avatarName, size = 44.dp, photoUri = if (curtain) null else nextUp.photoUri)
         Spacer(Modifier.width(OrbitTheme.spacing.x3))
         Column(Modifier.weight(1f)) {
             Text(
-                text = "Next up",
+                text = stringResource(R.string.home_next_up_eyebrow),
                 style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgSubtle),
             )
             Text(
@@ -571,39 +755,31 @@ private fun NextUpRow(nextUp: NextUp?, curtain: Boolean, modifier: Modifier = Mo
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = nextUp.why,
+                text = nextUp.why.asString(),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }
         Spacer(Modifier.width(OrbitTheme.spacing.x2))
-        PhIcon(name = "caret-right", size = 20.dp, tint = OrbitTheme.colors.fgSubtle)
+        // HOME-9: one deliberate tap from Home to a call. A labelled, muted
+        // phone button (rules.md §Design 6 allows a quiet dial per person row);
+        // the rest of the card still opens the list's deck. It replaces the
+        // chevron, which only repeated "this card is tappable".
+        val phone = nextUp.phone
+        if (phone != null) {
+            OrbitIconButton(
+                icon = "phone-call",
+                onClick = { onCall(phone) },
+                tint = OrbitTheme.colors.fgMuted,
+                contentDescription = stringResource(R.string.home_next_up_call, firstName),
+            )
+        } else {
+            PhIcon(name = "caret-right", size = 20.dp, tint = OrbitTheme.colors.fgSubtle)
+        }
     }
 }
 
-/**
- * Photo-with-initials-fallback avatar for the Next-up person. Follows the
- * `CallLogAvatar` / `ContactPhoto` convention but uses [SubcomposeAsyncImage] so
- * a blank/error load falls back to real initials rather than an empty crop.
- */
-@Composable
-private fun NextUpAvatar(photoUri: String?, name: String, size: Dp) {
-    if (photoUri.isNullOrBlank()) {
-        Avatar(name = name, size = size)
-        return
-    }
-    SubcomposeAsyncImage(
-        model = photoUri,
-        contentDescription = null,
-        loading = { Avatar(name = name, size = size) },
-        error = { Avatar(name = name, size = size) },
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(OrbitTheme.colors.bgSubtle),
-    )
-}
 
 /**
  * HOME-7 — 7-day rhythm strip. Bars are RELATIVE to this list's own busiest day
@@ -620,24 +796,39 @@ private fun NextUpAvatar(photoUri: String?, name: String, size: Dp) {
  *     calls: who, which way, how long, when.
  */
 @Composable
-private fun RhythmStrip(rhythm: List<RhythmDay>, onDayClick: (index: Int) -> Unit) {
-    val labels = remember {
-        val today = LocalDate.now()
+private fun RhythmStrip(
+    rhythm: List<RhythmDay>,
+    today: LocalDate,
+    onDayClick: (index: Int) -> Unit,
+    headerPadding: Dp = 0.dp,
+) {
+    // The drawn glyph is the one-letter weekday ("S M T W T F S"). Keyed on
+    // `today` (HOME-12): remembered once, the letters sat a day behind the
+    // feed's buckets after a midnight in the background.
+    val glyphs = remember(today) {
         (0..6).map { offset ->
             today.minusDays((6 - offset).toLong())
                 .dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault())
         }
+    }
+    // What TalkBack says for the day is a different string from the glyph:
+    // "T" is Tuesday or Thursday and "S" either weekend day, so a column that
+    // announced its letter said nothing. The spoken day comes from the same
+    // formatDayHeader call the day sheet's title uses ("Today", "Yesterday",
+    // "Wednesday 3 June"), so the column and the sheet it opens agree.
+    val spokenLabels = (0..6).map { offset ->
+        rhythmDayLabel(index = offset, size = 7, today = today)
     }
     val totals = rhythm.map { day -> day.calls.sumOf { it.durationSeconds } }
     val scaleMax = ((totals.maxOrNull() ?: 0).coerceAtLeast(1)) * RHYTHM_HEADROOM
 
     Column(Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = headerPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Last 7 days",
+                text = stringResource(R.string.home_rhythm_eyebrow),
                 style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgSubtle),
                 modifier = Modifier.weight(1f),
             )
@@ -654,7 +845,8 @@ private fun RhythmStrip(rhythm: List<RhythmDay>, onDayClick: (index: Int) -> Uni
             rhythm.forEachIndexed { idx, day ->
                 DayColumn(
                     day = day,
-                    label = labels.getOrElse(idx) { "" },
+                    glyph = glyphs.getOrElse(idx) { "" },
+                    spokenLabel = spokenLabels.getOrElse(idx) { "" },
                     isToday = idx == rhythm.lastIndex,
                     scaleMax = scaleMax,
                     onClick = { onDayClick(idx) },
@@ -670,16 +862,16 @@ private fun RhythmStrip(rhythm: List<RhythmDay>, onDayClick: (index: Int) -> Uni
  *  second one. */
 @Composable
 private fun DirectionLegend() {
+    val legendDescription = stringResource(R.string.home_rhythm_legend_a11y)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
         modifier = Modifier.clearAndSetSemantics {
-            contentDescription =
-                "Bar outlines show direction: one colour for calls you made, another for calls you received"
+            contentDescription = legendDescription
         },
     ) {
-        LegendSwatch(label = "You", rim = OrbitTheme.colors.directionOutgoing)
-        LegendSwatch(label = "Them", rim = OrbitTheme.colors.directionIncoming)
+        LegendSwatch(label = stringResource(R.string.home_rhythm_legend_you), rim = OrbitTheme.colors.directionOutgoing)
+        LegendSwatch(label = stringResource(R.string.home_rhythm_legend_them), rim = OrbitTheme.colors.directionIncoming)
     }
 }
 
@@ -687,7 +879,7 @@ private fun DirectionLegend() {
 private fun LegendSwatch(label: String, rim: Color) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1),
     ) {
         Box(
             Modifier
@@ -706,7 +898,8 @@ private fun LegendSwatch(label: String, rim: Color) {
 @Composable
 private fun DayColumn(
     day: RhythmDay,
-    label: String,
+    glyph: String,
+    spokenLabel: String,
     isToday: Boolean,
     scaleMax: Float,
     onClick: () -> Unit,
@@ -715,25 +908,41 @@ private fun DayColumn(
     // A quiet day has nothing to open, so it stays inert rather than presenting
     // a tap target that leads to an empty sheet.
     val tappable = day.calls.isNotEmpty()
+    // Resolved in composition: the semantics blocks below are not composable.
+    val a11yLabel = dayA11yLabel(spokenLabel, day.calls)
+    val quietLabel = stringResource(
+        R.string.home_rhythm_day_quiet_a11y,
+        spokenLabel,
+        stringResource(R.string.home_direction_none),
+    )
+    val seeDayLabel = stringResource(R.string.home_rhythm_see_day)
     Column(
         modifier = modifier
             .clip(OrbitTheme.shapes.sm)
             .then(
                 if (tappable) {
                     Modifier
-                        .clickable(onClickLabel = "See this day", onClick = onClick)
+                        .clickable(onClickLabel = seeDayLabel, onClick = onClick)
                         // mergeDescendants so the column announces as one target
-                        // ("Monday, 2 calls…") instead of the bare weekday letter
-                        // the child Text would otherwise contribute.
+                        // ("Monday 5 October, 2 calls…") instead of the bare
+                        // weekday letter the child Text would otherwise contribute.
                         .semantics(mergeDescendants = true) {
-                            contentDescription = dayA11yLabel(label, day.calls)
+                            contentDescription = a11yLabel
                         }
                 } else {
-                    Modifier
+                    // Still one node per day, so TalkBack hears seven days and
+                    // a quiet one is a fact ("Friday 2 October, No calls"), not
+                    // a lone letter. mergeDescendants, not clearAndSetSemantics:
+                    // only a merging node stays a node of its own under the
+                    // card's combinedClickable; a clearing one was folded into
+                    // the card's announcement with every other quiet day. The
+                    // glyph merges in as text, and a description is what
+                    // TalkBack speaks when a node has one.
+                    Modifier.semantics(mergeDescendants = true) { contentDescription = quietLabel }
                 },
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(7.dp),
+        verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
     ) {
         Box(
             modifier = Modifier.height(RHYTHM_BAR_AREA),
@@ -771,10 +980,13 @@ private fun DayColumn(
                 }
             }
         }
+        // Today is set apart by weight and ink, not the accent: in the accent
+        // (as the prototype draws it) a Home with N lists spent the screen's
+        // one accent N times on letters nobody taps (rules.md Design 5).
         Text(
-            text = label,
+            text = glyph,
             style = OrbitTheme.type.micro.copy(
-                color = if (isToday) OrbitTheme.colors.accent else OrbitTheme.colors.fgSubtle,
+                color = if (isToday) OrbitTheme.colors.fg else OrbitTheme.colors.fgSubtle,
                 fontWeight = if (isToday) FontWeight.SemiBold else FontWeight.Normal,
             ),
         )
@@ -782,19 +994,25 @@ private fun DayColumn(
 }
 
 /**
- * Screen-reader label for a day column. The rim colours carry the direction
- * split visually; this is the same information in words, since a colour rim is
- * invisible to TalkBack.
+ * Screen-reader label for a day column with calls. The rim colours carry the
+ * direction split visually; this is the same information in words, since a
+ * colour rim is invisible to TalkBack. [dayLabel] is the spoken day, never
+ * the drawn letter.
  */
+@Composable
 private fun dayA11yLabel(dayLabel: String, calls: List<RhythmCall>): String =
-    "$dayLabel, ${calls.size} ${if (calls.size == 1) "call" else "calls"}. " +
-        "${directionSummary(calls)}. Tap to see who."
+    stringResource(
+        R.string.home_rhythm_day_a11y,
+        dayLabel,
+        pluralStringResource(R.plurals.home_rhythm_day_calls, calls.size, calls.size),
+        directionSummary(calls).asString(),
+    )
 
+@Composable
 private fun memberLabel(count: Int?): String = when (count) {
     null -> ""
-    0 -> "No one yet"
-    1 -> "1 person"
-    else -> "$count people"
+    0 -> stringResource(R.string.home_member_count_none)
+    else -> pluralStringResource(R.plurals.home_member_count, count, count)
 }
 
 // Reflection footer — the app's one piece of wisdom, surfaced once at the foot
@@ -811,8 +1029,7 @@ private fun ReflectionFooter() {
             ),
     ) {
         Text(
-            text = "The call that makes your day can make someone else's. " +
-                "You deserve to be the one who reaches out.",
+            text = stringResource(R.string.home_reflection),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             textAlign = TextAlign.Center,
         )
@@ -823,10 +1040,12 @@ private fun ReflectionFooter() {
 private fun CreateListTile(label: String, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2, Alignment.CenterHorizontally),
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            // A floor, not a fixed height, so the row grows when its text
+            // wraps at 200% (rules.md Design 2); the token, not a literal.
+            .heightIn(min = OrbitTheme.spacing.tapMin)
             .clip(OrbitTheme.shapes.lg)
             .clickable(onClick = onClick)
             .padding(horizontal = OrbitTheme.spacing.x4),
@@ -842,6 +1061,12 @@ private fun CreateListTile(label: String, onClick: () -> Unit) {
 private val RHYTHM_BAR_AREA: Dp = 48.dp
 private val RHYTHM_BAR_WIDTH: Dp = 26.dp
 private const val RHYTHM_HEADROOM: Float = 1.25f
+
+// The name block's column when it sits beside Next up: the prototype's
+// `flex: 0 0 118px` (vision/00-home/prototype). Wide enough for a two-line
+// list name at 100%, and the layout stacks instead above 130% text or on a
+// card narrower than NARROW_CARD, so it never has to grow.
+private val NAME_COLUMN_WIDTH: Dp = 118.dp
 
 // HOME-8 — the direction rim. 2dp is the smallest width that still holds a
 // legible hue at this bar size; the shape is shared with the legend swatch so
@@ -869,7 +1094,7 @@ private fun previewCall(
     photoUri = null,
     durationSeconds = minutes * 60,
     direction = direction,
-    durationLabel = "$minutes min",
+    durationLabel = formatDuration(minutes * 60),
     timeLabel = "4:30pm",
 )
 
@@ -892,17 +1117,18 @@ private val previewState: HomeUiState = HomeUiState.Ready(
     lists = listOf(
         ListTileState(
             id = 1L, name = "Inner orbit", dueCount = 3, type = ListType.STATIC, memberCount = 12,
-            nextUp = NextUp(1L, "Kai", null, "3 weeks since you last spoke"),
+            nextUp = NextUp(
+                1L, "Kai", null,
+                UiText.res(R.string.home_why_ago, formatAgo(21)), phone = "+1 555 0100",
+            ),
             rhythm = previewRhythm(0),
         ),
         ListTileState(
             id = 2L, name = "Late night", dueCount = 0, type = ListType.SMART, memberCount = 5,
-            nextUp = NextUp(2L, "Mara", null, "you haven't spoken yet"),
+            nextUp = NextUp(2L, "Mara", null, UiText.res(R.string.home_why_never), phone = "+1 555 0101"),
             rhythm = previewRhythm(8),
         ),
     ),
-    hasPermissions = true,
-    dueContactCount = 3,
 )
 
 @PreviewLightDark
@@ -912,6 +1138,34 @@ private fun HomeContentPreview() {
     OrbitTheme {
         HomeContent(
             state = previewState,
+            onOpenList = {},
+            onOpenSearch = {},
+            onOpenSettings = {},
+            onOpenLists = {},
+            onCreateList = {},
+        )
+    }
+}
+
+// Gate G3: a 40-character person and list name, at 100% and 200% text.
+@PreviewLightDark
+@Preview(name = "200%", fontScale = 2f)
+@Composable
+private fun HomeContentLongNamesPreview() {
+    OrbitTheme {
+        HomeContent(
+            state = HomeUiState.Ready(
+                lists = listOf(
+                    ListTileState(
+                        id = 1L, name = "Old friends from the climbing gym crew", dueCount = 12, type = ListType.STATIC, memberCount = 48,
+                        nextUp = NextUp(
+                            1L, "Bartholomew Montgomery-Featherstonehaugh", null,
+                            UiText.res(R.string.home_why_ago, formatAgo(21)), phone = "+1 555 0100",
+                        ),
+                        rhythm = previewRhythm(0),
+                    ),
+                ),
+            ),
             onOpenList = {},
             onOpenSearch = {},
             onOpenSettings = {},
@@ -950,3 +1204,21 @@ private fun HomeContentLoadingPreview() {
         )
     }
 }
+
+@PreviewLightDark
+@Composable
+private fun HomeContentErrorPreview() {
+    OrbitTheme {
+        HomeContent(
+            state = HomeUiState.Error,
+            onOpenList = {},
+            onOpenSearch = {},
+            onOpenSettings = {},
+            onOpenLists = {},
+            onCreateList = {},
+        )
+    }
+}
+
+/** Below this card width the list header stacks name over Next up. */
+private val NARROW_CARD = 360.dp

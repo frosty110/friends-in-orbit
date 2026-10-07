@@ -56,12 +56,13 @@ class BulkIgnoreUseCaseTest {
 
         val result = useCase(listOf(1L, 2L, 3L))
 
-        assertEquals("Ignored 3 contacts", result.label)
+        // The words ("Ignored 3 people") are the caller's plural (SnackbarCopyTest).
+        assertEquals(3, result.count)
     }
 
     @Test
     fun result_label_singularizes_for_one_contact() = runBlocking {
-        // A single-row batch reads "1 contact", never "1 contacts".
+        // A single-row batch reports 1, which the plural reads as "1 person".
         val dao = RecordingContactDao(
             ignoredSnapshots = listOf(IgnoredSnapshot(1L, false)),
         )
@@ -69,7 +70,7 @@ class BulkIgnoreUseCaseTest {
 
         val result = useCase(listOf(1L))
 
-        assertEquals("Ignored 1 contact", result.label)
+        assertEquals(1, result.count)
     }
 
     @Test

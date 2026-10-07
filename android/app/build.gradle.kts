@@ -81,6 +81,15 @@ android {
             )
             signingConfig = signingConfigs.getByName("release")
         }
+        // Release, signed with the debug key so it installs anywhere, for the
+        // :benchmark module (startup timing and Baseline Profile generation).
+        // Never shipped.
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -89,6 +98,14 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    // Per-app language (Android 13+): AGP writes locales_config.xml from the
+    // values-* folders that exist, so a translation added later shows up in
+    // the system's app-language picker with no further wiring. The default
+    // (unqualified) strings are English; see res/resources.properties.
+    androidResources {
+        generateLocaleConfig = true
+    }
+
     buildFeatures {
         compose = true
         // AGP 8.x defaults buildConfig to false. OrbitApp.onCreate needs
@@ -169,7 +186,21 @@ kover {
                     "app.orbit.MainActivity",
                     "app.orbit.MainActivity*",
                     "app.orbit.OrbitApp",
-                    "app.orbit.OrbitApp*"
+                    "app.orbit.OrbitApp*",
+                    // The widget's Glance UI. The @Composable filter above
+                    // drops the composable functions themselves, but Kotlin 2
+                    // compiles each content lambda (a Row's or Column's body)
+                    // into a synthetic `Name$lambda$N` method on the file
+                    // class, and those carry no annotation, so a file of
+                    // nothing but composables still counted 107 uncovered
+                    // lines. Glance cannot be composed by the JVM unit tests;
+                    // the screenshot job's PlatformSurfacesGalleryTest renders
+                    // every arrangement instead. WidgetContent.kt holds only
+                    // composables (its intent builders live in
+                    // WidgetIntents.kt, measured). Screens under ui/ leak
+                    // their lambda bodies the same way and stay counted:
+                    // their Robolectric Compose tests do run many of them.
+                    "app.orbit.widget.WidgetContentKt"
                 )
             }
         }
@@ -185,18 +216,57 @@ kover {
 // extra test wall-time, which is worth deterministic green.
 tasks.withType<Test>().configureEach {
     forkEvery = 1
-    // WorkManager-in-Robolectric init (ForceStopRunnable -> Room) and the
-    // DataStore singleton occasionally hang across methods even with per-class
-    // JVM forking. Retry the rare flaky failure rather than red the build; a
-    // genuinely broken test fails all attempts, so this masks nothing real.
+    // The retry covers WorkManager-in-Robolectric init (ForceStopRunnable ->
+    // Room), which can still hang a method. The other historic cause is gone:
+    // AppPrefs read one process-wide DataStore (preferencesDataStore) per
+    // class, so every method shared its actor, cache and lock and a write
+    // stranded across a method boundary blocked every later edit; since
+    // 2026-10-06 each test builds its own store on a scope it cancels
+    // (testutil/TestDataStore.kt), and the one race left is inside DataStore
+    // 1.1.x itself (a collector subscribing mid-write can miss that write;
+    // tests poll with awaitValue instead). failOnPassedAfterRetry stays false
+    // so the WorkManager flake does not red the build, and CI's "Retried
+    // tests" step lists every test that passed only on a retry, so a
+    // recurrence is visible rather than silent. A genuinely broken test
+    // fails all attempts.
     retry {
         maxRetries.set(2)
         failOnPassedAfterRetry.set(false)
+    }
+    // The preview screenshot gallery renders ~140 previews in several modes;
+    // it runs only on request (-Pscreenshots) and then runs alone, writing
+    // PNGs to build/screenshots/.
+    if (project.hasProperty("screenshots")) {
+        filter { includeTestsMatching("app.orbit.ui.screenshots.*") }
+        systemProperty("roborazzi.test.record", "true")
+        systemProperty(
+            "orbit.screenshots.dir",
+            layout.buildDirectory.dir("screenshots").get().asFile.absolutePath,
+        )
+        (project.findProperty("orbit.screenshots.only") as String?)
+            ?.let { systemProperty("orbit.screenshots.only", it) }
+        (project.findProperty("orbit.screenshots.qualifiers") as String?)
+            ?.let { systemProperty("orbit.screenshots.qualifiers", it) }
+        // -Porbit.screenshots.curtain renders every preview with the privacy
+        // curtain down and reports any name that still shows (PRIV-03).
+        if (project.hasProperty("orbit.screenshots.curtain")) {
+            systemProperty("orbit.screenshots.curtain", "true")
+        }
+        // -Porbit.a11y.strict fails a preview on any accessibility finding.
+        if (project.hasProperty("orbit.a11y.strict")) {
+            systemProperty("orbit.a11y.strict", "true")
+        }
+        retry { maxRetries.set(0) }
+    } else {
+        exclude("app/orbit/ui/screenshots/**")
     }
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    // Installs the Baseline Profile (src/main/baseline-prof.txt) at install
+    // time so startup and the core loop run AOT-compiled (UX rubric D10).
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
@@ -207,7 +277,6 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.coil.compose)
-    implementation(libs.coil.svg)
     implementation(libs.reorderable)
 
     implementation(libs.androidx.room.runtime)
@@ -246,7 +315,18 @@ dependencies {
     // Application context that satisfies AppPrefs' @ApplicationContext param without
     // requiring an emulator.
     testImplementation(libs.robolectric)
+    // Screenshot gallery (ui/screenshots/PreviewGalleryTest): renders every
+    // @Preview on the JVM. Run with -Pscreenshots; excluded otherwise.
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.composable.preview.scanner)
     testImplementation(libs.androidx.junit)
+    // Navigation graph tests (nav/OrbitNavHostTest): TestNavHostController drives
+    // OrbitNavHost with stub screens, so the back-stack promises each page view
+    // makes (ONB-23, LIST-23, LOG-05, the deep-link guard) run on every push.
+    testImplementation(libs.androidx.navigation.testing)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

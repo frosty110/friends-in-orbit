@@ -9,7 +9,6 @@ import app.orbit.data.entity.ListEntity
 import app.orbit.data.repository.ListRepository
 import app.orbit.domain.JsonProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -31,12 +30,13 @@ import timber.log.Timber
  * re-enqueues from its `finally` block, so the chain continues indefinitely.
  *
  * ### Active-hours interplay (D-09)
- * [effectiveSchedule] injects an implicit daily slot at `activeHoursStart` when
- * the field is non-null. Without this injection, a list whose only explicit slots
- * all fall outside its active-hours window would have EVERY nudge suppressed
- * forever by the fire-time gate (active-hours gate rejects all of them and nothing
- * posts). Injecting `activeHoursStart` guarantees at least one slot that lands at
- * the boundary of the open window.
+ * A list whose chosen times all fall outside its active-hours window would have
+ * every nudge suppressed forever by the fire-time gate. [effectiveSchedule] adds
+ * the window start as a slot in exactly that case, on the list's own days. It
+ * never adds days and never revives a schedule the user emptied: the earlier
+ * version merged in all seven days and injected the slot unconditionally, which
+ * turned "Weekdays at 10am" into two nudges every day and kept "No days
+ * selected - nudges off" nudging.
  *
  * ### Cold-start re-anchor (D-08)
  * [reAnchorAll] reads every non-archived list, decodes its schedule, and calls
@@ -45,7 +45,7 @@ import timber.log.Timber
 @Singleton
 open class NudgeScheduler @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val listRepo: ListRepository,
+    private val listRepo: ListRepository
 ) {
 
     companion object {
@@ -67,7 +67,12 @@ open class NudgeScheduler @Inject constructor(
 
     /**
      * Enqueues (or replaces) the next slot for [listId] with the given [schedule]
-     * and optional [activeHoursStart].
+     * and the list's active-hours window ([activeHoursStart]..[activeHoursEnd],
+     * both null when the list is always active).
+     *
+     * Both window ends are required, with no defaults: [effectiveSchedule] needs
+     * the end to know whether a chosen time can post, and a caller that dropped it
+     * would silently lose the D-09 slot.
      *
      * Uses [setInitialDelay]; MUST NOT use `setExpedited` (mutual exclusion —
      * WorkManager rejects both together with an
@@ -78,9 +83,10 @@ open class NudgeScheduler @Inject constructor(
     open fun schedule(
         listId: Long,
         schedule: NudgeSchedule,
-        activeHoursStart: LocalTime? = null,
+        activeHoursStart: LocalTime?,
+        activeHoursEnd: LocalTime?
     ) {
-        val eff = effectiveSchedule(schedule, activeHoursStart)
+        val eff = effectiveSchedule(schedule, activeHoursStart, activeHoursEnd)
         val now = ZonedDateTime.now(ZoneId.systemDefault())
         val next = eff.nextSlot(now) ?: run {
             Timber.tag("nudge").d("schedule_skipped list=%d empty_effective_schedule", listId)
@@ -100,7 +106,9 @@ open class NudgeScheduler @Inject constructor(
 
         Timber.tag("nudge").d(
             "scheduled list=%d next=%s delay_ms=%d",
-            listId, next, delayMs,
+            listId,
+            next,
+            delayMs
         )
     }
 
@@ -134,7 +142,7 @@ open class NudgeScheduler @Inject constructor(
 
     /**
      * Convenience helper that decodes [ListEntity.nudgeScheduleJson] and forwards
-     * [ListEntity.activeHoursStart] into [schedule].
+     * the list's active-hours window into [schedule].
      *
      * Centralizes the decode-or-default + D-09-injection logic so callers
      * ([ListPromptWorker] re-enqueue, [reAnchorAll], [ListConfigViewModel] save)
@@ -150,43 +158,48 @@ open class NudgeScheduler @Inject constructor(
             }
             ?: NudgeSchedule.DEFAULT
 
-        schedule(list.id, nudgeSchedule, list.activeHoursStart)
+        schedule(list.id, nudgeSchedule, list.activeHoursStart, list.activeHoursEnd)
     }
 
     // ─── effectiveSchedule (internal — exercised by NudgeSchedulerEffectiveSlotsTest) ──
 
     /**
-     * Resolves D-09 at the scheduling level: when [activeHoursStart] is non-null,
-     * injects it as an additional daily slot (all 7 days) into [explicit].
+     * Resolves D-09 at the scheduling level: the schedule the chain actually runs.
      *
-     * **Why this is required (D-09):**
-     * A list whose only explicit slots all fall outside its own active-hours window
-     * would have EVERY nudge suppressed forever — the active-hours fire-time gate
-     * rejects all of them and nothing posts. Injecting `activeHoursStart` here
-     * guarantees at least one candidate slot that lands at the boundary of the open
-     * window, so the worker can post at least once per day (if other gates pass).
+     * Returns [explicit] unchanged unless every chosen time falls outside the
+     * list's active-hours window, in which case the fire-time gate would suppress
+     * them all forever. Then, and only then, the window start is added as a slot
+     * on the list's own days, so the list can post at least once on each of them.
+     *
+     * Deliberately unchanged:
+     * - **No window** (either end null): the gate only applies when both ends are
+     *   set, so every chosen time can already post.
+     * - **Nudges off** (no days or no times): the user emptied the schedule. A
+     *   slot injected here is what kept "No days selected - nudges off" nudging.
+     * - **A chosen time inside the window**: it can post, and an extra slot would
+     *   be a second nudge per day the user never asked for (onboarding promises
+     *   one).
      *
      * Declared `internal` (not `private`) so [NudgeSchedulerEffectiveSlotsTest] in
      * the JVM test source set can exercise it directly without reflection.
-     *
-     * @param explicit The schedule stored on [ListEntity.nudgeScheduleJson].
-     * @param activeHoursStart The start of the list's active-hours window; null means
-     *   always active (no injection needed).
-     * @return A [NudgeSchedule] with the implicit slot merged in, or [explicit]
-     *   unchanged when [activeHoursStart] is null.
      */
     internal fun effectiveSchedule(
         explicit: NudgeSchedule,
         activeHoursStart: LocalTime?,
+        activeHoursEnd: LocalTime?
     ): NudgeSchedule {
-        if (activeHoursStart == null) return explicit
-
-        // Merge all 7 days with the explicit days (the implicit slot fires every day).
-        val mergedDays = explicit.days + DayOfWeek.values().toSet()
-
-        // Inject the implicit activeHoursStart time; de-duplicate.
-        val mergedTimes = (explicit.times + activeHoursStart).distinct()
-
-        return NudgeSchedule(days = mergedDays, times = mergedTimes)
+        if (activeHoursStart == null || activeHoursEnd == null) return explicit
+        if (explicit.days.isEmpty() || explicit.times.isEmpty()) return explicit
+        if (explicit.times.any {
+                isInActiveWindow(
+                    it,
+                    activeHoursStart,
+                    activeHoursEnd
+                )
+            }
+        ) {
+            return explicit
+        }
+        return explicit.copy(times = (explicit.times + activeHoursStart).distinct())
     }
 }

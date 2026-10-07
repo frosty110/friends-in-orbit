@@ -27,18 +27,16 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
-import kotlin.math.abs
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
+import kotlin.math.abs
 
 /**
  * Card View's swipe container — three-anchor `anchoredDraggable`, derived from
@@ -198,17 +196,10 @@ internal fun CardSwipeFrame(
                         alpha = (1f - (abs(offset) / width).coerceAtMost(0.3f))
                     }
                 }
-                .anchoredDraggable(state, Orientation.Horizontal)
-                .semantics {
-                    customActions = listOf(
-                        CustomAccessibilityAction(label = "Surface sooner") {
-                            currentOnSwipeRight(); true
-                        },
-                        CustomAccessibilityAction(label = "Defer") {
-                            currentOnSwipeLeft(); true
-                        },
-                    )
-                },
+                // Accessibility actions (Later, Sooner, Call) live on the card
+                // face, the node TalkBack focuses; on this non-focusable frame
+                // they were unreachable (2026-10-05).
+                .anchoredDraggable(state, Orientation.Horizontal),
             content = content,
         )
         // Ghost-hint overlay slot — sits OUTSIDE the rotated/translated card

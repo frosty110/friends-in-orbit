@@ -1,8 +1,7 @@
 package app.orbit.ui.screens.settings.export
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
@@ -27,8 +28,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
+import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.theme.OrbitTheme
@@ -74,6 +80,8 @@ private fun ImportPassphraseContent(
 ) {
     var password by rememberSaveable { mutableStateOf("") }
     val canSubmit = password.isNotEmpty()
+    // Resolved here: semantics blocks are not composable.
+    val passwordLabel = stringResource(R.string.settings_password)
 
     Column(
         modifier = Modifier
@@ -88,19 +96,22 @@ private fun ImportPassphraseContent(
             ),
     ) {
         Text(
-            text = "Open your backup",
+            text = stringResource(R.string.settings_import_sheet_title),
             style = OrbitTheme.type.h2.copy(color = OrbitTheme.colors.fg),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
-            text = "Enter the password you chose when you exported this file.",
+            text = stringResource(R.string.settings_import_sheet_body),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
 
         Text(
-            text = "Password",
+            text = stringResource(R.string.settings_password),
             style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
+            // Spoken as the field's own label instead (below), so TalkBack
+            // says "Password, edit box" rather than an unlabelled edit box.
+            modifier = Modifier.clearAndSetSemantics {},
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         TextField(
@@ -112,7 +123,8 @@ private fun ImportPassphraseContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(OrbitTheme.shapes.md)
-                .background(OrbitTheme.colors.bgSubtle),
+                .background(OrbitTheme.colors.bgSubtle)
+                .semantics { contentDescription = passwordLabel },
         )
 
         Spacer(Modifier.height(OrbitTheme.spacing.x6))
@@ -122,13 +134,13 @@ private fun ImportPassphraseContent(
             horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x4),
         ) {
             OrbitButton(
-                text = "Cancel",
+                text = stringResource(R.string.components_action_cancel),
                 onClick = onCancel,
                 variant = OrbitButtonVariant.Ghost,
                 modifier = Modifier.weight(1f),
             )
             OrbitButton(
-                text = "Continue",
+                text = stringResource(R.string.components_action_continue),
                 onClick = {
                     if (canSubmit) onSubmit(password.toCharArray())
                 },
@@ -163,7 +175,7 @@ private fun ImportPassphraseSheetLightPreview() {
     }
 }
 
-@Preview(name = "ImportPassphraseSheet · dark", showBackground = true, backgroundColor = 0xFF0E0F12)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "ImportPassphraseSheet · dark", showBackground = true, backgroundColor = 0xFF0E0F12)
 @Composable
 private fun ImportPassphraseSheetDarkPreview() {
     OrbitTheme(darkTheme = true) {

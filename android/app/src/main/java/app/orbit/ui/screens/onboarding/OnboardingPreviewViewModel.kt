@@ -1,23 +1,32 @@
 package app.orbit.ui.screens.onboarding
 
-import android.text.format.DateUtils
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.repository.CallAgg
 import app.orbit.data.repository.CallEventRepository
 import app.orbit.data.repository.ContactRepository
+import app.orbit.domain.clock.Clock
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.formatRelative
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 
 /**
- * ONB-19 — ranks contacts by recency × frequency and surfaces 5–10
+ * ONB-19: ranks contacts by recency x frequency and surfaces 3 to 10
  * candidates for the H/β preview. Score formula (locked):
  *
  *   score = (call_count_30d × 1.0) + max(0, 30 − days_since_last_call) / 30.0
@@ -28,26 +37,49 @@ import kotlinx.coroutines.flow.stateIn
  * and the locked formula is intentionally simple). The
  * `days_since_last_call` arm is computed from `lastAt`.
  *
- * Filter: drop candidates with `lastAt == null` (never called — score = 0).
+ * Filter: drop candidates with `lastAt == null` (never called, score = 0).
  * Sort: score DESC, then displayName ASC tiebreaker.
  * Take: at most 10. Emit empty list when fewer than 3 score > 0.
+ *
+ * Time comes from the injected [Clock], never `Instant.now()`, so the rank is
+ * reproducible in tests (`TestClock`).
+ *
+ * A failed read becomes [OnboardingPreviewUiState.Error] instead of an
+ * uncaught exception in `viewModelScope` (which ended the first run with a
+ * crash). [onRetry] re-subscribes through `flatMapLatest`: a bare `catch`
+ * terminates the upstream, so the retry has to start a new one.
  */
 @HiltViewModel
 class OnboardingPreviewViewModel @Inject constructor(
     private val contactRepo: ContactRepository,
     private val callEventRepo: CallEventRepository,
+    private val clock: Clock,
 ) : ViewModel() {
 
+    private val retryCount = MutableStateFlow(0)
+
+    /** The Error state's Try again. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<OnboardingPreviewUiState> =
-        combine(
-            contactRepo.observeAll(),               // Flow<List<ContactEntity>>
-            callEventRepo.observeAggregatesAll(),   // Flow<Map<Long, CallAgg>>
-        ) { contacts, aggregate ->
-            val now = Instant.now()
-            val ranked = rankCandidates(contacts, aggregate, now)
-            OnboardingPreviewUiState.Ready(
-                candidates = if (ranked.size >= 3) ranked.take(10) else emptyList(),
-            )
+        retryCount.flatMapLatest {
+            combine(
+                contactRepo.observeAll(), // Flow<List<ContactEntity>>
+                callEventRepo.observeAggregatesAll(), // Flow<Map<Long, CallAgg>>
+            ) { contacts, aggregate ->
+                val now = clock.now()
+                val ranked = rankCandidates(contacts, aggregate, now)
+                OnboardingPreviewUiState.Ready(
+                    candidates = if (ranked.size >= 3) ranked.take(10) else emptyList(),
+                ) as OnboardingPreviewUiState
+            }.catch { t ->
+                // rules.md Code 5: cancellation is structured concurrency, not a failure.
+                if (t is CancellationException) throw t
+                emit(OnboardingPreviewUiState.Error)
+            }
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),
@@ -93,15 +125,9 @@ class OnboardingPreviewViewModel @Inject constructor(
             }
     }
 
-    private fun relativeTime(lastAt: Instant, now: Instant): String {
-        val rel = DateUtils.getRelativeTimeSpanString(
-            lastAt.toEpochMilli(),
-            now.toEpochMilli(),
-            DateUtils.MINUTE_IN_MILLIS,
-            DateUtils.FORMAT_ABBREV_RELATIVE,
-        ).toString()
-        // Voice-rule prefix for the row meta line. Sentence case, no
-        // exclamation; "Called {rel}" → e.g. "Called 4 days ago".
-        return "Called $rel"
-    }
+    // The glossary's one formatter for "time since" (voice.md). This used
+    // DateUtils, which switches to a date past a week ("Called Sep 12") and
+    // abbreviates short spans, where every other screen says "3 weeks ago".
+    private fun relativeTime(lastAt: Instant, now: Instant): UiText =
+        UiText.res(R.string.onb_preview_called, formatRelative(lastAt, now))
 }

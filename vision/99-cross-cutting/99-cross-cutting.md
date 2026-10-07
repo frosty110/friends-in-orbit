@@ -8,20 +8,20 @@
 
 ## Where it's going
 
-### `X-1` · Warm-theme every dropdown menu · **Now**
-Material's default **lavender** menu surface shows up on at least two screens (Lists Manager overflow, Card View list-actions) — the most visible break in the cream-and-terracotta system. Theme `DropdownMenu` (and any popup surfaces) to `surface` / `accentTint` once, centrally, so menus stop looking like they're from a different app. Cheap, high-visibility polish. (Referenced by `LISTS-2`.)
+### `X-1` · Warm-theme every dropdown menu · **Shipped 2026-10-05 (`1af5d3e`, `d8d7db0`)**
+Material's default **lavender** menu surface showed up on at least two screens (Lists Manager overflow, Card View list-actions): the most visible break in the cream-and-terracotta system. Every Material 3 colour, type and shape slot is now mapped to Orbit's tokens in one place (`OrbitTheme`; DESIGN.md "Material parts look like Orbit"), and the shared `OrbitDropdownMenu`, chips, checkboxes and state message replaced the one-offs, so no popup looks like it is from a different app. (Referenced by `LISTS-2`.)
 
-### `X-2` · A consistent "destructive / irreversible action" pattern · **Now**
-Some actions can't be taken back — placing a call (`CARD-3`), deleting a list, ignoring at scale. Today the card makes its *entire surface* a one-tap dialer, which caused a real accidental call during this review. Establish one principle: irreversible actions live behind a clear, labelled control (or a light confirm), never behind a tap that could be a mis-hit. Apply it to the card first, then audit elsewhere.
+### `X-2` · A consistent "destructive / irreversible action" pattern · **Shipped for the card (`468d68d`, CARD-01); the audit elsewhere holds**
+Some actions can't be taken back: placing a call (`CARD-3`), deleting a list, ignoring at scale. The card used to make its *entire surface* a one-tap dialer, which caused a real accidental call during the June review. The principle stands: irreversible actions live behind a clear, labelled control (or a light confirm), never behind a tap that could be a mis-hit. Applied to the card first (only the labelled Call dials; `ux-rubric.md` decision 3) and then checked elsewhere: deleting a list confirms and offers Undo; ignoring or pausing at scale offers Undo; the widgets dial only from their labelled Call (WIDGET-08). Remaining as a standing rule for new work.
 
 ### `X-3` · Display names / nicknames for messy contacts · **Next**
 Real address books are full of operational cruft — *"Eric Henderkson? Sila," "Ben Saa 8:30am Meeting," "Gabriel L (Use This number)."* It surfaces everywhere (Card, Browse, Pickers, Call Log) and makes the app feel like a dump of your phone rather than *your people*. Let a person carry an Orbit-local **display name** (without touching the phone contact), shown primary, with the raw name secondary. Offer to set it at the natural moments — filing them in a picker (`PICK-3`), or on Contact Detail. This is one of the bigger "feels intentional vs feels like a contacts export" levers in the app.
 
 ### `X-4` · Voice consistency on every new string · **Ongoing**
-Every string proposed across these files must clear the existing bar before it ships: sentence case, no exclamation marks, no gamification (streaks/achievements/XP), no shame framing ("you haven't called X in N days" is explicitly forbidden), no emoji in product copy, pattern language over performance language. When in doubt, check `README.md` → "Content fundamentals" and `features/_foundations/`. This isn't a feature — it's a gate on all of the above.
+Every string proposed across these files must clear the existing bar before it ships: sentence case, no exclamation marks, no gamification (streaks/achievements/XP), no shame framing ("you haven't called X in N days" is explicitly forbidden), no emoji in product copy, no "due" as a deadline, pattern language over performance language. When in doubt, check [`features/_foundations/voice.md`](../../features/_foundations/voice.md), glossary included; it is canonical and wins over `design/README.md`. This isn't a feature: it's a gate on all of the above.
 
-### `X-5` · One vocabulary for Later / Sooner / Skip · **Next**
-The defer/advance language isn't consistent: Card View shows "Later"/"Sooner" on the arrows but "Skip" in the text row; onboarding teaches "Later/Sooner"; undo snackbars and widgets will need the same words. Pick one vocabulary for the two directions and use it identically across Card View, onboarding, widgets, and snackbars. A core gesture should have one name. (Referenced by `CARD-2`.)
+### `X-5` · One vocabulary for Later / Sooner / Skip · **Shipped 2026-10-05 (`1d3266f`; voice.md glossary)**
+The defer/advance language wasn't consistent: Card View showed "Later"/"Sooner" on the arrows but "Skip" in the text row; onboarding taught "Later/Sooner". The glossary in `features/_foundations/voice.md` now fixes the two words, "Skip" is gone from the card, and the snackbars, onboarding's Done screen and the strings all use Later and Sooner. The same glossary pass settled the other doubled words (nudges, people, Unpause, Unignore, Next up). A core gesture has one name. (Referenced by `CARD-2`.)
 
 ### `X-6` · Hold the accessibility floor as features land · **Ongoing**
 The app already respects a 16sp body minimum, 48dp touch targets, and font-scale scrolling on the card. Every suggestion here must preserve that — new chips, labels, and controls included. Context lines and quick-chips (`CARD-1`, `CONTACT-2`) especially must not shrink below the type floor to fit. Calm includes legible.
@@ -35,10 +35,10 @@ A single, reversible setting that tells Orbit how much room the user has for con
 
 | Cross-cutting move | Shows up in |
 |---|---|
-| `X-1` Warm dropdowns | `06-lists-manager` (`LISTS-2`), `01-card-view` |
-| `X-2` Irreversible-action pattern | `01-card-view` (`CARD-3`) |
+| `X-1` Warm dropdowns (shipped) | `06-lists-manager` (`LISTS-2`), `01-card-view` |
+| `X-2` Irreversible-action pattern (shipped for the card) | `01-card-view` (`CARD-3`), `12-widgets` |
 | `X-3` Display names | `03-browse-list` (`BROWSE-4`), `09-pickers` (`PICK-3`), `02-contact-detail` |
 | `X-4` Voice gate | every file |
-| `X-5` Later/Sooner vocabulary | `01-card-view` (`CARD-2`), `11-onboarding`, `12-widgets` |
+| `X-5` Later/Sooner vocabulary (shipped) | `01-card-view` (`CARD-2`), `11-onboarding`, `12-widgets` |
 | `X-6` Accessibility floor | `01-card-view`, `02-contact-detail` |
 | `X-7` Life right now (seasons) | `10-settings`, `00-home`, `notifications` (nudge gate), `features/life-right-now/` |

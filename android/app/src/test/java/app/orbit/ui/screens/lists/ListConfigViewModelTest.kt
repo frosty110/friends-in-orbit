@@ -6,10 +6,13 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
+import app.orbit.R
 import app.orbit.data.dao.RecordingListMembershipDao
 import app.orbit.data.db.TransactionRunner
+import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListType
 import app.orbit.data.entity.RuleKind
+import app.orbit.data.repository.ListRepository
 import app.orbit.domain.FakeCallEventRepository
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
@@ -18,17 +21,18 @@ import app.orbit.domain.JsonProvider
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.contactFixture
 import app.orbit.domain.listFixture
+import app.orbit.domain.membershipFixture
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.ruleTemplateFixture
 import app.orbit.domain.smart.SmartListEngine
 import app.orbit.domain.smart.SmartListRule
-import app.orbit.domain.membershipFixture
 import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.BulkRemoveFromListUseCase
 import app.orbit.notify.NudgeSchedule
 import app.orbit.notify.NudgeScheduler
 import app.orbit.testutil.MainDispatcherRule
 import app.orbit.ui.screens.picker.SnackbarEvent
+import app.orbit.ui.util.UiText
 import java.time.DayOfWeek
 import java.time.LocalTime
 import kotlin.test.assertEquals
@@ -37,6 +41,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -52,14 +58,50 @@ import org.robolectric.annotation.Config
  */
 private class RecordingNudgeScheduler : NudgeScheduler(
     context = ApplicationProvider.getApplicationContext<Context>(),
-    listRepo = FakeListRepository(),
+    listRepo = FakeListRepository()
 ) {
-    data class ScheduleCall(val listId: Long, val schedule: NudgeSchedule, val activeHoursStart: LocalTime?)
+    data class ScheduleCall(
+        val listId: Long,
+        val schedule: NudgeSchedule,
+        val activeHoursStart: LocalTime?,
+        val activeHoursEnd: LocalTime?
+    )
 
     val scheduleCalls: MutableList<ScheduleCall> = mutableListOf()
 
-    override fun schedule(listId: Long, schedule: NudgeSchedule, activeHoursStart: LocalTime?) {
-        scheduleCalls += ScheduleCall(listId, schedule, activeHoursStart)
+    override fun schedule(
+        listId: Long,
+        schedule: NudgeSchedule,
+        activeHoursStart: LocalTime?,
+        activeHoursEnd: LocalTime?
+    ) {
+        scheduleCalls += ScheduleCall(listId, schedule, activeHoursStart, activeHoursEnd)
+    }
+}
+
+/**
+ * A [ListRepository] that can fail on demand: [failReads] makes the list's
+ * own stream throw on subscription, the way a database read error would
+ * (LIST-22); [failWrites] makes the convert write throw (rules.md Code 3).
+ * Every other call goes to the real fake, whose capture lists the tests
+ * still assert on.
+ */
+private class ConfigThrowingListRepository(
+    private val delegate: FakeListRepository
+) : ListRepository by delegate {
+    var failReads: Boolean = false
+    var failWrites: Boolean = false
+
+    override fun observeById(id: Long): Flow<ListEntity?> =
+        if (failReads) {
+            flow { throw IllegalStateException("database read failed") }
+        } else {
+            delegate.observeById(id)
+        }
+
+    override suspend fun convertSmartToStatic(listId: Long) {
+        if (failWrites) throw IllegalStateException("database write failed")
+        delegate.convertSmartToStatic(listId)
     }
 }
 
@@ -102,12 +144,23 @@ class ListConfigViewModelTest {
             id = 1L,
             name = "Inner orbit",
             type = ListType.STATIC,
-            ruleTemplateId = 1L,
+            ruleTemplateId = 1L
         ),
         templates: List<app.orbit.data.entity.RuleTemplateEntity> = listOf(
-            ruleTemplateFixture(id = 1L, kind = RuleKind.KEEP_IN_TOUCH, params = RuleParams.KeepInTouch()),
-            ruleTemplateFixture(id = 2L, kind = RuleKind.LATE_NIGHT, params = RuleParams.LateNight()),
+            ruleTemplateFixture(
+                id = 1L,
+                kind = RuleKind.KEEP_IN_TOUCH,
+                params = RuleParams.KeepInTouch()
+            ),
+            ruleTemplateFixture(
+                id = 2L,
+                kind = RuleKind.LATE_NIGHT,
+                params = RuleParams.LateNight()
+            )
         ),
+        // Lets a test put a failing wrapper between the VM and the fake; the
+        // default hands the fake over as is.
+        wrapListRepo: (FakeListRepository) -> ListRepository = { it }
     ): Setup {
         val listRepo = FakeListRepository().apply { seed(listOf(list)) }
         val templateRepo = FakeRuleTemplateRepository().apply { seed(templates) }
@@ -122,14 +175,19 @@ class ListConfigViewModelTest {
         val undoStack = UndoStack()
         val nudgeScheduler = RecordingNudgeScheduler()
         val vm = ListConfigViewModel(
-            listRepo = listRepo,
+            listRepo = wrapListRepo(listRepo),
             ruleTemplateRepo = templateRepo,
             contactRepo = contactRepo,
             smartListEngine = engine,
-            bulkRemoveFromListUseCase = BulkRemoveFromListUseCase(passThruTx, recDao, listRepo, clock),
+            bulkRemoveFromListUseCase = BulkRemoveFromListUseCase(
+                passThruTx,
+                recDao,
+                listRepo,
+                clock
+            ),
             undoStack = undoStack,
             nudgeScheduler = nudgeScheduler,
-            savedStateHandle = SavedStateHandle(mapOf("listId" to savedStateListId)),
+            savedStateHandle = SavedStateHandle(mapOf("listId" to savedStateListId))
         )
         return Setup(vm, listRepo, templateRepo, contactRepo, recDao, undoStack, nudgeScheduler)
     }
@@ -141,7 +199,7 @@ class ListConfigViewModelTest {
         val contactRepo: FakeContactRepository,
         val recDao: RecordingListMembershipDao,
         val undoStack: UndoStack,
-        val nudgeScheduler: RecordingNudgeScheduler = RecordingNudgeScheduler(),
+        val nudgeScheduler: RecordingNudgeScheduler = RecordingNudgeScheduler()
     )
 
     // ────────────────────────────────────────────────────────────────────────
@@ -174,12 +232,14 @@ class ListConfigViewModelTest {
         s.vm.snackbarEvents.test(timeout = 2.seconds) {
             s.vm.setRuleTemplate(RuleKind.ENERGIZE)
             val event = awaitItem()
-            assertEquals(SnackbarEvent("Couldn't update list"), event)
+            // The shared words every screen uses for a failed write; this
+            // screen said "Couldn't update list" until 2026-10-06.
+            assertEquals(SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)), event)
             cancel()
         }
         assertTrue(
             s.listRepo.updateRuleTemplateCalls.isEmpty(),
-            "no write when the template row cannot be resolved",
+            "no write when the template row cannot be resolved"
         )
     }
 
@@ -194,14 +254,14 @@ class ListConfigViewModelTest {
     fun `setRuleTemplate clears params override when switching templates`() = runTest {
         val overrideJson = json.encodeToString(
             RuleParams.serializer(),
-            RuleParams.KeepInTouch().withIntervalHours(30 * 24),
+            RuleParams.KeepInTouch().withIntervalHours(30 * 24)
         )
         val list = listFixture(
             id = 1L,
             name = "Inner orbit",
             type = ListType.STATIC,
             ruleTemplateId = 1L,
-            ruleParamsOverrideJson = overrideJson,
+            ruleParamsOverrideJson = overrideJson
         )
         val (vm, listRepo, _, _) = fixture(list = list)
         vm.setRuleTemplate(RuleKind.LATE_NIGHT)
@@ -217,64 +277,66 @@ class ListConfigViewModelTest {
     fun `setRuleTemplate preserves override when re-selecting the current template`() = runTest {
         val overrideJson = json.encodeToString(
             RuleParams.serializer(),
-            RuleParams.KeepInTouch().withIntervalHours(30 * 24),
+            RuleParams.KeepInTouch().withIntervalHours(30 * 24)
         )
         val list = listFixture(
             id = 1L,
             name = "Inner orbit",
             type = ListType.STATIC,
             ruleTemplateId = 1L,
-            ruleParamsOverrideJson = overrideJson,
+            ruleParamsOverrideJson = overrideJson
         )
         val (vm, listRepo, _, _) = fixture(list = list)
         vm.setRuleTemplate(RuleKind.KEEP_IN_TOUCH)
         assertTrue(
             listRepo.setRuleParamsOverrideJsonCalls.isEmpty(),
-            "re-selecting the active template must not clear the user's tuning",
+            "re-selecting the active template must not clear the user's tuning"
         )
         assertTrue(
             listRepo.updateRuleTemplateCalls.isEmpty(),
-            "re-selecting the active template is a write no-op",
+            "re-selecting the active template is a write no-op"
         )
     }
 
     @Test
-    fun `uiState decodes to the new template defaults after a switch clears the override`() = runTest {
-        val overrideJson = json.encodeToString(
-            RuleParams.serializer(),
-            RuleParams.KeepInTouch().withIntervalHours(30 * 24),
-        )
-        val list = listFixture(
-            id = 1L,
-            name = "Inner orbit",
-            type = ListType.STATIC,
-            ruleTemplateId = 1L,
-            ruleParamsOverrideJson = overrideJson,
-        )
-        val (vm, _, _, _) = fixture(list = list)
-        vm.uiState.test(timeout = 2.seconds) {
-            val initial = awaitReady { it.ruleParams is RuleParams.KeepInTouch }
-            assertEquals(
-                30 * 24,
-                (initial.ruleParams as RuleParams.KeepInTouch).cooldownMinHours,
-                "before the switch, the override carries the tuned interval",
+    fun `uiState decodes to the new template defaults after a switch clears the override`() =
+        runTest {
+            val overrideJson = json.encodeToString(
+                RuleParams.serializer(),
+                RuleParams.KeepInTouch().withIntervalHours(30 * 24)
             )
-
-            vm.setRuleTemplate(RuleKind.LATE_NIGHT)
-
-            val after = awaitReady { it.ruleKind == RuleKind.LATE_NIGHT }
-            assertEquals(
-                RuleParams.LateNight(),
-                after.ruleParams,
-                "after the switch, the cleared override decodes through to the template defaults",
+            val list = listFixture(
+                id = 1L,
+                name = "Inner orbit",
+                type = ListType.STATIC,
+                ruleTemplateId = 1L,
+                ruleParamsOverrideJson = overrideJson
             )
-            cancelAndIgnoreRemainingEvents()
+            val (vm, _, _, _) = fixture(list = list)
+            vm.uiState.test(timeout = 2.seconds) {
+                val initial = awaitReady { it.ruleParams is RuleParams.KeepInTouch }
+                assertEquals(
+                    30 * 24,
+                    (initial.ruleParams as RuleParams.KeepInTouch).cooldownMinHours,
+                    "before the switch, the override carries the tuned interval"
+                )
+
+                vm.setRuleTemplate(RuleKind.LATE_NIGHT)
+
+                val after = awaitReady { it.ruleKind == RuleKind.LATE_NIGHT }
+                assertEquals(
+                    RuleParams.LateNight(),
+                    after.ruleParams,
+                    "after the switch, the cleared override decodes through to the " +
+                        "template defaults"
+                )
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     /** Awaits the next [ListConfigUiState.Ready] emission matching [predicate]. */
     private suspend fun ReceiveTurbine<ListConfigUiState>.awaitReady(
-        predicate: (ListConfigUiState.Ready) -> Boolean,
+        predicate: (ListConfigUiState.Ready) -> Boolean
     ): ListConfigUiState.Ready {
         while (true) {
             val state = awaitItem()
@@ -353,8 +415,8 @@ class ListConfigViewModelTest {
             ruleTemplateId = null,
             smartRuleJson = json.encodeToString(
                 SmartListRule.serializer(),
-                SmartListRule.RecentlyAddedNotCalled(daysWindow = 30),
-            ),
+                SmartListRule.RecentlyAddedNotCalled(daysWindow = 30)
+            )
         )
         val (vm, listRepo, _, _) = fixture(list = smartList)
         val updated = SmartListRule.RecentlyAddedNotCalled(daysWindow = 60)
@@ -389,8 +451,8 @@ class ListConfigViewModelTest {
             ruleTemplateId = null,
             smartRuleJson = json.encodeToString(
                 SmartListRule.serializer(),
-                SmartListRule.RecentlyAddedNotCalled(daysWindow = 30),
-            ),
+                SmartListRule.RecentlyAddedNotCalled(daysWindow = 30)
+            )
         )
         val (vm, listRepo, _, _) = fixture(list = smartList)
         vm.confirmConvert()
@@ -398,7 +460,30 @@ class ListConfigViewModelTest {
         assertEquals(
             listOf(1L),
             listRepo.convertSmartToStaticCalls,
-            "confirmConvert should dispatch the listId exactly once",
+            "confirmConvert should dispatch the listId exactly once"
+        )
+    }
+
+    @Test
+    fun `confirmConvert gives a list with no cadence Keep in touch`() = runTest {
+        // Regression: a smart list had no cadence, so after converting it the
+        // Cadence section showed nothing selected and the list surfaced no one.
+        val smartList = listFixture(
+            id = 1L,
+            name = "Recently added, not called",
+            type = ListType.SMART,
+            ruleTemplateId = null,
+            smartRuleJson = json.encodeToString(
+                SmartListRule.serializer(),
+                SmartListRule.RecentlyAddedNotCalled(daysWindow = 30)
+            )
+        )
+        val (vm, listRepo, _, _) = fixture(list = smartList)
+        vm.confirmConvert()
+        assertEquals(
+            listOf(1L to 1L),
+            listRepo.updateRuleTemplateCalls.toList(),
+            "KEEP_IN_TOUCH is template id 1 in the fixture"
         )
     }
 
@@ -408,22 +493,121 @@ class ListConfigViewModelTest {
         vm.confirmConvert()
         assertTrue(
             listRepo.convertSmartToStaticCalls.isEmpty(),
-            "no convert dispatch when listId is null",
+            "no convert dispatch when listId is null"
         )
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // "This is now a regular list." is the VM's to say, and only after the
+    // write. The body used to show it on confirm, so a failed convert said
+    // "Couldn't save your change" and then that the list was regular. The
+    // VM's event flow has more than one slot, so a second event is received
+    // rather than dropped (see the note in ListsManagerViewModelTest); without
+    // the Boolean runMutation the failure case sees two events and fails.
+    // ────────────────────────────────────────────────────────────────────────
+
+    private val smartFixtureList = listFixture(
+        id = 1L,
+        name = "Recently added, not called",
+        type = ListType.SMART,
+        ruleTemplateId = null,
+        smartRuleJson = json.encodeToString(
+            SmartListRule.serializer(),
+            SmartListRule.RecentlyAddedNotCalled(daysWindow = 30)
+        )
+    )
+
+    @Test
+    fun `confirmConvert announces the regular list once the write is in`() = runTest {
+        val s = fixture(list = smartFixtureList)
+        s.vm.snackbarEvents.test(timeout = 2.seconds) {
+            s.vm.confirmConvert()
+            val event = awaitItem()
+            assertEquals(SnackbarEvent(UiText.res(R.string.lists_converted_snackbar)), event)
+            assertEquals(
+                "This is now a regular list.",
+                event.message.asString(ApplicationProvider.getApplicationContext<Context>())
+            )
+            expectNoEvents()
+            cancel()
+        }
+    }
+
+    @Test
+    fun `confirmConvert failure emits only the failure snackbar`() = runTest {
+        lateinit var throwing: ConfigThrowingListRepository
+        val s = fixture(
+            list = smartFixtureList,
+            wrapListRepo = { ConfigThrowingListRepository(it).also { w -> throwing = w } }
+        )
+        throwing.failWrites = true
+        s.vm.snackbarEvents.test(timeout = 2.seconds) {
+            s.vm.confirmConvert()
+            assertEquals(SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)), awaitItem())
+            expectNoEvents()
+            cancel()
+        }
+        assertTrue(s.listRepo.convertSmartToStaticCalls.isEmpty(), "the write threw before the fake saw it")
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // LIST-22: a failing source shows Error instead of killing the stream,
+    // and Try again re-subscribes and recovers. A list that does not exist
+    // is NotFound, not an error and not a crash.
+    // ────────────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `failing source shows error and retry recovers`() = runTest {
+        lateinit var throwing: ConfigThrowingListRepository
+        val s = fixture(wrapListRepo = { ConfigThrowingListRepository(it).also { w -> throwing = w } })
+        throwing.failReads = true
+        s.vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state is ListConfigUiState.Loading) state = awaitItem()
+            assertEquals(ListConfigUiState.Error, state)
+
+            throwing.failReads = false
+            s.vm.onRetry()
+            state = awaitItem()
+            while (state is ListConfigUiState.Loading || state is ListConfigUiState.Error) state = awaitItem()
+            assertTrue(state is ListConfigUiState.Ready, "Try again recovers to Ready, got $state")
+            assertEquals("Inner orbit", state.name)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `missing list is NotFound`() = runTest {
+        // The id parses but no row carries it (deleted elsewhere, a stale link).
+        val gone = fixture(savedStateListId = "404")
+        gone.vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state is ListConfigUiState.Loading) state = awaitItem()
+            assertEquals(ListConfigUiState.NotFound, state)
+            cancelAndIgnoreRemainingEvents()
+        }
+        // An id that does not parse at all (the old "new" sentinel) is NotFound too.
+        val garbage = fixture(savedStateListId = "not-a-number")
+        garbage.vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state is ListConfigUiState.Loading) state = awaitItem()
+            assertEquals(ListConfigUiState.NotFound, state)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
     fun `vm resolves override in uiState`() = runTest {
         val overrideJson = json.encodeToString(
             RuleParams.serializer(),
-            RuleParams.KeepInTouch(cooldownMinHours = 720),
+            RuleParams.KeepInTouch(cooldownMinHours = 720)
         )
         val list = listFixture(
             id = 1L,
             name = "Overridden",
             type = ListType.STATIC,
             ruleTemplateId = 1L,
-            ruleParamsOverrideJson = overrideJson,
+            ruleParamsOverrideJson = overrideJson
         )
         val (vm, _, _, _) = fixture(list = list)
         vm.uiState.test(timeout = 2.seconds) {
@@ -434,8 +618,33 @@ class ListConfigViewModelTest {
             assertEquals(
                 720,
                 params.cooldownMinHours,
-                "override beats template default — Ready.ruleParams carries the override value",
+                "override beats template default — Ready.ruleParams carries the override value"
             )
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a params override that cannot be read gives no params and no crash`() = runTest {
+        // The resolver shared with the Lists row reports Unreadable; this
+        // screen maps it to null params (How often has nothing honest to
+        // show) rather than Error, while the Lists row names the case. The
+        // domain's resolveParamsFor throws on the same blob. Pinned so the
+        // two resolvers stay one shape.
+        val list = listFixture(
+            id = 1L,
+            name = "Inner orbit",
+            type = ListType.STATIC,
+            ruleTemplateId = 1L,
+            ruleParamsOverrideJson = "{not json"
+        )
+        val (vm, _, _, _) = fixture(list = list)
+        vm.uiState.test(timeout = 2.seconds) {
+            var state = awaitItem()
+            while (state is ListConfigUiState.Loading) state = awaitItem()
+            assertTrue(state is ListConfigUiState.Ready, "expected Ready, got $state")
+            assertNull(state.ruleParams, "an unreadable override resolves to no params")
+            assertEquals(RuleKind.KEEP_IN_TOUCH, state.ruleKind, "the template is still known")
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -460,7 +669,7 @@ class ListConfigViewModelTest {
                     assertEquals(
                         ids.toList(),
                         state.members.map { it.id },
-                        "all 25 members projected, id ASC — none truncated",
+                        "all 25 members projected, id ASC — none truncated"
                     )
                     break
                 }
@@ -482,12 +691,12 @@ class ListConfigViewModelTest {
         s.listRepo.seedMemberships(
             listOf(
                 membershipFixture(contactId = 5L, listId = 1L),
-                membershipFixture(contactId = 9L, listId = 1L),
-            ),
+                membershipFixture(contactId = 9L, listId = 1L)
+            )
         )
         s.recDao.seed(
             membershipFixture(contactId = 5L, listId = 1L),
-            membershipFixture(contactId = 9L, listId = 1L),
+            membershipFixture(contactId = 9L, listId = 1L)
         )
         s.vm.onRemoveMember(contactId = 5L, contactName = "Mom")
         assertEquals(1, s.recDao.removeCalls.size, "expected one removeAll dispatch")
@@ -504,7 +713,8 @@ class ListConfigViewModelTest {
         s.vm.snackbarEvents.test(timeout = 2.seconds) {
             s.vm.onRemoveMember(contactId = 5L, contactName = "Mom")
             val event = awaitItem()
-            assertEquals(SnackbarEvent("Removed Mom", "Undo"), event)
+            assertEquals(SnackbarEvent.undoable(UiText.res(R.string.lists_snackbar_member_removed, "Mom")), event)
+            assertEquals("Removed Mom", event.message.asString(ApplicationProvider.getApplicationContext<Context>()))
             cancel()
         }
     }
@@ -517,7 +727,11 @@ class ListConfigViewModelTest {
         s.vm.onRemoveMember(contactId = 5L, contactName = "Mom")
         val pending = s.undoStack.peek()
         assertNotNull(pending, "expected a PendingUndo on the stack after onRemoveMember")
-        assertEquals("Removed 1 from Inner orbit", pending.label)
+        // It is the use case's inverse: running it puts the member back. (It
+        // carried a "Removed 1 from Inner orbit" label nothing showed.)
+        s.recDao.clearCalls()
+        pending.inverse()
+        assertEquals(listOf(5L), s.recDao.insertCalls.single().memberships.map { it.contactId })
     }
 
     @Test
@@ -529,7 +743,11 @@ class ListConfigViewModelTest {
         // Drop forward dispatches so the next assertion isolates the inverse.
         s.recDao.clearCalls()
         s.vm.onUndo()
-        assertEquals(1, s.recDao.insertCalls.size, "expected one insertAll from the inverse closure")
+        assertEquals(
+            1,
+            s.recDao.insertCalls.size,
+            "expected one insertAll from the inverse closure"
+        )
         val reinserted = s.recDao.insertCalls.last().memberships
         assertEquals(1, reinserted.size)
         assertEquals(5L, reinserted[0].contactId)
@@ -569,7 +787,11 @@ class ListConfigViewModelTest {
         val (vm, listRepo, _, _) = fixture()
         val before = listRepo.updateNameCalls.size
         vm.setName("   ")
-        assertEquals(before, listRepo.updateNameCalls.size, "blank input must not dispatch updateName")
+        assertEquals(
+            before,
+            listRepo.updateNameCalls.size,
+            "blank input must not dispatch updateName"
+        )
     }
 
     @Test
@@ -577,7 +799,11 @@ class ListConfigViewModelTest {
         val (vm, listRepo, _, _) = fixture()
         val before = listRepo.updateNameCalls.size
         vm.setName("")
-        assertEquals(before, listRepo.updateNameCalls.size, "empty input must not dispatch updateName")
+        assertEquals(
+            before,
+            listRepo.updateNameCalls.size,
+            "empty input must not dispatch updateName"
+        )
     }
 
     @Test
@@ -614,13 +840,13 @@ class ListConfigViewModelTest {
             type = ListType.STATIC,
             ruleTemplateId = 1L,
             activeHoursStart = LocalTime.of(9, 0),
-            activeHoursEnd = LocalTime.of(17, 0),
+            activeHoursEnd = LocalTime.of(17, 0)
         )
         val s = fixture(list = list)
 
         val newSchedule = NudgeSchedule(
             days = setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY),
-            times = listOf(LocalTime.of(8, 30)),
+            times = listOf(LocalTime.of(8, 30))
         )
         s.vm.onNudgeScheduleChange(newSchedule)
 
@@ -639,8 +865,26 @@ class ListConfigViewModelTest {
         assertEquals(
             LocalTime.of(9, 0),
             sched.activeHoursStart,
-            "activeHoursStart must be forwarded to preserve the D-09 implicit slot",
+            "activeHoursStart must be forwarded to preserve the D-09 implicit slot"
         )
+        assertEquals(
+            LocalTime.of(17, 0),
+            sched.activeHoursEnd,
+            "activeHoursEnd must be forwarded: D-09 decides against the whole window"
+        )
+    }
+
+    @Test
+    fun `setActiveHours re-anchors the nudge chain against the new window`() = runTest {
+        // Regression: the effective schedule depends on the window, but a window
+        // edit used to leave the previously queued slot in place.
+        val s = fixture()
+        s.vm.setActiveHours(LocalTime.of(21, 0), LocalTime.of(23, 0))
+        val sched = s.nudgeScheduler.scheduleCalls.lastOrNull()
+        assertNotNull(sched, "a window edit must reschedule the list's nudges")
+        assertEquals(1L, sched.listId)
+        assertEquals(LocalTime.of(21, 0), sched.activeHoursStart)
+        assertEquals(LocalTime.of(23, 0), sched.activeHoursEnd)
     }
 
     @Test
@@ -649,11 +893,11 @@ class ListConfigViewModelTest {
         s.vm.onNudgeScheduleChange(NudgeSchedule.DEFAULT)
         assertTrue(
             s.listRepo.setNudgeScheduleJsonCalls.isEmpty(),
-            "no write dispatch when listId is null",
+            "no write dispatch when listId is null"
         )
         assertTrue(
             s.nudgeScheduler.scheduleCalls.isEmpty(),
-            "no reschedule when listId is null",
+            "no reschedule when listId is null"
         )
     }
 }

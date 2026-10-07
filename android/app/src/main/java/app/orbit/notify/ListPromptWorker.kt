@@ -1,27 +1,38 @@
 package app.orbit.notify
 
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import androidx.core.app.NotificationCompat
+import android.content.res.Configuration
+import android.graphics.Bitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.app.NotificationManagerCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import app.orbit.MainActivity
-import app.orbit.R
+import app.orbit.data.AppPrefs
+import app.orbit.data.entity.ContactEntity
+import app.orbit.data.entity.ListEntity
 import app.orbit.data.repository.ListRepository
-import app.orbit.nav.Routes
-import app.orbit.ui.screens.lists.spansMidnight
+import app.orbit.domain.usecase.SurfaceNextUseCase
+import app.orbit.domain.usecase.SurfaceResult
+import app.orbit.nav.AppLinks
+import app.orbit.ui.components.AvatarBitmaps
+import app.orbit.ui.theme.OrbitThemes
+import app.orbit.ui.theme.ResolvedTheme
+import app.orbit.ui.theme.deviceAccentHue
+import app.orbit.ui.theme.themeSettingsSnapshot
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.time.LocalTime
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 /**
  * NOTIF-12 — self-re-enqueueing nudge worker for per-list prompts.
  *
- * ### 5-Gate doWork
+ * ### 6-Gate doWork
+ * 0. [ListEntity.isArchived]: an archived list never posts (NOTIF-11)
  * 1. [ListEntity.notificationsEnabled] — list-level mute flag
  * 2. [Context.areNotificationsEnabled] — POST_NOTIFICATIONS system gate (NOTIF-01 residual)
  * 3. [Context.isDndBlocking] — DND gate (NOTIF-06)
@@ -30,17 +41,25 @@ import timber.log.Timber
  *
  * Any gate failure returns [Result.success] (never [Result.failure] — failure triggers
  * backoff retries, which is wrong for a fire-time gate miss). The gate result does NOT
- * affect the re-enqueue: the finally block re-enqueues the next slot unconditionally
- * — the re-enqueue must never live inside a gate branch.
+ * affect the re-enqueue: the finally block re-enqueues the next slot unconditionally;
+ * the re-enqueue must never live inside a gate branch. The two exceptions are a
+ * list that is gone and a list that is archived: those chains are meant to end
+ * (NOTIF-11), and [reEnqueue] lets them.
  *
  * ### Thread safety
  * The `try { ... } finally { reEnqueue(listId) }` structure guarantees re-enqueue even
  * when an unhandled exception escapes the gate block. A DND night or empty-due-count day
  * can NEVER silently kill the chain.
  *
+ * ### What it posts (NOTIF-13, NOTIF-14, NOTIF-15)
+ * [NudgeNotification] builds the nudge. It names the list's next person, the
+ * head [SurfaceNextUseCase] gives Card view, with their face and a "Call"
+ * action, unless the previous nudge for this list already named them
+ * ([nudgeSubject]). Every nudge carries a name-free lock-screen version.
+ *
  * ### Tap navigation
- * Tapping the notification opens [MainActivity] with extra
- * `"app.orbit.extra.NAVIGATE_TO"` carrying `Routes.card(listId.toString())`. MainActivity
+ * Tapping the notification opens [app.orbit.MainActivity] with extra
+ * [AppLinks.EXTRA_NAVIGATE_TO] carrying `Routes.card(listId.toString())`. MainActivity
  * reads this extra after NavHost composition and navigates. `FLAG_IMMUTABLE` prevents
  * another app from rewriting the tap target (T-10-09).
  */
@@ -50,6 +69,8 @@ open class ListPromptWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val nudgeScheduler: NudgeScheduler,
     private val listRepo: ListRepository,
+    private val surfaceNext: SurfaceNextUseCase,
+    private val appPrefs: AppPrefs,
 ) : CoroutineWorker(appContext, params) {
 
     companion object {
@@ -57,7 +78,7 @@ open class ListPromptWorker @AssistedInject constructor(
         const val KEY_LIST_ID = "list_id"
 
         /** Intent extra key for the tap-destination route. */
-        const val EXTRA_NAVIGATE_TO = "app.orbit.extra.NAVIGATE_TO"
+        const val EXTRA_NAVIGATE_TO = AppLinks.EXTRA_NAVIGATE_TO
 
         private const val TAG = "nudge"
     }
@@ -79,11 +100,21 @@ open class ListPromptWorker @AssistedInject constructor(
     // ─── Gate evaluation ──────────────────────────────────────────────────────
 
     private suspend fun evaluateGatesAndPost(listId: Long): Result {
-        // Gate 1 — list-level notificationsEnabled flag
         val list = listRepo.getById(listId) ?: run {
             Timber.tag(TAG).d("list_gone list=%d", listId)
             return Result.success()
         }
+        // Gate 0: archived (NOTIF-11). Archive cancels the chain, but a slot
+        // already running, or one enqueued before the surface that archived
+        // the list learned to cancel (Home until 2026-10-06), still fires.
+        // `getById` returns archived rows, so without this gate the nudge
+        // posted for a list the user had put away.
+        if (list.isArchived) {
+            Timber.tag(TAG).d("gate_list_archived list=%d", listId)
+            return Result.success()
+        }
+
+        // Gate 1: list-level notificationsEnabled flag
         if (!list.notificationsEnabled) {
             Timber.tag(TAG).d("gate_list_muted list=%d", listId)
             return Result.success()
@@ -120,7 +151,7 @@ open class ListPromptWorker @AssistedInject constructor(
         }
 
         // All gates passed — post the nudge notification
-        postNudge(listId = listId, listName = list.name, dueCount = dueCount)
+        postNudge(list = list, dueCount = dueCount)
         return Result.success()
     }
 
@@ -149,70 +180,95 @@ open class ListPromptWorker @AssistedInject constructor(
      * - Midnight-spanning range (start > end, e.g. 22:00–02:00): [time] is inside
      *   when it is ≥ start OR ≤ end (wraps around midnight).
      *
-     * Mirror of [spansMidnight] from [app.orbit.ui.screens.lists.ActiveHoursEditor]
-     * — same invariant, now in the fire-time gate path.
+     * Delegates to [isInActiveWindow], the definition the scheduler also uses to
+     * decide whether a chosen time can ever post.
      */
     internal fun isWithinActiveHours(time: LocalTime, start: LocalTime, end: LocalTime): Boolean =
-        if (spansMidnight(start, end)) {
-            // Midnight-spanning: inside if time >= start OR time <= end
-            time >= start || time <= end
-        } else {
-            // Normal range: inside if start <= time <= end
-            time >= start && time <= end
-        }
+        isInActiveWindow(time, start, end)
 
     // ─── Notification post ────────────────────────────────────────────────────
 
-    private fun postNudge(listId: Long, listName: String, dueCount: Int) {
-        val pendingIntent = buildTapIntent(listId)
+    private suspend fun postNudge(list: ListEntity, dueCount: Int) {
+        val head = (surfaceNext(list.id).first() as? SurfaceResult.Found)?.contact
+        val subject = nudgeSubject(head, appPrefs.nudgeLastNamedContactId(list.id))
+        val theme = resolveTheme()
 
-        val notification = NotificationCompat.Builder(appContext, OrbitNotifications.CHANNEL_LIST_PROMPT)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(NotificationCopy.nudgeTitle(listName))
-            .setContentText(NotificationCopy.nudgeBody(listName, dueCount))
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .build()
+        val notification = NudgeNotification.build(
+            context = appContext,
+            listId = list.id,
+            listName = list.name,
+            dueCount = dueCount,
+            subject = subject,
+            face = subject?.let { face(it, theme) },
+            accent = theme.colors.accent.toArgb(),
+        )
 
         // Double-check system gate before calling notify() (belt + suspenders vs race).
         if (appContext.areNotificationsEnabled()) {
             NotificationManagerCompat.from(appContext)
-                .notify(NotificationIds.listPrompt(listId), notification)
-            Timber.tag(TAG).i("posted list=%d due=%d", listId, dueCount)
+                .notify(NotificationIds.listPrompt(list.id), notification)
+            // NOTIF-15: remember who was named, only once they really were.
+            if (subject != null) appPrefs.setNudgeLastNamedContactId(list.id, subject.id)
+            Timber.tag(TAG).i("posted list=%d due=%d named=%b", list.id, dueCount, subject != null)
         }
     }
 
     /**
-     * Builds the tap PendingIntent for the nudge notification.
-     *
-     * - Target: [MainActivity] with extra [EXTRA_NAVIGATE_TO] = [Routes.card(listId)]
-     * - Flags: [PendingIntent.FLAG_IMMUTABLE] | [PendingIntent.FLAG_UPDATE_CURRENT] (T-10-09)
-     * - [FLAG_ACTIVITY_SINGLE_TOP] | [FLAG_ACTIVITY_CLEAR_TOP]: if MainActivity is already
-     *   running, brings it to front and delivers the intent without a new instance.
-     * - requestCode = [NotificationIds.listPrompt(listId)] so per-list intents do not collide.
+     * The app's theme in the mode it is showing, so the face in the shade has
+     * the colours the same person's avatar has in the app.
      */
-    private fun buildTapIntent(listId: Long): PendingIntent {
-        val intent = Intent(appContext, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_NAVIGATE_TO, Routes.card(listId.toString()))
-        }
-        return PendingIntent.getActivity(
-            appContext,
-            NotificationIds.listPrompt(listId),
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    private suspend fun resolveTheme(): ResolvedTheme {
+        val settings = appPrefs.themeSettingsSnapshot()
+        val uiMode = appContext.resources.configuration.uiMode
+        val night = (uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        return OrbitThemes.resolve(
+            settings,
+            isDark = OrbitThemes.effectiveDark(settings, night),
+            deviceHue = deviceAccentHue(appContext),
         )
     }
+
+    /**
+     * NOTIF-14: the large icon. Their photo when they have one, otherwise the
+     * monogram on the palette colour the in-app avatar gives the same name.
+     * The photo is read from the address book, so on the IO dispatcher.
+     */
+    private suspend fun face(contact: ContactEntity, theme: ResolvedTheme): Bitmap =
+        withContext(Dispatchers.IO) {
+            val size = appContext.resources
+                .getDimensionPixelSize(android.R.dimen.notification_large_icon_width)
+            AvatarBitmaps.photo(appContext, contact.photoUri, contact.phoneContactId, size)
+                ?: theme.tones.avatarPalette(contact.displayName).let { (background, foreground) ->
+                    AvatarBitmaps.initials(
+                        appContext,
+                        contact.displayName,
+                        size,
+                        background.toArgb(),
+                        foreground.toArgb(),
+                    )
+                }
+        }
 
     // ─── Re-enqueue (MUST live in finally block) ──────────────────────────────
 
     /**
      * Re-enqueues the next slot for [listId]. Called unconditionally from the
      * `finally` block in [doWork] so no gate skip or exception can kill the chain.
+     *
+     * The chain ends here only when the list itself has: it is gone, or it is
+     * archived (NOTIF-11). An archived list's stale chain used to re-enqueue
+     * itself forever; with Gate 0 it would never post, but it would still
+     * wake the process on every slot. Unarchiving schedules a fresh chain
+     * (`NudgeScheduler.scheduleFromEntity` from the surface that unarchives),
+     * so nothing is lost by letting this one stop.
      */
     private suspend fun reEnqueue(listId: Long) {
         val list = listRepo.getById(listId) ?: run {
             Timber.tag(TAG).d("re_enqueue_skipped_list_gone list=%d", listId)
+            return
+        }
+        if (list.isArchived) {
+            Timber.tag(TAG).d("re_enqueue_skipped_list_archived list=%d", listId)
             return
         }
         nudgeScheduler.scheduleFromEntity(list)

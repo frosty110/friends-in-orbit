@@ -34,7 +34,7 @@ LAYER_TARGETS = {
     "calllog": 70,
     "notify": 65,
     "widget": 60,
-    "ui": 55,        # view-models (composables excluded from the denominator)
+    "ui": 55,        # view-models; composables excluded, but their lambda bodies still count
     "data": 30,      # logic only; DAOs/migrations covered by the instrumented job
     "nav": 10,       # navigation graph — framework glue
     "di": 0,          # Hilt wiring — not unit-tested (⚪ n/a, fine at 0%)

@@ -161,11 +161,15 @@ interface CallEventDao {
     /**
      * LOG-01 — chronological feed; only correlated rows (contactId IS NOT NULL).
      *
-     * Bounded by `:limit` so the initial render reads at most
-     * `LIMIT_INITIAL = 200` rows; the VM bumps the limit to `Int.MAX_VALUE`
-     * when the user taps the "Show 200 more" overflow affordance, re-emitting
-     * the unbounded set. The leading index on `call_events.occurredAt`
-     * (schema v8) lets the LIMIT clause short-circuit the sort.
+     * `:limit` is kept for parity with [observeForContact] (Contact detail
+     * reads 50) and for any future caller that wants a bounded read; the
+     * leading index on `call_events.occurredAt` (schema v8) lets a LIMIT
+     * short-circuit the sort. Call history itself passes `Int.MAX_VALUE` and
+     * pages in memory in 200-row increments (`CallLogViewModel.PAGE_SIZE`), so
+     * its "Show n more" footer can state the real remainder without a second
+     * count query (features/call-history/README.md, Technical). Until
+     * 2026-10-06 this comment described a limit the VM bumped on tap, a
+     * design the log no longer uses.
      */
     @Query(
         "SELECT * FROM call_events WHERE contactId IS NOT NULL " +

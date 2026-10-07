@@ -3,6 +3,7 @@ package app.orbit.ui.screens.contact
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.orbit.R
 import app.orbit.data.CallEntry
 import app.orbit.data.NoteRow
 import app.orbit.data.entity.CallEventEntity
@@ -14,6 +15,7 @@ import app.orbit.data.entity.NoteEntity
 import app.orbit.data.entity.RuleKind
 import app.orbit.data.entity.RuleTemplateEntity
 import app.orbit.data.mappers.toUiContact
+import app.orbit.data.mappers.withCallPatterns
 import app.orbit.data.mappers.withCallStats
 import app.orbit.data.repository.CallEventRepository
 import app.orbit.data.repository.ContactRepository
@@ -21,6 +23,7 @@ import app.orbit.data.repository.ListRepository
 import app.orbit.data.repository.NoteRepository
 import app.orbit.data.repository.RuleTemplateRepository
 import app.orbit.domain.JsonProvider
+import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.model.PauseDuration
 import app.orbit.domain.rule.RuleParams
@@ -33,18 +36,23 @@ import app.orbit.domain.usecase.EditNoteUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
-import kotlinx.serialization.encodeToString
+import app.orbit.domain.usecase.UnignoreContactUseCase
 import app.orbit.ui.screens.picker.SnackbarEvent
+import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatAbsolute
 import app.orbit.ui.util.formatDuration
 import app.orbit.ui.util.formatRelative
+import app.orbit.ui.util.pausedSnackbar
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,10 +61,15 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
 
 /**
  * ContactDetail ViewModel, with the Notes journaling surface (NOTE-01).
@@ -95,6 +108,15 @@ import kotlinx.coroutines.launch
  * Mapper [toUiCallEntry] continues to use [formatRelative] + [formatDuration]
  * from `app.orbit.ui.util.RelativeTime` — single source of truth shared with
  * the screen's CallHistoryRow render path.
+ *
+ * Every word this VM produces (labels in [ContactDetailUiState], snackbar
+ * events) is [UiText] from strings_contact.xml or a shared resource: the VM
+ * holds no Context, the screen resolves (UX rubric 3.4).
+ *
+ * READ_CALL_LOG is read by the screen on every resume and pushed in through
+ * [onCallLogPermissionChanged] (ARCH-04: no permission seam in the VM, the
+ * Browse and Call history precedent), so the JVM tests drive the denied state
+ * directly.
  */
 @HiltViewModel
 class ContactDetailViewModel @Inject constructor(
@@ -107,13 +129,22 @@ class ContactDetailViewModel @Inject constructor(
     private val editNoteUseCase: EditNoteUseCase,
     private val deleteNoteUseCase: DeleteNoteUseCase,
     private val ignoreContactUseCase: IgnoreContactUseCase,
+    private val unignoreContactUseCase: UnignoreContactUseCase,
     private val archiveContactUseCase: ArchiveContactUseCase,
     private val ruleTemplateRepo: RuleTemplateRepository,
     private val addRetroactiveNoteUseCase: AddRetroactiveNoteUseCase,
     private val markCalledUseCase: MarkCalledUseCase,
     private val undoStack: UndoStack,
     private val clock: Clock,
+    // Buckets call times into day-parts for the "Usually" stat; injected (as on
+    // CardViewViewModel) so tests pin the zone instead of inheriting the host's.
+    private val zoneId: ZoneId,
     savedStateHandle: SavedStateHandle,
+    // WIDGET-06: the widget must stop offering someone the user just paused,
+    // and offer them again once unpaused, before the hourly sweep. Trailing
+    // with a no-op default so JVM fixtures construct the VM unchanged (the
+    // IgnoreContactUseCase precedent).
+    private val widgetRefreshTrigger: WidgetRefreshTrigger = WidgetRefreshTrigger { }
 ) : ViewModel() {
 
     private val contactIdString: String? = savedStateHandle["contactId"]
@@ -122,8 +153,9 @@ class ContactDetailViewModel @Inject constructor(
     // NOTE-02 — PostCallBanner deep-link: when true, the Notes input
     // should claim focus on first composition. The Routes.contactWithFocus
     // helper encodes the boolean as "1"; nullable / unset / "0" all read as
-    // false. Owned by VM so rotation doesn't re-fire focus (init-only emit).
-    private val focusNoteOnFirstShow: Boolean =
+    // false. Owned by VM so rotation doesn't re-fire focus: cleared by the
+    // first delivery below.
+    private var focusNotePending: Boolean =
         savedStateHandle.get<String?>("focusNote") == "1"
 
     // LOG-03 — CallLog deep-link: when set, the screen scrolls its
@@ -134,15 +166,32 @@ class ContactDetailViewModel @Inject constructor(
     private val scrollToCallEventId: Long? =
         savedStateHandle.get<String?>("scrollToCallEventId")?.toLongOrNull()
 
-    private val _focusNoteEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val focusNoteEvent: SharedFlow<Unit> = _focusNoteEvent.asSharedFlow()
+    /**
+     * NOTE-02: the one-shot focus signal, delivered once per VM instance to
+     * the first collector. A cold flow, not a SharedFlow: a SharedFlow with
+     * replay 0 forgets a `tryEmit` made before anyone collects, and the
+     * screen's `LaunchedEffect` always collects after `hiltViewModel()` has
+     * run this VM's init, so the old emit-in-init never reached the screen
+     * (the VM test written for it on 2026-10-06 failed first). Replay 1 would
+     * re-fire on every re-collect (a rotation re-runs the LaunchedEffect on
+     * the same VM) and refocus the field; the pending flag does not.
+     */
+    val focusNoteEvent: Flow<Unit> = flow {
+        if (focusNotePending) {
+            focusNotePending = false
+            emit(Unit)
+        }
+    }
 
     private val contactSource: Flow<ContactEntity?> =
         if (contactId == null) flowOf(null) else contactRepo.observeById(contactId)
 
     private val membershipsSource: Flow<List<ListMembershipEntity>> =
-        if (contactId == null) flowOf(emptyList())
-        else listRepo.observeMembershipsForContact(contactId)
+        if (contactId == null) {
+            flowOf(emptyList())
+        } else {
+            listRepo.observeMembershipsForContact(contactId)
+        }
 
     // Contact-scoped recent events with explicit limit (50).
     // The DAO already filters by contactId and applies the LIMIT, so this read
@@ -150,8 +199,11 @@ class ContactDetailViewModel @Inject constructor(
     // legacy `callEventRepo.observeAll().map { it.filter { ... }.take(50) }`
     // shape that pulled the entire `call_events` table on every emission.
     private val recentEventsSource: Flow<List<CallEventEntity>> =
-        if (contactId == null) flowOf(emptyList())
-        else callEventRepo.observeForContact(contactId, limit = RECENT_EVENTS_LIMIT)
+        if (contactId == null) {
+            flowOf(emptyList())
+        } else {
+            callEventRepo.observeForContact(contactId, limit = RECENT_EVENTS_LIMIT)
+        }
 
     private val notesSource: Flow<List<NoteEntity>> =
         if (contactId == null) flowOf(emptyList()) else noteRepo.observeByContactId(contactId)
@@ -168,15 +220,24 @@ class ContactDetailViewModel @Inject constructor(
     // editor is not worth resurrecting across process death.
     private val _overrideEditorOpen = MutableStateFlow(false)
 
+    // READ_CALL_LOG, pushed from the screen on every ON_RESUME (ARCH-04), so
+    // coming back from Settings with access granted clears the notice without
+    // a restart. While denied the stats say so instead of "Never called".
+    private val _callLogDenied = MutableStateFlow(false)
+
+    fun onCallLogPermissionChanged(denied: Boolean) {
+        _callLogDenied.value = denied
+    }
+
     private val _snackbarEvents = MutableSharedFlow<SnackbarEvent>(extraBufferCapacity = 1)
     val snackbarEvents: SharedFlow<SnackbarEvent> = _snackbarEvents.asSharedFlow()
 
     /**
      * CONTACT-06 — one-shot navigation events. The screen's `LaunchedEffect`
      * collects this flow and routes [NavEvent.RelinkPicker] to
-     * `Routes.pickContacts(contactId, mode = "relink")`. SharedFlow with
-     * `extraBufferCapacity = 1` mirrors [_focusNoteEvent] semantics so a
-     * late-collecting screen still receives the event.
+     * `Routes.relinkContact(contactId)`. A SharedFlow is right here, unlike
+     * for [focusNoteEvent]: the event is emitted on a tap while the screen is
+     * collecting, never before it exists.
      */
     sealed interface NavEvent {
         /** Open the contact picker filtered to phone-contact relink candidates. */
@@ -184,17 +245,6 @@ class ContactDetailViewModel @Inject constructor(
     }
     private val _navEvents = MutableSharedFlow<NavEvent>(extraBufferCapacity = 1)
     val navEvents: SharedFlow<NavEvent> = _navEvents.asSharedFlow()
-
-    init {
-        // NOTE-02 — emit the focus signal exactly once at VM construction
-        // when the deep-link arg is set. SharedFlow's replay = 0 + extra
-        // buffer = 1 means a late-collecting screen (compose-then-collect
-        // ordering) still receives the event; rotation creates a new VM
-        // instance only if SavedStateHandle still carries the arg, which is
-        // intentional (the deep link is a one-shot intent — re-rotating the
-        // screen 5 minutes later shouldn't re-focus the input).
-        if (focusNoteOnFirstShow) _focusNoteEvent.tryEmit(Unit)
-    }
 
     /**
      * B4 — typed five-tuple folded by the first combine; the chained
@@ -206,7 +256,7 @@ class ContactDetailViewModel @Inject constructor(
         val memberships: List<ListMembershipEntity>,
         val events: List<CallEventEntity>,
         val allLists: List<ListEntity>,
-        val noteEntities: List<NoteEntity>,
+        val noteEntities: List<NoteEntity>
     )
 
     /**
@@ -214,157 +264,209 @@ class ContactDetailViewModel @Inject constructor(
      * second `.combine(ruleTemplateRepo.observeAll())` can lift the templates
      * list into the same recomposition family without a 7-arg combine call
      * (which would force `Array<Any?>` casts — see [FiveTuple] KDoc).
-     * Also folds the ephemeral [_overrideEditorOpen] flag in the same
-     * chained-combine shape.
+     * Also folds the ephemeral [_overrideEditorOpen] flag and the screen's
+     * READ_CALL_LOG report in the same chained-combine shape.
      */
     private data class SixTuple(
         val tuple: FiveTuple,
         val draft: String,
         val overrideEditorOpen: Boolean = false,
+        val callLogDenied: Boolean = false
     )
 
-    val uiState: StateFlow<ContactDetailUiState> =
-        combine(
-            contactSource,
-            membershipsSource,
-            recentEventsSource,
-            listRepo.observeAll(),
-            notesSource,
-        ) { entity, memberships, events, allLists, noteEntities ->
-            FiveTuple(entity, memberships, events, allLists, noteEntities)
-        }.combine(_draft) { tuple, draftStr ->
-            SixTuple(tuple, draftStr)
-        }.combine(_overrideEditorOpen) { six, editorOpen ->
-            six.copy(overrideEditorOpen = editorOpen)
-        }.combine(ruleTemplateRepo.observeAll()) { six, templates ->
-            val tuple = six.tuple
-            val draftStr = six.draft
-            val entity = tuple.entity ?: return@combine ContactDetailUiState.NotFound
+    // CONTACT-08: bumped by [onRetry]; flatMapLatest re-subscribes every source.
+    private val retryCount = MutableStateFlow(0)
 
-            // B3 — single Clock read per emission; passed into both the call
-            // mapper and the note mapper so derivations share one "now".
-            val now = clock.now()
+    /** The Error state's Retry. */
+    fun onRetry() {
+        retryCount.update { it + 1 }
+    }
 
-            val listsOn = tuple.memberships
-                .mapNotNull { m -> tuple.allLists.firstOrNull { it.id == m.listId }?.name }
-            val recentCalls = tuple.events.map { it.toUiCallEntry(now) }
-            // LOG-03 — parallel-indexed call-event ids for the screen's
-            // scroll-to + retro-note affordance lookup. Same order as
-            // `recentCalls` above (DESC by occurredAt).
-            val recentCallEventIds = tuple.events.map { it.id }
-            // Manual-log surface — parallel-indexed MANUAL flags so the
-            // history row can render "Logged" + a distinct icon without
-            // widening the CallEntry shape (same rationale as
-            // recentCallEventIds above).
-            val recentCallIsManual = tuple.events.map { it.source == CallSource.MANUAL }
-            // Attempt surface — parallel-indexed with recentCalls; reach-outs
-            // that didn't connect render "Attempted" + a phone-slash icon.
-            val recentCallIsAttempt = tuple.events.map { it.source == CallSource.ATTEMPT }
-            val longestGapLabel = computeLongestGap(tuple.events)
-            val noteRows = tuple.noteEntities.map { it.toNoteRow(now) }
-
-            // CONTACT-05 — derive UnpauseBanner visibility.
-            // True iff pausedUntil has lapsed AND it's NOT the indefinite
-            // sentinel. Indefinite pauses ("until I unpause") are user-explicit
-            // and never auto-expire; clearing them goes through the overflow
-            // sheet flow, not the banner.
-            val unpausePromptVisible = entity.pausedUntil?.let { pu ->
-                pu <= now && !PauseContactUseCase.isIndefinite(pu)
-            } ?: false
-
-            // CONTACT-03 — derive RuleOverrideSection
-            // inputs. Corrupted-JSON recovery is the try/catch
-            // around decodeFromString; failed decode flips currentParams to
-            // null and currentTemplateName to "Custom schedule (recovering)".
-            val customScheduleVisible = listsOn.size >= 2
-            // The editor branch renders when an override is
-            // PERSISTED or the user peeked the editor open this session.
-            // Opening alone persists nothing (see onOpenOverride).
-            val hasOverride = entity.ruleOverrideJson != null || six.overrideEditorOpen
-            val (currentTemplateName, currentParams) = deriveOverrideDisplay(
-                ruleOverrideJson = entity.ruleOverrideJson,
-                memberships = tuple.memberships,
-                allLists = tuple.allLists,
-                templates = templates,
-            )
-            val primaryListName = tuple.memberships.firstOrNull()?.listId?.let { lid ->
-                tuple.allLists.firstOrNull { it.id == lid }?.name
-            } ?: ""
-
-            // Overlay call-derived stats — `lastCalledLabel`, `totalCalls`,
-            // `avgLengthLabel` — onto the placeholder mapper output. Without
-            // this overlay the Stats panel reads "Never called / 0 / —" even
-            // for contacts with a populated call history (CallEventEntity
-            // rows existed for the contact but the bare toUiContact mapper
-            // emitted placeholders).
-            val contactWithStats = entity.toUiContact().withCallStats(tuple.events, now)
-
-            if (entity.isOrphaned) {
-                ContactDetailUiState.Orphaned(
-                    contact = contactWithStats,
-                    listsOn = listsOn,
-                    recentCalls = recentCalls,
-                    longestGapLabel = longestGapLabel,
-                    recentCallIsManual = recentCallIsManual,
-                    recentCallIsAttempt = recentCallIsAttempt,
-                )
-            } else {
-                ContactDetailUiState.Ready(
-                    contact = contactWithStats,
-                    notes = noteRows,
-                    listsOn = listsOn,
-                    recentCalls = recentCalls,
-                    longestGapLabel = longestGapLabel,
-                    draft = draftStr,
-                    unpausePromptVisible = unpausePromptVisible,
-                    customScheduleVisible = customScheduleVisible,
-                    currentTemplateName = currentTemplateName,
-                    primaryListName = primaryListName,
-                    hasOverride = hasOverride,
-                    currentParams = currentParams,
-                    // LOG-03 — CallLog deep-link surface. Both fields carry the
-                    // same id by default — scrolling and showing the affordance
-                    // are coupled signals. A future variant could decouple them
-                    // (e.g., scroll without affordance) but the user
-                    // story is single-purpose: tap row → arrive scrolled with
-                    // a one-tap retro-note path.
-                    scrollToCallEventId = scrollToCallEventId,
-                    retroNoteAffordanceFor = scrollToCallEventId,
-                    recentCallEventIds = recentCallEventIds,
-                    recentCallIsManual = recentCallIsManual,
-                    recentCallIsAttempt = recentCallIsAttempt,
-                )
-            }
-        }.stateIn(
+    /**
+     * CONTACT-08: a failure in any source becomes [ContactDetailUiState.Error]
+     * (with Retry) instead of an uncaught exception in viewModelScope, which
+     * took the whole app down. No logging here (rules.md Code 4).
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<ContactDetailUiState> = retryCount.flatMapLatest { detailState() }
+        .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),
-            initialValue = ContactDetailUiState.Loading,
+            initialValue = ContactDetailUiState.Loading
         )
+
+    private fun detailState(): Flow<ContactDetailUiState> = combine(
+        contactSource,
+        membershipsSource,
+        recentEventsSource,
+        listRepo.observeAll(),
+        notesSource
+    ) { entity, memberships, events, allLists, noteEntities ->
+        FiveTuple(entity, memberships, events, allLists, noteEntities)
+    }.combine(_draft) { tuple, draftStr ->
+        SixTuple(tuple, draftStr)
+    }.combine(_overrideEditorOpen) { six, editorOpen ->
+        six.copy(overrideEditorOpen = editorOpen)
+    }.combine(_callLogDenied) { six, denied ->
+        six.copy(callLogDenied = denied)
+    }.combine(ruleTemplateRepo.observeAll()) { six, templates ->
+        val tuple = six.tuple
+        val draftStr = six.draft
+        val entity = tuple.entity ?: return@combine ContactDetailUiState.NotFound
+
+        // B3: single Clock read per emission; passed into both the call
+        // mapper and the note mapper so derivations share one "now".
+        val now = clock.now()
+
+        val listsOn = tuple.memberships
+            .mapNotNull { m -> tuple.allLists.firstOrNull { it.id == m.listId }?.name }
+        val recentCalls = tuple.events.map { it.toUiCallEntry(now) }
+        // LOG-03: parallel-indexed call-event ids for the screen's
+        // scroll-to + retro-note affordance lookup. Same order as
+        // `recentCalls` above (DESC by occurredAt).
+        val recentCallEventIds = tuple.events.map { it.id }
+        // Manual-log surface: parallel-indexed MANUAL flags so the
+        // history row can render "Logged" + a distinct icon without
+        // widening the CallEntry shape (same rationale as
+        // recentCallEventIds above).
+        val recentCallIsManual = tuple.events.map { it.source == CallSource.MANUAL }
+        // Attempt surface: parallel-indexed with recentCalls; reach-outs
+        // that didn't connect render "Attempted" + a phone-slash icon.
+        val recentCallIsAttempt = tuple.events.map { it.source == CallSource.ATTEMPT }
+        val longestGapLabel = computeLongestGap(tuple.events)
+        val noteRows = tuple.noteEntities.map { it.toNoteRow(now) }
+
+        // CONTACT-05: derive UnpauseBanner visibility.
+        // True iff pausedUntil has lapsed AND it's NOT the indefinite
+        // sentinel. Indefinite pauses ("until I unpause") are user-explicit
+        // and never auto-expire; clearing them goes through the overflow
+        // sheet flow, not the banner.
+        val unpausePromptVisible = entity.pausedUntil?.let { pu ->
+            pu <= now && !PauseContactUseCase.isIndefinite(pu)
+        } ?: false
+        val pausedLabel = entity.pausedUntil
+            ?.takeIf { it.isAfter(now) }
+            ?.let { pu ->
+                if (PauseContactUseCase.isIndefinite(pu)) {
+                    UiText.res(R.string.contact_paused_indefinitely)
+                } else {
+                    UiText.res(
+                        R.string.contact_paused_until,
+                        pu.atZone(zoneId).format(PAUSED_UNTIL_FORMAT)
+                    )
+                }
+            }
+
+        // CONTACT-03: derive RuleOverrideSection
+        // inputs. Corrupted-JSON recovery is the try/catch
+        // around decodeFromString; failed decode flips currentParams and
+        // currentTemplateName to null (the section shows the editor).
+        val customScheduleVisible = listsOn.size >= 2
+        // The editor branch renders when an override is
+        // PERSISTED or the user peeked the editor open this session.
+        // Opening alone persists nothing (see onOpenOverride).
+        val hasOverride = entity.ruleOverrideJson != null || six.overrideEditorOpen
+        val (currentTemplateName, currentParams) = deriveOverrideDisplay(
+            ruleOverrideJson = entity.ruleOverrideJson,
+            memberships = tuple.memberships,
+            allLists = tuple.allLists,
+            templates = templates
+        )
+        val primaryListName = tuple.memberships.firstOrNull()?.listId?.let { lid ->
+            tuple.allLists.firstOrNull { it.id == lid }?.name
+        } ?: ""
+
+        // Overlay call-derived stats (`lastCalledLabel`, `totalCalls`,
+        // `avgLengthLabel`) onto the placeholder mapper output. Without
+        // this overlay the Stats panel reads "Never called / 0 / a dash" even
+        // for contacts with a populated call history (CallEventEntity
+        // rows existed for the contact but the bare toUiContact mapper
+        // emitted placeholders).
+        //
+        // The "Usually" stat reads `bestWindowLabel`, which only the
+        // call-pattern overlay computes. Card View applied it and this
+        // screen did not, so the same person showed "Mornings" on the card
+        // and a blank here.
+        val contactWithStats = entity.toUiContact()
+            .withCallStats(tuple.events, now)
+            .withCallPatterns(tuple.events, zoneId)
+
+        if (entity.isOrphaned) {
+            ContactDetailUiState.Orphaned(
+                contact = contactWithStats,
+                listsOn = listsOn,
+                recentCalls = recentCalls,
+                longestGapLabel = longestGapLabel,
+                // Notes are Orbit's own data: they outlive the phone
+                // contact and stay readable on the orphaned page.
+                notes = noteRows,
+                recentCallEventIds = recentCallEventIds,
+                recentCallIsManual = recentCallIsManual,
+                recentCallIsAttempt = recentCallIsAttempt,
+                callLogDenied = six.callLogDenied
+            )
+        } else {
+            ContactDetailUiState.Ready(
+                contact = contactWithStats,
+                notes = noteRows,
+                listsOn = listsOn,
+                recentCalls = recentCalls,
+                longestGapLabel = longestGapLabel,
+                draft = draftStr,
+                unpausePromptVisible = unpausePromptVisible,
+                pausedLabel = pausedLabel,
+                isIgnored = entity.isIgnored,
+                isArchived = entity.isArchived,
+                phoneContactId = entity.phoneContactId,
+                callLogDenied = six.callLogDenied,
+                customScheduleVisible = customScheduleVisible,
+                currentTemplateName = currentTemplateName,
+                primaryListName = primaryListName,
+                hasOverride = hasOverride,
+                currentParams = currentParams,
+                // LOG-03: CallLog deep-link surface. Both fields carry the
+                // same id by default; scrolling and showing the affordance
+                // are coupled signals. A future variant could decouple them
+                // (e.g., scroll without affordance) but the user
+                // story is single-purpose: tap row → arrive scrolled with
+                // a one-tap retro-note path.
+                scrollToCallEventId = scrollToCallEventId,
+                retroNoteAffordanceFor = scrollToCallEventId,
+                recentCallEventIds = recentCallEventIds,
+                recentCallIsManual = recentCallIsManual,
+                recentCallIsAttempt = recentCallIsAttempt
+            )
+        }
+    }.catch { emit(ContactDetailUiState.Error) }
 
     /**
      * CONTACT-03 — resolves the (template-name, RuleParams) pair driving the
      * RuleOverrideSection copy.
      *
      * Three branches:
-     *   1. Override exists + decodes cleanly → ("Keep in touch" / "Late
-     *      night" / "Energize" via [labelForKind], decoded RuleParams).
-     *   2. Override exists + decode throws (corrupted JSON) →
-     *      ("Custom schedule (recovering)", null). The screen passes a fresh
-     *      default RuleParams so the editor still renders.
+     *   1. Override exists + decodes cleanly → ("keep in touch" / "late
+     *      night" / "energize" via [labelForKind], decoded RuleParams).
+     *   2. Override exists + decode throws (corrupted JSON) → (null, null).
+     *      The screen passes a fresh default RuleParams so the editor still
+     *      renders; with an override stored the section never shows the
+     *      "Follows the ... rhythm" sentence, so there is no name to give.
      *   3. No override → (template name from primary list, null params).
+     *
+     * The name is the lowercase form that sits mid-sentence
+     * (strings_contact.xml, `contact_rhythm_name_*`).
      */
     private fun deriveOverrideDisplay(
         ruleOverrideJson: String?,
         memberships: List<ListMembershipEntity>,
         allLists: List<ListEntity>,
-        templates: List<RuleTemplateEntity>,
-    ): Pair<String, RuleParams?> {
+        templates: List<RuleTemplateEntity>
+    ): Pair<UiText?, RuleParams?> {
         if (ruleOverrideJson != null) {
             return try {
                 val params = JsonProvider.json.decodeFromString<RuleParams>(ruleOverrideJson)
                 Pair(labelForKind(params.toRuleKind()), params)
             } catch (_: Throwable) {
-                Pair("Custom schedule (recovering)", null)
+                Pair(null, null)
             }
         }
         // No per-contact override — show the template inherited from the
@@ -375,7 +477,7 @@ class ContactDetailViewModel @Inject constructor(
         val primaryList = primaryListId?.let { lid -> allLists.firstOrNull { it.id == lid } }
         val templateId = primaryList?.ruleTemplateId
         val templateKind = templateId?.let { tid -> templates.firstOrNull { it.id == tid } }?.kind
-        val name = templateKind?.let(::labelForKind) ?: "Keep in touch"
+        val name = labelForKind(templateKind ?: RuleKind.KEEP_IN_TOUCH)
         return Pair(name, null)
     }
 
@@ -385,22 +487,29 @@ class ContactDetailViewModel @Inject constructor(
         is RuleParams.Energize -> RuleKind.ENERGIZE
     }
 
-    private fun labelForKind(kind: RuleKind): String = when (kind) {
-        RuleKind.KEEP_IN_TOUCH -> "Keep in touch"
-        RuleKind.LATE_NIGHT -> "Late night"
-        RuleKind.ENERGIZE -> "Energize"
-    }
+    private fun labelForKind(kind: RuleKind): UiText = UiText.res(
+        when (kind) {
+            RuleKind.KEEP_IN_TOUCH -> R.string.contact_rhythm_name_keep_in_touch
+            RuleKind.LATE_NIGHT -> R.string.contact_rhythm_name_late_night
+            RuleKind.ENERGIZE -> R.string.contact_rhythm_name_energize
+        }
+    )
 
-    /** Longest gap between consecutive call events. "—" if < 2 events. */
-    private fun computeLongestGap(events: List<CallEventEntity>): String {
-        if (events.size < 2) return "—"
+    /**
+     * Longest gap between consecutive call events: "21 days". Null if fewer
+     * than two events, or if they all fell on one day: the screen then says
+     * "Not enough calls yet" (it used to be an em dash the screen filtered).
+     */
+    private fun computeLongestGap(events: List<CallEventEntity>): UiText? {
+        if (events.size < 2) return null
         val sorted = events.sortedBy { it.occurredAt }
         var maxDays = 0L
         for (i in 1 until sorted.size) {
             val days = Duration.between(sorted[i - 1].occurredAt, sorted[i].occurredAt).toDays()
             if (days > maxDays) maxDays = days
         }
-        return if (maxDays == 0L) "—" else "$maxDays days"
+        if (maxDays == 0L) return null
+        return maxDays.toInt().let { UiText.plural(R.plurals.time_span_days, it, it) }
     }
 
     /**
@@ -410,18 +519,17 @@ class ContactDetailViewModel @Inject constructor(
      * opened a contact with any history. Lifted formatters live in
      * `app.orbit.ui.util.RelativeTime` so VM and screen share one source.
      */
-    private fun CallEventEntity.toUiCallEntry(now: Instant = Instant.now()): CallEntry =
-        CallEntry(
-            // Entity enum (OUTGOING / INCOMING) → UI enum (Outgoing / Incoming).
-            // Two enums are deliberate: entity layer follows SQL-style upper case,
-            // UI layer follows Kotlin convention. Map at the seam.
-            direction = when (this.direction) {
-                app.orbit.data.entity.CallDirection.OUTGOING -> app.orbit.data.CallDirection.Outgoing
-                app.orbit.data.entity.CallDirection.INCOMING -> app.orbit.data.CallDirection.Incoming
-            },
-            relativeWhen = formatRelative(this.occurredAt, now),
-            lengthLabel = formatDuration(this.durationSeconds),
-        )
+    private fun CallEventEntity.toUiCallEntry(now: Instant = Instant.now()): CallEntry = CallEntry(
+        // Entity enum (OUTGOING / INCOMING) → UI enum (Outgoing / Incoming).
+        // Two enums are deliberate: entity layer follows SQL-style upper case,
+        // UI layer follows Kotlin convention. Map at the seam.
+        direction = when (this.direction) {
+            app.orbit.data.entity.CallDirection.OUTGOING -> app.orbit.data.CallDirection.Outgoing
+            app.orbit.data.entity.CallDirection.INCOMING -> app.orbit.data.CallDirection.Incoming
+        },
+        relativeWhen = formatRelative(this.occurredAt, now),
+        lengthLabel = formatDuration(this.durationSeconds)
+    )
 
     /**
      * NOTE-01 — adds a note via [AddNoteUseCase]; clears the draft on a
@@ -430,7 +538,7 @@ class ContactDetailViewModel @Inject constructor(
     fun addNote(body: String) {
         val cid = contactId ?: return
         viewModelScope.launch {
-            runMutation("Couldn't add note") {
+            runMutation(UiText.res(R.string.contact_snackbar_add_note_failed)) {
                 val rowId = addNoteUseCase(cid, body)
                 if (rowId != null) _draft.value = ""
             }
@@ -464,11 +572,15 @@ class ContactDetailViewModel @Inject constructor(
     fun onAddRetroactiveNote(callEventId: Long, body: String) {
         val cid = contactId ?: return
         viewModelScope.launch {
-            runMutation("Couldn't add note") {
+            runMutation(UiText.res(R.string.contact_snackbar_add_note_failed)) {
                 // O(1) primary-key lookup. NOT observeAll().first().
                 val event = callEventRepo.byId(callEventId) ?: return@runMutation
                 val rowId = addRetroactiveNoteUseCase(cid, body, event.occurredAt)
-                if (rowId != null) _snackbarEvents.tryEmit(SnackbarEvent("Note saved", null))
+                if (rowId != null) {
+                    _snackbarEvents.tryEmit(
+                        SnackbarEvent(UiText.res(R.string.contact_snackbar_note_saved))
+                    )
+                }
             }
         }
     }
@@ -507,19 +619,25 @@ class ContactDetailViewModel @Inject constructor(
     fun onLogConnection(whenChoice: LogConnectionWhen, note: String, isAttempt: Boolean = false) {
         val cid = contactId ?: return
         viewModelScope.launch {
-            runMutation("Couldn't log that") {
+            runMutation(UiText.res(R.string.contact_snackbar_log_failed)) {
                 val now = clock.now()
                 val occurredAt: Instant = when (whenChoice) {
                     LogConnectionWhen.Today -> now
                     LogConnectionWhen.Yesterday -> now.minus(Duration.ofDays(1))
-                    is LogConnectionWhen.OnDate -> Instant
-                        .ofEpochMilli(whenChoice.utcMidnightMillis)
-                        .atZone(ZoneOffset.UTC)
-                        .toLocalDate()
-                        .atTime(12, 0)
-                        .atZone(ZoneId.systemDefault())
-                        .toInstant()
-                        .coerceAtMost(now)
+                    is LogConnectionWhen.OnDate ->
+                        Instant
+                            .ofEpochMilli(whenChoice.utcMidnightMillis)
+                            .atZone(ZoneOffset.UTC)
+                            .toLocalDate()
+                            .atTime(12, 0)
+                            // The injected zone, as the rest of the screen's
+                            // day grouping uses; production injects the
+                            // system zone. Until 2026-10-06 this alone read
+                            // ZoneId.systemDefault(), which the test fixture
+                            // cannot pin.
+                            .atZone(zoneId)
+                            .toInstant()
+                            .coerceAtMost(now)
                 }
                 val event = CallEventEntity(
                     contactId = cid,
@@ -529,13 +647,19 @@ class ContactDetailViewModel @Inject constructor(
                     // anyway (isRealCall gate / attempt short-circuit).
                     direction = app.orbit.data.entity.CallDirection.OUTGOING,
                     durationSeconds = 0,
-                    source = if (isAttempt) CallSource.ATTEMPT else CallSource.MANUAL,
+                    source = if (isAttempt) CallSource.ATTEMPT else CallSource.MANUAL
                 )
                 markCalledUseCase(cid, event)
                 if (note.isNotBlank()) {
                     addRetroactiveNoteUseCase(cid, note.trim(), occurredAt)
                 }
-                _snackbarEvents.tryEmit(SnackbarEvent(if (isAttempt) "Attempt logged." else "Logged."))
+                _snackbarEvents.tryEmit(
+                    SnackbarEvent(
+                        UiText.res(
+                            if (isAttempt) R.string.contact_snackbar_attempt_logged else R.string.contact_snackbar_logged
+                        )
+                    )
+                )
             }
         }
     }
@@ -550,13 +674,15 @@ class ContactDetailViewModel @Inject constructor(
             id = noteRow.id,
             contactId = noteRow.contactId,
             body = noteRow.body,
-            createdAt = Instant.ofEpochMilli(noteRow.createdAtMs),
+            createdAt = Instant.ofEpochMilli(noteRow.createdAtMs)
         )
         viewModelScope.launch {
-            runMutation("Couldn't delete note") {
+            runMutation(UiText.res(R.string.contact_snackbar_delete_note_failed)) {
                 val result = deleteNoteUseCase(noteEntity)
-                undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
-                _snackbarEvents.tryEmit(SnackbarEvent(result.label, "Undo"))
+                undoStack.put(UndoStack.PendingUndo(result.inverse))
+                _snackbarEvents.tryEmit(
+                    SnackbarEvent.undoable(UiText.res(R.string.contact_snackbar_note_deleted))
+                )
             }
         }
     }
@@ -567,16 +693,20 @@ class ContactDetailViewModel @Inject constructor(
             id = noteRow.id,
             contactId = noteRow.contactId,
             body = newBody.trim(),
-            createdAt = Instant.ofEpochMilli(noteRow.createdAtMs),
+            createdAt = Instant.ofEpochMilli(noteRow.createdAtMs)
         )
         viewModelScope.launch {
-            runMutation("Couldn't update note") { editNoteUseCase(updated) }
+            runMutation(
+                UiText.res(R.string.contact_snackbar_update_note_failed)
+            ) { editNoteUseCase(updated) }
         }
     }
 
     /** Snackbar "Undo" tap — pops UndoStack and runs the inverse closure. */
     fun onUndo() = viewModelScope.launch {
-        runMutation("Couldn't undo") { undoStack.take()?.inverse?.invoke() }
+        runMutation(UiText.res(R.string.contact_snackbar_undo_failed)) {
+            undoStack.take()?.inverse?.invoke()
+        }
     }
 
     /**
@@ -589,10 +719,37 @@ class ContactDetailViewModel @Inject constructor(
     fun onIgnore(contactName: String) {
         val cid = contactId ?: return
         viewModelScope.launch {
-            runMutation("Couldn't ignore $contactName") {
-                val result = ignoreContactUseCase(cid, contactName)
-                undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
-                _snackbarEvents.tryEmit(SnackbarEvent(result.label, "Undo"))
+            runMutation(UiText.res(R.string.contact_snackbar_ignore_failed, contactName)) {
+                val result = ignoreContactUseCase(cid)
+                undoStack.put(UndoStack.PendingUndo(result.inverse))
+                _snackbarEvents.tryEmit(
+                    SnackbarEvent.undoable(
+                        UiText.res(R.string.components_snackbar_ignored, contactName)
+                    )
+                )
+            }
+        }
+    }
+
+    /**
+     * CONTACT-10: the inverse of [onIgnore], offered while the person is
+     * ignored: [unignoreContactUseCase] restores their memberships from the
+     * snapshot taken at ignore time (IGNORE-07) and the snackbar's Undo
+     * re-ignores through [ignoreContactUseCase], the same pairing Settings >
+     * Ignored uses. Before this the page offered Ignore again and the way
+     * back was two screens away.
+     */
+    fun onUnignore(contactName: String) {
+        val cid = contactId ?: return
+        viewModelScope.launch {
+            runMutation(UiText.res(R.string.contact_snackbar_unignore_failed, contactName)) {
+                unignoreContactUseCase(cid)
+                undoStack.put(UndoStack.PendingUndo(inverse = { ignoreContactUseCase(cid) }))
+                _snackbarEvents.tryEmit(
+                    SnackbarEvent.undoable(
+                        UiText.res(R.string.components_snackbar_unignored, contactName)
+                    )
+                )
             }
         }
     }
@@ -603,45 +760,79 @@ class ContactDetailViewModel @Inject constructor(
      * that with the snackbar event the screen's `LaunchedEffect` collector
      * needs. The inverse closure clears `pausedUntil` (mirrors
      * [onUnpauseContact] semantics — there is no companion UnpauseUseCase
-     * for the single-contact path; the repo setter is the inverse).
+     * for the single-contact path; the repo setter is the inverse), and
+     * asks for a widget refresh like the forward write does (WIDGET-06):
+     * the use case fires the trigger on pause, so Undo must fire it too or
+     * the widget keeps hiding someone who is back.
      */
     fun onPauseContact(duration: PauseDuration) {
         val cid = contactId ?: return
-        val displayName = (uiState.value as? ContactDetailUiState.Ready)?.contact?.name ?: "Contact"
-        val labelSuffix = when (duration) {
-            PauseDuration.OneWeek -> "for 1 week"
-            PauseDuration.OneMonth -> "for 1 month"
-            PauseDuration.Indefinite -> "indefinitely"
-        }
+        val displayName = readyNameOrStandIn()
         viewModelScope.launch {
-            runMutation("Couldn't pause $displayName") {
+            runMutation(UiText.res(R.string.contact_snackbar_pause_failed, displayName)) {
                 pauseContact(cid, duration)
-                val inverse: suspend () -> Unit = { contactRepo.setPausedUntil(cid, null) }
-                val label = "Paused $displayName $labelSuffix"
-                undoStack.put(UndoStack.PendingUndo(inverse, label))
-                _snackbarEvents.tryEmit(SnackbarEvent(label, "Undo"))
+                val inverse: suspend () -> Unit = {
+                    contactRepo.setPausedUntil(cid, null)
+                    widgetRefreshTrigger.scheduleRefresh()
+                }
+                undoStack.put(UndoStack.PendingUndo(inverse))
+                _snackbarEvents.tryEmit(
+                    SnackbarEvent.undoable(pausedSnackbar(displayName, duration))
+                )
             }
         }
     }
 
+    /**
+     * Overflow → Unpause, while a pause is in force. Restores surfacing now and
+     * offers Undo back to the exact prior pause. The only way out of an
+     * indefinite pause besides its own snackbar: the banner path below only
+     * ever shows once a timed pause has already expired. Both the write and
+     * its Undo refresh the widget (WIDGET-06): these bypass
+     * [PauseContactUseCase], which is where the trigger otherwise fires.
+     */
+    fun onUnpauseNow() {
+        val cid = contactId ?: return
+        val displayName = readyNameOrStandIn()
+        viewModelScope.launch {
+            runMutation(UiText.res(R.string.contact_snackbar_unpause_failed)) {
+                val prior = contactRepo.getById(cid)?.pausedUntil
+                contactRepo.setPausedUntil(cid, null)
+                widgetRefreshTrigger.scheduleRefresh()
+                undoStack.put(
+                    UndoStack.PendingUndo({
+                        contactRepo.setPausedUntil(cid, prior)
+                        widgetRefreshTrigger.scheduleRefresh()
+                    })
+                )
+                _snackbarEvents.tryEmit(
+                    SnackbarEvent.undoable(
+                        UiText.res(R.string.components_snackbar_unpaused, displayName)
+                    )
+                )
+            }
+        }
+    }
+
+    /** The unpause banner's dismiss (CONTACT-05): the pause has lapsed, so clearing it only tidies up. */
     fun onUnpauseContact() {
         val cid = contactId ?: return
         viewModelScope.launch {
-            runMutation("Couldn't unpause") { contactRepo.setPausedUntil(cid, null) }
+            runMutation(UiText.res(R.string.contact_snackbar_unpause_failed)) {
+                contactRepo.setPausedUntil(cid, null)
+                widgetRefreshTrigger.scheduleRefresh()
+            }
         }
     }
 
     /**
      * CONTACT-06 — Re-link tap on the OrphanBanner. Emits a one-shot
      * [NavEvent.RelinkPicker] so the screen's NavHost-side caller can navigate
-     * to `Routes.pickContacts(contactId, mode = "relink")`.
-     *
-     * **Deferral:** the picker treats `mode=relink` as the
-     * default `Add` fall-through today; future work extends
-     * [app.orbit.ui.screens.picker.ContactPickerViewModel] with relink-mode
-     * filter behavior (e.g., hide already-tracked contacts). The
-     * navigation-layer wiring is in place; the picker filter is the
-     * cosmetic deferral.
+     * to `Routes.relinkContact(contactId)`: the picker in Relink mode
+     * (CONTACT-07), which merges the picked phone contact into this one with
+     * [app.orbit.domain.usecase.RelinkContactUseCase]. This contact's id
+     * survives the merge, so popping back lands on the same screen, now
+     * showing the linked contact.
      */
     fun onRelink() {
         val cid = contactId ?: return
@@ -660,10 +851,14 @@ class ContactDetailViewModel @Inject constructor(
     fun onArchive(contactName: String) {
         val cid = contactId ?: return
         viewModelScope.launch {
-            runMutation("Couldn't archive $contactName") {
-                val result = archiveContactUseCase(cid, contactName)
-                undoStack.put(UndoStack.PendingUndo(result.inverse, result.label))
-                _snackbarEvents.tryEmit(SnackbarEvent(result.label, "Undo"))
+            runMutation(UiText.res(R.string.contact_snackbar_archive_failed, contactName)) {
+                val result = archiveContactUseCase(cid)
+                undoStack.put(UndoStack.PendingUndo(result.inverse))
+                _snackbarEvents.tryEmit(
+                    SnackbarEvent.undoable(
+                        UiText.res(R.string.contact_snackbar_archived, contactName)
+                    )
+                )
             }
         }
     }
@@ -704,10 +899,11 @@ class ContactDetailViewModel @Inject constructor(
      * setter wipes the column; on the next emission the section flips back
      * to the no-override branch ("Inherits {template} from {primary list}").
      *
-     * Also covers the corrupted-JSON recovery path: when decode
-     * fails the user sees "Custom schedule (recovering)" + the editor
-     * primed with default RuleParams; tapping Reset to default here clears
-     * the corrupted column without forcing the user to overwrite it.
+     * Also covers the corrupted-JSON recovery path: when decode fails the
+     * section shows the editor primed with default RuleParams under its
+     * usual "Custom schedule" label (no special copy; `currentTemplateName`
+     * is null and nothing displays it), and tapping Reset to default here
+     * clears the corrupted column without forcing the user to overwrite it.
      */
     fun onClearOverride() {
         val cid = contactId ?: return
@@ -728,8 +924,8 @@ class ContactDetailViewModel @Inject constructor(
      * stack.
      */
     private suspend fun runMutation(
-        failureLabel: String = "Couldn't save your change",
-        block: suspend () -> Unit,
+        failureLabel: UiText = UiText.res(R.string.components_snackbar_save_failed),
+        block: suspend () -> Unit
     ) {
         try {
             block()
@@ -750,8 +946,17 @@ class ContactDetailViewModel @Inject constructor(
         body = body,
         createdAtMs = createdAt.toEpochMilli(),
         relativeTimestamp = formatRelative(createdAt, now),
-        absoluteTimestamp = formatAbsolute(createdAt),
+        absoluteTimestamp = formatAbsolute(createdAt)
     )
+
+    /**
+     * The person's name for a snackbar, or the curtain's neutral "Contact"
+     * when the screen isn't showing a person yet (the old literal fallback).
+     * A [UiText] stand-in nests as an argument like a name does.
+     */
+    private fun readyNameOrStandIn(): Any =
+        (uiState.value as? ContactDetailUiState.Ready)?.contact?.name
+            ?: UiText.res(R.string.components_curtain_contact)
 
     private companion object {
         /**
@@ -779,3 +984,9 @@ sealed interface LogConnectionWhen {
     data object Yesterday : LogConnectionWhen
     data class OnDate(val utcMidnightMillis: Long) : LogConnectionWhen
 }
+
+/** "12 Oct": short and unambiguous next to "Paused until". */
+private val PAUSED_UNTIL_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern(
+    "d MMM",
+    Locale.getDefault()
+)

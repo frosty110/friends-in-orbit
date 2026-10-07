@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.picker
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,8 +38,9 @@ private val RailCellHeight = 20.dp
  * gesture surface — pressing or dragging anywhere resolves to the nearest
  * letter, the same pattern the system contacts app uses for its scrubber. The
  * letter currently under the finger — or, at rest, the section in view
- * ([activeIndex]) — is highlighted in accent so the user can see where they
- * are and slide to correct without lifting.
+ * ([activeIndex]): is highlighted (bold ink) so the user can see where they
+ * are and slide to correct without lifting. It was accent until 2026-10-05,
+ * a second accent element beside the commit button (rules.md §Design 5).
  *
  * Only shown in [PickerSort.ByName] with a blank search query (the caller
  * gates this); hidden otherwise because rank- or recency-ordered lists have
@@ -100,7 +102,7 @@ fun AlphabetRail(
                 Text(
                     text = letter,
                     style = OrbitTheme.type.micro,
-                    color = if (isCurrent) OrbitTheme.colors.accent else OrbitTheme.colors.fgMuted,
+                    color = if (isCurrent) OrbitTheme.colors.fg else OrbitTheme.colors.fgMuted,
                     fontWeight = if (isCurrent) FontWeight.Bold else null,
                 )
             }
@@ -119,7 +121,7 @@ private fun AlphabetRailPreviewLight() {
     }
 }
 
-@Preview(name = "AlphabetRail — dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "AlphabetRail — dark", showBackground = true)
 @Composable
 private fun AlphabetRailPreviewDark() {
     OrbitTheme(darkTheme = true) {

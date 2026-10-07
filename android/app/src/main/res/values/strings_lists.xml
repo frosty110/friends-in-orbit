@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Lists: the Lists manager, creating a list, and a list's settings.
+    Keys are area_what (features/_foundations/voice.md, "Where copy lives").
+    Glossary: a "list" is a group of people with its own "rhythm"; Orbit sends "nudges".
+-->
+<resources>
+
+    <!-- ===== Lists manager ===== -->
+    <string name="lists_title">Lists</string>
+    <string name="lists_new_list">New list</string>
+    <string name="lists_footer_hint">Drag to reorder. Lists higher up show first on home.</string>
+    <string name="lists_empty_title">No lists yet</string>
+    <string name="lists_empty_body">Add a list to start grouping the people you want to stay in touch with.</string>
+
+    <!-- Collapsible section of archived lists. %1$d: how many. A plural because other
+         languages change the bracketed count's wording. -->
+    <plurals name="lists_archived_header">
+        <item quantity="one">Archived (%1$d)</item>
+        <item quantity="other">Archived (%1$d)</item>
+    </plurals>
+    <!-- Screen-reader hint and state on the archived section header. -->
+    <string name="lists_archived_show">Show archived lists</string>
+    <string name="lists_archived_hide">Hide archived lists</string>
+    <string name="lists_archived_expanded">Expanded</string>
+    <string name="lists_archived_collapsed">Collapsed</string>
+
+    <!-- Snackbars after archiving, deleting or restoring a list (Home and the Lists manager). -->
+    <string name="lists_snackbar_archived">List archived.</string>
+    <string name="lists_snackbar_deleted">List deleted.</string>
+    <string name="lists_snackbar_restored">List restored.</string>
+    <!-- List settings, after taking one person off the list (with Undo). %1$s: their name. -->
+    <string name="lists_snackbar_member_removed">Removed %1$s</string>
+    <string name="lists_snackbar_member_removed_unnamed">Removed them</string>
+    <!-- A change that could not be saved says components_snackbar_save_failed, the same
+         words as Home and every other screen. -->
+
+    <!-- Second line under a regular list's name on Lists: its rhythm. Keep in touch lists
+         say "Every 14 days" (lists_interval_every_days, below); these two rhythms have
+         nothing to set, so the line names the rhythm. -->
+    <string name="lists_rhythm_late_night">Late night rhythm</string>
+    <string name="lists_rhythm_energize">Energize rhythm</string>
+    <!-- Shown as a list's second line when its stored rule cannot be decoded; the deck
+         fails on the same data. -->
+    <string name="lists_rhythm_unreadable">Couldn\'t read this list\'s rhythm</string>
+
+    <!-- Subtitle under a smart list's name: its rule, then its setting. -->
+    <plurals name="lists_rule_summary_recently_added">
+        <item quantity="one">Recently added · %1$d day</item>
+        <item quantity="other">Recently added · %1$d days</item>
+    </plurals>
+    <plurals name="lists_rule_summary_long_gap">
+        <item quantity="one">Long gap · %1$d day</item>
+        <item quantity="other">Long gap · %1$d days</item>
+    </plurals>
+    <!-- %1$d: a percentage, for example "top 20%". -->
+    <string name="lists_rule_summary_commonly_called">Commonly called · top %1$d%%</string>
+    <string name="lists_rule_summary_rarely_called">Rarely called · bottom %1$d%%</string>
+    <string name="lists_rule_summary_never_called">Never called</string>
+
+    <!-- A row in the Lists manager. -->
+    <string name="lists_row_reorder">Reorder list</string>
+    <!-- Chip on a list that fills itself from a rule. -->
+    <string name="lists_row_smart_chip">Smart list</string>
+    <!-- %1$s: the list's name. -->
+    <string name="lists_row_add_people">Add people to %1$s</string>
+    <string name="lists_row_more_actions">More actions for %1$s</string>
+    <string name="lists_menu_rename">Rename</string>
+    <string name="lists_menu_list_settings">List settings</string>
+    <!-- Keyboard and screen-reader alternatives to dragging a list. -->
+    <string name="lists_menu_move_up">Move up</string>
+    <string name="lists_menu_move_down">Move down</string>
+    <!-- Pause nudges / Resume nudges and the Archive line are Home's strings
+         (home_menu_pause_nudges, components_menu_archive_supporting): the two menus
+         must read the same (LIST-23). -->
+
+    <!-- A row in the archived section. %1$s: the list's name. -->
+    <string name="lists_archived_restore">Restore</string>
+    <string name="lists_archived_delete">Delete %1$s</string>
+    <string name="lists_archived_settings">List settings for %1$s</string>
+
+    <!-- Delete confirmation. -->
+    <string name="lists_delete_title">Delete this list?</string>
+    <string name="lists_delete_body">This removes the list. People stay in your contacts.</string>
+    <string name="lists_delete_keep">Keep</string>
+
+    <string name="lists_rename_title">Rename list</string>
+
+    <!-- ===== Create a list ===== -->
+    <string name="lists_create_choose_template">Choose a template</string>
+    <string name="lists_create_name_label">Name your list</string>
+    <!-- Placeholder in the empty name field. -->
+    <string name="lists_create_name_placeholder">e.g. Inner orbit</string>
+    <!-- Create stays disabled until a template and a name are chosen; the "Name your list"
+         heading is the prompt, so there is no error line. -->
+    <string name="lists_create_cta">Create</string>
+
+    <!-- List templates. The name also becomes the new list's starting name. -->
+    <string name="lists_template_inner_orbit">Inner orbit</string>
+    <string name="lists_template_inner_orbit_subtitle">Closest people, about weekly.</string>
+    <string name="lists_template_family">Family</string>
+    <string name="lists_template_family_subtitle">Steady, every couple of weeks.</string>
+    <string name="lists_template_mentors">Mentors</string>
+    <string name="lists_template_mentors_subtitle">Every couple of months.</string>
+    <!-- People the user has drifted apart from. -->
+    <string name="lists_template_drifted">Drifted</string>
+    <string name="lists_template_drifted_subtitle">Reconnect about once a month.</string>
+    <string name="lists_template_recently_added">Recently added, not called</string>
+    <string name="lists_template_recently_added_subtitle">Auto-updates as you add people.</string>
+    <string name="lists_template_blank">Start from blank</string>
+    <string name="lists_template_blank_subtitle">Choose your own rhythm.</string>
+
+    <!-- ===== List settings ===== -->
+    <!-- App bar title when the list has no name, or can't be found. -->
+    <string name="lists_config_title_fallback">List</string>
+    <!-- The app bar's Done reads "Done" (components_action_done) to TalkBack too: it closes
+         the screen from Lists, Home or Card view, and everything is already saved. -->
+    <!-- The list no longer exists (deleted elsewhere, or a stale link). -->
+    <string name="lists_config_not_found">List not found</string>
+    <string name="lists_config_not_found_body">It may have been deleted.</string>
+
+    <!-- Section titles. -->
+    <string name="lists_section_name">Name</string>
+    <string name="lists_section_rhythm">Rhythm</string>
+    <string name="lists_section_how_often">How often</string>
+    <string name="lists_section_active_hours">Active hours</string>
+    <string name="lists_section_nudges">Nudges</string>
+    <string name="lists_section_when_to_nudge">When to nudge</string>
+    <string name="lists_section_smart_rule">Smart rule</string>
+    <!-- The people on the list: an editable list, not a preview ("people", never "members"). -->
+    <string name="lists_section_members">People</string>
+
+    <string name="lists_send_nudges">Send nudges</string>
+    <string name="lists_send_nudges_sub">A gentle nudge when someone here is worth a call.</string>
+
+    <!-- Turning a smart list into a regular one keeps today's people and stops the rule. -->
+    <string name="lists_convert_button">Make this a regular list</string>
+    <string name="lists_convert_note">The people here now stay, and the list stops adding people by itself. This can\'t be undone.</string>
+    <string name="lists_converted_snackbar">This is now a regular list.</string>
+
+    <!-- Interval slider, as one sentence over the slider. %1$s: the interval, from
+         lists_interval_days below ("Aim for every 14 days"). Contact detail's custom
+         schedule uses the same sentence. -->
+    <string name="lists_interval_aim">Aim for every %1$s</string>
+    <plurals name="lists_interval_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <!-- Screen-reader name and value of the interval slider. -->
+    <string name="lists_interval_label">How often to aim for</string>
+    <plurals name="lists_interval_every_days">
+        <item quantity="one">Every %1$d day</item>
+        <item quantity="other">Every %1$d days</item>
+    </plurals>
+    <!-- Tick labels under the 1 to 60 day slider. -->
+    <plurals name="lists_interval_tick_weeks">
+        <item quantity="one">%1$d week</item>
+        <item quantity="other">%1$d weeks</item>
+    </plurals>
+    <plurals name="lists_interval_tick_months">
+        <item quantity="one">%1$d month</item>
+        <item quantity="other">%1$d months</item>
+    </plurals>
+
+    <!-- Shown instead of the slider for rhythms that have nothing to set. -->
+    <string name="lists_rhythm_note_late_night">This list keeps the late night rhythm on its own: slower and more patient, with nothing to set.</string>
+    <string name="lists_rhythm_note_energize">This list keeps the energize rhythm on its own: quicker, with nothing to set.</string>
+
+    <!-- Inline rename of the list. -->
+    <string name="lists_name_save">Save list name</string>
+    <string name="lists_name_unnamed">Unnamed list</string>
+    <string name="lists_name_rename">Rename list</string>
+
+    <!-- Rhythm choices. -->
+    <string name="lists_rule_keep_in_touch">Keep in touch</string>
+    <string name="lists_rule_keep_in_touch_sub">Surfaces each person on a steady rhythm you set.</string>
+    <string name="lists_rule_late_night">Late night</string>
+    <string name="lists_rule_late_night_sub">A slower, more patient rhythm for people you reach at night.</string>
+    <string name="lists_rule_energize">Energize</string>
+    <string name="lists_rule_energize_sub">A quicker rhythm that brings people back sooner after a call.</string>
+
+    <!-- Smart rule editor. Each rule is one sentence over its control, with the current
+         setting as the argument, so a translator can reorder the words. -->
+    <!-- %1$d: a number of days, set by the slider below the sentence. -->
+    <plurals name="lists_smart_added_within">
+        <item quantity="one">Added in the last %1$d day</item>
+        <item quantity="other">Added in the last %1$d days</item>
+    </plurals>
+    <!-- %1$d: a number of days, typed into the field below the sentence. -->
+    <plurals name="lists_smart_no_call_in">
+        <item quantity="one">No call in the last %1$d day</item>
+        <item quantity="other">No call in the last %1$d days</item>
+    </plurals>
+    <!-- %1$d: a percentage. The people the user calls most. -->
+    <string name="lists_smart_top">The top %1$d%% of the people you call</string>
+    <!-- %1$d: a percentage. The people the user calls least. -->
+    <string name="lists_smart_bottom">The bottom %1$d%% of the people you call</string>
+    <!-- Screen-reader value of the days slider, and its end labels. -->
+    <plurals name="lists_smart_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <!-- %1$d: a percentage. -->
+    <string name="lists_smart_percent">%1$d%%</string>
+    <!-- Screen-reader value of the percentage slider; the same slider serves lists_smart_top
+         and lists_smart_bottom, so it names neither direction. -->
+    <string name="lists_smart_percent_a11y">%1$d percent of the people you call</string>
+    <string name="lists_smart_no_params">Nothing to set. This list shows everyone you have never called.</string>
+
+    <!-- Members preview. -->
+    <plurals name="lists_members_count">
+        <item quantity="one">%1$d person</item>
+        <item quantity="other">%1$d people</item>
+    </plurals>
+    <string name="lists_members_empty_smart">No one matches this rule right now.</string>
+    <string name="lists_members_empty_static">No one in this list yet.</string>
+    <!-- Long lists show their first 20. %1$d: how many are shown, %2$d: the total, which
+         is the plural's quantity. -->
+    <plurals name="lists_members_showing">
+        <item quantity="one">Showing %1$d of %2$d</item>
+        <item quantity="other">Showing %1$d of %2$d</item>
+    </plurals>
+    <string name="lists_members_show_all">Show all</string>
+    <!-- Screen-reader name of the Show all row. %1$d: the total. -->
+    <plurals name="lists_members_show_all_a11y">
+        <item quantity="one">Show all %1$d person</item>
+        <item quantity="other">Show all %1$d people</item>
+    </plurals>
+    <!-- %1$s: the person's name. -->
+    <string name="lists_members_remove">Remove %1$s from list</string>
+    <string name="lists_members_add">Add people</string>
+    <string name="lists_members_add_a11y">Add people to this list</string>
+
+    <!-- Nudge schedule. -->
+    <string name="lists_nudge_change_time">Change time</string>
+    <string name="lists_nudge_every_day">Every day</string>
+    <string name="lists_nudge_weekdays">Weekdays</string>
+    <string name="lists_nudge_weekends">Weekends</string>
+    <string name="lists_nudge_onboarding_hint">Change the days or time any time in this list\'s settings.</string>
+    <string name="lists_nudge_add_time">Add time</string>
+    <string name="lists_nudge_add_time_a11y">Add a nudge time</string>
+    <!-- Screen-reader name of a nudge time's remove button. %1$s: the time, "10am". -->
+    <string name="lists_nudge_remove_time">Remove %1$s</string>
+    <!-- Screen-reader name of a day chip. %1$s: the day, "Monday". -->
+    <string name="lists_nudge_day_selected">%1$s, selected</string>
+    <string name="lists_nudge_day_unselected">%1$s, unselected</string>
+    <!-- The schedule as one line. %1$s: the days ("Every day", "Weekdays", "Sun, Wed"),
+         %2$s: the times, below. "Every day at 10am". -->
+    <string name="lists_nudge_summary">%1$s at %2$s</string>
+    <!-- Two times: "10am and 6pm". -->
+    <string name="lists_nudge_times_two">%1$s and %2$s</string>
+    <!-- Three or more: %1$s is every time but the last, joined by commas. "9am, 1pm, and 6pm". -->
+    <string name="lists_nudge_times_many">%1$s, and %2$s</string>
+    <string name="lists_nudge_summary_no_days">No days selected: nudges off</string>
+    <string name="lists_nudge_summary_no_time">No time set: tap “Add time”</string>
+    <!-- Shown while this list's nudges are paused. -->
+    <string name="lists_nudge_paused_badge">Nudges paused</string>
+
+    <!-- Active hours. "9am to 5pm". -->
+    <string name="lists_hours_to">to</string>
+    <string name="lists_hours_overnight">Overnight list: active across midnight.</string>
+    <string name="lists_hours_always_active">Always active</string>
+    <!-- Active hours gate when a nudge may post, so the line says what they open up. -->
+    <string name="lists_hours_always_active_sub">Nudges can come at any time of day</string>
+    <!-- Confirms the time picker. -->
+    <string name="lists_hours_ok">OK</string>
+
+    <!-- Confirmation for "Make this a regular list": a smart list stops filling itself and
+         keeps the people on it now. Same words as the button and the note under it.
+         %1$d: how many people are on the list now. -->
+    <string name="lists_convert_title">Make this a regular list?</string>
+    <plurals name="lists_convert_body">
+        <item quantity="one">The %1$d person here now stays, and the list stops adding people by itself. This can\'t be undone.</item>
+        <item quantity="other">The %1$d people here now stay, and the list stops adding people by itself. This can\'t be undone.</item>
+    </plurals>
+    <!-- The same when the smart list matches no one right now. -->
+    <string name="lists_convert_body_empty">No one is on this list right now, and it stops adding people by itself. This can\'t be undone.</string>
+    <!-- %1$s: up to three names, comma separated. -->
+    <string name="lists_convert_preview">Including: %1$s</string>
+    <!-- %1$s: three names, %2$d: how many more people. -->
+    <plurals name="lists_convert_preview_more">
+        <item quantity="one">Including: %1$s and %2$d more</item>
+        <item quantity="other">Including: %1$s and %2$d more</item>
+    </plurals>
+    <string name="lists_convert_body_with_preview" translatable="false">%1$s\n\n%2$s</string>
+    <string name="lists_convert_confirm">Make it regular</string>
+
+    <!-- The screen could not read its data; shown with Try again. -->
+    <string name="lists_error_title">Orbit couldn\'t load your lists</string>
+    <!-- The screen could not read its data; shown with Try again. -->
+    <string name="lists_config_error_title">Orbit couldn\'t load this list</string>
+    <!-- Screen-reader hint for tapping a row on Lists: it opens that list's cards. -->
+    <string name="lists_row_open">Open list</string>
+</resources>

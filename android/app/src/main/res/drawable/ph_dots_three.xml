@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from app/icons-src/phosphor/dots-three.svg by scripts/phosphor_to_vector.py. Do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="256"
+    android:viewportHeight="256">
+    <path
+        android:pathData="M116,128A12,12 0 1,0 140,128A12,12 0 1,0 116,128Z"
+        android:fillColor="#FF000000" />
+    <path
+        android:pathData="M184,128A12,12 0 1,0 208,128A12,12 0 1,0 184,128Z"
+        android:fillColor="#FF000000" />
+    <path
+        android:pathData="M48,128A12,12 0 1,0 72,128A12,12 0 1,0 48,128Z"
+        android:fillColor="#FF000000" />
+</vector>

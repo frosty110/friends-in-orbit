@@ -7,21 +7,23 @@ import androidx.work.WorkManager
 import app.orbit.calllog.ContentObserverController
 import app.orbit.data.AppPrefs
 import app.orbit.data.feed.HomeFeed
+import app.orbit.data.feed.SmartListMembershipSync
 import app.orbit.data.keystore.DatabaseKeyProvider
+import app.orbit.launcher.LauncherShortcuts
 import app.orbit.logging.OrbitDebugTree
 import app.orbit.notify.NudgeScheduler
 import app.orbit.notify.OrbitNotifications
+import app.orbit.ui.util.TimeStyle
 import app.orbit.widget.WidgetUpdateScheduler
 import coil.ImageLoader
 import coil.ImageLoaderFactory
-import coil.decode.SvgDecoder
 import dagger.hilt.android.HiltAndroidApp
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import javax.inject.Inject
 
 /**
  * Application entry point.
@@ -42,11 +44,18 @@ import timber.log.Timber
 class OrbitApp : Application(), Configuration.Provider, ImageLoaderFactory {
 
     @Inject lateinit var hiltWorkerFactory: HiltWorkerFactory
+
     @Inject lateinit var appPrefs: AppPrefs
+
     @Inject lateinit var contentObserverController: ContentObserverController
+
     @Inject lateinit var keyProvider: DatabaseKeyProvider
+
     @Inject lateinit var homeFeed: HomeFeed
+
     @Inject lateinit var nudgeScheduler: NudgeScheduler
+
+    @Inject lateinit var smartListMembershipSync: SmartListMembershipSync
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -54,24 +63,24 @@ class OrbitApp : Application(), Configuration.Provider, ImageLoaderFactory {
         get() = Configuration.Builder()
             .setWorkerFactory(hiltWorkerFactory)
             .setMinimumLoggingLevel(
-                if (BuildConfig.DEBUG) android.util.Log.DEBUG else android.util.Log.ERROR,
+                if (BuildConfig.DEBUG) android.util.Log.DEBUG else android.util.Log.ERROR
             )
             .build()
 
     /**
-     * Serve a single application-scoped Coil [ImageLoader] (decoder registry +
-     * OkHttp client + dispatchers) instead of letting each PhIcon call site
-     * allocate its own. Coil resolves this through `Coil.imageLoader(context)`
-     * whenever an [AsyncImage] composable does not pass an explicit
-     * `imageLoader` parameter.
+     * Serve a single application-scoped Coil [ImageLoader] (contact photos)
+     * instead of letting each [AsyncImage] call site allocate its own. Coil
+     * resolves this through `Coil.imageLoader(context)` whenever an
+     * [AsyncImage] does not pass an explicit `imageLoader`. Icons no longer go
+     * through Coil (see PhIcon), so no SVG decoder is registered.
      */
-    override fun newImageLoader(): ImageLoader =
-        ImageLoader.Builder(this)
-            .components { add(SvgDecoder.Factory()) }
-            .build()
+    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this).build()
 
     override fun onCreate() {
         super.onCreate()
+        // Clock times follow the phone's 12/24-hour setting (voice.md glossary).
+        // Set here for widgets and workers; MainActivity refreshes it on start.
+        TimeStyle.refresh(this)
 
         // Plant the PII-scrubbing tree BEFORE any code path that could log
         // call-log data. Release builds stay silent — no Tree planted,
@@ -103,12 +112,22 @@ class OrbitApp : Application(), Configuration.Provider, ImageLoaderFactory {
         // the DB and is declared suspend.
         appScope.launch { nudgeScheduler.reAnchorAll() }
 
+        // Smart lists surface through stored membership rows like static ones;
+        // the sync keeps those rows equal to each rule's matches for the life
+        // of the process (see SmartListMembershipSync).
+        smartListMembershipSync.start()
+
         // WIDGET-06: register the 1h periodic widget sweep on every cold
         // start. ExistingPeriodicWorkPolicy.KEEP makes re-registration a no-op so
         // WorkManager does not reschedule an already-enqueued periodic chain. This
         // catches active-hours boundary transitions (~60min staleness upper bound)
         // without requiring any user interaction.
         WidgetUpdateScheduler.schedulePeriodic(applicationContext)
+
+        // LAUNCH-01: the long-press shortcuts ("Call next", "Search"). Off the
+        // main thread because ShortcutManager is a binder call; idempotent, and
+        // it writes only when the published set differs.
+        appScope.launch(Dispatchers.IO) { LauncherShortcuts.publish(applicationContext) }
 
         // Pre-warm the Keystore-wrapped passphrase off the
         // Main thread so the synchronous `runBlocking { ... }` gate inside

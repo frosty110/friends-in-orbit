@@ -88,6 +88,9 @@
   .day { display: flex; flex-direction: column; align-items: center; gap: 7px; }
   .daycol { height: 50px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 100%; }
   .daylabel { font-size: 12px; color: var(--fg-subtle); }
+  /* The shipped app draws today's letter in ink (fg), SemiBold: an accent letter on every card
+     spent the screen's one accent N times (rules.md Design 5; changed 2026-10-05). The accent is
+     kept here only as the June exploration this prototype records. */
   .day.today .daylabel { color: var(--accent); font-weight: var(--fw-semi); }
   .emptydot { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
   .barstack { width: 26px; display: flex; flex-direction: column-reverse; gap: 3px; }

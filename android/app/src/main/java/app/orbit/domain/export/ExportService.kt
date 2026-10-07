@@ -36,12 +36,13 @@ import kotlinx.coroutines.withContext
  * 5. Write the resulting `ByteArray` to the SAF-provided [Uri] via
  *    `Context.contentResolver.openOutputStream(uri)`.
  *
- * Failure surface — every step throws on error; the caller (ExportViewModel)
- * wraps the call in `runCatching` and surfaces a snackbar per UI-SPEC
- * §"Empty / Loading / Error States" — "Couldn't save the file. Try again?".
+ * Failure surface: every step throws on error; the caller (ExportViewModel)
+ * wraps the call in `runCatching` and shows the "Couldn't save the file."
+ * snackbar (features/settings/README.md, Data section). `open` so
+ * ExportViewModelTest can script the outcome without a database.
  */
 @Singleton
-class ExportService @Inject constructor(
+open class ExportService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val listRepo: ListRepository,
     private val contactRepo: ContactRepository,
@@ -57,7 +58,7 @@ class ExportService @Inject constructor(
      *                   Caller MUST zero the array after this returns.
      * @return [ExportSummary] capturing how many lists / contacts shipped.
      */
-    suspend fun export(uri: Uri, passphrase: CharArray): ExportSummary = withContext(Dispatchers.IO) {
+    open suspend fun export(uri: Uri, passphrase: CharArray): ExportSummary = withContext(Dispatchers.IO) {
         val envelope = buildEnvelope()
         val plaintext = JsonProvider.json
             .encodeToString(ExportEnvelope.serializer(), envelope)
