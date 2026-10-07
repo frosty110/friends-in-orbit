@@ -41,6 +41,7 @@
   --wallpaper-a: #6F8B6B; --wallpaper-b: #2E3B33;
   --dir-out: #BE185D; --dir-in: #0D9488; --dir-sep: #141210;
   --accent-deep: #90412C; --tone-b-band: #F2ECE2;
+  --nl-warm: 75%; /* LIST-29: the warmest template tint, the accent tint stepped toward the surface until fg and fg-muted clear 4.5:1 */
 
   /* Review chrome tokens (light) */
   --chrome-bg: #ECE6DC; --chrome-panel: #FBF9F5; --chrome-fg: #26221F; --chrome-muted: #6E6862;
@@ -72,7 +73,7 @@
     --bezel: #0E0D0C; --bezel-edge: #2A2622;
     --wallpaper-a: #3C4D3A; --wallpaper-b: #161D18;
     --dir-out: #EC4899; --dir-in: #5EEAD4;
-    --accent-deep: #D87560; --tone-b-band: #35302C;
+    --accent-deep: #D87560; --tone-b-band: #35302C; --nl-warm: 100%;
     --chrome-bg: #141210; --chrome-panel: #1C1917; --chrome-fg: #EDE7E0; --chrome-muted: #A39C94;
     --chrome-line: #322D29; --chrome-hover: #26221F;
     --markup: #8FB0E3; --markup-tint: #22303F; --markup-fg: #0F1620;
@@ -99,7 +100,7 @@
   --bezel: #0E0D0C; --bezel-edge: #2A2622;
   --wallpaper-a: #3C4D3A; --wallpaper-b: #161D18;
   --dir-out: #EC4899; --dir-in: #5EEAD4;
-  --accent-deep: #D87560; --tone-b-band: #35302C;
+  --accent-deep: #D87560; --tone-b-band: #35302C; --nl-warm: 100%;
   --chrome-bg: #141210; --chrome-panel: #1C1917; --chrome-fg: #EDE7E0; --chrome-muted: #A39C94;
   --chrome-line: #322D29; --chrome-hover: #26221F;
   --markup: #8FB0E3; --markup-tint: #22303F; --markup-fg: #0F1620;
@@ -586,6 +587,18 @@ textarea.fb:focus { outline: 2px solid var(--markup); outline-offset: 0; border-
 .wk-name { margin-top: 3.5px; font-size: 12px; line-height: 16px; padding: 0 4px; border-radius: 4px; background: var(--surface); color: var(--fg); white-space: nowrap; }
 .wk-empty { position: sticky; top: 24px; z-index: 3; align-self: center; margin-bottom: -40px; padding: 8px 16px; border-radius: 12px; background: var(--surface); color: var(--fg-muted); font-size: 16px; }
 
+/* LIST-29: New list's template tiles, full width. The rhythm ones take a step along one ramp
+   from the warmest tint toward the surface (0, 0.35, 0.65 in Oklab, as rhythmTemplateTints);
+   the chosen tile is outlined in ink with a check, never the accent. */
+.nl-tile { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--fg-muted); text-align: left; font: inherit; cursor: pointer; }
+.nl-tile.on { border: 2px solid var(--fg); padding: 11px 15px; color: var(--fg); }
+.nl-tile svg.i { width: 24px; height: 24px; }
+.nl-tile .nt { display: block; font-size: 16px; font-weight: 500; color: var(--fg); }
+.nl-tile .ns { display: block; font-size: 14px; color: var(--fg-muted); }
+.nl-tint-0 { background: color-mix(in oklab, var(--accent-tint) var(--nl-warm), var(--surface)); }
+.nl-tint-1 { background: color-mix(in oklab, color-mix(in oklab, var(--accent-tint) var(--nl-warm), var(--surface)) 65%, var(--surface)); }
+.nl-tint-2 { background: color-mix(in oklab, color-mix(in oklab, var(--accent-tint) var(--nl-warm), var(--surface)) 35%, var(--surface)); }
+
 /* LIST-26: the title is the rename control; while renaming it is a field. */
 .ttl { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 48px; border: 0; background: transparent; cursor: pointer; padding: 0 4px; border-radius: 12px; text-align: left; font: inherit; color: var(--fg); }
 .ttl span { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -744,6 +757,8 @@ const LIST_ORDER = ['touch', 'late', 'recent'];
 const LIST_NAMES = Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.name]));
 const members = (lid) => [...L[lid].queue, ...L[lid].other];
 const listsOf = (pid) => LIST_ORDER.filter((l) => members(l).includes(pid));
+// The lists Home and Lists show, in order.
+const shownLists = () => (D.onlyLists ? LIST_ORDER.filter((l) => D.onlyLists.includes(l)) : LIST_ORDER);
 
 /* Each person's next turn on a list, in days from today (Sunday 4 October); zero or less is
    "Up now", the most negative first. The card shows the earliest; Browse lists everyone in
@@ -841,7 +856,16 @@ const NOW_HOUR = 9; // the status bar says 9:41
 /* ───────── Mutable demo state (what taps change) ───────── */
 function freshData() {
   Object.entries(LIST_NAMES).forEach(([k, n]) => { L[k].name = n; });
+  // Lists made with New list (LIST-28) live in L like the seeded ones; Restart removes them.
+  Object.keys(L).filter((k) => !(k in LIST_NAMES)).forEach((k) => { delete L[k]; delete RHYTHM[k]; delete TURNS[k]; });
+  LIST_ORDER.splice(0, LIST_ORDER.length, ...Object.keys(LIST_NAMES));
   return {
+    // New list's draft, which every step reads and Back keeps (NewListUiState).
+    nl: { step: 'start', template: null, name: '', interval: 2, moved: false, people: [] },
+    listSeq: 0,
+    // Set when a first list is made from "No lists yet": Home and Lists then show only the lists
+    // made since, as an app with no lists would.
+    onlyLists: null,
     turns: Object.fromEntries(Object.entries(TURNS).map(([k, v]) => [k, { ...v }])),
     tick: 0,
     waiting: [],
@@ -861,9 +885,6 @@ function freshData() {
     flName: 'In touch',
     flMembers: ['priya', 'sarah', 'nia', 'jamie', 'owen', 'alex', 'theo'],
     syncRange: '90 days',
-    template: null,
-    newName: '',
-    created: null,
     flInterval: 2, flTime: 'any',
     reminders: true,
     days: new Set([0, 1, 2, 3, 4, 5, 6]),
@@ -871,7 +892,6 @@ function freshData() {
     logMode: 'conn',
     logWhen: 'Today',
     ignored: ['jordan', 'mia'],
-    newMembers: [],
     theme: 'Warm', mode: 'System', range: '3 months',
     focusId: null,
   };
@@ -1412,7 +1432,7 @@ screen({
 const nextInterval = (d) => Math.min(60, d >= 60 ? 1 : d < 7 ? d + 5 : d + 14);
 ACT.bumpInterval = (key) => {
   if (key === 'fl') D.flInterval = nextInterval(D.flInterval);
-  else if (key === 'new' && D.created) D.created.interval = nextInterval(D.created.interval);
+  else if (key === 'nl') { D.nl.interval = nextInterval(D.nl.interval); D.nl.moved = true; }
   else if (L[key]) D.intervals[key] = nextInterval(D.intervals[key]);
 };
 ACT.timeOfDay = (arg) => { const [key, part] = String(arg).split(':'); if (key === 'fl') D.flTime = part; else D.timeOfDay = part; };
@@ -1530,12 +1550,13 @@ screen({
   id: 'S10', group: 'loop', name: 'Home', route: 'home',
   spec: 'features/page-views/home.md', code: 'ui/screens/home/HomeScreen.kt',
   purpose: 'The front door: every list, who is next on each, the last week at a glance, and the calls still waiting for a note.',
-  owes: ['A calm date header, no count of people "due" (HOME-6)', 'The calls waiting for a note, under the date: one as a card ("You called Kai", "14 min · 14 minutes ago", Add a note, Dismiss); two or more as a pile ("3 calls to write about") that opens into rows, with "Dismiss all" (HOME-14, NOTE-05)', 'Every active list as a card with its "Next up" person and a quiet Call button (HOME-9)', 'A 7-day rhythm strip per list, headed "See your week" with the You and Them key beside it; tap a day to see who, and "See the whole week" at the foot of that sheet (HOME-8, HOME-13)', 'New list in one tap', 'Search, Lists, and Settings in the app bar', '"Orbit couldn\'t load your lists" with Try again if reading fails (HOME-10)'],
+  owes: ['A calm date header, no count of people "due" (HOME-6)', 'The calls waiting for a note, under the date: one as a card ("You called Kai", "14 min · 14 minutes ago", Add a note, Dismiss); two or more as a pile ("3 calls to write about") that opens into rows, with "Dismiss all" (HOME-14, NOTE-05)', 'Every active list as a card with its "Next up" person and a quiet Call button (HOME-9)', 'A 7-day rhythm strip per list, headed "See your week" with the You and Them key beside it; tap a day to see who, and "See the whole week" at the foot of that sheet (HOME-8, HOME-13)', 'New list in one tap, opening New list step by step; Create comes back here with "Created {name}." and the new card last (LIST-28)', 'Search, Lists, and Settings in the app bar', '"Orbit couldn\'t load your lists" with Try again if reading fails (HOME-10)'],
   drift: null,
   states: [['default', 'Lists'], ['one', 'A call waiting for a note'], ['pile', 'Three calls waiting (a pile)'], ['pileopen', 'The pile, open'], ['quick', 'Long-press a list', 'overlay'], ['delete', 'Delete this list?', 'overlay'], ['day', 'A day on the strip', 'overlay'], ['empty', 'No lists yet']],
-  to: [['S11', 'Tap a list card'], ['S12', '"See your week" on a strip, or "See the whole week" on a day\'s sheet'], ['S53', 'Call on a card\'s Next up'], ['S22', 'Search icon'], ['S30', 'Lists icon, or New list'], ['S40', 'Settings icon'], ['S23', 'A call waiting for a note: Add a note'], ['S32', 'Long-press: Add people'], ['S31', 'Long-press: List settings']],
+  to: [['S11', 'Tap a list card'], ['S12', '"See your week" on a strip, or "See the whole week" on a day\'s sheet'], ['S53', 'Call on a card\'s Next up'], ['S22', 'Search icon'], ['S30', 'Lists icon'], ['S33', 'New list, or Create your first list'], ['S40', 'Settings icon'], ['S23', 'A call waiting for a note: Add a note'], ['S32', 'Long-press: Add people'], ['S31', 'Long-press: List settings']],
   // The waiting states follow a call with Kai just now, so In touch has already moved past him.
   prep(st) {
+    D.onlyLists = null;
     if (['default', 'one', 'pile', 'pileopen'].includes(st)) resetTurns('touch');
     if (st === 'one') D.waiting = [CALLS.kai];
     else if (st === 'pile' || st === 'pileopen') D.waiting = [CALLS.kai, CALLS.nia, CALLS.theo];
@@ -1545,13 +1566,13 @@ screen({
   render(st, p) {
     const bar = appBar({ back: false, word: true, title: 'Orbit', actions: iconBtn('magnifying-glass', A.go('S22'), 'Search') + iconBtn('list', A.go('S30'), 'Lists') + iconBtn('gear', A.go('S40'), 'Settings') });
     if (st === 'empty') {
-      return view({ bar, center: true, body: `<div class="pad center-t gap16" style="align-items:center;display:flex;flex-direction:column;padding:0 32px 80px"><div class="body muted">Start with the people you keep meaning to call.</div><button class="btn primary" ${A.go('S30', 'create')}>Create your first list</button></div>` });
+      return view({ bar, center: true, body: `<div class="pad center-t gap16" style="align-items:center;display:flex;flex-direction:column;padding:0 32px 80px"><div class="body muted">Start with the people you keep meaning to call.</div><button class="btn primary" ${A.go('S33')}>Create your first list</button></div>` });
     }
     const stack = D.waiting.length ? `<div style="padding-bottom:12px">${notesStack(D.waiting, st === 'pileopen')}</div>` : '';
     let layer = '';
     if (st === 'quick') {
-      const lid = p || 'touch';
-      const idx = LIST_ORDER.indexOf(lid);
+      const lid = p && L[p] ? p : 'touch';
+      const idx = shownLists().indexOf(lid);
       layer = menu([
         { label: 'Add people', attrs: A.go('S32', null, lid) },
         { label: 'List settings', attrs: A.go('S31', null, lid) },
@@ -1572,8 +1593,8 @@ screen({
     return view({
       bar,
       body: `<div style="padding:4px 20px 12px"><div class="eyebrow">Today</div><div class="h2">Sunday 4 October</div></div>
-        ${stack}<div class="gap12">${LIST_ORDER.map((l, i) => listCard(l, i)).join('')}</div>
-        <button class="btn text block" style="margin-top:4px;font-size:14px" ${A.go('S30', 'create')}>${ic('plus').replace('class="i"', 'class="i" style="width:16px;height:16px"')}New list</button>
+        ${stack}<div class="gap12">${shownLists().map((l, i) => listCard(l, i)).join('')}</div>
+        <button class="btn text block" style="margin-top:4px;font-size:14px" ${A.go('S33')}>${ic('plus').replace('class="i"', 'class="i" style="width:16px;height:16px"')}New list</button>
         <div class="body muted center-t" style="padding:24px 32px 32px">The call that makes your day can make someone else's. You deserve to be the one who reaches out.</div>`,
       layer,
     });
@@ -1614,7 +1635,8 @@ screen({
   },
   render(st, p) {
     if (st === 'called') st = 'default';
-    const lid = p || 'touch';
+    // Restart removes lists made with New list, so an id that is gone falls back to In touch.
+    const lid = p && L[p] ? p : 'touch';
     const l = L[lid];
     if (st === 'default' && !l.queue.length) st = 'empty'; // a list with no stored members (smart lists store their matches since the B1 fix)
     const menuBtn = iconBtn('dots-three-vertical', A.st('menu'), 'More actions for ' + l.name);
@@ -2319,34 +2341,26 @@ ACT.noteedit = () => { snack('Long-press opens the note for editing in place'); 
   .forEach(([id, name, tone, last, calls]) => { P[id] = { name, tone, phone: '+1 415-555-01' + (10 + id.length * 7), last, calls, avg: calls ? '7 min' : null, gap: null, usually: null, heat: null, ab: true }; });
 
 /* ════════ Lists manager ════════ */
-const TEMPLATES = [
-  ['Inner orbit', 'Closest people, about weekly.', 'heart'],
-  ['Family', 'Steady, every couple of weeks.', 'users'],
-  ['Mentors', 'Every couple of months.', 'star'],
-  ['Drifted', 'Reconnect about once a month.', 'clock-counter-clockwise'],
-  ['Recently added, not called', 'Auto-updates as you add people.', 'shuffle-angular'],
-  ['Start from blank', 'Choose your own rhythm.', 'plus'],
-];
 screen({
   id: 'S30', group: 'lists', name: 'Lists', route: 'lists',
   spec: 'features/page-views/lists-manager.md', code: 'ui/screens/lists/ListsManagerScreen.kt',
   purpose: 'Shape your lists: order them, archive them, start new ones.',
-  owes: ['Every list, reorderable by drag (order is Home order)', 'Tap a list to open its cards, as on Home (LIST-23)', 'Per list: name, its rhythm as an interval ("Every 14 days", "Every 3 days" for Late night, "Every day"; never a rhythm\'s name, LIST-24) or its rule, member count, + to add people', 'Row menu: Rename, List settings, Move up or down, then Archive', 'One New list control, floating with lists and centred without (LIST-20)', 'Archived lists to restore, delete (with Undo), or configure', 'Undo archive'],
+  owes: ['Every list, reorderable by drag (order is Home order)', 'Tap a list to open its cards, as on Home (LIST-23)', 'Per list: name, its rhythm as an interval ("Every 14 days", "Every 3 days" for Late night, "Every day"; never a rhythm\'s name, LIST-24) or its rule, member count, + to add people', 'Row menu: Rename, List settings, Move up or down, then Archive', 'One New list control, floating with lists and centred without (LIST-20); it opens New list, step by step, which returns here with "Created {name}." and the new list last (LIST-28)', 'Archived lists to restore, delete (with Undo), or configure', 'Undo archive'],
   drift: null,
-  states: [['default', 'Lists'], ['rowmenu', 'Row menu', 'overlay'], ['rename', 'Rename list', 'overlay'], ['archived', 'Archived open'], ['delete', 'Delete this list?', 'overlay'], ['create', 'New list sheet', 'overlay'], ['empty', 'No lists yet']],
-  to: [['S11', 'Tap a list'], ['S31', 'Create, or menu: List settings'], ['S32', '+ on a static list'], ['S10', 'Back']],
-  prep(st) { if (st === 'create') { D.template = null; D.newName = ''; } D.archivedOpen = st === 'archived' || st === 'delete'; },
+  states: [['default', 'Lists'], ['rowmenu', 'Row menu', 'overlay'], ['rename', 'Rename list', 'overlay'], ['archived', 'Archived open'], ['delete', 'Delete this list?', 'overlay'], ['empty', 'No lists yet']],
+  to: [['S11', 'Tap a list'], ['S33', 'New list'], ['S31', 'Menu: List settings'], ['S32', '+ on a static list'], ['S10', 'Back']],
+  prep(st) { D.archivedOpen = st === 'archived' || st === 'delete'; D.onlyLists = null; },
   render(st, p) {
     // LIST-20: one create control. The app bar's "+" is gone; the centred button serves the empty state.
     const bar = appBar({ title: 'Lists' });
-    const fab = `<button class="fab" ${A.st('create')}>${ic('plus')} New list</button>`;
+    const fab = `<button class="fab" ${A.go('S33')}>${ic('plus')} New list</button>`;
     if (st === 'empty') {
-      return view({ bar, center: true, body: `<div class="center-t" style="padding:0 36px 120px;display:flex;flex-direction:column;gap:12px;align-items:center"><div class="h2">No lists yet</div><div class="body muted">Add a list to start grouping the people you want to stay in touch with.</div><button class="btn primary sm" ${A.st('create')}>${ic('plus')}New list</button></div>` });
+      return view({ bar, center: true, body: `<div class="center-t" style="padding:0 36px 120px;display:flex;flex-direction:column;gap:12px;align-items:center"><div class="h2">No lists yet</div><div class="body muted">Add a list to start grouping the people you want to stay in touch with.</div><button class="btn primary sm" ${A.go('S33')}>${ic('plus')}New list</button></div>` });
     }
     // A regular list carries its rhythm where a smart list carries its rule (LISTS-3). Since
     // LIST-24 the rhythm is said as its interval whatever engine runs it, never "Late night rhythm".
     const rhythmLine = (lid) => L[lid].smart ? L[lid].rule : everyLine(D.intervals[lid]);
-    const rows = LIST_ORDER.map((lid) => {
+    const rows = shownLists().map((lid) => {
       const l = L[lid]; const n = members(lid).length;
       return `<div class="card row" style="border-radius:20px;padding:10px 4px 10px 0;min-height:76px;cursor:pointer" ${A.go('S11', null, lid)} aria-label="Open list">
         <button class="ib muted" aria-label="Reorder list" ${A.snack('Drag the handle to reorder. Lists higher up show first on home.')}>${ic('dots-six-vertical').replace('class="i"', 'class="i" style="width:18px;height:18px"')}</button>
@@ -2355,7 +2369,7 @@ screen({
         ${n ? `<span class="pill">${n}</span>` : ''}
         ${l.smart ? '' : iconBtn('plus', A.go('S32', null, lid), 'Add people to ' + l.name, 'muted')}
         ${iconBtn('dots-three-vertical', A.st('rowmenu', lid), 'More actions for ' + l.name, 'muted')}</div>`;
-    }).join('') + (D.created ? `<div class="card row" style="border-radius:20px;padding:10px 4px 10px 0;min-height:76px;cursor:pointer" ${A.snack("Opens the new list's cards; empty until people are added")}><button class="ib muted" aria-label="Reorder list">${ic('dots-six-vertical').replace('class="i"', 'class="i" style="width:18px;height:18px"')}</button><div class="grow"><div class="body">${esc(D.created.name)}</div><div class="meta">${D.created.smart ? 'Recently added · 30 days' : everyLine(D.created.interval)}</div></div>${(D.newMembers || []).length ? `<span class="pill">${D.newMembers.length}</span>` : ''}${iconBtn('plus', A.go('S32', null, 'new'), 'Add people to ' + D.created.name, 'muted')}${iconBtn('dots-three-vertical', A.st('rowmenu', 'touch'), 'More actions', 'muted')}</div>` : '');
+    }).join('');
     const open = st === 'archived' || st === 'delete' || D.archivedOpen;
     const archived = `<button class="row btn text" style="color:var(--fg);padding:0 4px;justify-content:flex-start;font-size:20px;font-weight:600;min-height:56px" ${A.st(open ? 'default' : 'archived')}>${ic(open ? 'caret-down' : 'caret-right')}Archived (1)</button>
       ${open ? `<div class="row" style="background:var(--surface-alt);border-radius:20px;padding:8px 4px 8px 16px;min-height:68px"><span class="grow body muted">Old team</span><button class="btn text" ${A.snack('List restored.')}>Restore</button>${iconBtn('trash', A.st('delete'), 'Delete Old team', '')}${iconBtn('sliders-horizontal', A.go('S31', null, 'touch'), 'List settings for Old team', 'muted')}</div>` : ''}`;
@@ -2367,25 +2381,12 @@ screen({
       { label: 'Move up', attrs: A.st('default') },
       { label: 'Move down', attrs: A.st('default') },
       { label: 'Archive', sub: `Hides ${L[lid].name} from home. You can restore it.`, danger: true, attrs: `${A.st('default')} ${A.snack('List archived.', 'Undo')}` },
-    ], { top: 160 + LIST_ORDER.indexOf(lid) * 88, right: 16 });
+    ], { top: 160 + shownLists().indexOf(lid) * 88, right: 16 });
     if (st === 'rename') layer += dialog(`<div class="dt">Rename list</div><div style="border:1.5px solid var(--accent);border-radius:12px;padding:12px;color:var(--fg)">${esc(L[lid].name)}<span style="display:inline-block;width:1.5px;height:18px;background:var(--accent);vertical-align:middle;margin-left:2px"></span></div><div class="da"><button class="btn text" style="color:var(--fg-muted)" ${A.st('default')}>Cancel</button><button class="btn primary sm" ${A.st('default')}>Save</button></div>`);
     if (st === 'delete') layer += dialog(`<div class="dt">Delete this list?</div><div class="db">This removes the list. People stay in your contacts.</div><div class="da"><button class="btn text" style="color:var(--fg-muted)" ${A.st('archived')}>Keep</button><button class="btn outline sm danger" ${A.st('default')} ${A.snack('List deleted.', 'Undo')}>Delete</button></div>`, 'archived');
-    if (st === 'create') {
-      const tiles = TEMPLATES.map(([t, s, i], k) => `<button style="border:0;cursor:pointer;border-radius:14px;padding:12px 8px;min-height:104px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;background:${D.template === k ? 'var(--accent-tint)' : 'var(--bg-subtle)'};color:var(--fg)" ${A.act('template', k)}><span style="color:${D.template === k ? 'var(--accent-press)' : 'var(--fg-muted)'}">${ic(i)}</span><span style="font-weight:500;font-size:15px;line-height:1.2">${t}</span><span class="meta" style="font-size:13px;line-height:1.25">${s}</span></button>`).join('');
-      const ok = D.template != null && D.newName.trim();
-      layer = sheet(`<div style="padding:0 24px" class="gap12"><div class="eyebrow">Choose a template</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${tiles}</div>
-        <div class="h3" style="margin-top:4px">Name your list</div>
-        <input id="newName" data-bind="newName" value="${esc(D.newName)}" placeholder="${D.template != null && D.template !== 5 ? TEMPLATES[D.template][0] : 'e.g. Inner orbit'}" aria-label="Name your list" style="font:inherit;font-size:16px;border:0;border-radius:12px;padding:14px;background:var(--bg-subtle);color:var(--fg);outline:none">
-        <div class="row" style="gap:16px"><button class="btn text grow" ${A.st('default')}>Cancel</button><button class="btn primary sm grow${ok ? '' : ' disabled'}" ${ok ? A.act('createList') : ''}>Create</button></div></div>`);
-    }
     return view({ bar, body: `<div class="gap12" style="padding:4px 16px 120px">${rows}${archived}<div class="meta center-t" style="color:var(--fg-subtle)">Drag to reorder. Lists higher up show first on home.</div></div>`, layer });
   },
 });
-ACT.template = (k) => { k = +k; D.template = k; if (!D.newName.trim() && k !== 5) D.newName = TEMPLATES[k][0]; return false; };
-// Each template writes its own rhythm (TemplateChoice: 7, 14, 60 and 30 days; the smart list and
-// Start from blank keep Keep in touch's 2 days).
-const TEMPLATE_DAYS = [7, 14, 60, 30, 2, 2];
-ACT.createList = () => { D.created = { name: D.newName.trim(), smart: D.template === 4, interval: TEMPLATE_DAYS[D.template] || 2 }; setSt('default'); go('S31', D.created.smart ? 'smart' : 'new', 'new'); return false; };
 
 /* ════════ List settings ════════ */
 function nudgesBlock() {
@@ -2403,7 +2404,7 @@ screen({
   purpose: 'Define a list\'s rhythm, its time of day and its people in plain terms; changes save as you go.',
   owes: ['The name is the title: tap it or the pencil to rename, in a field with Cancel and "Save list name"; a blank name keeps the old one (LIST-26)', '"How often" for every list, smart lists too: "Aim for every 14 days"; a Late night list shows its real 3 days, and moving the slider makes it an ordinary list (LIST-24)', '"Time of day": Any time, Mornings, Afternoons, Evenings or Nights, or "Custom: 9am to 5pm" for a window set before, with one line on what it does (LIST-25)', 'Nudges on or off, with the days and times they come', 'People: the count with "Add people" beside it (LIST-27); remove with undo', 'Smart lists: edit the rule, or make it a regular list', 'Changes save as you go; Done is the only accent on the screen (LIST-21)'],
   drift: null,
-  states: [['default', 'Regular list'], ['rename', 'Renaming from the title'], ['new', 'Just created (empty)'], ['latenight', 'A Late night list (every 3 days)'], ['evenings', 'Time of day: Evenings'], ['custom', 'Time of day: Custom (set before)'], ['time', 'Time picker', 'overlay'], ['smart', 'Smart list'], ['convert', 'Make this a regular list?', 'overlay']],
+  states: [['default', 'Regular list'], ['rename', 'Renaming from the title'], ['latenight', 'A Late night list (every 3 days)'], ['evenings', 'Time of day: Evenings'], ['custom', 'Time of day: Custom (set before)'], ['time', 'Time picker', 'overlay'], ['smart', 'Smart list'], ['convert', 'Make this a regular list?', 'overlay']],
   to: [['S32', 'Add people (People header)'], ['S30', 'Done, or back']],
   prep(st) {
     D.timeOfDay = st === 'evenings' ? 'evenings' : st === 'custom' ? 'custom' : 'any';
@@ -2411,13 +2412,13 @@ screen({
     if (st === 'rename') D.focusId = 'list-name';
   },
   render(st, p) {
-    const smart = st === 'smart' || st === 'convert' || (p === 'new' && D.created && D.created.smart) || p === 'recent';
-    const isNew = st === 'new' || p === 'new';
-    const lid = st === 'latenight' ? 'late' : smart && !isNew ? 'recent' : L[p] ? p : 'touch';
-    const key = isNew ? 'new' : lid;
-    const name = isNew ? (D.created ? D.created.name : 'Family') : L[lid].name;
-    const days = isNew ? (D.created ? D.created.interval : 14) : D.intervals[lid];
-    const mem = isNew ? (D.newMembers || []) : smart ? (L[lid].preview || []) : members(lid);
+    // A list made with New list is an ordinary list here (LIST-28), smart or not.
+    const lid = st === 'latenight' ? 'late' : st === 'smart' || st === 'convert' ? 'recent' : L[p] ? p : 'touch';
+    const smart = !!L[lid].smart;
+    const key = lid;
+    const name = L[lid].name;
+    const days = D.intervals[lid];
+    const mem = smart ? (L[lid].preview || []) : members(lid);
     // LIST-26: the title is the rename control. While renaming it is a field labelled "List
     // name", with Cancel and "Save list name" where Done was and no back arrow.
     const bar = st === 'rename'
@@ -2458,8 +2459,7 @@ ACT.saveListName = (key) => {
   const f = document.getElementById('list-name');
   const name = f ? f.value.trim() : '';
   if (name) {
-    if (key === 'new') D.created = { ...(D.created || { smart: false, interval: 14 }), name };
-    else if (L[key]) L[key].name = name;
+    if (L[key]) L[key].name = name;
   }
   setSt('default');
   return false;
@@ -2477,7 +2477,9 @@ const FILTERS = [
 ];
 function pickerTarget(p) {
   if (p === 'fl') return { name: D.flName || 'your list', exclude: D.flMembers };
-  if (p === 'new') return { name: D.created ? D.created.name : 'Family', exclude: [] };
+  // LIST-28: Collect, New list's People step. No list exists yet, so nothing is excluded and
+  // the button names none.
+  if (p === 'collect') return { name: '', exclude: [], collect: true };
   if (p === 'relink') return { name: P.kai.name, exclude: ['kai'], relink: true };
   const lid = L[p] ? p : 'touch';
   return { name: L[lid].name, exclude: members(lid) };
@@ -2486,14 +2488,15 @@ screen({
   id: 'S32', group: 'lists', name: 'Add people', route: 'pick/contacts',
   spec: 'features/page-views/picker-contacts.md', code: 'ui/screens/picker/ContactPickerScreen.kt',
   purpose: 'Get the right people into a list fast, from the whole address book.',
-  owes: ['Pick people from the address book into a list; the title says which mode ("Add people", "Move 3 people")', 'Search by name or number, with one clear control', 'Sort: Alphabetical, Most called, Recently called, Recently added', 'Filter chips with counts; applied filters in their own row; "Not on a list" and "On a list"', 'Empty filters greyed and pushed to the end', '"Select all 14 matches"', 'A docked bar with the count and "Add N to {list}" that never hides the last row', '"Couldn\'t load your contacts" with Try again if reading fails (PICK-09)'],
+  owes: ['Pick people from the address book into a list; the title says which mode ("Add people", "Move 3 people")', 'Search by name or number, with one clear control', 'Sort: Alphabetical, Most called, Recently called, Recently added', 'Filter chips with counts; applied filters in their own row; "Not on a list" and "On a list"', 'Empty filters greyed and pushed to the end', '"Select all 14 matches"', 'A docked bar with the count and "Add N to {list}" that never hides the last row', 'Collect mode for New list\'s People step (LIST-28): everyone offered, whoever is already chosen ticked, and "Add 3 people", which names no list, saves nothing and hands the selection back', '"Couldn\'t load your contacts" with Try again if reading fails (PICK-09)'],
   drift: 'Move and Copy modes exist in code but nothing opens them; Browse moves people with its own sheet instead. "Skip for now" never shows, because its only caller passes no skip action. Re-link from a deleted contact opens a Re-link mode: pick one phone contact and it merges into that person (fixed 2026-10-05, B2).',
-  states: [['default', 'Alphabetical'], ['selected', 'Three picked'], ['filtered', 'Filter applied'], ['sort', 'Sort menu', 'overlay'], ['rowmenu', 'Row menu', 'overlay'], ['nomatch', 'No matches'], ['rationale', 'Before contacts access'], ['denied', 'Contacts access off'], ['nodevice', 'No contacts on the phone'], ['relink', 'Re-link mode']],
-  to: [['S31', 'Add N to {list} (returns with a snackbar)'], ['S07', 'Same, during first run'], ['S20', 'Re-link (back to the contact, now linked)']],
-  prep(st) { D.pq = st === 'nomatch' ? 'zz' : ''; D.pfilters = new Set(st === 'filtered' ? ['never'] : []); D.sel = new Set(st === 'selected' ? ['ava', 'beth', 'grace'] : []); },
-  enter() { D.pq = ''; D.pfilters = new Set(); D.sel = new Set(); },
+  states: [['default', 'Alphabetical'], ['selected', 'Three picked'], ['filtered', 'Filter applied'], ['sort', 'Sort menu', 'overlay'], ['rowmenu', 'Row menu', 'overlay'], ['nomatch', 'No matches'], ['rationale', 'Before contacts access'], ['denied', 'Contacts access off'], ['nodevice', 'No contacts on the phone'], ['relink', 'Re-link mode'], ['collect', 'Collect mode (New list)']],
+  to: [['S31', 'Add N to {list} (returns with a snackbar)'], ['S07', 'Same, during first run'], ['S20', 'Re-link (back to the contact, now linked)'], ['S33', 'Collect: Add 3 people (back to New list, nothing saved yet)']],
+  prep(st) { D.pq = st === 'nomatch' ? 'zz' : ''; D.pfilters = new Set(st === 'filtered' ? ['never'] : []); D.sel = new Set(st === 'selected' ? ['ava', 'beth', 'grace'] : st === 'collect' ? ['ava', 'kai'] : []); if (st === 'collect') nlCollectStep(); },
+  // Collect opens with whoever New list has already chosen ticked.
+  enter(e) { D.pq = ''; D.pfilters = new Set(); D.sel = new Set(e && e.p === 'collect' ? D.nl.people : []); },
   render(st, p) {
-    const tgt = pickerTarget(st === 'relink' ? 'relink' : p);
+    const tgt = pickerTarget(st === 'relink' ? 'relink' : st === 'collect' ? 'collect' : p);
     const bar = appBar({ title: tgt.relink ? 'Re-link contact' : 'Add people' });
     if (st === 'rationale') return view({ bar, body: `<div class="center-t" style="padding:40px 24px;display:flex;flex-direction:column;align-items:center;gap:12px"><span style="color:var(--accent)">${ic('shield-check')}</span><div class="h3">Allow access to your contacts</div><div class="body muted" style="max-width:280px">Orbit reads your phone contacts so you can add them to lists. Nothing is uploaded: your contacts stay on this device.</div><button class="btn primary block" ${A.st('default')}>Grant access</button><button class="btn text block" data-back>Not now</button></div>` });
     if (st === 'denied') return view({ bar, center: true, body: `<div class="center-t" style="padding:0 24px 80px;display:flex;flex-direction:column;align-items:center;gap:12px"><span style="color:var(--fg-muted)">${ic('shield-check')}</span><div class="h3">Contacts access is off</div><div class="body muted">Turn it on in your phone's settings to add people to your lists. Your contacts stay on this device.</div><button class="btn primary block" ${A.act('openSettings')}>Open phone settings</button></div>` });
@@ -2526,7 +2529,7 @@ screen({
     const letters = [...new Set(shown.map((id) => P[id].name[0].toUpperCase()))];
     const rail = !narrowing && letters.length > 1 ? `<div style="position:absolute;right:2px;top:300px;width:28px;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:2" aria-hidden="true">${letters.map((x, i) => `<span class="micro" style="height:20px;line-height:20px;${i === 0 ? 'color:var(--accent);font-weight:700' : 'color:var(--fg-muted)'}">${x}</span>`).join('')}</div>` : '';
     const n = D.sel.size;
-    const foot = n ? `<div class="row" style="flex:none;background:var(--surface);border-top:1px solid var(--line-soft);padding:10px 16px 12px"><span class="body grow">${n} selected</span><button class="btn text" ${A.act('pclear')}>Clear</button>${tgt.relink ? `<button class="btn primary sm" ${A.act('prelink', [...D.sel][0])}>Re-link ${esc(tgt.name)}</button>` : `<button class="btn primary sm" ${A.act('pcommit', p || 'touch')}>Add ${n} to ${esc(tgt.name)}</button>`}</div>` : '';
+    const foot = n ? `<div class="row" style="flex:none;background:var(--surface);border-top:1px solid var(--line-soft);padding:10px 16px 12px"><span class="body grow">${n} selected</span><button class="btn text" ${A.act('pclear')}>Clear</button>${tgt.relink ? `<button class="btn primary sm" ${A.act('prelink', [...D.sel][0])}>Re-link ${esc(tgt.name)}</button>` : tgt.collect ? `<button class="btn primary sm" ${A.act('pcollect')}>Add ${plural(n, 'person', 'people')}</button>` : `<button class="btn primary sm" ${A.act('pcommit', p || 'touch')}>Add ${n} to ${esc(tgt.name)}</button>`}</div>` : '';
     let layer = rail;
     if (st === 'sort') layer += menu(['Alphabetical', 'Most called', 'Recently called', 'Recently added'].map((s) => ({ label: s, icon: D.psort === s ? 'check' : null, attrs: A.act('psort', s) })), { top: 200, left: 20 });
     if (st === 'rowmenu') { const who = P[p] ? p : 'ava'; layer += menu([{ label: 'Open in Contacts', sub: "See their call and message history in your phone's contacts app.", attrs: A.st('default') }, { label: 'Ignore', sub: `Hide ${P[who].name} from Orbit. They stay in your phone's contacts.`, danger: true, attrs: `${A.st('default')} ${A.snack('Ignored ' + P[who].name, 'Undo')}` }], { top: 340, left: 60 }); }
@@ -2552,12 +2555,189 @@ ACT.prelink = (id) => {
   if (t.id === 'S20') { t.st = 'default'; t.p = 'kai'; }
   return false;
 };
+// Collect writes nothing and says nothing: the chosen people go back to New list's People step,
+// which adds them when it creates the list.
+ACT.pcollect = () => {
+  D.nl.people = [...D.sel];
+  D.sel = new Set();
+  back();
+  const t = cur();
+  if (t.id === 'S33') t.st = nlState();
+  return false;
+};
 ACT.pcommit = (p) => {
   const n = D.sel.size; const name = pickerTarget(p).name;
-  if (p === 'new') D.newMembers = [...(D.newMembers || []), ...D.sel];
   if (p === 'fl') D.flMembers = [...D.flMembers, ...[...D.sel].filter((x) => !D.flMembers.includes(x))];
   D.sel = new Set();
   back(`Added ${n} to ${name}`, 'Undo');
+  return false;
+};
+
+/* ════════ New list, step by step (LIST-28, LIST-29) ════════ */
+// TemplateChoice.Catalog, in order. The three rhythm templates are tinted a step along one ramp
+// (rhythmTemplateTints: warmest for the most often); the tint is decoration, and the subtitle's
+// words say the rhythm. Mentors went with LIST-29: the slider reaches 60 days for anyone who wants it.
+const NL_TEMPLATES = [
+  { id: 'blank', name: 'Start from blank', sub: 'Choose your own rhythm.', icon: 'plus', group: 'blank', days: 2, defaultName: '' },
+  { id: 'inner_orbit', name: 'Inner orbit', sub: 'Closest people, about weekly.', icon: 'heart', group: 'rhythm', days: 7, tint: 0 },
+  { id: 'family', name: 'Family', sub: 'Steady, every couple of weeks.', icon: 'users', group: 'rhythm', days: 14, tint: 1 },
+  { id: 'drifted', name: 'Drifted', sub: 'Reconnect about once a month.', icon: 'clock-counter-clockwise', group: 'rhythm', days: 30, tint: 2 },
+  { id: 'recently_added_not_called', name: 'Recently added, not called', sub: 'Auto-updates as you add people.', icon: 'shuffle-angular', group: 'smart', days: 2 },
+];
+const nlTemplate = (id = D.nl.template) => NL_TEMPLATES.find((t) => t.id === id) || null;
+const nlDefaultName = (t) => (t ? (t.defaultName ?? t.name) : '');
+// Four steps; the list that fills itself has three, its How often step the last.
+const nlSteps = () => (nlTemplate() && nlTemplate().group === 'smart' ? ['start', 'name', 'often'] : ['start', 'name', 'often', 'people']);
+const nlHasEntries = () => !!D.nl.template || !!D.nl.name.trim() || D.nl.people.length > 0;
+// Whether the step can be left by Next: a template on step 1, a name that is not blank on step 2.
+const nlCanGoOn = () => (D.nl.step === 'start' ? !!D.nl.template : D.nl.step === 'name' ? !!D.nl.name.trim() : true);
+// The screen's state is its step (and what is chosen on it), so the review panel follows the flow.
+function nlState() {
+  const s = D.nl.step;
+  if (s === 'start') return D.nl.template ? 'chosen' : 'default';
+  if (s === 'name') return 'name';
+  if (s === 'often') return nlSteps().length === 3 ? 'smart' : 'often';
+  return D.nl.people.length ? 'peoplechosen' : 'people';
+}
+// Each preset the review panel opens: [step, template, people].
+const NL_PRESETS = { default: ['start', null], chosen: ['start', 'inner_orbit'], name: ['name', 'family'], often: ['often', 'family'], smart: ['often', 'recently_added_not_called'], people: ['people', 'family'], peoplechosen: ['people', 'family', ['ava', 'beth', 'grace']], discard: ['start', 'inner_orbit'] };
+function nlPreset(st) {
+  const [step, tid, people] = NL_PRESETS[st] || NL_PRESETS.default;
+  const t = nlTemplate(tid);
+  D.nl = { step, template: tid, name: nlDefaultName(t), interval: t ? t.days : 2, moved: false, people: people ? people.slice() : [] };
+}
+/* Create makes the list, its rhythm and its people in one go, last in the order, and the screen
+   that opened New list says "Created {name}." (CreateListUseCase). A list that fills itself
+   takes its rule's people, here the two people added recently and never called. */
+function createList(nl) {
+  const t = nlTemplate(nl.template);
+  const smart = t.group === 'smart';
+  D.listSeq += 1;
+  const id = 'created' + D.listSeq;
+  const queue = smart ? ['ama', 'leo'] : nl.people.slice();
+  L[id] = { name: nl.name.trim(), template: 'Keep in touch', interval: nl.interval, queue, other: [], smart, rule: smart ? 'Recently added · 30 days' : undefined, preview: smart ? queue.slice() : undefined };
+  LIST_ORDER.push(id);
+  if (D.onlyLists) D.onlyLists.push(id);
+  RHYTHM[id] = [[], [], [], [], [], [], []];
+  // Everyone on a new list is up now, in the order they were chosen.
+  TURNS[id] = Object.fromEntries(queue.map((pid, i) => [pid, i - queue.length]));
+  D.turns[id] = { ...TURNS[id] };
+  D.intervals[id] = nl.interval;
+  return id;
+}
+screen({
+  id: 'S33', group: 'lists', name: 'New list', route: 'lists/new',
+  spec: 'features/page-views/new-list.md', code: 'ui/screens/lists/newlist/NewListScreen.kt',
+  purpose: 'Make a list one decision at a time: how to start, its name, how often, its people, then Create.',
+  owes: ['"New list" and "Step 1 of 4" ("Step 1 of 3" for the list that fills itself) in the bar; Back steps back and keeps everything; Close from step 2 (LIST-28)', '"How do you want to start?": Start from blank first, then Inner orbit, Family and Drifted, each tinted a step along one ramp (warmest for the most often), then the smart "Recently added, not called" under "Smart list"; the chosen tile outlined in ink with a check (LIST-29)', '"Name your list": one field, "List name", filled from the template', '"How often": the List settings slider, set from the template; the list that fills itself makes its list here, with "Create list"', '"Add people": the picker in Collect mode, then the People section with the count, "Add people" and a remove per person; "Create without people" while nobody is chosen', 'The footer\'s main button ("Next", "Create list", "Add people") is the one accent', 'Leaving with something entered asks "Discard this list?" ("Keep going", "Discard")', 'Create returns to Home or Lists with "Created {name}." and the new list last'],
+  drift: null,
+  states: [['default', 'Step 1: How do you want to start?'], ['chosen', 'Step 1: a template chosen'], ['name', 'Step 2: Name your list'], ['often', 'Step 3: How often'], ['smart', 'Step 3 of 3: the list that fills itself'], ['people', 'Step 4: nobody chosen yet'], ['peoplechosen', 'Step 4: three people chosen'], ['discard', 'Discard this list?', 'overlay']],
+  to: [['S32', 'Add people (Collect mode)'], ['S10', 'Create list, Discard or Back (opened from Home)'], ['S30', 'The same, opened from Lists']],
+  enter() { nlPreset('default'); },
+  prep(st) { nlPreset(st); if (st === 'name') D.focusId = 'nl-name'; },
+  render(st) {
+    const nl = D.nl;
+    const steps = nlSteps();
+    const n = steps.indexOf(nl.step) + 1;
+    const last = n === steps.length;
+    const bar = `<div class="ab">${iconBtn('arrow-left', A.act('nlBack'), 'Back')}<div class="t">New list</div><span style="font-size:13px;font-weight:600;letter-spacing:0.03em;color:var(--fg-subtle);padding:0 ${n > 1 ? 4 : 16}px 0 8px;white-space:nowrap">Step ${n} of ${steps.length}</span>${n > 1 ? iconBtn('x', A.act('nlClose'), 'Close') : ''}</div>`;
+    const heading = { start: 'How do you want to start?', name: 'Name your list', often: 'How often', people: 'Add people' }[nl.step];
+    let step = '';
+    if (nl.step === 'start') {
+      // One radio group; the chosen tile wears an ink outline and a check, never the accent.
+      step = `<div class="gap12" role="radiogroup" aria-label="How do you want to start?">${NL_TEMPLATES.map((t) => {
+        const on = nl.template === t.id;
+        return `${t.group === 'smart' ? '<div class="sec-label" style="padding:16px 0 0">Smart list</div>' : ''}<button class="nl-tile${t.group === 'rhythm' ? ' nl-tint-' + t.tint : ''}${on ? ' on' : ''}" role="radio" aria-checked="${on}" ${A.act('nlTemplate', t.id)}>${ic(t.icon)}<span class="grow"><span class="nt">${t.name}</span><span class="ns">${t.sub}</span></span>${on ? ic('check-circle') : ''}</button>`;
+      }).join('')}</div>`;
+    } else if (nl.step === 'name') {
+      step = `<div class="ttl-field" style="margin:8px 0 0"><label for="nl-name">List name</label><input id="nl-name" value="${esc(nl.name)}" autocomplete="off"></div>`;
+    } else if (nl.step === 'often') {
+      step = `<div class="body muted" style="padding-bottom:16px">You can change this any time in the list's settings.</div><div class="group" style="margin:0">${intervalBlock(nl.interval, 'nl')}</div>`;
+    } else {
+      step = nl.people.length
+        ? `<div class="group" style="margin:0">${peopleBlock(nl.people, { addAttrs: A.go('S32', null, 'collect'), removeAttrs: (id) => A.act('nlRemove', id) })}</div>`
+        : '<div class="body muted">Choose the people you want to keep in touch with on this list.</div>';
+    }
+    // The step's one accent: Next, Create list on the last step, or Add people while nobody is
+    // chosen, with Create without people (quiet) above it.
+    let foot;
+    if (nl.step === 'people' && !nl.people.length) {
+      foot = `<button class="btn text block" ${A.act('nlCreate')}>Create without people</button><button class="btn primary block" ${A.go('S32', null, 'collect')}>Add people</button>`;
+    } else if (last) {
+      foot = `<button class="btn primary block" ${A.act('nlCreate')}>Create list</button>`;
+    } else {
+      const ok = nlCanGoOn();
+      foot = `<button class="btn primary block${ok ? '' : ' disabled'}" id="nl-next" ${A.act('nlNext')} aria-disabled="${!ok}">Next</button>`;
+    }
+    const layer = st === 'discard'
+      ? dialog(`<div class="dt">Discard this list?</div><div class="da"><button class="btn text" style="color:var(--fg-muted)" ${A.act('nlKeep')}>Keep going</button><button class="btn outline sm danger" ${A.act('nlDiscard')}>Discard</button></div>`, nlState())
+      : '';
+    return view({
+      bar,
+      body: `<div style="padding:8px 20px 20px"><div class="h2" role="heading" aria-level="2" aria-live="polite" style="padding:8px 0 16px">${heading}</div>${step}</div>`,
+      foot: `<div class="bottom-cta" style="padding-top:8px">${foot}</div>${nl.step === 'name' && st !== 'discard' ? KEYBOARD_DOCKED : ''}`,
+      layer,
+    });
+  },
+  // The name field writes the draft one way; Next follows whether it is blank; the keyboard's
+  // action is Next.
+  mount(ph) {
+    const f = $('#nl-name', ph);
+    if (!f) return;
+    const next = $('#nl-next', ph);
+    f.addEventListener('input', () => {
+      D.nl.name = f.value;
+      const ok = !!f.value.trim();
+      next.classList.toggle('disabled', !ok);
+      next.setAttribute('aria-disabled', String(!ok));
+    });
+    f.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ACT.nlNext(); afterNav(''); } });
+  },
+});
+// Picking a tile: the name follows the template while it is blank or still the last template's
+// name, and How often follows it until the slider has been moved.
+ACT.nlTemplate = (id) => {
+  const before = nlTemplate();
+  const t = nlTemplate(id);
+  D.nl.template = id;
+  if (!D.nl.name.trim() || (before && D.nl.name === nlDefaultName(before))) D.nl.name = nlDefaultName(t);
+  if (!D.nl.moved) D.nl.interval = t.days;
+  setSt(nlState());
+  return false;
+};
+ACT.nlNext = () => {
+  if (!nlCanGoOn()) return false;
+  const steps = nlSteps();
+  D.nl.step = steps[Math.min(steps.length - 1, steps.indexOf(D.nl.step) + 1)];
+  if (D.nl.step === 'name') D.focusId = 'nl-name';
+  setSt(nlState());
+  return false;
+};
+// Back steps back, keeping everything; on step 1 it leaves, as Close does from any step.
+ACT.nlBack = () => {
+  const steps = nlSteps();
+  const i = steps.indexOf(D.nl.step);
+  if (i > 0) { D.nl.step = steps[i - 1]; setSt(nlState()); return false; }
+  return ACT.nlClose();
+};
+ACT.nlClose = () => { if (nlHasEntries()) setSt('discard'); else back(); return false; };
+ACT.nlKeep = () => { setSt(nlState()); return false; };
+ACT.nlDiscard = () => { nlPreset('default'); back(); return false; };
+ACT.nlRemove = (id) => { D.nl.people = D.nl.people.filter((x) => x !== id); setSt(nlState()); return false; };
+// A journey that jumps to the picker in Collect mode puts New list behind it, on its People step,
+// keeping whatever the walk has already entered there.
+function nlCollectStep() {
+  if (D.nl.step !== 'people') nlPreset('people');
+  S.stack.forEach((e) => { if (e.id === 'S33') e.st = nlState(); });
+}
+ACT.nlCreate = () => {
+  const name = D.nl.name.trim();
+  const id = createList(D.nl);
+  nlPreset('default');
+  back(`Created ${name}.`);
+  // Made from "No lists yet", it is the first list: the opener shows it, alone.
+  const t = cur();
+  if (t.st === 'empty') { D.onlyLists = [id]; t.st = 'default'; }
   return false;
 };
 </script>
@@ -2863,10 +3043,12 @@ const openBugsFor = (id) => bugsFor(id).filter(([, b]) => b.status !== 'fixed');
 <script>
 'use strict';
 /* ════════ Review chrome: rail, inspector, boards, flow player ════════ */
-const PARENT = { S02: 'S01', S03: 'S02', S04: 'S03', S05: 'S03', S06: 'S05', S07: 'S05', S11: 'S10', S13: 'S11', S12: 'S10', S20: 'S11', S21: 'S20', S22: 'S10', S23: 'S10', S30: 'S10', S31: 'S30', S32: 'S31', S40: 'S10', S41: 'S40', S42: 'S40', S53: 'S11' };
+const PARENT = { S02: 'S01', S03: 'S02', S04: 'S03', S05: 'S03', S06: 'S05', S07: 'S05', S11: 'S10', S13: 'S11', S12: 'S10', S20: 'S11', S21: 'S20', S22: 'S10', S23: 'S10', S30: 'S10', S31: 'S30', S32: 'S31', S33: 'S10', S40: 'S10', S41: 'S40', S42: 'S40', S53: 'S11' };
+// The picker's Collect mode sits over New list's People step, not List settings.
+const parentOf = (id, st, p) => (id === 'S32' && (st === 'collect' || p === 'collect') ? 'S33' : PARENT[id]);
 function naturalStack(id, st, p) {
   const chain = [];
-  let x = PARENT[id];
+  let x = parentOf(id, st, p);
   while (x) { chain.unshift({ id: x, st: 'default', p: null }); x = PARENT[x]; }
   return [...chain, { id, st: st || 'default', p: p ?? null }];
 }
@@ -3161,16 +3343,18 @@ const FLOWS = [
       { id: 'S13', st: 'moved', p: 'touch', say: 'Theo, dragged up under Owen, is "Up now". "Moved Theo earlier" has Undo, and the line under the order says a call, Later or Sooner moves people again.', do: () => { resetTurns('touch'); setTurn('touch', 'kai', 4); setTurn('touch', 'luma', 1); reorder('touch', 'theo', 'owen'); } },
       { id: 'S11', st: 'none', p: 'touch', say: 'If no one is eligible (everyone paused), the card says so and offers Browse.', from: ['S10'] },
     ] },
-  { id: 'F4', name: 'Start a new list', why: 'From Home to a list with people in it.',
+  { id: 'F4', name: 'Start a new list', why: 'New list, step by step, from Home to a list with people on it (LIST-28, LIST-29).',
     steps: [
-      { id: 'S10', say: 'New list sits quietly under the cards.', tap: '[data-go="S30:create"]' },
-      { id: 'S30', st: 'create', say: 'Lists opens with the template sheet up. Picking a template fills in the name.', tap: '[data-act="template"][data-arg="1"]' },
-      { id: 'S30', st: 'create', say: 'Family picked. Create is enabled once there is a template and a name.', do: () => { D.template = 1; D.newName = 'Family'; }, tap: '[data-act="createList"]' },
-      { id: 'S31', st: 'new', p: 'new', say: 'Create goes straight to List settings for the new list: its name is the title (tap it to rename), How often starts at the template\'s 14 days, and Add people sits in the People header. Everything saves as you change it.', do: () => { D.created = { name: 'Family', smart: false, interval: 14 }; D.newMembers = []; }, tap: '[data-go="S32"]' },
-      { id: 'S32', p: 'new', say: 'Add people opens the address book picker, with filters and an A to Z rail.', tap: '.row[data-act="psel"]' },
-      { id: 'S32', st: 'selected', p: 'new', say: 'Three picked. The docked bar says exactly what will happen.', tap: '[data-act="pcommit"]' },
-      { id: 'S31', st: 'new', p: 'new', say: 'Back on List settings, a snackbar confirms with Undo.', snack: 'Added 3 to Family', undo: true, do: () => { D.newMembers = ['ava', 'beth', 'grace']; }, tap: '.ab [data-back]' },
-      { id: 'S30', say: 'Done returns to Lists. Home order follows this order.', do: () => { D.created = D.created || { name: 'Family', smart: false, interval: 14 }; } },
+      { id: 'S10', say: 'New list sits quietly under the cards.', tap: '[data-go="S33"]' },
+      { id: 'S33', say: 'New list opens on its first question, step 1 of 4: Start from blank first; then Inner orbit, Family and Drifted, tinted warmer the more often they bring people up; then, under "Smart list", the list that fills itself. Next waits for a choice.', tap: '[data-act="nlTemplate"][data-arg="family"]' },
+      { id: 'S33', st: 'chosen', say: 'Family picked: an ink outline and a check, never the accent. Next is the step\'s one accent.', tap: '#nl-next', do: () => { if (D.nl.template !== 'family') { nlPreset('name'); D.nl.step = 'start'; } } },
+      { id: 'S33', st: 'name', say: 'The name comes from the template; type over it if you like. Back steps back and keeps it; Close leaves, asking "Discard this list?" first.', tap: '#nl-next' },
+      { id: 'S33', st: 'often', say: 'How often starts at the template\'s 14 days, on the slider List settings uses.', tap: '#nl-next' },
+      { id: 'S33', st: 'people', say: 'Add people opens the picker; "Create without people" makes the list empty, to fill later.', tap: '.bottom-cta .btn.primary' },
+      { id: 'S32', p: 'collect', say: 'The picker in Collect mode. The list does not exist yet, so nothing is saved here. Tick a few people.', tap: '.row[data-act="psel"]', from: ['S10', 'S33'], do: () => { nlCollectStep(); D.sel = new Set(D.nl.people); } },
+      { id: 'S32', st: 'selected', p: 'collect', say: 'Three picked. "Add 3 people" names no list and hands them back to New list.', tap: '[data-act="pcollect"]', from: ['S10', 'S33'], do: () => { nlCollectStep(); D.sel = new Set(['ava', 'beth', 'grace']); } },
+      { id: 'S33', st: 'peoplechosen', say: 'Back on the step: the People section List settings shows, with the count, Add people and a remove per person. "Create list" makes the list, its rhythm and its people in one go.', tap: '[data-act="nlCreate"]' },
+      { id: 'S10', say: 'Back on Home with "Created Family.", and the new list\'s card after the others. Lists shows it last too, "Every 14 days".', snack: 'Created Family.', do: () => { if (!LIST_ORDER.some((k) => L[k].name === 'Family')) createList({ template: 'family', name: 'Family', interval: 14, people: ['ava', 'beth', 'grace'] }); } },
     ] },
   { id: 'F5', name: 'Tidy a list in bulk', why: 'Long-press, select several, move them to another list, undo if wrong.',
     steps: [
