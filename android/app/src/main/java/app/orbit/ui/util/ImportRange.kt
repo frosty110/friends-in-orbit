@@ -4,9 +4,10 @@ import app.orbit.R
 
 /**
  * How far back Orbit reads the call log, offered on two screens: Settings'
- * import range row and onboarding's sync step. One list and one wording so
- * the same setting looks and reads the same on both (voice.md glossary: one
- * word for one idea). Before 2026-10-06 each screen kept its own copy, and
+ * import range row and onboarding's sync step, both through
+ * `ui/components/ImportRangeChipGroup.kt`. One list and one wording so the
+ * same setting looks and reads the same on both (voice.md glossary: one word
+ * for one idea). Before 2026-10-06 each screen kept its own copy, and
  * they had drifted: onboarding offered three windows to Settings' four and
  * said "90 days" where Settings said "3 months" (onb-9).
  */

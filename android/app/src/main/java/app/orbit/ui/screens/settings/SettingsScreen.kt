@@ -14,10 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,8 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -57,6 +52,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import app.orbit.R
 import app.orbit.calllog.CallLogPermissionState
 import app.orbit.data.PickerThresholds
+import app.orbit.ui.components.ImportRangeChipGroup
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
@@ -689,11 +685,12 @@ private fun CallLogPermissionState.toPermissionStatus(): PermissionStatus = when
 }
 
 /**
- * The day options were raw M3 FilledTonal/Outlined buttons
- * (M3 default palette, off-token). Restyled on the picker FilterChipsRow
- * idiom: accentTint selected container, fg label, 48dp tap floor.
+ * "Import range": the title, "How far back to read", and the four windows as
+ * [ImportRangeChipGroup], the radio group onboarding's sync step draws, so the
+ * setting looks, reads and announces the same on both screens. Until
+ * 2026-10-07 this row drew a Material FilterChip (checkbox semantics, an
+ * accent-tint fill) over its own private copy of the options and labels.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ImportRangeRow(
     selectedDays: Int,
@@ -712,38 +709,12 @@ private fun ImportRangeRow(
             color = OrbitTheme.colors.fgMuted,
             modifier = Modifier.padding(top = OrbitTheme.spacing.hair),
         )
-        // Wraps instead of squeezing: at larger text a fixed row crushed the
-        // last chip to a sliver (caught by the gallery's accessibility audit).
-        FlowRow(
+        ImportRangeChipGroup(
+            selectedDays = selectedDays,
+            onSelect = onChange,
             modifier = Modifier.padding(top = OrbitTheme.spacing.x2),
-            horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
-        ) {
-            IMPORT_DAY_OPTIONS.forEach { days ->
-                FilterChip(
-                    selected = selectedDays == days,
-                    onClick = { onChange(days) },
-                    // Words, not "30d" (rubric D7).
-                    label = { Text(importRangeLabel(days)) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = OrbitTheme.colors.accentTint,
-                        selectedLabelColor = OrbitTheme.colors.fg,
-                    ),
-                    modifier = Modifier.defaultMinSize(minHeight = OrbitTheme.spacing.tapMin),
-                )
-            }
-        }
+        )
     }
-}
-
-private val IMPORT_DAY_OPTIONS: List<Int> = listOf(30, 90, 180, 365)
-
-@Composable
-private fun importRangeLabel(days: Int): String = when (days) {
-    30 -> pluralStringResource(R.plurals.settings_import_range_months, 1, 1)
-    90 -> pluralStringResource(R.plurals.settings_import_range_months, 3, 3)
-    180 -> pluralStringResource(R.plurals.settings_import_range_months, 6, 6)
-    365 -> pluralStringResource(R.plurals.settings_import_range_years, 1, 1)
-    else -> pluralStringResource(R.plurals.settings_import_range_days, days, days)
 }
 
 /**

@@ -4,13 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.PreviewFontScale
@@ -31,12 +27,9 @@ import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.orbit.R
-import app.orbit.ui.components.OrbitFilterChip
+import app.orbit.ui.components.ImportRangeChipGroup
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
-import app.orbit.ui.util.IMPORT_DAY_OPTIONS
-import app.orbit.ui.util.asString
-import app.orbit.ui.util.importRangeLabel
 import kotlinx.coroutines.delay
 
 /**
@@ -233,26 +226,17 @@ private fun FriendlyCount(callCount: Int, contactCount: Int) {
 }
 
 /**
- * Look-back window selector: Orbit's one chip ([OrbitFilterChip], RadioButton
- * semantics since exactly one window is chosen) over the list and the words
- * Settings' import range row uses (`ui/util/ImportRange.kt`), so the same
- * setting says the same four things on both screens. (Only the words are
- * shared: Settings still draws a Material FilterChip with checkbox semantics.)
- * Before 2026-10-06 this was a Material FilterChip with a colour override that
- * offered three windows and said "90 days" where Settings offered four and
- * said "3 months" (onb-9).
- *
- * A FlowRow, not a Row: at 200% text a fixed row crushed the last chip to a
- * sliver (gate G3); wrapping keeps every label whole. One `selectableGroup`
- * over the chips, as CallLogScreen's direction row and the rhythm rows do, so
- * TalkBack counts them ("3 months, radio button, 2 of 4") instead of
- * announcing four lone radio buttons.
+ * Look-back window selector: the question over [ImportRangeChipGroup], the
+ * same radio group Settings' import range row draws, so the same setting
+ * looks, reads and announces the same on both screens. Before 2026-10-06 this
+ * was a Material FilterChip with a colour override that offered three windows
+ * and said "90 days" where Settings offered four and said "3 months" (onb-9);
+ * until 2026-10-07 Settings still drew checkboxes.
  *
  * Selecting a chip persists `callLogImportDays` and re-runs the import for the
  * new window (VM.onImportDaysSelected); the default (90) is pre-selected and
  * already importing, so the common path stays friction-free.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ImportRangeChips(
     selectedDays: Int,
@@ -263,19 +247,11 @@ private fun ImportRangeChips(
             text = stringResource(R.string.onb_sync_range_question),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
         )
-        FlowRow(
-            modifier = Modifier.padding(top = OrbitTheme.spacing.x2).selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
-        ) {
-            IMPORT_DAY_OPTIONS.forEach { days ->
-                OrbitFilterChip(
-                    label = importRangeLabel(days).asString(),
-                    selected = selectedDays == days,
-                    onClick = { onSelect(days) },
-                    role = Role.RadioButton,
-                )
-            }
-        }
+        ImportRangeChipGroup(
+            selectedDays = selectedDays,
+            onSelect = onSelect,
+            modifier = Modifier.padding(top = OrbitTheme.spacing.x2),
+        )
     }
 }
 
