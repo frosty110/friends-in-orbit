@@ -10,11 +10,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
@@ -35,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -44,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
+import app.orbit.ui.components.OrbitTextField
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.contact.LogConnectionWhen
 import app.orbit.ui.theme.OrbitTheme
@@ -196,10 +194,12 @@ private fun LogConnectionSheetContent(
         modifier = Modifier
             .fillMaxWidth()
             // Keyboard safety — the note field sits at the foot of the sheet,
-            // exactly where the IME lands. Scroll + imePadding keep it (and
-            // what's being typed into it) above the keyboard.
+            // exactly where the IME lands. The sheet pads its content by the
+            // keyboard itself (Material's contentWindowInsets); this scroll
+            // lets the field move up into what is left, and the field asks it
+            // to (OrbitTextField). An imePadding() here was a no-op: the sheet
+            // had already consumed the inset.
             .verticalScroll(rememberScrollState())
-            .imePadding()
             .padding(
                 horizontal = OrbitTheme.spacing.x6,
                 vertical = OrbitTheme.spacing.x4,
@@ -241,35 +241,17 @@ private fun LogConnectionSheetContent(
             onSelect = { onSelect(2) },
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
-        BasicTextField(
+        // Up to four lines, like every other note; it was one line that
+        // scrolled sideways out of sight.
+        val hint = stringResource(R.string.contact_log_note_hint)
+        OrbitTextField(
             value = note,
             onValueChange = onNoteChange,
-            singleLine = true,
-            textStyle = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-            cursorBrush = SolidColor(OrbitTheme.colors.accent),
-            decorationBox = { inner ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(OrbitTheme.shapes.md)
-                        .background(OrbitTheme.colors.bgSubtle)
-                        .padding(
-                            horizontal = OrbitTheme.spacing.x4,
-                            vertical = OrbitTheme.spacing.x3,
-                        )
-                        .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    if (note.isEmpty()) {
-                        Text(
-                            text = stringResource(R.string.contact_log_note_hint),
-                            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
-                        )
-                    }
-                    inner()
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
+            label = null,
+            contentDescription = hint,
+            placeholder = hint,
+            singleLine = false,
+            maxLines = 4,
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
         OrbitButton(

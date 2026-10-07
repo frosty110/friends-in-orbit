@@ -10,16 +10,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
@@ -39,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import app.orbit.R
+import app.orbit.ui.components.OrbitFilterChip
 import app.orbit.ui.components.OrbitSlider
 import app.orbit.ui.theme.OrbitDarkMode
 import app.orbit.ui.theme.OrbitTheme
@@ -111,20 +110,21 @@ fun AppearanceSection(
 
         // ---- Light / Dark / System ----
         Text(stringResource(R.string.settings_appearance_light_dark), style = OrbitTheme.type.body, color = OrbitTheme.colors.fg)
+        // One choice of three, so a radio group of the shared chip
+        // (ImportRangeChipGroup's precedent). It was the last stock Material
+        // FilterChip in the app, which TalkBack read as three checkboxes.
         Row(
-            modifier = Modifier.padding(top = OrbitTheme.spacing.x2),
+            modifier = Modifier
+                .padding(top = OrbitTheme.spacing.x2)
+                .selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
         ) {
             OrbitDarkMode.entries.forEach { mode ->
-                FilterChip(
+                OrbitFilterChip(
+                    label = stringResource(mode.displayNameRes),
                     selected = darkMode == mode,
                     onClick = { onSelectDarkMode(mode) },
-                    label = { Text(stringResource(mode.displayNameRes)) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = OrbitTheme.colors.accentTint,
-                        selectedLabelColor = OrbitTheme.colors.fg,
-                    ),
-                    modifier = Modifier.defaultMinSize(minHeight = OrbitTheme.spacing.tapMin),
+                    role = Role.RadioButton,
                 )
             }
         }

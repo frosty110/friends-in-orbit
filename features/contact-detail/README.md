@@ -1,7 +1,7 @@
 # contact-detail
 
 **Status:** in-progress
-**Last reviewed:** 2026-10-06
+**Last reviewed:** 2026-10-07
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/ui/screens/contact/` (`ContactDetailScreen`, `ContactDetailViewModel`, `ContactDetailUiState`, `sections/`: `LogConnectionSheet`, `NotesSection`, `RuleOverrideSection`, `UnpauseBanner`; the pause sheet is the shared `ui/components/PauseDurationSheet`); re-link merge in `android/app/src/main/java/app/orbit/domain/usecase/RelinkContactUseCase.kt`
 - Tests, all on the JVM: `android/app/src/test/java/app/orbit/ui/screens/contact/` (`ContactDetailViewModelTest`, `ContactOverflowMenuTest`, `ContactDetailCurtainTest`, `ContactDetailScreenTest`, `OrphanBannerTest`, `UnpauseBannerTest`, `sections/NotesMenuTest`, `sections/RuleOverrideSectionTest`), `android/app/src/test/java/app/orbit/domain/usecase/RelinkContactUseCaseTest.kt`. The two banner tests moved from `androidTest` on 2026-10-06, so they gate every push instead of waiting for an emulator.
@@ -56,7 +56,7 @@ Defined 2026-10-05 from what the code already cites for them (they were cited in
 
 - **CONTACT-01: One person's whole picture.** Contact detail shows the person's photo (initials as the fallback), name and number, the lists they are on, their stats and their call history, from one state contract (`ContactDetailUiState`).
 - **CONTACT-02: Neutral stats.** Last call, total calls, average length, longest gap and "Usually", in factual labels: no "overdue", no "haven't called", no time-since framing beyond the facts. A stat without enough history says "Not enough calls yet" ("Average length" and "Usually" need three measured calls, "Longest gap" two), and a stat Orbit cannot know without call log access is left out under a notice rather than claimed.
-- **CONTACT-03: A schedule for one person.** For someone on two or more lists, a per-contact override of the rhythm (`ContactEntity.ruleOverrideJson`), edited with the same kind picker as List settings and an interval slider (the shared `OrbitSlider`) that moves both cooldown bounds.
+- **CONTACT-03: A schedule for one person.** For someone on two or more lists, a per-contact override of the rhythm (`ContactEntity.ruleOverrideJson`), edited with the same kind picker and the same day wheel as List settings (`IntervalDaysPicker`, ADR 0011), which moves both cooldown bounds.
 - **CONTACT-04: Pause.** The overflow's Pause opens the shared duration sheet (1 week, 1 month, until you unpause); the pause commits with an Undo snackbar, and a paused person shows "Paused until ..." with Unpause in the overflow.
 - **CONTACT-05: The pause has ended.** When a timed pause has lapsed (never an indefinite one), a banner at the top says so ("{Name} is unpaused" / "They'll come up again on their lists.") and can be dismissed; the whole banner is a button named "Dismiss unpause notice", the same as its x.
 - **CONTACT-09: Logging an attempt.** "Log a connection" can record a reach-out that did not connect ("Couldn't reach them": a voicemail, no answer) as `CallSource.ATTEMPT`, confirmed by "Attempt logged." The row reads "Attempted" with a phone-slash icon, and an attempt stays out of Last call, Total calls, Average length and Usually (`ContactMapper.withCallStats`); it advances the rotation only by `AttemptCooldown`.

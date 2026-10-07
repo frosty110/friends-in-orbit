@@ -29,7 +29,7 @@ As a user, I pick a simple rule template for each list ("keep in touch"), option
 - Short-call threshold (default 60s) + short-call reset percent — calls under the threshold don't fully reset cooldown.
 - Incoming-call reset percent.
 
-**Interval honesty (`KeepInTouch.withIntervalHours`, 2026-06-09).** The List Configuration "aim for every N" slider commits through a single entry point that moves **both** cooldown bounds together: `cooldownMinHours = interval`, `cooldownMaxHours = interval + 288h` of skip headroom. Committing only the min let the default 336h cap silently turn "aim for every 30 days" into every 14 days; the cap must never force someone to surface more often than the rhythm the user chose.
+**Interval honesty (`KeepInTouch.withIntervalHours`, 2026-06-09).** The List Configuration "aim for every N" day wheel (a slider until ADR 0011) commits through a single entry point that moves **both** cooldown bounds together: `cooldownMinHours = interval`, `cooldownMaxHours = interval + 288h` of skip headroom. Committing only the min let the default 336h cap silently turn "aim for every 30 days" into every 14 days; the cap must never force someone to surface more often than the rhythm the user chose.
 
 **Call metadata considered.** Duration, time of day, direction (outgoing vs incoming).
 
@@ -53,7 +53,7 @@ As a user, I pick a simple rule template for each list ("keep in touch"), option
 - [x] Rule config round-trips through JSON losslessly (`RuleParamsSerializationTest`).
 - [x] Short-call threshold, skip penalty, and incoming-call weight all respected.
 - [x] Ignored contacts short-circuit before cooldown math (engines return `null` — never due).
-- [x] Interval slider commits via `withIntervalHours` so the cooldown cap never overrides the chosen cadence.
+- [x] The interval (day wheel since ADR 0011) commits via `withIntervalHours` so the cooldown cap never overrides the chosen cadence.
 
 ### Not in scope
 

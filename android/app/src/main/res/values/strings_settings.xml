@@ -149,15 +149,12 @@
         <item quantity="other">Long gap: no call in %1$d days</item>
     </plurals>
     <string name="settings_thresholds_long_gap_helper">Days without a call</string>
-    <!-- The group's short name, for the stepper buttons' screen-reader labels below. -->
+    <!-- The group's short name: the screen-reader name of its number wheel. -->
     <string name="settings_thresholds_commonly_name">Commonly called</string>
     <string name="settings_thresholds_rarely_name">Rarely called</string>
     <string name="settings_thresholds_recently_added_name">Recently added</string>
     <string name="settings_thresholds_long_gap_name">Long gap</string>
     <string name="settings_thresholds_overlap" formatted="false">These two groups overlap: together they can\'t be more than 100%.</string>
-    <!-- Stepper buttons. %1$s: the group's short name, for example "Commonly called". -->
-    <string name="settings_thresholds_decrease">Decrease %1$s</string>
-    <string name="settings_thresholds_increase">Increase %1$s</string>
 
     <!-- Appearance. -->
     <string name="settings_appearance_theme">Theme</string>

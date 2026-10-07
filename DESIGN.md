@@ -85,7 +85,10 @@ Two requirements sit above the table because every screen meets them, and they a
 | `Avatar(name, size, photoUri)` | Every person, everywhere | Photo with initials fallback, always a circle, hidden from TalkBack (the name is beside it), initials sized in dp so they fit at 200% |
 | `OrbitButton` / `OrbitIconButton` | Actions | 48dp, `Role.Button`, Primary is the screen's one accent, press overlay on every variant |
 | `OrbitSwitch` | On/off rows (`onCheckedChange = null` inside a `toggleable` row) | Announced as a switch; ink when on, so toggles never spend the accent |
-| `OrbitSlider` | Any range | Ink track, round thumb, and a `valueDescription` TalkBack reads in words ("Every 14 days") |
+| `OrbitWheelPicker` | Any whole number: days, counts, percentages | A horizontal row of values that flings and snaps to the centre band; one write per gesture; a haptic tick per value; TalkBack hears one adjustable control with its value in words; landmark words under familiar values; a stored value outside the range widens it rather than being clamped (ADR 0011) |
+| `IntervalDaysPicker` | The keep-in-touch interval (List settings, Contact detail) | "Aim for every 14 days" over the day wheel, 1 to 60 days; one composable so the two screens cannot drift |
+| `OrbitSlider` | Continuous values only (the accent hue) | Ink track, round thumb, and a `valueDescription` TalkBack reads in words. Not for whole numbers: those use the wheel |
+| `OrbitTextField` | Every text field | Label above, inside the field's tap target and TalkBack node; `fgSubtle` outline at 3:1 over `bgSubtle`, ink ring on focus, `danger` ring and message on error; ink cursor; sentence case and Done by default; stays above the keyboard (`keepAboveKeyboard`, ADR 0012) |
 | `OrbitSearchField` | Search boxes (Browse, Search, the picker) | The whole 48dp pill is the field; the placeholder is its TalkBack label while empty; clear control has its own 48dp target |
 | `OrbitAppBar` | Every screen's top bar | The title is a heading and the screen's pane title, so TalkBack announces each new screen; grows for two-line titles at 200% |
 | `OrbitSnackbarHost` / `OrbitSnackbar` | Every snackbar | Material's snackbar, themed, with its action (Undo) held to 48dp; the default was 40dp |

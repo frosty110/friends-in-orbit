@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,7 +32,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.SnackbarDuration
@@ -91,6 +92,7 @@ import app.orbit.ui.components.OrbitMenuTone
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSnackbarHost
+import app.orbit.ui.components.OrbitTextField
 import app.orbit.ui.components.PauseDurationSheet
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.SectionLabel
@@ -151,7 +153,7 @@ fun ContactDetailScreen(
     // NOTE-02 — single FocusRequester instance, threaded down to NotesSection
     // so the deep-link path can request focus on the input. The 100ms delay
     // lets layout settle before requestFocus(); without it the request can
-    // fire before the BasicTextField is composed.
+    // fire before the note field is composed.
     val notesInputFocusRequester = remember { FocusRequester() }
     // Single LocalLifecycleOwner reference reused by all three event-flow
     // collects below so each is gated by STARTED (no snackbar / focus / nav
@@ -193,7 +195,7 @@ fun ContactDetailScreen(
 
     // NOTE-02: listen for the VM's one-shot focus signal (delivered once per
     // VM instance when `focusNote=1` is in SavedStateHandle). The 100ms delay
-    // mitigates "requestFocus() called before the BasicTextField is laid out"
+    // mitigates "requestFocus() called before the note field is laid out"
     // on cold deep-links.
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -523,9 +525,15 @@ private fun ContactDetailContent(
                 onDismiss = { showLogConnectionSheet = false }
             )
         }
+        // Outside OrbitScreen, so it pads for the system itself, as the
+        // app-level commit snackbar does: above the navigation bar, and above
+        // the keyboard, which is up exactly when a note's save says something.
         OrbitSnackbarHost(
             hostState = snackbarHostState,
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .imePadding()
         )
     }
 }
@@ -1054,7 +1062,7 @@ private fun ContactBodyLazyColumn(
                         // LOG-03: inline "Add note to this call" affordance. Renders
                         // below the tinted call row (the one the CallLog deep link
                         // pointed at). The composable is a small Secondary button + a
-                        // BasicTextField; tapping it invokes vm::onAddRetroactiveNote
+                        // note field; tapping it invokes vm::onAddRetroactiveNote
                         // which back-dates createdAt to the call's occurredAt via the
                         // byId O(1) lookup (no observeAll snapshot).
                         if (retroNoteAffordanceFor == key) {
@@ -1273,34 +1281,15 @@ private fun RetroNoteAffordance(
             .fillMaxWidth()
             .padding(top = OrbitTheme.spacing.x2, bottom = OrbitTheme.spacing.x4)
     ) {
-        BasicTextField(
+        val hint = stringResource(R.string.contact_retro_note_hint)
+        OrbitTextField(
             value = draft,
             onValueChange = onDraftChange,
+            label = null,
+            contentDescription = hint,
+            placeholder = hint,
+            singleLine = false,
             maxLines = 4,
-            textStyle = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-            cursorBrush = androidx.compose.ui.graphics.SolidColor(OrbitTheme.colors.accent),
-            decorationBox = { inner ->
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(OrbitTheme.shapes.md)
-                        .background(OrbitTheme.colors.bgSubtle)
-                        .padding(
-                            horizontal = OrbitTheme.spacing.x4,
-                            vertical = OrbitTheme.spacing.x3
-                        )
-                        .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
-                ) {
-                    if (draft.isEmpty()) {
-                        Text(
-                            text = stringResource(R.string.contact_retro_note_hint),
-                            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted)
-                        )
-                    }
-                    inner()
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         OrbitButton(

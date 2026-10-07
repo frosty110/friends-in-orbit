@@ -36,6 +36,7 @@ internal val PhosphorIcons: Map<String, Int> = mapOf(
     "house-simple" to R.drawable.ph_house_simple,
     "house" to R.drawable.ph_house,
     "info" to R.drawable.ph_info,
+    "keyboard" to R.drawable.ph_keyboard,
     "link" to R.drawable.ph_link,
     "list-bullets" to R.drawable.ph_list_bullets,
     "list" to R.drawable.ph_list,

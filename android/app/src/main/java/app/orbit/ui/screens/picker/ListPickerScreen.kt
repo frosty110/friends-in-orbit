@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
@@ -18,11 +18,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,13 +38,14 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.orbit.R
+import app.orbit.ui.components.CurtainMask
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
@@ -57,6 +55,7 @@ import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitListSkeleton
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
+import app.orbit.ui.components.OrbitTextField
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -389,26 +388,22 @@ private fun CreateListNameDialog(
             )
         },
         text = {
-            OutlinedTextField(
+            // PRIV-03: drawn as "List" under the curtain, like every other
+            // list-name field; the buffer that Create saves is untouched
+            // (CurtainMask). This was the one name field without it.
+            val curtainList = stringResource(R.string.components_curtain_list)
+            OrbitTextField(
                 value = nameText,
                 onValueChange = { nameText = it },
-                singleLine = true,
-                textStyle = LocalTextStyle.current.merge(OrbitTheme.type.body),
-                placeholder = {
-                    Text(
-                        text = stringResource(R.string.picker_lists_name_hint),
-                        style = OrbitTheme.type.body,
-                        color = OrbitTheme.colors.fgMuted,
-                    )
-                },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                label = null,
+                contentDescription = stringResource(R.string.picker_lists_new_list),
+                placeholder = stringResource(R.string.picker_lists_name_hint),
+                visualTransformation = if (LocalPrivacyCurtain.current) CurtainMask(curtainList) else VisualTransformation.None,
                 keyboardActions = KeyboardActions(onDone = {
                     commit()
                     focusManager.clearFocus()
                 }),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester),
+                modifier = Modifier.focusRequester(focusRequester),
             )
         },
         confirmButton = {

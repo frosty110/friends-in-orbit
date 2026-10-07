@@ -9,18 +9,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,7 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
+import app.orbit.ui.components.OrbitTextField
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
@@ -108,13 +107,14 @@ internal fun CreateListContent(
         modifier = Modifier
             .fillMaxWidth()
             // Keyboard safety (2026-08-15 UAT): the sheet used to be a plain
-            // fixed Column, so raising the IME left "Name your list" — and the
-            // text being typed into it — underneath the keyboard. imePadding
-            // shrinks the sheet to the visible area and verticalScroll lets the
-            // focused field scroll up into it (Compose's TextField asks for
-            // that on focus; it needs a scrollable parent to be able to obey).
+            // fixed Column, so raising the IME left "Name your list", and the
+            // text being typed into it, underneath the keyboard. The sheet
+            // itself pads its content by the keyboard (Material's
+            // contentWindowInsets, safeDrawing at the bottom); this scroll is
+            // what lets the field move up into what is left, and the field
+            // asks it to (OrbitTextField). An imePadding() here was a no-op:
+            // the sheet had already consumed the inset.
             .verticalScroll(rememberScrollState())
-            .imePadding()
             .padding(
                 start = OrbitTheme.spacing.x6,
                 end = OrbitTheme.spacing.x6,
@@ -167,33 +167,25 @@ internal fun CreateListContent(
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
 
-        TextField(
+        // The heading above names it on screen, so TalkBack gets the same
+        // words rather than a second visible label. Done creates the list
+        // once a template and a name are in, like the button.
+        val nameHeading = stringResource(R.string.lists_create_name_label)
+        val focusManager = LocalFocusManager.current
+        OrbitTextField(
             value = name,
             onValueChange = { name = it },
-            placeholder = {
-                Text(
-                    text = stringResource(selected?.displayNameRes ?: R.string.lists_create_name_placeholder),
-                    style = OrbitTheme.type.body,
-                    color = OrbitTheme.colors.fgSubtle,
-                )
-            },
-            singleLine = true,
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-                disabledContainerColor = Color.Transparent,
-                errorContainerColor = Color.Transparent,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                disabledIndicatorColor = Color.Transparent,
-                errorIndicatorColor = Color.Transparent,
-                focusedTextColor = OrbitTheme.colors.fg,
-                unfocusedTextColor = OrbitTheme.colors.fg,
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(OrbitTheme.shapes.md)
-                .background(OrbitTheme.colors.bgSubtle),
+            label = null,
+            contentDescription = nameHeading,
+            placeholder = stringResource(selected?.displayNameRes ?: R.string.lists_create_name_placeholder),
+            keyboardActions = KeyboardActions(onDone = {
+                val tpl = selected
+                if (tpl != null && name.trim().isNotEmpty()) {
+                    onCreate(tpl, name.trim())
+                } else {
+                    focusManager.clearFocus()
+                }
+            }),
         )
 
         Spacer(Modifier.height(OrbitTheme.spacing.x6))

@@ -1,9 +1,7 @@
 package app.orbit.ui.screens.lists
 
-import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -12,21 +10,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -36,13 +29,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import app.orbit.R
@@ -52,11 +42,12 @@ import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeSchedule
 import app.orbit.ui.components.CurtainMask
+import app.orbit.ui.components.IntervalDaysPicker
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
-import app.orbit.ui.components.OrbitSlider
 import app.orbit.ui.components.OrbitSnackbarHost
+import app.orbit.ui.components.OrbitTextField
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 import java.time.LocalTime
@@ -80,9 +71,9 @@ import java.time.LocalTime
  *     Nesting a second scroll under an infinite-height parent triggers
  *     `IllegalStateException: "Vertically scrollable component was measured
  *     with an infinity maximum height constraints"` (F-1, 2026-04-30 UAT).
- *     The onboarding branch instead uses `fillMaxWidth().imePadding()` and
- *     lets the OnboardingScaffold scroll container be the only scroll parent.
- *   - An [OutlinedTextField] for the list name renders at the top of the
+ *     The onboarding branch instead uses `fillMaxWidth()` and lets the
+ *     OnboardingScaffold scroll container be the only scroll parent.
+ *   - An [OrbitTextField] for the list name renders at the top of the
  *     body (BLOCKER 1 / ONB-11). The production path renders the name as an
  *     inline rename row instead (F-12, [ListNameRenameRow]: static text with
  *     a pencil, a field while editing); both commit through `onNameChange`.
@@ -125,13 +116,14 @@ internal fun ListConfigBody(
         // verticalScroll + fillMaxSize. OnboardingScaffold wraps `content`
         // in a verticalScroll Column with infinite max height; a second
         // scroll under an infinite-height parent crashes the layout pass.
-        // The onboarding branch lets the scaffold be the only scroll parent
-        // and applies imePadding here so name + member edit fields stay
-        // visible above the soft keyboard (ONB-21).
+        // The onboarding branch lets the scaffold be the only scroll parent.
+        // The keyboard is handled above and below this (ONB-21): OrbitScreen
+        // pads for it, and each OrbitTextField keeps itself above it. An
+        // imePadding() here did nothing, because OrbitScreen had already
+        // consumed the inset.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .imePadding()
                 .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x1)
                 .padding(bottom = OrbitTheme.spacing.x7)
         ) {
@@ -241,23 +233,25 @@ private fun ColumnScope.ListConfigBodySections(
             // PRIV-03: under the curtain the field draws "List" over the
             // user's buffer, which it leaves alone (CurtainMask).
             val curtainList = stringResource(R.string.components_curtain_list)
-            OutlinedTextField(
+            // The group's title says "Name" over it, so the field is named
+            // for TalkBack rather than labelled twice on screen.
+            OrbitTextField(
                 value = nameText,
                 onValueChange = {
                     nameText = it
                     onNameChange(it)
                 },
+                label = null,
+                contentDescription = stringResource(R.string.lists_section_name),
+                placeholder = stringResource(R.string.lists_create_name_placeholder),
                 visualTransformation = if (LocalPrivacyCurtain.current) CurtainMask(curtainList) else VisualTransformation.None,
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x2)
+                modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x2)
             )
         }
     } else {
         // F-12 — production inline rename. The list name is rendered as
         // static text alongside a pencil affordance that flips the row
-        // into an OutlinedTextField. Save paths: IME "Done", focus loss,
+        // into an OrbitTextField. Save paths: IME "Done", focus loss,
         // or trailing check icon. Empty names revert silently — the VM
         // setter is never invoked when the trimmed buffer is blank.
         SettingGroup(title = stringResource(R.string.lists_section_name)) {
@@ -286,15 +280,17 @@ private fun ColumnScope.ListConfigBodySections(
         val keepInTouch = state.ruleParams as? RuleParams.KeepInTouch
         if (keepInTouch != null) {
             SettingGroup(title = stringResource(R.string.lists_section_how_often)) {
-                IntervalSliderLocal(
+                // The day wheel, shared with Contact detail's custom schedule
+                // (ADR 0011).
+                IntervalDaysPicker(
                     currentHours = keepInTouch.cooldownMinHours,
-                    onCommit = { hours ->
+                    onCommit = { days ->
                         // Rule-correctness fix — commit through withIntervalHours
                         // so cooldownMaxHours moves with the chosen interval.
                         // Committing only cooldownMinHours let the default 336h
                         // cap silently turn "aim for every 30 days" into every
                         // 14 (see RuleParams.KeepInTouch.withIntervalHours KDoc).
-                        onRuleParamsChange(keepInTouch.withIntervalHours(hours))
+                        onRuleParamsChange(keepInTouch.withIntervalHours(days * 24))
                     }
                 )
             }
@@ -412,116 +408,6 @@ private fun ColumnScope.ListConfigBodySections(
     }
 }
 
-/**
- * Local interval slider — moved from `ListConfigScreen.kt` along with the
- * Cadence body. Identical behavior; the production path imports it via
- * `ListConfigBody` rather than directly.
- *
- * One sentence over the slider ("Aim for every 14 days"), with the interval
- * as its argument, rather than a label on the left and the value on the
- * right: a translator can then put the words in their language's order
- * (voice.md, "keep a sentence whole"). Contact detail's custom schedule uses
- * the same sentence.
- */
-@Composable
-private fun IntervalSliderLocal(currentHours: Int, onCommit: (Int) -> Unit) {
-    val initialDays = (currentHours / 24f).coerceAtLeast(1f)
-    var days by remember(currentHours) { mutableFloatStateOf(initialDays) }
-    Column(Modifier.padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4)) {
-        val rounded = days.toInt().coerceAtLeast(1)
-        Text(
-            text = stringResource(
-                R.string.lists_interval_aim,
-                pluralStringResource(R.plurals.lists_interval_days, rounded, rounded),
-            ),
-            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-            modifier = Modifier.fillMaxWidth()
-        )
-        OrbitSlider(
-            value = days,
-            onValueChange = { days = it },
-            onValueChangeFinished = {
-                val intDays = days.toInt().coerceAtLeast(1)
-                onCommit(intDays * 24)
-            },
-            valueRange = 1f..60f,
-            label = stringResource(R.string.lists_interval_label),
-            valueDescription = days.toInt().coerceAtLeast(1).let { d ->
-                pluralStringResource(R.plurals.lists_interval_every_days, d, d)
-            },
-            modifier = Modifier.padding(top = OrbitTheme.spacing.x1)
-        )
-        IntervalScaleLabels(modifier = Modifier.fillMaxWidth().padding(top = OrbitTheme.spacing.x1))
-    }
-}
-
-/**
- * 1..60 days per ADR 0010. The floor is deliberately 1, not 2: Energize already
- * defaults to a 24h cadence, and nothing below the UI enforces a wider gap
- * (`withIntervalHours` floors at 1 hour). Do not raise it to "fix" the default
- * 48h list rendering its thumb at ~1.7% of the track, flush against the `1d`
- * tick — that reads as a mismatch but is a correct state on a linear scale, and
- * raising the floor to hide it also silently rewrote 24h rows to 48h. If the
- * compressed low end needs fixing, change the scale, not the floor.
- */
-private const val INTERVAL_MIN_DAY = 1
-private const val INTERVAL_MAX_DAY = 60
-
-/** One tick under the interval slider: where it sits, and its words. */
-private data class IntervalTick(val day: Int, @PluralsRes val label: Int, val count: Int)
-
-private val INTERVAL_TICKS: List<IntervalTick> = listOf(
-    // Words, not "1d / 2w / 1m / 2m" (rubric D7).
-    IntervalTick(day = 1, label = R.plurals.lists_interval_days, count = 1),
-    IntervalTick(day = 14, label = R.plurals.lists_interval_tick_weeks, count = 2),
-    IntervalTick(day = 30, label = R.plurals.lists_interval_tick_months, count = 1),
-    IntervalTick(day = 60, label = R.plurals.lists_interval_tick_months, count = 2)
-)
-
-/**
- * Linear placement on a [minDay]..[maxDay] day axis. F-4 fix: the prior
- * [Row] with [Arrangement.SpaceBetween] placed labels at fractions
- * 0/0.33/0.67/1.0 — visually saying 2w=20d and 1m=40d. The slider's true
- * thumb fraction is `(value - minDay) / (maxDay - minDay)`, so labels must
- * follow the same math: 14d → 0.22, 30d → 0.49, 60d → 1.0.
- */
-internal fun intervalLabelFraction(day: Int, minDay: Int, maxDay: Int): Float {
-    val span = (maxDay - minDay).coerceAtLeast(1)
-    return ((day - minDay).coerceAtLeast(0).toFloat() / span).coerceIn(0f, 1f)
-}
-
-@Composable
-private fun IntervalScaleLabels(modifier: Modifier = Modifier) {
-    Layout(
-        modifier = modifier,
-        content = {
-            INTERVAL_TICKS.forEach { tick ->
-                Text(
-                    text = pluralStringResource(tick.label, tick.count, tick.count),
-                    style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle)
-                )
-            }
-        }
-    ) { measurables, constraints ->
-        val placeables = measurables.map {
-            it.measure(
-                constraints.copy(minWidth = 0, minHeight = 0)
-            )
-        }
-        val width = constraints.maxWidth
-        val height = placeables.maxOfOrNull { it.height } ?: 0
-        layout(width, height) {
-            placeables.forEachIndexed { index, p ->
-                val day = INTERVAL_TICKS[index].day
-                val fraction = intervalLabelFraction(day, INTERVAL_MIN_DAY, INTERVAL_MAX_DAY)
-                val centered = (fraction * width).toInt() - p.width / 2
-                val x = centered.coerceIn(0, (width - p.width).coerceAtLeast(0))
-                p.placeRelative(x, 0)
-            }
-        }
-    }
-}
-
 // `templateIdForKindLocal` (the hardcoded 1L/2L/3L kind → seed id map) is gone:
 // the picker hands the RuleKind straight to the VM, which resolves the row via
 // RuleTemplateRepository.getByKind.
@@ -544,7 +430,7 @@ private fun rhythmNoteFor(kind: RuleKind): Int? = when (kind) {
 /**
  * F-12 — production inline rename row. Renders the current list name as
  * static text with a trailing pencil affordance; tapping the pencil (or
- * the row itself) flips into an [OutlinedTextField] with the keyboard
+ * the row itself) flips into an [OrbitTextField] with the keyboard
  * raised. Save paths:
  *  - IME "Done" tap
  *  - Focus loss
@@ -595,20 +481,19 @@ private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
         LaunchedEffect(Unit) {
             runCatching { focusRequester.requestFocus() }
         }
-        OutlinedTextField(
+        OrbitTextField(
             value = nameText,
             onValueChange = { nameText = it },
+            label = null,
+            contentDescription = stringResource(R.string.lists_section_name),
             // PRIV-03: drawn as "List" under the curtain; the buffer, which
             // saves on focus loss, is untouched (CurtainMask).
             visualTransformation = if (curtain) CurtainMask(curtainList) else VisualTransformation.None,
-            singleLine = true,
-            textStyle = LocalTextStyle.current.merge(OrbitTheme.type.body),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = {
                 commit()
                 focusManager.clearFocus()
             }),
-            trailingIcon = {
+            trailing = {
                 Box(
                     modifier = Modifier
                         .size(OrbitTheme.spacing.tapMin)
@@ -627,8 +512,7 @@ private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
                 }
             },
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x2)
+                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x2)
                 .focusRequester(focusRequester)
                 .onFocusChanged { focusState ->
                     if (focusState.isFocused) {

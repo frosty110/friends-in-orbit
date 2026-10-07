@@ -3,12 +3,8 @@ package app.orbit.ui.screens.lists
 import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,7 +18,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import app.orbit.R
@@ -30,6 +25,7 @@ import app.orbit.ui.components.CurtainMask
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
+import app.orbit.ui.components.OrbitTextField
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -87,20 +83,18 @@ fun RenameListDialog(
             // 2026-10-06 this dialog was the one name field without the mask,
             // so a list name stayed readable in the app switcher.
             val curtainList = stringResource(R.string.components_curtain_list)
-            OutlinedTextField(
+            // The dialog's title names the field, so TalkBack gets it too.
+            OrbitTextField(
                 value = nameText,
                 onValueChange = { nameText = it },
+                label = null,
+                contentDescription = stringResource(R.string.lists_rename_title),
                 visualTransformation = if (LocalPrivacyCurtain.current) CurtainMask(curtainList) else VisualTransformation.None,
-                singleLine = true,
-                textStyle = LocalTextStyle.current.merge(OrbitTheme.type.body),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
                     commit()
                     focusManager.clearFocus()
                 }),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester),
+                modifier = Modifier.focusRequester(focusRequester),
             )
         },
         confirmButton = {
