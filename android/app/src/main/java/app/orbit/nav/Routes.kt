@@ -83,7 +83,13 @@ object Routes {
             "&sourceListId={sourceListId}&relinkContactId={relinkContactId}"
     const val PickLists = "pick/lists?contactId={contactId}"
 
+    // HOME-13: one list's calls, week by week, from Home's strip ("See your
+    // week") and its day sheet ("See the whole week"). It always opens on
+    // this week, which holds every day the strip shows. Build it with [week].
+    const val Week = "week/{listId}"
+
     fun card(listId: String) = "card/$listId"
+    fun week(listId: String) = "week/$listId"
     fun browse(listId: String, focusContactId: Long? = null) =
         if (focusContactId == null) "browse/$listId" else "browse/$listId?focus=$focusContactId"
     fun contact(contactId: String) = "contact/$contactId"

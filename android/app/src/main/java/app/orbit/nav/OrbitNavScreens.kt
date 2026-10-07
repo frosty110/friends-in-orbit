@@ -25,6 +25,7 @@ import app.orbit.ui.screens.picker.PickerCommitSnackbarHost
 import app.orbit.ui.screens.picker.UnknownRouteSnackbar
 import app.orbit.ui.screens.settings.SettingsScreen
 import app.orbit.ui.screens.settings.ignored.SettingsIgnoredScreen
+import app.orbit.ui.screens.week.WeekScreen
 
 /**
  * The screens the navigation graph composes, one slot per route, plus the
@@ -53,6 +54,18 @@ interface OrbitNavScreens {
         onOpenListSettings: (listId: String) -> Unit,
         onOpenContactWithFocus: (contactId: String, focusNote: Boolean) -> Unit,
         onOpenPostCallNote: (contactId: String, callEventId: Long) -> Unit,
+        onOpenWeek: (listId: String) -> Unit,
+    )
+
+    /**
+     * HOME-13: one list's week. The real screen reads [listId] from its own
+     * SavedStateHandle; it is in the slot so a stub can show which list.
+     */
+    @Composable
+    fun Week(
+        listId: String,
+        onBack: () -> Unit,
+        onOpenContact: (contactId: String) -> Unit,
     )
 
     @Composable
@@ -210,6 +223,7 @@ interface OrbitNavScreens {
             onOpenListSettings: (listId: String) -> Unit,
             onOpenContactWithFocus: (contactId: String, focusNote: Boolean) -> Unit,
             onOpenPostCallNote: (contactId: String, callEventId: Long) -> Unit,
+            onOpenWeek: (listId: String) -> Unit,
         ) = HomeScreen(
             onOpenList = onOpenList,
             onOpenSearch = onOpenSearch,
@@ -220,7 +234,15 @@ interface OrbitNavScreens {
             onOpenListSettings = onOpenListSettings,
             onOpenContactWithFocus = onOpenContactWithFocus,
             onOpenPostCallNote = onOpenPostCallNote,
+            onOpenWeek = onOpenWeek,
         )
+
+        @Composable
+        override fun Week(
+            listId: String,
+            onBack: () -> Unit,
+            onOpenContact: (contactId: String) -> Unit,
+        ) = WeekScreen(onBack = onBack, onOpenContact = onOpenContact)
 
         @Composable
         override fun Card(

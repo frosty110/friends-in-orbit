@@ -237,7 +237,22 @@ private fun OrbitNavGraph(
                 // opens the page for writing about that call.
                 onOpenPostCallNote = { contactId, callEventId ->
                     nav.navigate(Routes.postCallNote(contactId, callEventId))
-                }
+                },
+                // HOME-13: the strip's "See your week" and the day sheet's
+                // "See the whole week".
+                onOpenWeek = { listId -> nav.navigate(Routes.week(listId)) }
+            )
+        }
+        // HOME-13: one list's calls, week by week. Back returns to Home; a
+        // block or a day sheet row opens the person at the top.
+        composable(
+            Routes.Week,
+            arguments = listOf(navArgument("listId") { type = NavType.StringType })
+        ) { entry ->
+            screens.Week(
+                listId = entry.requiredString("listId"),
+                onBack = { nav.popBackStack() },
+                onOpenContact = openContact
             )
         }
         composable(

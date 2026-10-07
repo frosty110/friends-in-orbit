@@ -28,6 +28,7 @@ Each page view lives in its own file under [`page-views/`](page-views/). When a 
 | [Home](page-views/home.md) | `home` |
 | [Card view](page-views/card-view.md) | `card/{listId}` |
 | [Browse people](page-views/browse.md) | `browse/{listId}`, with optional `focus` (the card's person); the numbered sequence lives here, under "Next up" |
+| [Your week](page-views/week.md) | `week/{listId}`, from Home's strip ("See your week") and its day sheet ("See the whole week") |
 
 ## People
 

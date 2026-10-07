@@ -29,6 +29,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
@@ -58,6 +60,10 @@ import app.orbit.ui.util.formatDuration
  * Rows tap through to Contact Detail. Under the privacy curtain (PRIV-03) names
  * mask to "Someone", photos are withheld, and initials derive from the masked
  * literal — the BrowseRow / CallLogScreen convention.
+ *
+ * HOME-13: opened from Home's strip, the sheet ends in "See the whole week"
+ * ([onSeeWeek]), which opens the list's Week screen. The Week screen opens
+ * this same sheet for one of its days and passes null: it is already there.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +74,7 @@ fun RhythmDaySheet(
     onOpenContact: (contactId: Long) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    onSeeWeek: (() -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -114,7 +121,45 @@ fun RhythmDaySheet(
                     )
                 }
             }
+            if (onSeeWeek != null) {
+                Spacer(Modifier.height(OrbitTheme.spacing.x2))
+                SeeWeekLink(
+                    text = stringResource(R.string.home_rhythm_see_whole_week),
+                    onClick = onSeeWeek,
+                )
+            }
         }
+    }
+}
+
+/**
+ * HOME-13: the quiet way into the Week screen, the same on the strip's header
+ * line ("See your week") and at the foot of the day sheet ("See the whole
+ * week"): the words and a chevron in muted ink, a 48dp button (rules.md
+ * Design 3). Never the accent: Home spends none while it has lists (rules.md
+ * Design 5), and this is a side door, not the screen's main action.
+ */
+@Composable
+internal fun SeeWeekLink(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1),
+        modifier = modifier
+            .heightIn(min = OrbitTheme.spacing.tapMin)
+            .clip(OrbitTheme.shapes.sm)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(end = OrbitTheme.spacing.x1),
+    ) {
+        Text(
+            text = text,
+            style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted, fontWeight = FontWeight.Medium),
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        PhIcon(name = "caret-right", size = 14.dp, tint = OrbitTheme.colors.fgMuted)
     }
 }
 
@@ -297,6 +342,8 @@ private fun RhythmDaySheetBodyPreview() {
                 previewCalls.forEach { call ->
                     RhythmCallRow(call = call, curtain = false, onClick = {})
                 }
+                Spacer(Modifier.height(OrbitTheme.spacing.x2))
+                SeeWeekLink(text = stringResource(R.string.home_rhythm_see_whole_week), onClick = {})
             }
         }
     }
@@ -312,6 +359,7 @@ private val previewCalls = listOf(
         direction = CallDirection.OUTGOING,
         durationLabel = formatDuration(14 * 60),
         timeLabel = "4:30pm",
+        minuteOfDay = 16 * 60 + 30,
     ),
     RhythmCall(
         callEventId = 2L,
@@ -322,5 +370,6 @@ private val previewCalls = listOf(
         direction = CallDirection.INCOMING,
         durationLabel = formatDuration(26 * 60),
         timeLabel = "8:05pm",
+        minuteOfDay = 20 * 60 + 5,
     ),
 )

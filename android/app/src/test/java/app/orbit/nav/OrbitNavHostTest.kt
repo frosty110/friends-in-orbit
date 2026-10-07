@@ -352,6 +352,38 @@ class OrbitNavHostTest {
         assertNull(arg("focusNote"))
     }
 
+    // HOME-13: the strip's "See your week" and the day sheet's "See the
+    // whole week" open the list's Week screen; Back returns Home, and a
+    // block opens the person at the top.
+
+    @Test
+    fun homeSeeYourWeek_opensTheWeek_forThatList_andBackReturnsHome() {
+        start(Routes.Home)
+
+        act { screens.homeOnOpenWeek("5") }
+
+        assertEquals(Routes.Week, route)
+        assertEquals("5", arg("listId"))
+        assertEquals(Routes.Home, previousRoute)
+
+        act { screens.weekOnBack() }
+        assertEquals(Routes.Home, route)
+        assertEquals(1, depth)
+    }
+
+    @Test
+    fun theWeek_opensAPerson_atTheTop() {
+        start(Routes.Home)
+        navigate(Routes.week("5"))
+
+        act { screens.weekOnOpenContact("7") }
+
+        assertEquals(Routes.Contact, route)
+        assertEquals("7", arg("contactId"))
+        assertNull(arg("focusNote"))
+        assertEquals(Routes.Week, previousRoute)
+    }
+
     // Open settings from the call-log notices
 
     @Test
@@ -457,6 +489,9 @@ private class StubScreens : OrbitNavScreens {
     lateinit var cardOnOpenContact: (String) -> Unit
     lateinit var cardOnAddNote: (String) -> Unit
     lateinit var homeOnOpenPostCallNote: (String, Long) -> Unit
+    lateinit var homeOnOpenWeek: (String) -> Unit
+    lateinit var weekOnBack: () -> Unit
+    lateinit var weekOnOpenContact: (String) -> Unit
     lateinit var noteOnLeave: () -> Unit
 
     /** The person and call the note page was last composed for. */
@@ -489,9 +524,22 @@ private class StubScreens : OrbitNavScreens {
         onOpenListSettings: (listId: String) -> Unit,
         onOpenContactWithFocus: (contactId: String, focusNote: Boolean) -> Unit,
         onOpenPostCallNote: (contactId: String, callEventId: Long) -> Unit,
+        onOpenWeek: (listId: String) -> Unit,
     ) {
         homeOnOpenPostCallNote = onOpenPostCallNote
+        homeOnOpenWeek = onOpenWeek
         Stub(Routes.Home)
+    }
+
+    @Composable
+    override fun Week(
+        listId: String,
+        onBack: () -> Unit,
+        onOpenContact: (contactId: String) -> Unit,
+    ) {
+        weekOnBack = onBack
+        weekOnOpenContact = onOpenContact
+        Stub(Routes.week(listId))
     }
 
     @Composable

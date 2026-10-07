@@ -20,6 +20,8 @@ class RoutesTest {
         assertEquals("lists/7/config", Routes.listConfig("7"))
         assertEquals("onboard/first-list/7", Routes.firstList("7"))
         assertEquals("pick/lists?contactId=7", Routes.pickLists("7"))
+        // HOME-13
+        assertEquals("week/7", Routes.week("7"))
     }
 
     @Test
