@@ -59,7 +59,7 @@ import java.util.Locale
  * button. Mirrors every other ListConfigBody control.
  *
  * Token-clean: no raw colour literals, no raw font-size literals.
- * Reuses [TimePickerDialogOrbit] and [formatHour12] from [ActiveHoursEditor].
+ * Reuses [TimePickerDialogOrbit] and [formatHour12] from TimeOfDayPicker.kt.
  */
 @Composable
 internal fun NudgeScheduleSection(

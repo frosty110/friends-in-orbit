@@ -1,7 +1,7 @@
 # Voice and content rules
 
 **Status:** active
-**Last reviewed:** 2026-10-06
+**Last reviewed:** 2026-10-07
 **Canonical for:** voice, tone, never-say list, empty-state framing
 **Ground truth:** enforced at notification-formatter level (`features/notifications/README.md`); elsewhere enforced by review
 
@@ -56,7 +56,8 @@ Added 2026-10-05 ([UX rubric](../../vision/ux-rubric.md) D7). The same idea had 
 | **Sooner** | Bring this person forward on this list. | Surface sooner, move up, boost |
 | **Nudge** | The notification Orbit sends when someone on a list is worth a call. | Reminder, prompt, notification (in UI copy), alert |
 | **List** | A group of people the user keeps in touch with, with its own rhythm. | Orbit (as a noun for a list), group, circle |
-| **Rhythm** | How often the user means to talk to people on a list ("every 2 weeks"), and the 7-day strip on Home. | Cadence, frequency, interval, threshold |
+| **Rhythm** | How often the user means to talk to people on a list ("every 2 weeks"), and the 7-day strip on Home. A list's rhythm is said as its interval ("Every 3 days", "Every day"), never by an engine's name ("Late night rhythm"); List settings' control for it is "How often" (LIST-24). | Cadence, frequency, interval, threshold |
+| **Time of day** | The part of the day a list's nudges may come in: "Any time", "Mornings", "Afternoons", "Evenings", "Nights", or "Custom: 9am to 5pm" for an older window that is none of them (LIST-25). Said in one line under the choice: "Nudges for this list come only in the evening, from 5pm to 9pm." (Added 2026-10-07.) | Active hours, always active, window, quiet hours |
 | **Call** | A phone call, which Orbit sees in the call log. | Interaction, touchpoint |
 | **Connection** | A conversation Orbit couldn't see (WhatsApp, a visit), added by hand with "Log a connection". Only for those. | Using it for a phone call |
 | **Note** | Something the user wrote about a person. | Memo, comment |

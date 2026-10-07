@@ -53,6 +53,42 @@ class IntervalScaleLabelsTest {
         assertEquals(0f, intervalLabelFraction(day = 5, minDay = 5, maxDay = 5), tolerance)
     }
 
+    // At 200% text the 1 day, 2 weeks and 1 month labels were printed over one
+    // another (seen in the gallery's 200% render of How often, 2026-10-07).
+    // Pixel numbers below are the shape of that render: an 800px track.
+
+    @Test
+    fun `at normal size every tick fits`() {
+        assertEquals(
+            setOf(0, 1, 2, 3),
+            ticksThatFit(lefts = listOf(0, 129, 343, 685), widths = listOf(60, 95, 100, 115), gap = 16)
+        )
+    }
+
+    @Test
+    fun `at 200 percent a tick that would overlap is left out and the ends stay`() {
+        // "2 weeks" (left 81) would start inside "1 day" (0 to 120): dropped.
+        // "1 month" (293 to 493) clears "1 day" and the end at 570: kept.
+        assertEquals(
+            setOf(0, 2, 3),
+            ticksThatFit(lefts = listOf(0, 81, 293, 570), widths = listOf(120, 190, 200, 230), gap = 16)
+        )
+    }
+
+    @Test
+    fun `a middle tick that would run into the last one is left out`() {
+        // "1 month" at 420 to 570 would end inside the last label, at 560.
+        assertEquals(
+            setOf(0, 1, 3),
+            ticksThatFit(lefts = listOf(0, 200, 420, 560), widths = listOf(100, 150, 150, 240), gap = 16)
+        )
+    }
+
+    @Test
+    fun `no ticks, nothing to draw`() {
+        assertEquals(emptySet<Int>(), ticksThatFit(emptyList(), emptyList(), gap = 16))
+    }
+
     @Test
     fun `monotonicity — larger day yields larger or equal fraction`() {
         var prev = -1f

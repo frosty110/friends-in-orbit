@@ -35,13 +35,10 @@
     <!-- A change that could not be saved says components_snackbar_save_failed, the same
          words as Home and every other screen. -->
 
-    <!-- Second line under a regular list's name on Lists: its rhythm. Keep in touch lists
-         say "Every 14 days" (lists_interval_every_days, below); these two rhythms have
-         nothing to set, so the line names the rhythm. -->
-    <string name="lists_rhythm_late_night">Late night rhythm</string>
-    <string name="lists_rhythm_energize">Energize rhythm</string>
-    <!-- Shown as a list's second line when its stored rule cannot be decoded; the deck
-         fails on the same data. -->
+    <!-- Second line under a regular list's name on Lists: its rhythm, as its interval
+         ("Every 14 days", "Every day": lists_interval_every_days and lists_interval_every_day,
+         below) whichever rhythm it runs (LIST-24). Shown instead when its stored rule cannot
+         be decoded; the deck fails on the same data. -->
     <string name="lists_rhythm_unreadable">Couldn\'t read this list\'s rhythm</string>
 
     <!-- Subtitle under a smart list's name: its rule, then its setting. -->
@@ -120,10 +117,11 @@
     <string name="lists_config_not_found_body">It may have been deleted.</string>
 
     <!-- Section titles. -->
+    <!-- Make your first list only: List settings renames from its title (LIST-26). -->
     <string name="lists_section_name">Name</string>
-    <string name="lists_section_rhythm">Rhythm</string>
     <string name="lists_section_how_often">How often</string>
-    <string name="lists_section_active_hours">Active hours</string>
+    <!-- The part of the day a list's nudges may come in (LIST-25). -->
+    <string name="lists_section_time_of_day">Time of day</string>
     <string name="lists_section_nudges">Nudges</string>
     <string name="lists_section_when_to_nudge">When to nudge</string>
     <string name="lists_section_smart_rule">Smart rule</string>
@@ -142,6 +140,9 @@
          lists_interval_days below ("Aim for every 14 days"). Contact detail's custom
          schedule uses the same sentence. -->
     <string name="lists_interval_aim">Aim for every %1$s</string>
+    <!-- The same sentence for an interval of one day, which reads "every day", not
+         "every 1 day". -->
+    <string name="lists_interval_aim_every_day">Aim for every day</string>
     <plurals name="lists_interval_days">
         <item quantity="one">%1$d day</item>
         <item quantity="other">%1$d days</item>
@@ -152,6 +153,8 @@
         <item quantity="one">Every %1$d day</item>
         <item quantity="other">Every %1$d days</item>
     </plurals>
+    <!-- A rhythm of one day, on the Lists row and as the slider's screen-reader value. -->
+    <string name="lists_interval_every_day">Every day</string>
     <!-- Tick labels under the 1 to 60 day slider. -->
     <plurals name="lists_interval_tick_weeks">
         <item quantity="one">%1$d week</item>
@@ -162,16 +165,23 @@
         <item quantity="other">%1$d months</item>
     </plurals>
 
-    <!-- Shown instead of the slider for rhythms that have nothing to set. -->
-    <string name="lists_rhythm_note_late_night">This list keeps the late night rhythm on its own: slower and more patient, with nothing to set.</string>
-    <string name="lists_rhythm_note_energize">This list keeps the energize rhythm on its own: quicker, with nothing to set.</string>
+    <!-- Over the slider when the list has no rhythm Orbit can read: nothing set yet, or a
+         stored rule that no longer decodes. Moving the slider sets one. -->
+    <string name="lists_rhythm_unset">This list has no rhythm yet. Move the slider to set one.</string>
 
-    <!-- Inline rename of the list. -->
-    <string name="lists_name_save">Save list name</string>
-    <string name="lists_name_unnamed">Unnamed list</string>
+    <!-- Rename from the title (LIST-26). The title is a button; screen readers hear
+         "Rename list, Inner orbit" (%1$s: the list's name), or lists_name_rename alone
+         under the privacy curtain. -->
     <string name="lists_name_rename">Rename list</string>
+    <string name="lists_name_rename_named">Rename list, %1$s</string>
+    <!-- The label on the title's text field while renaming. -->
+    <string name="lists_name_field">List name</string>
+    <!-- Screen-reader names of the two controls beside the field; Cancel is
+         components_action_cancel. -->
+    <string name="lists_name_save">Save list name</string>
 
-    <!-- Rhythm choices. -->
+    <!-- Rhythm choices. Contact detail's per-person rhythm offers these; List settings shows
+         one "How often" control instead (LIST-24). -->
     <string name="lists_rule_keep_in_touch">Keep in touch</string>
     <string name="lists_rule_keep_in_touch_sub">Surfaces each person on a steady rhythm you set.</string>
     <string name="lists_rule_late_night">Late night</string>
@@ -228,8 +238,8 @@
     </plurals>
     <!-- %1$s: the person's name. -->
     <string name="lists_members_remove">Remove %1$s from list</string>
+    <!-- The text button on the right of the People header (LIST-27). -->
     <string name="lists_members_add">Add people</string>
-    <string name="lists_members_add_a11y">Add people to this list</string>
 
     <!-- Nudge schedule. -->
     <string name="lists_nudge_change_time">Change time</string>
@@ -256,13 +266,27 @@
     <!-- Shown while this list's nudges are paused. -->
     <string name="lists_nudge_paused_badge">Nudges paused</string>
 
-    <!-- Active hours. "9am to 5pm". -->
-    <string name="lists_hours_to">to</string>
-    <string name="lists_hours_overnight">Overnight list: active across midnight.</string>
-    <string name="lists_hours_always_active">Always active</string>
-    <!-- Active hours gate when a nudge may post, so the line says what they open up. -->
-    <string name="lists_hours_always_active_sub">Nudges can come at any time of day</string>
-    <!-- Confirms the time picker. -->
+    <!-- Time of day (LIST-25): one choice of the part of the day this list's nudges may
+         come in. A nudge is held to that part; the times are fixed (7am to noon, noon to
+         5pm, 5pm to 9pm, 9pm to 7am). -->
+    <string name="lists_time_any">Any time</string>
+    <string name="lists_time_mornings">Mornings</string>
+    <string name="lists_time_afternoons">Afternoons</string>
+    <string name="lists_time_evenings">Evenings</string>
+    <string name="lists_time_nights">Nights</string>
+    <!-- A window set earlier that is none of the parts. %1$s and %2$s: its start and end
+         in the phone's clock style ("Custom: 9am to 5pm"). -->
+    <string name="lists_time_custom">Custom: %1$s to %2$s</string>
+    <!-- The line under the choice, saying what it does. %1$s and %2$s: the start and end
+         in the phone's clock style ("7am", "12pm", or "07:00", "12:00"). -->
+    <string name="lists_time_note_any">Nudges can come at any time of day.</string>
+    <string name="lists_time_note_mornings">Nudges for this list come only in the morning, from %1$s to %2$s.</string>
+    <string name="lists_time_note_afternoons">Nudges for this list come only in the afternoon, from %1$s to %2$s.</string>
+    <string name="lists_time_note_evenings">Nudges for this list come only in the evening, from %1$s to %2$s.</string>
+    <string name="lists_time_note_nights">Nudges for this list come only at night, from %1$s to %2$s.</string>
+    <string name="lists_time_note_custom">Nudges for this list come only from %1$s to %2$s.</string>
+
+    <!-- Confirms the time picker (a nudge time). -->
     <string name="lists_hours_ok">OK</string>
 
     <!-- Confirmation for "Make this a regular list": a smart list stops filling itself and

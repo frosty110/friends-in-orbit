@@ -15,6 +15,7 @@ import app.orbit.domain.ReorderArgs
 import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.listFixture
 import app.orbit.domain.rule.RuleParams
+import app.orbit.domain.rule.toKeepInTouchEvery
 import app.orbit.domain.ruleTemplateFixture
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeScheduler
@@ -326,11 +327,38 @@ class ListsManagerViewModelTest {
         val blank = listFixture(id = 12L, ruleTemplateId = 1L, ruleParamsOverrideJson = null)
         assertEquals("Every 2 days", singleTileSubtitle(blank, seededTemplates))
 
+        // LIST-24: every rule type reads as its interval. Late night's base is
+        // 72 hours and Energize's 24; the row said "Late night rhythm" and
+        // "Energize rhythm" until 2026-10-07, names List settings no longer
+        // shows. One day is "Every day", not "Every 1 day".
         val lateNight = listFixture(id = 13L, ruleTemplateId = 2L, ruleParamsOverrideJson = null)
-        assertEquals("Late night rhythm", singleTileSubtitle(lateNight, seededTemplates))
+        assertEquals("Every 3 days", singleTileSubtitle(lateNight, seededTemplates))
 
         val energize = listFixture(id = 14L, ruleTemplateId = 3L, ruleParamsOverrideJson = null)
-        assertEquals("Energize rhythm", singleTileSubtitle(energize, seededTemplates))
+        assertEquals("Every day", singleTileSubtitle(energize, seededTemplates))
+    }
+
+    @Test
+    fun a_keep_in_touch_list_at_one_day_reads_every_day() = runTest {
+        val daily = JsonProvider.json.encodeToString(
+            RuleParams.serializer(),
+            RuleParams.KeepInTouch().withIntervalHours(24)
+        )
+        val list = listFixture(id = 18L, ruleTemplateId = 1L, ruleParamsOverrideJson = daily)
+        assertEquals("Every day", singleTileSubtitle(list, seededTemplates))
+    }
+
+    @Test
+    fun a_late_night_list_moved_to_keep_in_touch_reads_its_new_interval() = runTest {
+        // What List settings writes when a Late night list's slider moves
+        // (the template becomes Keep in touch and the override carries the
+        // interval) reads like any other list.
+        val moved = JsonProvider.json.encodeToString(
+            RuleParams.serializer(),
+            RuleParams.LateNight().toKeepInTouchEvery(10 * 24)
+        )
+        val list = listFixture(id = 19L, ruleTemplateId = 1L, ruleParamsOverrideJson = moved)
+        assertEquals("Every 10 days", singleTileSubtitle(list, seededTemplates))
     }
 
     @Test
