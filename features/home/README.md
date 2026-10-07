@@ -1,10 +1,10 @@
 # home
 
 **Status:** in-progress
-**Last reviewed:** 2026-10-06
+**Last reviewed:** 2026-10-07 (HOME-14: the calls waiting for a note replace the post-call banner)
 **Ground truth:**
-- Code: `android/app/src/main/java/app/orbit/ui/screens/home/` (`HomeScreen.kt`, `HomeViewModel.kt`, `HomeUiState.kt`, `RhythmDaySheet.kt`), `android/app/src/main/java/app/orbit/data/feed/HomeFeed.kt`, `android/app/src/main/res/values/strings_home.xml`
-- Tests: `android/app/src/test/java/app/orbit/ui/screens/home/HomeViewModelTest.kt`, `HomeTileMenuTest.kt`, `HomeContentTest.kt`, `RhythmDaySheetTest.kt`; `android/app/src/test/java/app/orbit/data/feed/HomeFeedRhythmTest.kt`; the archived-list gate in `android/app/src/test/java/app/orbit/notify/ListPromptWorkerTest.kt`; the gallery previews `HomeContentPreview`, `HomeContentLongNamesPreview`, `HomeContentEmptyPreview`, `HomeContentLoadingPreview`, `HomeContentErrorPreview`, `RhythmDaySheetBodyPreview` (`PreviewGalleryTest`, with the curtain pass)
+- Code: `android/app/src/main/java/app/orbit/ui/screens/home/` (`HomeScreen.kt`, `HomeViewModel.kt`, `HomeUiState.kt`, `RhythmDaySheet.kt`), `android/app/src/main/java/app/orbit/data/feed/HomeFeed.kt`, `android/app/src/main/res/values/strings_home.xml`; the calls waiting for a note (HOME-14): `android/app/src/main/java/app/orbit/ui/components/NotesWaitingStack.kt`, their state in `AppViewModel.notesWaiting` over `data/repository/WaitingCalls.kt` (NOTE-05)
+- Tests: `android/app/src/test/java/app/orbit/ui/screens/home/HomeViewModelTest.kt`, `HomeTileMenuTest.kt`, `HomeContentTest.kt`, `HomeNotesWaitingTest.kt`, `RhythmDaySheetTest.kt`; `android/app/src/test/java/app/orbit/AppViewModelTest.kt` (the stack's state and dismissals); `android/app/src/test/java/app/orbit/data/feed/HomeFeedRhythmTest.kt`; the archived-list gate in `android/app/src/test/java/app/orbit/notify/ListPromptWorkerTest.kt`; the gallery previews `HomeContentPreview`, `HomeContentLongNamesPreview`, `HomeContentNotesWaitingPreview`, `HomeContentEmptyPreview`, `HomeContentLoadingPreview`, `HomeContentErrorPreview`, `RhythmDaySheetBodyPreview`, and the stack's own `NotesWaitingStack*Preview`s (`PreviewGalleryTest`, with the curtain pass)
 
 ---
 
@@ -31,12 +31,22 @@ As a user, I open the app and see, for each of my lists, who I would reach first
 - One tap to a call (HOME-9): the "Next up" row ends in a quiet, muted, labelled phone button ("Call Kai") that opens the dialer with the number filled in; Orbit never places the call itself. The rest of the card opens the list's deck. Muted, not accent: rules.md Design 6 allows a quiet dial per person row. A person with no number has no button. Masked under the privacy curtain ("Call Someone").
 - The "Last 7 days" rhythm strip under each card (HOME-7, HOME-8), described below.
 - "New list" after the last card, and the reflection line at the foot of the scroll.
-- After a call placed from Orbit, the post-call banner at the top ("You just called {name}", "Add a note" / "Dismiss"; NOTE-02).
+- At the top of the list, the calls waiting for a note (HOME-14, below): one as a card, two or more as a pile.
 - Smart lists get cards like static ones (2026-10-05): their rule's matches are stored as members (`SmartListMembershipSync`, `features/orbit-lists/README.md`), so size and "Next up" work the same. Before, a smart list's card surfaced no one.
 
-**The one accent.** On a fresh install the accent is spent on "Create your first list". With lists on the page nothing is in the accent: the call buttons are muted and today's weekday letter is ink in SemiBold. Until 2026-10-06 today's letter was painted in the accent on every card, so a Home with N lists spent the screen's one accent N times on letters nobody taps (rules.md Design 5); the prototype draws it that way and the app deliberately does not.
+**The one accent.** On a fresh install the accent is spent on "Create your first list". With lists on the page nothing is in the accent: the call buttons are muted, today's weekday letter is ink in SemiBold, and the calls waiting for a note use a Secondary "Add a note" (the post-call banner they replaced spent the accent on its "Add a note" and its icon, a second accent on a screen whose rule is none). Until 2026-10-06 today's letter was painted in the accent on every card, so a Home with N lists spent the screen's one accent N times on letters nobody taps (rules.md Design 5); the prototype draws it that way and the app deliberately does not.
 
 **Today is derived once per resume (`HOME-12`, added 2026-10-06).** Home is the root destination and stays composed across the dialer round-trip and across midnight. The date header and the strip's weekday letters are keyed on one `today` value the screen refreshes on every resume, and the same resume tells `HomeFeed` the date (`noteToday`) so every list's rhythm re-buckets when the day has changed. Before, a `LocalDate.now()` read once at composition left the header on yesterday's date and the letters a day behind the feed's buckets until Home was recomposed from scratch; and because `HomeFeed.buildRhythm` buckets only when a Room flow re-emits, a UI-only fix would have drawn the right letters over yesterday's buckets. A resume on the same date is a no-op (the feed's date is a StateFlow, so equal values conflate), which keeps ADR 0006's "no projection re-fire on navigation".
+
+**Calls waiting for a note (`HOME-14`, added 2026-10-07).** Replaces the single post-call banner ("You just called Sam", NOTE-02), which showed only the latest outgoing call of the last ten minutes and forgot a dismissal when the process died. The owner asked for every unnoted call of the last day, stacked and each closable, and a cleaner look (`vision/flows/owner-review-2026-10-07.md`, decision 12). Which calls wait is NOTE-05 in [`contact-detail`](../contact-detail/README.md): a connected call of a minute or more, either direction, in the last 24 hours, with someone on a list, nothing written about them since, not dismissed; one per person.
+
+- One call is one clean card: the person's face, "You called Kai" or "Kai called you", "14 min · 2 hours ago" (the app's duration words and `formatRelativeFine`'s time since), a Secondary "Add a note" and a Ghost "Dismiss".
+- Two or more lie in a pile: the newest card on top with the edges of one or two more under it, and "3 calls to write about". The whole pile is one button; a tap opens it, accordion style, into one row per call (face, the two lines, "Add a note", "Dismiss"), then "Dismiss all"; the count line at the top folds it again. Opening, closing and a row leaving are a short fade and resize, instant with the system's animations off.
+- "Add a note" opens the post-call note page for that call (NOTE-04); the call keeps waiting until a note is saved. "Dismiss" and "Dismiss all" close calls for good (persisted, NOTE-05), with "Dismissed 1 call" / "Dismissed 3 calls" and Undo; a dismissal that could not be saved says "Couldn't save your change". A dismissal also takes away that call's notification (NOTIF-16).
+- TalkBack: the closed pile is one button, "3 calls to write about, Collapsed"; open, the count line says "Expanded" and folds it. Each call's buttons say whose call it is ("Add a note about your call with Kai", "Dismiss your call with Kai").
+- Privacy curtain: "You called someone" / "Someone called you", no photo, initials from "Someone", and the buttons read "Add a note about this call" / "Dismiss this call".
+- Placement: the first item of the scrolling list, so an open pile scrolls with the cards however tall it gets (the banner sat above the list and could not scroll). When it arrives after the cards while the list is at the top, the list scrolls up to show it.
+- Freshness: the 24 hour window moves to now on every resume (the `LifecycleResumeEffect` that drives HOME-12), so a day-old call leaves the stack even while Home stays composed; a note saved anywhere and a dismissal take a call off live, through Room and DataStore.
 
 **Error state (`HOME-10`, added 2026-10-05; the feed covered 2026-10-06).** If the lists cannot be read, Home says "Orbit couldn't load your lists", that nothing is lost, and offers Try again, which re-subscribes. The failure can come from the ViewModel's own source (the member counts) or from either of `HomeFeed`'s projections (`tiles`, `enrichment`): the feed catches what its sources throw and reports it as data (`HomeFeed.failed`), and Try again re-subscribes the feed as well as the ViewModel. Before 2026-10-06 the feed's flows had no catch, so a failing `observeActive()` escaped the handler-less application scope and crashed the app, and HOME-10 held only for the member-count query. Before 2026-10-05 a failed read ended the stream and Home sat on stale or empty chrome (UX rubric D6).
 
@@ -102,6 +112,8 @@ The strip under each card shows the list's last 7 days, one stacked bar per qual
 - [x] A many-call day's bars stay inside the 48dp strip. `DayColumn`'s per-bar floor yields to an even split of the strip's height (the `minBar` budget).
 - [x] Under the privacy curtain the day sheet shows "Someone" with no photo and masked initials, and no card leaks a person's or list's name. `RhythmCallRow` masks with `home_rhythm_someone`; the gallery's curtain pass (`PreviewGalleryTest -Porbit.screenshots.curtain`, `curtain-report.md` "None") over the Home and day-sheet previews.
 - [x] Today's weekday letter is ink in SemiBold, and with lists on the page nothing on Home is in the accent (rules.md Design 5). `DayColumn` colours today `colors.fg`; the gallery renders of `HomeContentPreview`.
+- [x] One waiting call is a single card whose buttons name the person; three are a closed pile, one button that says how many and that it is collapsed, which opens into a row per call and folds again; Dismiss hands Home one call and Dismiss all every one; under the curtain no name reaches text or TalkBack (HOME-14). `HomeNotesWaitingTest`.
+- [x] The stack reads nothing until Home resumes, words each call ("14 min · 2 hours ago"), keeps the 24 hour window and the minute floor, and a dismissal says so with an Undo that restores it, or says "Couldn't save your change" with nothing to undo (HOME-14). `AppViewModelTest`.
 
 ### Not in scope
 
@@ -125,6 +137,8 @@ The strip under each card shows the list's last 7 days, one stacked bar per qual
 ### Architecture
 
 UI-only screen. `HomeViewModel` is a thin subscriber to the process-scoped `HomeFeed` singleton (ADR 0006 Rule 1) and exposes one `StateFlow<HomeUiState>` (ARCH-02, `WhileSubscribed(5_000L)`). No DAO access from UI. Navigation Compose routes into Card view and the other destinations.
+
+The calls waiting for a note (HOME-14) are a second, separate state: `AppViewModel.notesWaiting` (`StateFlow<List<NoteWaiting>>`, `WhileSubscribed(5_000L)`), the precedent the post-call banner set, because they are not a list's data and `HomeFeed` knows nothing of notes. `HomeScreen` collects it, calls `AppViewModel.onHomeResumed()` on every resume, and hands `HomeContent` the list, its "Add a note" leg (the NavHost's `onOpenPostCallNote`) and the dismissals. Whether the pile is open is `HomeContent`'s own `rememberSaveable` (rules.md Code 7).
 
 State shape (`ui/screens/home/HomeUiState.kt`, a sealed interface, every variant `@Immutable`):
 ```

@@ -1,12 +1,6 @@
 package app.orbit.ui.screens.home
 
 import android.content.res.Resources
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.SnackbarDuration
@@ -75,6 +70,8 @@ import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.ListType
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.components.NoteWaiting
+import app.orbit.ui.components.NotesWaitingStack
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitDropdownMenu
@@ -85,10 +82,8 @@ import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.PhIcon
-import app.orbit.ui.components.PostCallBanner
 import app.orbit.ui.screens.lists.DeleteListDialog
 import app.orbit.ui.theme.LocalReducedMotion
-import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
 import app.orbit.ui.util.UiText
@@ -133,12 +128,13 @@ fun HomeScreen(
     onAddPeopleToList: (listId: String) -> Unit = {},
     onOpenListSettings: (listId: String) -> Unit = {},
     onOpenContactWithFocus: (contactId: String, focusNote: Boolean) -> Unit = { _, _ -> },
+    // HOME-14: "Add a note" on a call waiting for one opens the note page (NOTE-04).
+    onOpenPostCallNote: (contactId: String, callEventId: Long) -> Unit = { _, _ -> },
     vm: HomeViewModel = hiltViewModel(),
     appVm: AppViewModel = hiltViewModel(),
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
-    val postCallPrompt by appVm.postCallPrompt.collectAsStateWithLifecycle()
-    val curtain = LocalPrivacyCurtain.current
+    val notesWaiting by appVm.notesWaiting.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -175,6 +171,28 @@ fun HomeScreen(
         }
     }
 
+    // HOME-14: what a dismissal says, on the same host. The newest message
+    // replaces whatever is showing, as above; the Undo's ids ride the event.
+    LaunchedEffect(lifecycleOwner, snackbarHostState) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            appVm.notesWaitingEvents.collectLatest { event ->
+                snackbarHostState.currentSnackbarData?.dismiss()
+                val result = snackbarHostState.showSnackbar(
+                    message = event.message.asString(context),
+                    actionLabel = if (event.undoCallEventIds.isEmpty()) {
+                        null
+                    } else {
+                        context.getString(R.string.components_action_undo)
+                    },
+                    duration = SnackbarDuration.Short,
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    appVm.undoDismissNotesWaiting(event.undoCallEventIds)
+                }
+            }
+        }
+    }
+
     // HOME-12: the day Home is showing, derived once per resume. Home is the
     // root destination and stays composed across the dialer round-trip and
     // across midnight; a `LocalDate.now()` read once at composition left the
@@ -183,16 +201,17 @@ fun HomeScreen(
     // the header, the strip and the day sheet so they can never disagree.
     var today by remember { mutableStateOf(LocalDate.now()) }
 
-    // NOTE-02 — `LifecycleResumeEffect` re-fires on every resume, so the
-    // dialer→app return path always re-derives the post-call prompt. (See git
-    // history for why `LaunchedEffect(Unit)` is insufficient here.) The same
-    // resume refreshes `today` and tells the feed (HOME-12), so the letters
-    // and the buckets move to the new day together.
+    // `LifecycleResumeEffect` re-fires on every resume, including the return
+    // from the dialer (Home stays composed across the call, so a
+    // `LaunchedEffect(Unit)` would miss it). It refreshes `today` and tells
+    // the feed (HOME-12), so the letters and the buckets move to the new day
+    // together, and moves the window of calls waiting for a note to now
+    // (HOME-14), so a call more than a day old leaves the stack.
     LifecycleResumeEffect(key1 = Unit, lifecycleOwner = lifecycleOwner) {
         today = LocalDate.now()
         vm.onResumed()
-        appVm.checkPostCallPrompt()
-        onPauseOrDispose { /* prompt state lives in the VM; nothing to clean up */ }
+        appVm.onHomeResumed()
+        onPauseOrDispose { /* the stack's state lives in the VM; nothing to clean up */ }
     }
 
     HomeContent(
@@ -214,15 +233,12 @@ fun HomeScreen(
         // HOME-8 — a rhythm-day sheet row taps through to the person. No note
         // focus: this is "who was that", not a post-call prompt.
         onOpenContact = { contactId -> onOpenContactWithFocus(contactId.toString(), false) },
-        postCallPrompt = postCallPrompt,
-        curtain = curtain,
-        onPostCallAddNote = { prompt ->
-            appVm.dismissPostCallPrompt(prompt.callEventId)
-            onOpenContactWithFocus(prompt.contactId.toString(), true)
-        },
-        onPostCallDismiss = { prompt ->
-            appVm.dismissPostCallPrompt(prompt.callEventId)
-        },
+        // HOME-14: the calls waiting for a note. "Add a note" opens the
+        // note page and leaves the call waiting until a note is saved
+        // (NOTE-05); only Dismiss closes it.
+        notesWaiting = notesWaiting,
+        onAddNoteForCall = { call -> onOpenPostCallNote(call.contactId.toString(), call.callEventId) },
+        onDismissWaiting = { callEventIds -> appVm.dismissNotesWaiting(callEventIds) },
     )
 }
 
@@ -252,10 +268,11 @@ internal fun HomeContent(
     onArchive: (Long) -> Unit = {},
     onDeleteConfirmed: (Long) -> Unit = {},
     onOpenContact: (contactId: Long) -> Unit = {},
-    postCallPrompt: AppViewModel.PostCallPromptState? = null,
-    curtain: Boolean = false,
-    onPostCallAddNote: (AppViewModel.PostCallPromptState) -> Unit = {},
-    onPostCallDismiss: (AppViewModel.PostCallPromptState) -> Unit = {},
+    // HOME-14: the calls waiting for a note, newest first, and what their
+    // buttons do. Dismiss passes one id; "Dismiss all" passes every one shown.
+    notesWaiting: List<NoteWaiting> = emptyList(),
+    onAddNoteForCall: (NoteWaiting) -> Unit = {},
+    onDismissWaiting: (callEventIds: List<Long>) -> Unit = {},
 ) {
     // Which tile's quick-actions menu is open (null = none) — single-open
     // invariant. Plus the pending delete-confirm target; rememberSaveable so a
@@ -273,6 +290,21 @@ internal fun HomeContent(
     val isLoading = state is HomeUiState.Loading
     val isError = state is HomeUiState.Error
     val reducedMotion = LocalReducedMotion.current
+    // HOME-14: whether the pile of waiting calls is open. One owner, here,
+    // above the stack's own branches (rules.md Code 7), so it survives the
+    // pile shrinking to one card and growing again.
+    var notesWaitingOpen by rememberSaveable { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    // The stack is the list's first item. An item inserted above the first
+    // visible one leaves the list where it was, so a stack that arrives after
+    // the cards would sit above the top of the screen; bring it into view
+    // when the user was at the top anyway.
+    val hasWaiting = notesWaiting.isNotEmpty()
+    LaunchedEffect(hasWaiting) {
+        if (hasWaiting && listState.firstVisibleItemIndex <= 1 && listState.firstVisibleItemScrollOffset == 0) {
+            if (reducedMotion) listState.scrollToItem(0) else listState.animateScrollToItem(0)
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
       OrbitScreen {
@@ -300,29 +332,6 @@ internal fun HomeContent(
                 }
             },
         )
-
-        // NOTE-02 — PostCallBanner sits above the header so it earns the user's
-        // first glance after a return from the dialer.
-        AnimatedVisibility(
-            visible = postCallPrompt != null,
-            enter = slideInVertically(
-                initialOffsetY = { -it },
-                animationSpec = tween(OrbitMotion.DurBaseMs),
-            ) + fadeIn(animationSpec = tween(OrbitMotion.DurBaseMs)),
-            exit = slideOutVertically(
-                targetOffsetY = { -it },
-                animationSpec = tween(OrbitMotion.DurBaseMs),
-            ) + fadeOut(animationSpec = tween(OrbitMotion.DurBaseMs)),
-        ) {
-            postCallPrompt?.let { prompt ->
-                PostCallBanner(
-                    contactName = prompt.contactName,
-                    curtain = curtain,
-                    onAddNote = { onPostCallAddNote(prompt) },
-                    onDismiss = { onPostCallDismiss(prompt) },
-                )
-            }
-        }
 
         // HOME-6 — calm date orientation only. No count, no "caught up": Home is
         // an always-on recommender, not an inbox. Header shows only in Ready;
@@ -386,6 +395,7 @@ internal fun HomeContent(
             // rhythm days get 48dp each on a 360dp phone.
             val sideMargin = if (LocalConfiguration.current.screenWidthDp < 380) OrbitTheme.spacing.x3 else OrbitTheme.spacing.x4
             LazyColumn(
+                state = listState,
                 contentPadding = PaddingValues(
                     start = sideMargin,
                     end = sideMargin,
@@ -398,6 +408,25 @@ internal fun HomeContent(
                 // Loading contributes no items — the list stays a quiet surface
                 // until the database answers (never the first-install CTA).
                 if (!isLoading) {
+                    // HOME-14: the calls waiting for a note lead the list, so
+                    // they are the first thing seen on return from a call and
+                    // scroll with the cards however tall an open pile grows.
+                    // They fade in and out like the cards (and not at all with
+                    // the system's animations off).
+                    if (hasWaiting) {
+                        item(key = NOTES_WAITING_KEY) {
+                            Box(if (reducedMotion) Modifier else Modifier.animateItem()) {
+                                NotesWaitingStack(
+                                    calls = notesWaiting,
+                                    open = notesWaitingOpen,
+                                    onOpenChange = { notesWaitingOpen = it },
+                                    onAddNote = onAddNoteForCall,
+                                    onDismiss = { call -> onDismissWaiting(listOf(call.callEventId)) },
+                                    onDismissAll = { onDismissWaiting(notesWaiting.map { it.callEventId }) },
+                                )
+                            }
+                        }
+                    }
                     itemsIndexed(tiles, key = { _, tile -> tile.id }) { index, tile ->
                         // Cards slide and fade when a list is archived, deleted,
                         // restored or reordered, instead of popping (rubric D5);
@@ -1175,6 +1204,41 @@ private fun HomeContentLongNamesPreview() {
     }
 }
 
+private fun previewWaiting(id: Long, name: String, direction: CallDirection, minutes: Int, hoursAgo: Int) = NoteWaiting(
+    callEventId = id,
+    contactId = id,
+    name = name,
+    photoUri = null,
+    direction = direction,
+    meta = UiText.res(
+        R.string.components_notes_waiting_meta,
+        formatDuration(minutes * 60),
+        UiText.plural(R.plurals.time_ago_hours, hoursAgo, hoursAgo),
+    ),
+)
+
+// HOME-14: three calls waiting for a note, as the closed pile over the cards.
+@PreviewLightDark
+@Preview(name = "200%", fontScale = 2f)
+@Composable
+private fun HomeContentNotesWaitingPreview() {
+    OrbitTheme {
+        HomeContent(
+            state = previewState,
+            onOpenList = {},
+            onOpenSearch = {},
+            onOpenSettings = {},
+            onOpenLists = {},
+            onCreateList = {},
+            notesWaiting = listOf(
+                previewWaiting(11L, "Kai Mensah", CallDirection.OUTGOING, minutes = 14, hoursAgo = 2),
+                previewWaiting(12L, "Mara Ellis", CallDirection.INCOMING, minutes = 26, hoursAgo = 5),
+                previewWaiting(13L, "Sam Okafor", CallDirection.OUTGOING, minutes = 41, hoursAgo = 20),
+            ),
+        )
+    }
+}
+
 @PreviewLightDark
 @Composable
 private fun HomeContentEmptyPreview() {
@@ -1219,6 +1283,9 @@ private fun HomeContentErrorPreview() {
         )
     }
 }
+
+/** HOME-14: the stack's key in Home's list; tile keys are list ids (Longs), so it cannot collide. */
+private const val NOTES_WAITING_KEY = "notes-waiting"
 
 /** Below this card width the list header stacks name over Next up. */
 private val NARROW_CARD = 360.dp

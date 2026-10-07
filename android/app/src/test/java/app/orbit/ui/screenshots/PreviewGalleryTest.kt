@@ -233,13 +233,15 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
         //   "Inner orbit" and "Late night" by name;
         // - components that take an already-masked label, or the curtain as a
         //   parameter, from their screen (the screens are checked): Chip;
-        //   PostCallBanner and RhythmDaySheet (whose previews pass
-        //   curtain = false on purpose; Home passes the real value);
-        //   UnpauseBanner and RuleOverrideSection (Contact detail passes the
-        //   curtain and a masked list name; its own curtain previews are clean).
+        //   RhythmDaySheet (whose previews pass curtain = false on purpose;
+        //   Home passes the real value); UnpauseBanner and RuleOverrideSection
+        //   (Contact detail passes the curtain and a masked list name; its own
+        //   curtain previews are clean). Home's stack of calls waiting for a
+        //   note (NotesWaitingStack) replaced PostCallBanner on 2026-10-07 and
+        //   reads the curtain itself, so it is audited, not exempt.
         private val CURTAIN_EXEMPT = setOf(
             "RuleTemplatePicker", "SmartRuleEditor", "CreateListBottomSheet",
-            "Chip", "PostCallBanner", "RhythmDaySheet", "UnpauseBanner", "RuleOverrideSection",
+            "Chip", "RhythmDaySheet", "UnpauseBanner", "RuleOverrideSection",
         )
         private val qualifiers: String? = System.getProperty("orbit.screenshots.qualifiers")?.takeIf { it.isNotBlank() }
         private const val TAP_MIN_DP = 48f

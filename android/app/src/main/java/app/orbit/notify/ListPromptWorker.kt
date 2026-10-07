@@ -1,7 +1,6 @@
 package app.orbit.notify
 
 import android.content.Context
-import android.content.res.Configuration
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.app.NotificationManagerCompat
@@ -16,10 +15,7 @@ import app.orbit.domain.usecase.SurfaceNextUseCase
 import app.orbit.domain.usecase.SurfaceResult
 import app.orbit.nav.AppLinks
 import app.orbit.ui.components.AvatarBitmaps
-import app.orbit.ui.theme.OrbitThemes
 import app.orbit.ui.theme.ResolvedTheme
-import app.orbit.ui.theme.deviceAccentHue
-import app.orbit.ui.theme.themeSettingsSnapshot
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.time.LocalTime
@@ -217,16 +213,7 @@ open class ListPromptWorker @AssistedInject constructor(
      * The app's theme in the mode it is showing, so the face in the shade has
      * the colours the same person's avatar has in the app.
      */
-    private suspend fun resolveTheme(): ResolvedTheme {
-        val settings = appPrefs.themeSettingsSnapshot()
-        val uiMode = appContext.resources.configuration.uiMode
-        val night = (uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        return OrbitThemes.resolve(
-            settings,
-            isDark = OrbitThemes.effectiveDark(settings, night),
-            deviceHue = deviceAccentHue(appContext),
-        )
-    }
+    private suspend fun resolveTheme(): ResolvedTheme = resolveNotificationTheme(appContext, appPrefs)
 
     /**
      * NOTIF-14: the large icon. Their photo when they have one, otherwise the

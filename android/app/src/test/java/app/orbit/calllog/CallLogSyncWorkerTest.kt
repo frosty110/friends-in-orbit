@@ -12,8 +12,12 @@ import androidx.work.workDataOf
 import app.orbit.data.AppPrefs
 import app.orbit.data.android.CallLogReader
 import app.orbit.data.android.CallRow
+import app.orbit.data.repository.WaitingCalls
+import app.orbit.domain.FakeCallEventRepository
 import app.orbit.domain.JsonProvider
 import app.orbit.domain.clock.Clock
+import app.orbit.notify.AppForeground
+import app.orbit.notify.PostCallNotifier
 import app.orbit.testutil.newPrefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,14 +69,17 @@ class CallLogSyncWorkerTest {
     private lateinit var appPrefs: AppPrefs
     private val fakeReconciler = FakeReconciler()
     private val fakeReader = FakeCallLogReader()
+    private lateinit var notifier: RecordingNotifier
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext<Application>()
         appPrefs = tmp.newPrefs(storeScope)
+        notifier = RecordingNotifier(context, appPrefs)
         // Reset capture state between tests
         fakeReconciler.callCount = 0
         fakeReconciler.lastSinceMs = -1L
+        fakeReconciler.summary = ReconcileSummary.EMPTY
         fakeReader.rows = emptyList()
     }
 
@@ -91,7 +98,7 @@ class CallLogSyncWorkerTest {
                     workerParameters: WorkerParameters,
                 ): ListenableWorker = CallLogSyncWorker(
                     appContext, workerParameters,
-                    fakeReconciler, fakeReader.asReader(appContext), appPrefs,
+                    fakeReconciler, fakeReader.asReader(appContext), appPrefs, notifier,
                 )
             })
             .build()
@@ -161,11 +168,97 @@ class CallLogSyncWorkerTest {
             "incremental sinceMs=${fakeReconciler.lastSinceMs}, expected >= $recent",
         )
     }
+
+    // ── NOTIF-16: the post-call hook ─────────────────────────────────────────
+
+    private val oneInserted = ReconcileSummary(scanned = 1, inserted = 1, skipped = 0, contactsPropagated = 1)
+
+    @Test
+    fun anIncrementalPassThatInserts_handsTheNewCallsToTheNotifier() = runTest {
+        Shadows.shadowOf(context as Application).grantPermissions(Manifest.permission.READ_CALL_LOG)
+        appPrefs.setLastCallLogSyncAt(System.currentTimeMillis() - 60_000L)
+        fakeReconciler.summary = oneInserted
+        notifier.newestBefore = 41L
+
+        buildWorker(workDataOf(ContentObserverController.KEY_FULL_RESYNC to false)).doWork()
+
+        // The marker is read before the reconcile and handed back after it,
+        // so only the rows this pass wrote (ids above 41) are considered.
+        assertEquals(listOf(41L to false), notifier.finished)
+    }
+
+    @Test
+    fun aFullResync_isABulkPass_andNeverNotifies() = runTest {
+        Shadows.shadowOf(context as Application).grantPermissions(Manifest.permission.READ_CALL_LOG)
+        appPrefs.setLastCallLogSyncAt(System.currentTimeMillis() - 60_000L)
+        fakeReconciler.summary = oneInserted
+
+        buildWorker(workDataOf(ContentObserverController.KEY_FULL_RESYNC to true)).doWork()
+
+        assertEquals(listOf(0L to true), notifier.finished)
+    }
+
+    @Test
+    fun theFirstImport_isABulkPass_evenWhenIncremental() = runTest {
+        Shadows.shadowOf(context as Application).grantPermissions(Manifest.permission.READ_CALL_LOG)
+        appPrefs.setLastCallLogSyncAt(0L)
+        fakeReconciler.summary = oneInserted
+
+        buildWorker(workDataOf(ContentObserverController.KEY_FULL_RESYNC to false)).doWork()
+
+        assertEquals(listOf(0L to true), notifier.finished)
+    }
+
+    @Test
+    fun aPassThatInsertsNothing_doesNotAskTheNotifier() = runTest {
+        Shadows.shadowOf(context as Application).grantPermissions(Manifest.permission.READ_CALL_LOG)
+        appPrefs.setLastCallLogSyncAt(System.currentTimeMillis() - 60_000L)
+
+        buildWorker().doWork()
+
+        assertTrue(notifier.finished.isEmpty())
+    }
+
+    @Test
+    fun aNotifierFailure_neverFailsTheSync() = runTest {
+        Shadows.shadowOf(context as Application).grantPermissions(Manifest.permission.READ_CALL_LOG)
+        appPrefs.setLastCallLogSyncAt(System.currentTimeMillis() - 60_000L)
+        fakeReconciler.summary = oneInserted
+        notifier.failure = IllegalStateException("shade unavailable")
+
+        val result = buildWorker().doWork()
+
+        assertEquals(ListenableWorker.Result.success(), result)
+    }
 }
 
 // ============================================================================
 // Test-only doubles for CallLogSyncWorker
 // ============================================================================
+
+/**
+ * Records what the worker hands the post-call notifier (NOTIF-16) instead of
+ * posting anything; the notifier's own rules are `PostCallNotifierTest`'s.
+ */
+private class RecordingNotifier(ctx: android.content.Context, prefs: AppPrefs) : PostCallNotifier(
+    context = ctx,
+    waitingCalls = WaitingCalls(FakeCallEventRepository(), prefs, EpochClockForWorker),
+    callEventRepo = FakeCallEventRepository(),
+    appForeground = AppForeground(),
+    appPrefs = prefs,
+    clock = EpochClockForWorker,
+) {
+    var newestBefore: Long = 0L
+    var failure: Throwable? = null
+    val finished: MutableList<Pair<Long, Boolean>> = mutableListOf()
+
+    override suspend fun markBeforeSync(): Long = newestBefore
+
+    override suspend fun onSyncFinished(insertedAfterId: Long, bulkPass: Boolean) {
+        failure?.let { throw it }
+        finished += insertedAfterId to bulkPass
+    }
+}
 //
 // These reuse the throwing-singleton repos from Fakes.kt so we don't replicate
 // the `ThrowingContactRepository` etc. MarkCalledUseCase and CallLogReconciler
@@ -187,11 +280,12 @@ private class FakeReconciler : CallLogReconciler(
 ) {
     var callCount: Int = 0
     var lastSinceMs: Long = -1L
+    var summary: ReconcileSummary = ReconcileSummary.EMPTY
 
     override suspend fun reconcile(sinceMs: Long, rows: List<CallRow>): ReconcileSummary {
         callCount++
         lastSinceMs = sinceMs
-        return ReconcileSummary.EMPTY
+        return summary
     }
 }
 
@@ -216,9 +310,9 @@ private object ThrowingCallEventDaoForWorker : app.orbit.data.dao.CallEventDao {
     override suspend fun existsAt(contactId: Long, occurredAt: Instant): Int =
         throw NotImplementedError()
 
-    // Notes surface — worker never exercises; throw on access.
-    override suspend fun latestUnnotedOutgoing(since: Instant): app.orbit.data.entity.CallEventEntity? =
-        throw NotImplementedError()
+    // Notes surface: the worker never exercises it; throw on access.
+    override fun observeWaitingForNote(since: Instant, minSeconds: Int) = throw NotImplementedError()
+    override suspend fun maxId(): Long = throw NotImplementedError()
 
     // Worker never exercises; throw on access.
     override fun observeForLog(limit: Int) = throw NotImplementedError()

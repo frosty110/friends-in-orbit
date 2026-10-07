@@ -251,18 +251,67 @@ class OrbitNavHostTest {
         assertEquals("5", arg("listId"))
     }
 
-    // CARD-03 / NOTE-02
+    // CARD-03 / NOTE-04: the card's "Add a note" opens the page for writing
+    // about the call. Until 2026-10-07 it opened the person with the note
+    // field focused (NOTE-02).
 
     @Test
-    fun cardAddANote_opensThePerson_withTheNoteFieldFocused() {
+    fun cardAddANote_opensTheNotePage_forThatPerson() {
         start(Routes.Home)
         navigate(Routes.card("3"))
 
         act { screens.cardOnAddNote("c-7") }
 
-        assertEquals(Routes.Contact, route)
+        assertEquals(Routes.PostCallNote, route)
         assertEquals("c-7", arg("contactId"))
-        assertEquals("1", arg("focusNote"))
+        // The card knows who was called, not which call: the page finds it.
+        assertNull(arg("callEventId"))
+        assertEquals("c-7", screens.noteShownFor?.first)
+    }
+
+    // HOME-14 / NOTE-04
+
+    @Test
+    fun homeAddANote_opensTheNotePage_forThatCall_andLeavingReturnsHome() {
+        start(Routes.Home)
+
+        act { screens.homeOnOpenPostCallNote("7", 41L) }
+
+        assertEquals(Routes.PostCallNote, route)
+        assertEquals("7", arg("contactId"))
+        assertEquals("41", arg("callEventId"))
+        assertEquals("7" to "41", screens.noteShownFor)
+
+        act { screens.noteOnLeave() }
+        assertEquals(Routes.Home, route)
+    }
+
+    @Test
+    fun theNotePage_leavesOnce_evenWhenAskedTwice() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+        navigate(Routes.postCallNote("7", 41L))
+
+        // "Not now" tapped twice, or a save landing as it is tapped: the
+        // second must not pop the deck under the page.
+        act {
+            screens.noteOnLeave()
+            screens.noteOnLeave()
+        }
+
+        assertEquals(Routes.Card, route)
+    }
+
+    @Test
+    fun theNotification_opensTheNotePage_overHome() {
+        start(Routes.Home)
+
+        // What NOTIF-16's tap hands MainActivity, through NAVIGATE_TO.
+        act { deepLink = Routes.postCallNote("7", 41L) }
+
+        assertEquals(Routes.PostCallNote, route)
+        assertEquals("41", arg("callEventId"))
+        assertEquals(Routes.Home, previousRoute)
     }
 
     @Test
@@ -381,6 +430,11 @@ private class StubScreens : OrbitNavScreens {
     lateinit var doneOnFinish: () -> Unit
     lateinit var cardOnOpenContact: (String) -> Unit
     lateinit var cardOnAddNote: (String) -> Unit
+    lateinit var homeOnOpenPostCallNote: (String, Long) -> Unit
+    lateinit var noteOnLeave: () -> Unit
+
+    /** The person and call the note page was last composed for. */
+    var noteShownFor: Pair<String, String?>? = null
     lateinit var browseOnOpenSettings: () -> Unit
     lateinit var searchOnOpenSettings: () -> Unit
     lateinit var contactOnViewAllCalls: () -> Unit
@@ -407,7 +461,11 @@ private class StubScreens : OrbitNavScreens {
         onAddPeopleToList: (listId: String) -> Unit,
         onOpenListSettings: (listId: String) -> Unit,
         onOpenContactWithFocus: (contactId: String, focusNote: Boolean) -> Unit,
-    ) = Stub(Routes.Home)
+        onOpenPostCallNote: (contactId: String, callEventId: Long) -> Unit,
+    ) {
+        homeOnOpenPostCallNote = onOpenPostCallNote
+        Stub(Routes.Home)
+    }
 
     @Composable
     override fun Card(
@@ -561,6 +619,13 @@ private class StubScreens : OrbitNavScreens {
 
     @Composable
     override fun PickLists(onBack: () -> Unit, onCommit: () -> Unit) = Stub("pick/lists")
+
+    @Composable
+    override fun PostCallNote(contactId: String, callEventId: String?, onLeave: () -> Unit) {
+        noteShownFor = contactId to callEventId
+        noteOnLeave = onLeave
+        Stub(Routes.PostCallNote)
+    }
 
     @Composable
     override fun CommitSnackbarHost(modifier: Modifier) = Unit

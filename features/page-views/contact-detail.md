@@ -13,7 +13,7 @@
 - Card view: the card face or "Open details"; "Add a note" on the Called snackbar (note field focused)
 - Browse: tap a row
 - Search: tap a row
-- Home: a row on the rhythm day sheet; "Add a note" on the post-call banner (note field focused)
+- Home: a row on the rhythm day sheet. (Until 2026-10-07 the post-call banner's "Add a note" opened this page with the note field focused; Home's waiting calls open the note page now, NOTE-04)
 - Call history: tap a row, or "Open details" (scrolled to that call, with "Add note to this call" under it)
 
 ## What the user sees

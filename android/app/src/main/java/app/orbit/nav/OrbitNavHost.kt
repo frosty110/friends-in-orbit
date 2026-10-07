@@ -228,11 +228,15 @@ private fun OrbitNavGraph(
                 // Long-press quick-actions: navigation legs (add people, list settings).
                 onAddPeopleToList = { listId -> nav.navigate(Routes.pickContacts(listId)) },
                 onOpenListSettings = { listId -> nav.navigate(Routes.listConfig(listId)) },
-                // NOTE-02: PostCallBanner "Add a note" tap routes to
-                // ContactDetail with focusNote=true so the Notes input claims
-                // focus once the screen settles.
+                // HOME-8: a row on the rhythm day sheet opens the person at the
+                // top (no note focus: "who was that", not a post-call prompt).
                 onOpenContactWithFocus = { id, focus ->
                     nav.navigate(Routes.contactWithFocus(id, focus))
+                },
+                // HOME-14 / NOTE-04: "Add a note" on a call waiting for one
+                // opens the page for writing about that call.
+                onOpenPostCallNote = { contactId, callEventId ->
+                    nav.navigate(Routes.postCallNote(contactId, callEventId))
                 }
             )
         }
@@ -244,10 +248,12 @@ private fun OrbitNavGraph(
                 listId = entry.requiredString("listId"),
                 onBack = { nav.popBackStack() },
                 onOpenContact = openContact,
-                // CARD-03 / NOTE-02: "Add a note" lands in the note field, the
-                // same as Home's "Add a note"; a plain tap on the face opens
-                // the person at the top.
-                onAddNote = { contactId -> nav.navigate(Routes.contactWithFocus(contactId, focusNote = true)) },
+                // CARD-03 / NOTE-04: "Add a note" on "Called Kai" opens the
+                // page for writing about the call, as Home's does. The card
+                // knows who was called, not which call-log row, so the page
+                // describes their latest connected call. A plain tap on the
+                // face opens the person at the top.
+                onAddNote = { contactId -> nav.navigate(Routes.postCallNote(contactId)) },
                 onBrowse = { listId -> nav.navigate(Routes.browse(listId)) },
                 onEditList = { listId -> nav.navigate(Routes.listConfig(listId)) },
                 onAddContacts = { listId -> nav.navigate(Routes.pickContacts(listId)) },
@@ -605,6 +611,32 @@ private fun OrbitNavGraph(
             screens.PickLists(
                 onBack = { nav.popBackStack() },
                 onCommit = { nav.popBackStack() }
+            )
+        }
+        // NOTE-04: writing about a call, from Home's stack, Card view's
+        // "Called Kai" and the notification after a call (a NAVIGATE_TO
+        // route, so a cold start lands on Home with this page on top and
+        // Back returns to Home).
+        composable(
+            Routes.PostCallNote,
+            arguments = listOf(
+                navArgument("contactId") { type = NavType.StringType },
+                navArgument("callEventId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { entry ->
+            screens.PostCallNote(
+                contactId = entry.requiredString("contactId"),
+                callEventId = entry.arguments?.getString("callEventId"),
+                // Leaves once: "Not now" tapped twice, or a save landing as
+                // the user taps it, must not pop the screen under this one
+                // (Home is the root, and popping it empties the graph).
+                onLeave = {
+                    if (nav.currentBackStackEntry?.id == entry.id) nav.popBackStack()
+                }
             )
         }
     }

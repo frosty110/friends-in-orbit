@@ -1,10 +1,10 @@
 # privacy
 
 **Status:** in-progress (was `privacy-and-lock` until 2026-04-28)
-**Last reviewed:** 2026-10-06 (export wording, PRIV-04 verification)
+**Last reviewed:** 2026-10-07 (the notification after a call, NOTIF-16, in the surfaces table)
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/data/keystore/DatabaseKeyProvider.kt` (Keystore + SQLCipher passphrase wrapping), `android/app/src/main/java/app/orbit/ui/components/PrivacyCurtain.kt` (quick-hide composable), `android/app/src/main/java/app/orbit/AppViewModel.kt` (privacy-curtain flow), `android/app/src/main/java/app/orbit/domain/export/` (`ExportService`, `ImportService`, `PassphraseEncryptor`, `ExportEnvelope`)
-- Tests: `android/app/src/test/java/app/orbit/domain/export/ImportServiceTest.kt`, `android/app/src/test/java/app/orbit/ui/screens/settings/export/ImportViewModelTest.kt`; for the surfaces outside the app, `ListPromptWorkerTest` (lock screen, NOTIF-13) and `LauncherShortcutsTest` (LAUNCH-01)
+- Tests: `android/app/src/test/java/app/orbit/domain/export/ImportServiceTest.kt`, `android/app/src/test/java/app/orbit/ui/screens/settings/export/ImportViewModelTest.kt`; for the surfaces outside the app, `ListPromptWorkerTest` (lock screen, NOTIF-13), `PostCallNotifierTest` (the notification after a call's lock-screen version, NOTIF-16) and `LauncherShortcutsTest` (LAUNCH-01)
 
 > **2026-04-28 scope change.** Biometric lock and the user-toggled "minimal mode" are removed from v1. ADR 0003 is superseded; the manifest permission, catalog entry, onboarding step, settings toggles, and DataStore keys are all deleted. Privacy substrate is now: encrypted-at-rest (SQLCipher + Keystore) plus auto quick-hide on focus loss. No user-facing privacy toggles.
 
@@ -38,10 +38,12 @@ As a user, I trust that my data is encrypted on my device and never leaves it. W
 | Lock screen, sensitive content hidden | "Someone is ready when you are. Want to call?" Nothing else: no person, list name, note, face or action | NOTIF-13 |
 | Lock screen, all content shown | The full nudge, as in the shade | The user's Android setting. Orbit marks every nudge sensitive (`VISIBILITY_PRIVATE`); whether to show sensitive content when locked is Android's choice to offer and the user's to make. Many phones ship showing it (reasoned, not checked on a device); see `features/notifications/README.md`, open questions |
 | Notification shade, unlocked | The list's name and, once in a row, the list's next person: first name, face, "Call {first name}" | NOTIF-14, NOTIF-15 |
+| Lock screen, sensitive content hidden, after a call | "How was your call?" / "Add a note while it's fresh." Nothing else: no person, list, note or face | NOTIF-16, by NOTIF-13's rule. With all content shown, the full version below |
+| Notification shade after a call | "How was your call with {first name}?" / "Add a note while it's fresh."; no face, no list, no action | NOTIF-16: one per person, only for a call that just ended with someone on a list, gone once a note is written or the call is dismissed |
 | Home-screen widgets | Person names and faces; never a list name | The user placed the widget on a home screen that is behind the phone's lock. WIDGET-04 can mask names, but nothing sets it today (`features/widgets/README.md`) |
 | Launcher long-press and pinned shortcuts | "Call next" and "Search" only | LAUNCH-01: fixed words, never a person or a list, because anyone holding the unlocked phone can read them |
 
-Outside the app, a list name appears only in that list's nudge: in the shade, and on the lock screen only where the user's Android setting shows all content. Person names appear on the widgets and in nudges, surfaces the user placed or scheduled; never in a launcher shortcut.
+Outside the app, a list name appears only in that list's nudge: in the shade, and on the lock screen only where the user's Android setting shows all content. Person names appear on the widgets and in nudges, surfaces the user placed or scheduled, and, since 2026-10-07, in the notification after a call (NOTIF-16), which has its own channel to turn off; never in a launcher shortcut.
 
 **No cloud sync. No analytics. No telemetry.** Per PRD §v1 Scope and §Privacy & Security.
 

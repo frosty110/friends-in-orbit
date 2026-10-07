@@ -7,24 +7,27 @@ import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import app.orbit.calllog.ContentObserverController
 import app.orbit.data.AppPrefs
+import app.orbit.data.dao.WaitingCallRow
 import app.orbit.data.db.OrbitDatabase
+import app.orbit.data.entity.CallDirection
 import app.orbit.data.repository.ResetOutcome
 import app.orbit.data.repository.ResetService
+import app.orbit.data.repository.WaitingCalls
 import app.orbit.domain.FakeCallEventRepository
-import app.orbit.domain.FakeContactRepository
-import app.orbit.domain.callEventFixture
 import app.orbit.domain.clock.TestClock
-import app.orbit.domain.contactFixture
 import app.orbit.nav.Routes
 import app.orbit.testutil.MainDispatcherRule
 import app.orbit.testutil.awaitValue
+import app.orbit.testutil.newFailingStore
 import app.orbit.testutil.newPrefs
 import app.orbit.ui.screens.onboarding.OnboardingStep
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.formatDuration
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -45,8 +48,8 @@ import org.robolectric.annotation.Config
 
 /**
  * Behavioral tests for [AppViewModel] — boot-time start-destination resolution,
- * the NOTE-02 post-call prompt, the auto privacy curtain, and the reset outcome
- * it hands MainActivity (SET-06).
+ * Home's calls waiting for a note (HOME-14), the auto privacy curtain, and the
+ * reset outcome it hands MainActivity (SET-06).
  *
  * Fixture pattern (mirrors OnboardingDoneViewModelTest / SettingsViewModelTest):
  *   - Robolectric for the Context; a real DataStore per test method, built by
@@ -95,8 +98,10 @@ class AppViewModelTest {
     private fun buildVm(
         prefs: AppPrefs,
         callEventRepo: FakeCallEventRepository = FakeCallEventRepository(),
-        contactRepo: FakeContactRepository = FakeContactRepository(),
-    ) = AppViewModel(prefs, callEventRepo, contactRepo, TestClock(now), resetService)
+    ): AppViewModel {
+        val clock = TestClock(now)
+        return AppViewModel(prefs, WaitingCalls(callEventRepo, prefs, clock), clock, resetService)
+    }
 
     @Before
     fun openDb() {
@@ -154,52 +159,102 @@ class AppViewModelTest {
         assertEquals(Routes.OnboardWelcome, startDestinationOf(prefs))
     }
 
-    // ── post-call prompt (NOTE-02) ───────────────────────────────────────────
+    // ── calls waiting for a note (HOME-14 over NOTE-05) ──────────────────────
+
+    private fun waitingRow(id: Long, contactId: Long, name: String, ago: Duration, seconds: Int = 14 * 60) =
+        WaitingCallRow(
+            callEventId = id,
+            contactId = contactId,
+            occurredAt = now.minus(ago),
+            direction = CallDirection.OUTGOING,
+            durationSeconds = seconds,
+            displayName = name,
+            photoUri = null,
+        )
 
     @Test
-    fun `checkPostCallPrompt surfaces a recent unnoted outgoing call`() = runBlocking {
-        val contactRepo = FakeContactRepository(listOf(contactFixture(id = 1L, displayName = "Sam")))
-        val callEventRepo = FakeCallEventRepository(
-            listOf(callEventFixture(id = 7L, contactId = 1L, occurredAt = now.minus(Duration.ofMinutes(1)))),
-        )
-        val vm = buildVm(buildAppPrefs(), callEventRepo, contactRepo)
+    fun `nothing is read until Home resumes, then the waiting calls are worded`() = runBlocking {
+        val calls = FakeCallEventRepository().apply {
+            waitingRows.value = listOf(waitingRow(7L, 1L, "Kai Mensah", ago = Duration.ofHours(2)))
+        }
+        val vm = buildVm(buildAppPrefs(), calls)
 
-        vm.checkPostCallPrompt()
-
-        val prompt = assertNotNull(
-            withTimeout(30_000L) { vm.postCallPrompt.filter { it != null }.first() },
-        )
-        assertEquals(7L, prompt.callEventId)
-        assertEquals(1L, prompt.contactId)
-        assertEquals("Sam", prompt.contactName)
+        vm.notesWaiting.test {
+            assertEquals(emptyList(), awaitItem(), "no resume yet: no read")
+            vm.onHomeResumed()
+            val shown = awaitItem().single()
+            assertEquals(7L, shown.callEventId)
+            assertEquals(1L, shown.contactId)
+            assertEquals("Kai Mensah", shown.name)
+            // "14 min · 2 hours ago", from the app's two formatters.
+            assertEquals(
+                UiText.res(
+                    R.string.components_notes_waiting_meta,
+                    formatDuration(14 * 60),
+                    UiText.plural(R.plurals.time_ago_hours, 2, 2),
+                ),
+                shown.meta,
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
-    fun `checkPostCallPrompt stays clear when there is no recent call`() = runBlocking {
-        val vm = buildVm(buildAppPrefs()) // empty repositories
+    fun `the window starts 24 hours before the resume, and calls under a minute are left out`() = runBlocking {
+        val calls = FakeCallEventRepository().apply {
+            waitingRows.value = listOf(
+                waitingRow(1L, 1L, "Kai", ago = Duration.ofHours(23)),
+                waitingRow(2L, 2L, "Mara", ago = Duration.ofHours(25)),
+                waitingRow(3L, 3L, "Sam", ago = Duration.ofHours(1), seconds = 59),
+            )
+        }
+        val vm = buildVm(buildAppPrefs(), calls)
 
-        vm.checkPostCallPrompt()
-
-        assertNull(vm.postCallPrompt.first())
+        vm.notesWaiting.test {
+            awaitItem()
+            vm.onHomeResumed()
+            assertEquals(listOf(1L), awaitItem().map { it.callEventId })
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
-    fun `dismissPostCallPrompt clears the banner and suppresses the re-prompt`() = runBlocking {
-        val contactRepo = FakeContactRepository(listOf(contactFixture(id = 1L, displayName = "Sam")))
-        val callEventRepo = FakeCallEventRepository(
-            listOf(callEventFixture(id = 7L, contactId = 1L, occurredAt = now.minus(Duration.ofMinutes(1)))),
-        )
-        val vm = buildVm(buildAppPrefs(), callEventRepo, contactRepo)
+    fun `dismiss takes the call off, says so with Undo, and Undo brings it back`() = runBlocking {
+        val calls = FakeCallEventRepository().apply {
+            waitingRows.value = listOf(
+                waitingRow(7L, 1L, "Kai", ago = Duration.ofHours(2)),
+                waitingRow(8L, 2L, "Mara", ago = Duration.ofHours(3)),
+            )
+        }
+        val prefs = buildAppPrefs()
+        val vm = buildVm(prefs, calls)
+        vm.onHomeResumed()
 
-        vm.checkPostCallPrompt()
-        withTimeout(30_000L) { vm.postCallPrompt.filter { it != null }.first() }
+        vm.notesWaitingEvents.test {
+            vm.dismissNotesWaiting(listOf(7L, 8L))
+            val event = awaitItem()
+            assertEquals(UiText.plural(R.plurals.home_snackbar_calls_dismissed, 2, 2), event.message)
+            assertEquals(listOf(7L, 8L), event.undoCallEventIds)
+            cancelAndIgnoreRemainingEvents()
+        }
+        awaitValue(setOf(7L, 8L)) { prefs.dismissedPostCallIds.first() }
 
-        vm.dismissPostCallPrompt(7L)
-        assertNull(vm.postCallPrompt.first(), "banner clears immediately on dismiss")
+        vm.undoDismissNotesWaiting(listOf(7L, 8L))
+        awaitValue(emptySet()) { prefs.dismissedPostCallIds.first() }
+    }
 
-        // The same call must not re-surface on a later resume.
-        vm.checkPostCallPrompt()
-        assertNull(vm.postCallPrompt.first(), "a dismissed call is suppressed on re-check")
+    @Test
+    fun `a dismissal that cannot be saved says so and offers no Undo`() = runBlocking {
+        val store = tmp.newFailingStore(storeScope)
+        val vm = buildVm(AppPrefs(store))
+
+        vm.notesWaitingEvents.test {
+            vm.dismissNotesWaiting(listOf(7L))
+            val event = awaitItem()
+            assertEquals(UiText.res(R.string.components_snackbar_save_failed), event.message)
+            assertTrue(event.undoCallEventIds.isEmpty(), "nothing was dismissed, so nothing to undo")
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     // ── reset outcome (SET-06) ──────────────────────────────────────────────

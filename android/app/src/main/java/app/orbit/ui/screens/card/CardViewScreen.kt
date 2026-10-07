@@ -110,14 +110,16 @@ import kotlin.math.abs
 // 2026-10-06 card-view audit: every state message is the shared
 // OrbitScreenMessage (the error one with Try again, CARD-07, or Go home alone
 // when nothing can be retried), the app bar is titled in every state, and
-// "Add a note" lands in the note field (NOTE-02).
+// "Add a note" lands in the note field (NOTE-02; since 2026-10-07 the
+// post-call note page, NOTE-04, which the NavHost wires).
 
 /**
  * @param onOpenContact opens a person's page from the face or "Open details".
- * @param onAddNote opens the same page with the note field focused (NOTE-02),
+ * @param onAddNote opens the page for writing about the call (NOTE-04; until
+ *   2026-10-07 the person's page with the note field focused, NOTE-02),
  *   from the "Called {name}" snackbar's "Add a note" (CARD-03). Defaults to
  *   [onOpenContact] so a host that has not wired the focus still opens the
- *   person; the NavHost passes `Routes.contactWithFocus`.
+ *   person; the NavHost passes `Routes.postCallNote`.
  */
 @Composable
 fun CardViewScreen(
@@ -320,7 +322,7 @@ internal fun CardViewContent(
             if (result == SnackbarResult.ActionPerformed) {
                 when (message) {
                     is CardMessage.Undoable -> currentOnUndo(message.token)
-                    // CARD-03: "Add a note" lands in the note field (NOTE-02),
+                    // CARD-03: "Add a note" opens the note page (NOTE-04),
                     // as Home's does; it used to open the top of the page.
                     is CardMessage.Called -> currentOnAddNote(message.contactId)
                     is CardMessage.Failed -> Unit

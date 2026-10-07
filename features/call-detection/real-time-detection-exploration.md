@@ -1,9 +1,10 @@
 # Exploration: real-time / in-call detection
 
-**Status:** exploration (no code committed for the real-time path)
+**Status:** exploration (no code committed for the real-time path); the
+just-ended gap is now closed by a call-log trigger, see "2026-10-07" below
 **Raised by:** user report — "I made a call outside the app; an hour in, still on
 the call, the app hasn't updated."
-**Last reviewed:** 2026-06-20
+**Last reviewed:** 2026-10-07
 
 This note captures *why* an in-progress call is invisible today, what a real-time
 path would cost, and a recommendation. It is a design memo, not a commitment.
@@ -35,6 +36,37 @@ resume-sync added alongside this note (`ContentObserverController.enqueueResumeS
 fired from `MainActivity` ON_START): the next time the app is foregrounded it
 re-reads the call log incrementally and picks up the completed call. The manual
 "Sync now" button already forces a full re-read.
+
+## 2026-10-07: woken when the call ends, with no new permission
+
+The owner asked for a notification after a call ("How was your call with
+Kai?", NOTIF-16 in `features/notifications/README.md`). The resume sync is too
+late for that: it reads the call when the user next opens Orbit, which is the
+moment the notification was meant to save. Consequence (2) above is now closed
+for a dead process too:
+
+- `ContentObserverController.start()` arms a WorkManager request constrained
+  by a **content URI trigger** on `CallLog.Calls.CONTENT_URI`
+  (`CallLogTriggerWorker`). WorkManager hands it to JobScheduler, which
+  watches the URI on Orbit's behalf and starts Orbit's process when the call
+  log changes, whether or not Orbit was alive. The worker enqueues the
+  ordinary incremental sync (the observer's own unique work, KEEP) and arms
+  the trigger again, because a content URI trigger fires once per enqueue.
+- It needs only READ_CALL_LOG, which Orbit already holds and justifies; it is
+  armed only while that is granted and is disarmed with the observers. No
+  `READ_PHONE_STATE`, no foreground service, no receiver: none of the
+  blockers below apply, because it reacts to the row the call log writes when
+  a call **ends**, exactly as the observer does.
+- The observer stays. It reacts at once while Orbit is alive (the card's
+  return from the dialer depends on that, CORE-04); the trigger is batched by
+  JobScheduler and Doze or App Standby may defer it. When both fire, KEEP
+  makes them one sync.
+
+So "Orbit notices after the call ends" is still the contract: nothing here
+sees a call in progress. What changed is that "after" no longer waits for the
+user to open the app. Whether the wake-up arrives promptly on a given phone
+(manufacturer battery managers can delay or drop background jobs) has not been
+checked on a device.
 
 ## What real (live) in-call detection would require
 

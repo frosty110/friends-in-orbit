@@ -5,6 +5,7 @@ import app.orbit.data.dao.CallEventDao
 import app.orbit.data.dao.ContactDao
 import app.orbit.data.dao.ListDao
 import app.orbit.data.dao.ListMembershipDao
+import app.orbit.data.dao.WaitingCallRow
 import app.orbit.data.db.OrbitDatabase
 import app.orbit.data.entity.CallEventEntity
 import java.time.Instant
@@ -102,8 +103,10 @@ internal class CallEventRepositoryImpl @Inject constructor(
     override fun observeForLog(limit: Int): Flow<List<CallEventEntity>> =
         callEventDao.observeForLog(limit)
 
-    override suspend fun latestUnnotedOutgoing(since: Instant): CallEventEntity? =
-        callEventDao.latestUnnotedOutgoing(since)
+    override fun observeWaitingForNote(since: Instant, minSeconds: Int): Flow<List<WaitingCallRow>> =
+        callEventDao.observeWaitingForNote(since, minSeconds)
+
+    override suspend fun maxId(): Long = callEventDao.maxId()
 
     override suspend fun byId(id: Long): CallEventEntity? = callEventDao.getById(id)
 

@@ -69,4 +69,10 @@ class RoutesTest {
         assertEquals("pick/contacts?mode=relink&relinkContactId=7", route)
         assertFalse("targetListId" in route)
     }
+
+    @Test
+    fun `postCallNote names the call only when there is one (NOTE-04)`() {
+        assertEquals("note/7?callEventId=41", Routes.postCallNote("7", 41L))
+        assertEquals("note/c-7", Routes.postCallNote("c-7"))
+    }
 }

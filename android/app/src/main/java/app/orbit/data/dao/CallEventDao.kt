@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.CallEventEntity
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
@@ -133,30 +134,74 @@ interface CallEventDao {
     suspend fun existsAt(contactId: Long, occurredAt: Instant): Int
 
     /**
-     * NOTE-02 — most recent OUTGOING call within `since` that has
-     * no associated Note (no row in `notes` where `createdAt >= callEvent.occurredAt`
-     * for the same contactId). Returns null when nothing is unnoted. The per-call
-     * (vs per-contact) check prevents an OLDER retroactive note from suppressing
-     * the banner for a NEWER call.
+     * NOTE-05: the calls that wait for a note, one per person, newest first.
+     * A call waits when it came from the call log (`CALL_LOG`: not a
+     * connection logged by hand, not an attempt), lasted at least
+     * [minSeconds] (either direction: a call they made is as worth
+     * remembering as one the user made), started at or after [since], its
+     * person is neither ignored nor archived and is on at least one list that
+     * is not archived, and no note about that person was written at or after
+     * the call started. The user's dismissals are applied on top of this, from
+     * DataStore ([app.orbit.data.repository.WaitingCalls]).
      *
-     * `contactId IS NOT NULL` is defensive — current schema makes `contactId`
-     * non-nullable on [CallEventEntity], but the filter keeps the query forward-
-     * compatible if the column ever loosens.
+     * One row per person: the latest qualifying call stands for any earlier
+     * one (the `ce.id = (...)` subquery), so Kai called twice is one entry.
+     * The latest is picked before the note test on purpose: a note written
+     * after the latest call is also after every earlier one, so the note test
+     * can only drop the person, never promote an older call in their place.
+     *
+     * The note test is per call, not per person, as NOTE-02's banner query
+     * was: an older note, or a retroactive one back-dated to an older call,
+     * never covers a newer call. A retroactive note dated to this very call
+     * (`createdAt = occurredAt`) does cover it.
+     *
+     * Replaced `latestUnnotedOutgoing` (a ten-minute, outgoing-only window,
+     * one call at a time) on 2026-10-07 (HOME-14). Room re-runs it whenever
+     * any of the five tables it reads changes, which is how Home's stack
+     * updates live when a note is saved on another screen.
      */
     @Query(
-        "SELECT ce.* FROM call_events ce " +
-            "WHERE ce.direction = 'OUTGOING' " +
+        "SELECT ce.id AS callEventId, ce.contactId AS contactId, ce.occurredAt AS occurredAt, " +
+            "  ce.direction AS direction, ce.durationSeconds AS durationSeconds, " +
+            "  c.displayName AS displayName, c.photoUri AS photoUri " +
+            "FROM call_events ce " +
+            "INNER JOIN contacts c ON c.id = ce.contactId " +
+            "WHERE ce.source = 'CALL_LOG' " +
+            "  AND ce.durationSeconds >= :minSeconds " +
             "  AND ce.occurredAt >= :since " +
-            "  AND ce.contactId IS NOT NULL " +
+            "  AND c.isIgnored = 0 " +
+            "  AND c.isArchived = 0 " +
+            "  AND EXISTS ( " +
+            "      SELECT 1 FROM list_memberships m " +
+            "      INNER JOIN lists l ON l.id = m.listId " +
+            "      WHERE m.contactId = ce.contactId AND l.isArchived = 0 " +
+            "  ) " +
+            "  AND ce.id = ( " +
+            "      SELECT latest.id FROM call_events latest " +
+            "      WHERE latest.contactId = ce.contactId " +
+            "        AND latest.source = 'CALL_LOG' " +
+            "        AND latest.durationSeconds >= :minSeconds " +
+            "        AND latest.occurredAt >= :since " +
+            "      ORDER BY latest.occurredAt DESC, latest.id DESC " +
+            "      LIMIT 1 " +
+            "  ) " +
             "  AND NOT EXISTS ( " +
             "      SELECT 1 FROM notes n " +
             "      WHERE n.contactId = ce.contactId " +
             "        AND n.createdAt >= ce.occurredAt " +
             "  ) " +
-            "ORDER BY ce.occurredAt DESC " +
-            "LIMIT 1",
+            "ORDER BY ce.occurredAt DESC, ce.id DESC",
     )
-    suspend fun latestUnnotedOutgoing(since: Instant): CallEventEntity?
+    fun observeWaitingForNote(since: Instant, minSeconds: Int): Flow<List<WaitingCallRow>>
+
+    /**
+     * NOTIF-16: the highest call event id so far, or 0 for an empty table.
+     * The call-log sync reads it before reconciling so it can tell the calls
+     * that pass inserted from the ones already there: ids are autoincrement
+     * and never reused, so every row the pass writes is above it.
+     */
+    @Query("SELECT COALESCE(MAX(id), 0) FROM call_events")
+    suspend fun maxId(): Long
 
     /**
      * LOG-01 — chronological feed; only correlated rows (contactId IS NOT NULL).
@@ -223,4 +268,20 @@ data class CallAggRow(
     val contactId: Long,
     val cnt: Int,
     val lastAt: Instant?,
+)
+
+/**
+ * Projection row for [CallEventDao.observeWaitingForNote] (NOTE-05): the
+ * call, and the name and photo of the person it was with, from one query so
+ * Home's stack and the post-call notification need no second read. Room maps
+ * the SELECT aliases to these names, so the aliases are load-bearing.
+ */
+data class WaitingCallRow(
+    val callEventId: Long,
+    val contactId: Long,
+    val occurredAt: Instant,
+    val direction: CallDirection,
+    val durationSeconds: Int,
+    val displayName: String,
+    val photoUri: String?,
 )

@@ -22,9 +22,12 @@ import app.orbit.ui.util.UiText
  * - List nudge body: [nudgeBody]: opportunity framing, name-free; one person or "a few" by due count
  * - Named nudge: [nudgeNamedBody] + [callActionLabel], built from [firstNameOf]
  * - Lock-screen version: [PUBLIC_TITLE] / [PUBLIC_BODY]
+ * - After a call (NOTIF-16, not a nudge): [postCallTitle] / [POST_CALL_BODY],
+ *   and the lock-screen [POST_CALL_PUBLIC_TITLE]
  *
  * ### Channel strings (D-16)
  * - [CHANNEL_LABEL_LIST_PROMPTS] / [CHANNEL_DESC_LIST_PROMPTS]: orbit.list_prompt channel
+ * - [CHANNEL_LABEL_AFTER_CALL] / [CHANNEL_DESC_AFTER_CALL]: orbit.after_call channel
  *
  * The nudge schedule editor's words (List settings: "Add time", the summary
  * line, the paused badge) used to live here too; they are List settings copy
@@ -107,4 +110,29 @@ object NotificationCopy {
 
     /** Channel description shown in Android system notification settings (orbit.list_prompt). */
     val CHANNEL_DESC_LIST_PROMPTS: UiText = UiText.res(R.string.notify_channel_list_nudges_description)
+
+    // -------------------------------------------------------------------------
+    // After a call (NOTIF-16)
+    // -------------------------------------------------------------------------
+
+    /**
+     * NOTIF-16: the title of the notification after a call, by first name.
+     * An invitation about a call that just happened, never a count and never
+     * how long ago: "How was your call with Kai?"
+     */
+    fun postCallTitle(firstName: String): UiText = UiText.res(R.string.notify_post_call_title, firstName)
+
+    /** NOTIF-16: its body, the same words Home's old banner used. */
+    val POST_CALL_BODY: UiText = UiText.res(R.string.notify_post_call_body)
+
+    /**
+     * NOTIF-16: the lock-screen version's title, with no name (NOTIF-13's
+     * rule for every notification Orbit posts). Its body is [POST_CALL_BODY],
+     * which names no one either.
+     */
+    val POST_CALL_PUBLIC_TITLE: UiText = UiText.res(R.string.notify_post_call_public_title)
+
+    /** NOTIF-16: the "After a call" channel's name and description in Android's settings. */
+    val CHANNEL_LABEL_AFTER_CALL: UiText = UiText.res(R.string.notify_channel_after_call)
+    val CHANNEL_DESC_AFTER_CALL: UiText = UiText.res(R.string.notify_channel_after_call_description)
 }

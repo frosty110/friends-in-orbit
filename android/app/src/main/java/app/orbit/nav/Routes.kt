@@ -128,6 +128,20 @@ object Routes {
     fun callLogFor(contactId: String) = "call-log?contactId=$contactId"
 
     /**
+     * NOTE-04: the page for writing about a call. `contactId` is the person
+     * (a bare id or the UI's "c-" form); the optional `callEventId` names the
+     * call the page describes ("You called Kai · 14 min · Today at 4:30pm").
+     * Without it the page describes the person's latest connected call, which
+     * is what a caller that knows only who was called (Card view's "Called
+     * Kai" snackbar) means. Build it with [postCallNote].
+     */
+    const val PostCallNote = "note/{contactId}?callEventId={callEventId}"
+
+    /** NOTE-04: see [PostCallNote]. Home's stack and the notification pass the call. */
+    fun postCallNote(contactId: String, callEventId: Long? = null): String =
+        if (callEventId == null) "note/$contactId" else "note/$contactId?callEventId=$callEventId"
+
+    /**
      * CONTACT-07: the picker in Relink mode for one orphaned contact. Its own
      * builder, not [pickContacts]: that one's first argument is a LIST id, and
      * passing a contact id there is exactly how Re-link used to add people to

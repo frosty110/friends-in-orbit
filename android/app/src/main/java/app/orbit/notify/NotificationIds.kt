@@ -11,6 +11,7 @@ package app.orbit.notify
  * | Category | Base offset | Range |
  * |---|---|---|
  * | List nudge | 2_000_000 | 2_000_001 … 2_999_999 |
+ * | After a call (NOTIF-16), one per person | 3_000_000 | 3_000_001 … 3_999_999 |
  *
  * The modulo 1_000_000 keeps the result within a safe Int range even for large
  * auto-increment Room IDs. In practice Orbit lists and contacts stay well below
@@ -25,4 +26,11 @@ object NotificationIds {
      * Base offset 2_000_000; maps list row ID → int in [2_000_001, 2_999_999].
      */
     fun listPrompt(listId: Long): Int = (2_000_000L + (listId % 1_000_000L)).toInt()
+
+    /**
+     * NOTIF-16: the notification after a call with [contactId]. Keyed by the
+     * person, not the call, so a second call with Kai replaces the first
+     * one's notification: one per person, as on Home.
+     */
+    fun postCall(contactId: Long): Int = (3_000_000L + (contactId % 1_000_000L)).toInt()
 }

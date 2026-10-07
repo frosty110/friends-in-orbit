@@ -150,7 +150,8 @@ class ContactDetailViewModel @Inject constructor(
     private val contactIdString: String? = savedStateHandle["contactId"]
     private val contactId: Long? = contactIdString?.removePrefix("c-")?.toLongOrNull()
 
-    // NOTE-02 — PostCallBanner deep-link: when true, the Notes input
+    // NOTE-02: the focusNote deep-link (a Call history row; Home's post-call
+    // banner used it until 2026-10-07, NOTE-04): when true, the Notes input
     // should claim focus on first composition. The Routes.contactWithFocus
     // helper encodes the boolean as "1"; nullable / unset / "0" all read as
     // false. Owned by VM so rotation doesn't re-fire focus: cleared by the

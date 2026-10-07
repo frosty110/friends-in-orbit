@@ -9,6 +9,7 @@ import android.os.Looper
 import android.provider.CallLog
 import android.provider.ContactsContract
 import androidx.core.content.ContextCompat
+import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
@@ -26,6 +27,16 @@ import timber.log.Timber
  *
  * Lifecycle: [start] is called once from OrbitApp.onCreate and from
  * Settings on permission grant. Idempotent via @Volatile [registered] guard.
+ *
+ * Two ways Orbit hears the call log change (NOTIF-16, 2026-10-07): the
+ * process-bound ContentObserver below, and a WorkManager content URI trigger
+ * ([CallLogTriggerWorker]) that [start] arms whenever READ_CALL_LOG is
+ * granted. The observer only hears changes while Orbit's process is alive and
+ * reacts at once; the trigger wakes Orbit even when its process was killed
+ * during the call, but JobScheduler batches it and Doze can defer it. Both
+ * enqueue the one call-log sync ([UNIQUE_NAME_SYNC], KEEP), so the slower one
+ * finds the work already pending and adds nothing. [stop] disarms the trigger
+ * with the observers.
  *
  * Permission policy:
  * - The OS enforces READ_CALL_LOG at `registerContentObserver` time on
@@ -116,6 +127,13 @@ open class ContentObserverController @Inject constructor(
             }
         }
 
+        // NOTIF-16: the trigger that wakes a dead process. Armed on every
+        // start with the permission (KEEP leaves an armed one alone), so app
+        // start and a permission grant both arm it, as they register the
+        // observer. Without the permission it would wake Orbit for a sync
+        // that cannot read anything.
+        if (hasCallLogPermission()) armCallLogTrigger(ExistingWorkPolicy.KEEP)
+
         synchronized(contactsLock) {
             if (!contactsRegistered && hasContactsPermission()) {
                 context.contentResolver.registerContentObserver(
@@ -156,6 +174,42 @@ open class ContentObserverController @Inject constructor(
                 Timber.tag(TAG).d("contacts_observer_unregistered")
             }
         }
+        // NOTIF-16: the trigger goes with the observers (reset, a revoked
+        // permission), or it would keep waking Orbit for a log it may not read.
+        WorkManager.getInstance(context).cancelUniqueWork(CallLogTriggerWorker.UNIQUE_NAME)
+        Timber.tag(TAG).d("call_log_trigger_disarmed")
+    }
+
+    /**
+     * NOTIF-16: the sync the call-log trigger starts. The observer's own path
+     * ([UNIQUE_NAME_SYNC], KEEP, the same short debounce), so a trigger and an
+     * observer firing for one change still make one sync.
+     */
+    open fun enqueueObservedSync() = enqueueDebouncedSync()
+
+    /**
+     * NOTIF-16: arms the trigger again from inside [CallLogTriggerWorker],
+     * which a content URI trigger needs because it fires once per enqueue.
+     * APPEND_OR_REPLACE, because the worker calling this is still RUNNING
+     * under the unique name: KEEP would see it and add nothing, and REPLACE
+     * would cancel it mid-run. Appended, the new trigger starts waiting for
+     * the next change as soon as this run succeeds.
+     */
+    open fun rearmCallLogTrigger() = armCallLogTrigger(ExistingWorkPolicy.APPEND_OR_REPLACE)
+
+    private fun armCallLogTrigger(policy: ExistingWorkPolicy) {
+        val request = OneTimeWorkRequestBuilder<CallLogTriggerWorker>()
+            .setConstraints(
+                Constraints.Builder()
+                    // Descendants too: a provider may notify on a row's own
+                    // uri. A spurious wake costs one incremental sync under
+                    // KEEP; a missed insert costs the notification.
+                    .addContentUriTrigger(CallLog.Calls.CONTENT_URI, true)
+                    .build(),
+            )
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(CallLogTriggerWorker.UNIQUE_NAME, policy, request)
+        Timber.tag(TAG).d("call_log_trigger_armed policy=%s", policy.name)
     }
 
     private fun enqueueDebouncedSync() {

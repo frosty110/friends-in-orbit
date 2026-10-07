@@ -26,4 +26,16 @@
     <string name="notify_channel_list_nudges">List nudges</string>
     <string name="notify_channel_list_nudges_description">A gentle nudge when you have someone to call.</string>
 
+    <!-- After a call: a call of a minute or more with someone on a list ended while Orbit was
+         closed, and nothing is written about them yet. Tapping it opens the page for writing
+         about that call. Not a nudge: it is about a call that just happened.
+         %1$s: the person's first name. -->
+    <string name="notify_post_call_title">How was your call with %1$s?</string>
+    <string name="notify_post_call_body">Add a note while it\'s fresh.</string>
+    <!-- What a locked phone shows instead, when it hides sensitive content. No name. -->
+    <string name="notify_post_call_public_title">How was your call?</string>
+    <!-- Its own channel, so it can be turned off without turning off the nudges. -->
+    <string name="notify_channel_after_call">After a call</string>
+    <string name="notify_channel_after_call_description">A prompt to write a note after a call with someone on your lists.</string>
+
 </resources>

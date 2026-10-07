@@ -31,6 +31,13 @@ object OrbitNotifications {
     const val CHANNEL_LIST_PROMPT = "orbit.list_prompt"
 
     /**
+     * NOTIF-16: the notification after a call ("How was your call with
+     * Kai?"). Its own channel, so it can be turned off in Android's settings
+     * without touching the nudges; the same importance as the nudges.
+     */
+    const val CHANNEL_AFTER_CALL = "orbit.after_call"
+
+    /**
      * Ensures the current channel set exists and retires legacy channels.
      *
      * Safe to call on every app start (idempotent). Called from [OrbitApp.onCreate].
@@ -53,6 +60,13 @@ object OrbitNotifications {
                 NotificationCopy.CHANNEL_LABEL_LIST_PROMPTS.asString(context),
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply { description = NotificationCopy.CHANNEL_DESC_LIST_PROMPTS.asString(context) }
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_AFTER_CALL,
+                NotificationCopy.CHANNEL_LABEL_AFTER_CALL.asString(context),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply { description = NotificationCopy.CHANNEL_DESC_AFTER_CALL.asString(context) }
         )
     }
 }

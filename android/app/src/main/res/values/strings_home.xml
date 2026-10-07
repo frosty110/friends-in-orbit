@@ -35,6 +35,12 @@
     <!-- Snackbars after the menu's nudge toggle. -->
     <string name="home_snackbar_nudges_on">Nudges on.</string>
     <string name="home_snackbar_nudges_paused">Nudges paused.</string>
+    <!-- After "Dismiss" or "Dismiss all" on the calls waiting for a note, with Undo.
+         %1$d: how many calls. -->
+    <plurals name="home_snackbar_calls_dismissed">
+        <item quantity="one">Dismissed 1 call</item>
+        <item quantity="other">Dismissed %1$d calls</item>
+    </plurals>
 
     <!-- A list card's member count when nobody has been added yet. -->
     <string name="home_member_count_none">No one yet</string>
