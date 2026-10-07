@@ -1,7 +1,6 @@
 package app.orbit.ui.screens.card
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Resources
 import androidx.compose.animation.AnimatedContent
@@ -65,7 +64,6 @@ import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -76,7 +74,6 @@ import app.orbit.data.Contact
 import app.orbit.data.NoteRow
 import app.orbit.data.entity.ListType
 import app.orbit.domain.usecase.LogConnectionWhen
-import app.orbit.notify.NotificationIds
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.InfoTip
 import app.orbit.ui.components.ListContextChip
@@ -352,13 +349,12 @@ internal fun CardViewContent(
                 is CardMessage.Failed -> message.text
                 is CardMessage.OpenNote -> {
                     // CARD-11: the page for the call, in place of a snackbar.
-                    // NOTIF-16's notification for the same call is withdrawn
-                    // first: it is posted only while Orbit is in the
-                    // background, which on the dial-and-return path means only
-                    // when the user stayed away 10 seconds or more after
-                    // hanging up, and then the page and the notification would
-                    // ask the same question twice.
-                    cancelPostCallNotification(context, message.contactId)
+                    // NOTIF-16's notification for the same call (posted only
+                    // while Orbit is in the background, which on the
+                    // dial-and-return path means only when the user stayed
+                    // away 10 seconds or more after hanging up) is withdrawn by
+                    // the page itself as it opens, so the two never ask the
+                    // same question twice.
                     currentOnAddNote(message.contactId, message.callEventId)
                     return@collectLatest
                 }
@@ -476,17 +472,6 @@ internal fun CardViewContent(
             onDismiss = { logSheetFor = null }
         )
     }
-}
-
-/**
- * CARD-11 / NOTIF-16: withdraws the notification after a call with
- * [contactId] (one per person, `NotificationIds.postCall`), because the card
- * is opening the page that notification would open. A no-op when none is
- * showing. A tap on the notification cancels it the same way (auto-cancel);
- * the call still waits on Home until a note is written or it is dismissed.
- */
-internal fun cancelPostCallNotification(context: Context, contactId: Long) {
-    NotificationManagerCompat.from(context).cancel(NotificationIds.postCall(contactId))
 }
 
 // The three state messages below are the shared OrbitScreenMessage (DESIGN.md:

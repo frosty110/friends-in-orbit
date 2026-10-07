@@ -11,7 +11,7 @@
 ## Reached from
 
 - Home: "Add a note" on a call waiting for a note, as the single card or a row of the open pile (HOME-14)
-- The notification after a call, "How was your call with Kai?" (NOTIF-16): a tap opens this page over Home, with Orbit open or closed
+- The notification after a call, "How was your call with Kai?" (NOTIF-16): a tap opens this page over Home, with Orbit open or closed. However the page is reached, opening it withdraws that person's notification
 - Card view: "Add a note" on the "Called {first name}" snackbar after a call placed from the card (CARD-03). Card view will also open it by itself after a call of a minute or more placed from the card (CARD-11, not yet built)
 
 ## What the user sees
