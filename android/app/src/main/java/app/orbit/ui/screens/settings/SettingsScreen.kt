@@ -609,7 +609,8 @@ internal fun SettingsContent(
                     subtitle = stringResource(
                         when {
                             exportInFlight -> R.string.settings_export_in_progress
-                            importBusy || isResetting -> R.string.settings_data_wait
+                            importBusy -> R.string.settings_data_wait
+                            isResetting -> R.string.settings_data_wait_reset
                             else -> R.string.settings_export_sub
                         },
                     ),
@@ -623,7 +624,8 @@ internal fun SettingsContent(
                             ImportUiState.Validating -> R.string.settings_import_checking
                             ImportUiState.Applying -> R.string.settings_import_in_progress
                             else -> when {
-                                exportInFlight || isResetting -> R.string.settings_data_wait
+                                exportInFlight -> R.string.settings_data_wait
+                                isResetting -> R.string.settings_data_wait_reset
                                 else -> R.string.settings_import_sub
                             }
                         },

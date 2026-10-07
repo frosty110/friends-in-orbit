@@ -26,8 +26,9 @@ import org.robolectric.annotation.Config
  *
  * SET-05 / SET-06: while an export, an import or a reset runs, all three rows
  * are disabled. The busy row says what is happening ("Saving…", "Restoring…",
- * "Resetting…"); the other two say "Waiting for the other backup step to
- * finish" instead of their default line. Until 2026-10-06 a disabled Reset
+ * "Resetting…"); the other two say what they wait for ("Waiting for the
+ * backup to finish", or "Waiting for the reset to finish") instead of their
+ * default line. Until 2026-10-06 a disabled Reset
  * row changed only its title's colour, and Import kept "Replace what's here
  * with an exported file" while refusing taps during an export: colour, or a
  * vanished chevron, as the only signal (vision/ux-rubric.md D8).
@@ -85,9 +86,16 @@ class SettingsDataRowsTest {
         row(titleId).assertIsNotEnabled().assert(hasText(string(busySubtitleId)))
     }
 
-    /** A row held by another row's work: disabled, saying it waits, its default line gone. */
-    private fun assertWaiting(titleId: Int, defaultSubtitleId: Int) {
-        row(titleId).assertIsNotEnabled().assert(hasText(string(R.string.settings_data_wait)))
+    /**
+     * A row held by another row's work: disabled, saying what it waits for
+     * ([waitId]: the backup, or the reset), its default line gone.
+     */
+    private fun assertWaiting(
+        titleId: Int,
+        defaultSubtitleId: Int,
+        waitId: Int = R.string.settings_data_wait,
+    ) {
+        row(titleId).assertIsNotEnabled().assert(hasText(string(waitId)))
         compose.onAllNodes(hasText(string(defaultSubtitleId))).assertCountEquals(0)
     }
 
@@ -102,6 +110,7 @@ class SettingsDataRowsTest {
         row(R.string.settings_reset_title).assertIsEnabled()
             .assert(hasText(string(R.string.settings_reset_sub)))
         compose.onAllNodes(hasText(string(R.string.settings_data_wait))).assertCountEquals(0)
+        compose.onAllNodes(hasText(string(R.string.settings_data_wait_reset))).assertCountEquals(0)
     }
 
     @Test
@@ -135,8 +144,18 @@ class SettingsDataRowsTest {
     fun during_a_reset_the_reset_row_says_so_and_the_other_two_wait() {
         setRows(state = SettingsUiState.Ready.INITIAL.copy(isResetting = true))
 
+        // A reset is not a backup step, so the waiting rows name it (until
+        // 2026-10-07 they said "Waiting for the other backup step to finish").
         assertBusy(R.string.settings_reset_title, R.string.settings_reset_in_progress)
-        assertWaiting(R.string.settings_export_title, R.string.settings_export_sub)
-        assertWaiting(R.string.settings_import_title, R.string.settings_import_sub)
+        assertWaiting(
+            R.string.settings_export_title,
+            R.string.settings_export_sub,
+            R.string.settings_data_wait_reset,
+        )
+        assertWaiting(
+            R.string.settings_import_title,
+            R.string.settings_import_sub,
+            R.string.settings_data_wait_reset,
+        )
     }
 }
