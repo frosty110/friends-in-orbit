@@ -71,8 +71,8 @@ import app.orbit.ui.theme.OrbitTheme
  *     the row is the checkbox for TalkBack); a list the person is already on
  *     says "Already added" and is disabled, so it cannot be picked
  *   - The shared [BatchCounter] docked under the list (PICK-06) with the CTA
- *     "Add to N list[s]"; it was a floating card that covered the last row
- *     until 2026-10-06
+ *     "Add" (TalkBack: "Add to N list[s]"); it was a floating card that
+ *     covered the last row until 2026-10-06
  *   - No snackbar host — the screen pops on commit, so the result surfaces
  *     via [PickerCommitBus] on the app-level [PickerCommitSnackbarHost]
  *     (identical to the forward picker)
@@ -249,7 +249,12 @@ private fun ReadyContent(
 
         BatchCounter(
             selectionCount = state.selectionCount,
-            ctaLabel = pluralStringResource(R.plurals.picker_lists_commit, state.selectionCount, state.selectionCount),
+            ctaLabel = stringResource(R.string.picker_commit_add_short),
+            ctaDescription = pluralStringResource(
+                R.plurals.picker_lists_commit,
+                state.selectionCount,
+                state.selectionCount
+            ),
             isCommitting = state.phase == ListPickerUiState.Phase.Committing,
             onClear = onClearSelection,
             onCommit = onCommit,

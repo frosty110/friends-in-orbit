@@ -10,6 +10,7 @@ import app.orbit.data.repository.CallEventRepository
 import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ListRepository
 import app.orbit.domain.clock.Clock
+import app.orbit.domain.model.onActiveLists
 import app.orbit.ui.util.formatDayHeader
 import app.orbit.ui.util.formatDuration
 import app.orbit.ui.util.formatWallClock
@@ -186,7 +187,9 @@ class CallLogViewModel @Inject constructor(
             // timestamp `maxByOrNull` returns one deterministically per
             // input order; UI doesn't pin a tiebreak because v1 doesn't
             // surface ties anywhere. Empty list → null → empty subtitle.
+            // Archived lists are out of your orbit and never named (LIST-24).
             val mostRecentListByContactId: Map<Long, Long> = memberships
+                .onActiveLists(lists)
                 .groupBy { it.contactId }
                 .mapValues { (_, ms) -> ms.maxByOrNull { it.addedAt }?.listId ?: 0L }
             val listById = lists.associateBy { it.id }

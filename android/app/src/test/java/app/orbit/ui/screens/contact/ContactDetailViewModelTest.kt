@@ -411,6 +411,38 @@ class ContactDetailViewModelTest {
     // ============================================================================
 
     @Test
+    fun `an archived list is not named, counted or followed (LIST-24)`() = runTest {
+        // The archived list is the first membership row, so before LIST-24 it
+        // was named, made two lists (showing the custom schedule), and was the
+        // list whose rhythm this person "follows".
+        val setup = fixture(contactIdArg = "c-5")
+        setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+        setup.listRepo.seed(
+            listOf(
+                ListEntity(id = 1L, name = "Old friends", sortOrder = 0, isArchived = true),
+                ListEntity(id = 2L, name = "Inner orbit", sortOrder = 1)
+            )
+        )
+        setup.listRepo.seedMemberships(
+            listOf(
+                ListMembershipEntity(contactId = 5L, listId = 1L, addedAt = T0),
+                ListMembershipEntity(contactId = 5L, listId = 2L, addedAt = T0)
+            )
+        )
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            var ready: ContactDetailUiState.Ready? = null
+            while (ready?.listsOn.isNullOrEmpty()) {
+                val next = awaitItem()
+                if (next is ContactDetailUiState.Ready) ready = next
+            }
+            assertEquals(listOf("Inner orbit"), ready!!.listsOn)
+            assertTrue(!ready.customScheduleVisible)
+            assertEquals("Inner orbit", ready.primaryListName)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `customScheduleVisible flips true when contact appears on two lists`() = runTest {
         val setup = fixture(contactIdArg = "c-5")
         setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))

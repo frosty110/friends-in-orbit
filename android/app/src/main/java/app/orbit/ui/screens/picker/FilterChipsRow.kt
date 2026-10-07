@@ -43,10 +43,14 @@ import app.orbit.ui.theme.OrbitTheme
  *      front. The "On a list" menu chip trails the row (only when no list
  *      filter is already applied).
  *
- * "Recently added" is no longer a chip — it became a sort option (see
- * [app.orbit.ui.screens.picker.PickerSort.ByRecentlySaved]); the old chip
- * surfaced nothing for most users because `firstSeenByAppAt` clusters at the
- * first-sync moment. "Called recently" likewise moved to the sort control as
+ * "Recently added" is a chip again (2026-10-07), beside the sort of the same
+ * name ([app.orbit.ui.screens.picker.PickerSort.ByRecentlySaved]). It was
+ * dropped because it read `firstSeenByAppAt`, which the first sync sets to one
+ * instant for everyone already on the phone, so it matched the whole address
+ * book or no one. It reads `ContactEntity.addedAt` now (SMART-08), the
+ * definition the smart rule and the sort share, over the window Settings sets
+ * ("Recently added: the last 30 days", PICK-07). "Called recently" moved to
+ * the sort control as
  * [app.orbit.ui.screens.picker.PickerSort.ByRecency] ("Recently called") —
  * surfacing recent callers by ordering reads better than hiding everyone else.
  *
@@ -76,11 +80,13 @@ fun FilterChipsRow(
     disabledHint: String? = null,
 ) {
     val curtain = LocalPrivacyCurtain.current
-    // Recently-added is now a sort option, not a chip (see KDoc).
     val allChips: List<Pair<PickerFilter, String>> = listOf(
         // Android favorites (ContactsContract STARRED), seeded
         // into the picker so hand-curated closest people are one tap away.
         PickerFilter.Starred to stringResource(R.string.picker_filter_starred),
+        // Second, so it shows without scrolling: someone you just saved is
+        // the likeliest person to add (see KDoc).
+        PickerFilter.RecentlyAdded to stringResource(R.string.picker_filter_recently_added),
         PickerFilter.CommonlyCalled to stringResource(R.string.picker_filter_commonly_called),
         PickerFilter.RarelyCalled to stringResource(R.string.picker_filter_rarely_called),
         PickerFilter.NeverCalled to stringResource(R.string.picker_filter_never_called),

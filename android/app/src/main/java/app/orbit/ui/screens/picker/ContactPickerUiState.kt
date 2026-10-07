@@ -455,6 +455,8 @@ data class PickerContact(
     // the "Recently added" sort takes min(firstSeen, this) so old contacts sink.
     // Null when the device gave no timestamp or the row predates the field.
     val deviceUpdatedAt: Instant? = null,
+    // Lists this person is on, archived ones left out (LIST-24), plus the
+    // picker's own target and source: [pickerListIdsByContact].
     val listIds: Set<Long>,
     val listNames: List<String>,
     val isCommonlyCalled: Boolean,

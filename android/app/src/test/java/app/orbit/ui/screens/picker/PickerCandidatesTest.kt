@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.picker
 
+import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.domain.contactFixture
 import app.orbit.domain.listFixture
 import java.time.Instant
@@ -83,6 +84,53 @@ class PickerCandidatesTest {
         assertEquals(
             built,
             pickerCandidates(built, PickerMode.Relink, targetListId = null, sourceListId = null)
+        )
+    }
+
+    // ─── LIST-24: which lists a person counts as being on ──────────────────
+
+    private val lists = listOf(
+        listFixture(id = 1L, name = "Inner orbit"),
+        listFixture(id = 2L, name = "Late night"),
+        listFixture(id = 3L, name = "Old friends", isArchived = true)
+    )
+
+    private fun on(contactId: Long, listId: Long) = ListMembershipEntity(
+        contactId = contactId,
+        listId = listId,
+        addedAt = Instant.parse("2026-01-01T00:00:00Z")
+    )
+
+    @Test
+    fun `an archived list is not a list the person is on`() {
+        // Person 1 is on Late night and an archived list: only Late night
+        // counts. Person 2 is on the archived list alone, so has no lists and
+        // is "Not on a list".
+        assertEquals(
+            mapOf(1L to listOf(2L)),
+            pickerListIdsByContact(
+                memberships = listOf(on(1, 2), on(1, 3), on(2, 3)),
+                lists = lists,
+                targetListId = 1L,
+                sourceListId = null
+            )
+        )
+    }
+
+    @Test
+    fun `an archived target list still hides its own members`() {
+        // List settings can open Add people for an archived list; its members
+        // are already on it and must not be offered again.
+        val byContact = pickerListIdsByContact(
+            memberships = listOf(on(1, 3), on(2, 2)),
+            lists = lists,
+            targetListId = 3L,
+            sourceListId = null
+        )
+        val rows = listOf(row(1, byContact[1L].orEmpty().toSet()), row(2, byContact[2L].orEmpty().toSet()))
+        assertEquals(
+            listOf(2L),
+            pickerCandidates(rows, PickerMode.Add, targetListId = 3L, sourceListId = null).map { it.contactId }
         )
     }
 

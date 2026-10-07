@@ -16,6 +16,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
@@ -33,10 +35,15 @@ import app.orbit.ui.theme.OrbitTheme
  * (its bottom padding was 16dp short of the card, so the last row's checkbox
  * sat under it); one component for the job now (DESIGN.md).
  *
- * [ctaLabel] is the caller's words: the contact picker words it by mode
- * through the overload below, the list picker passes "Add to N lists". Hidden
- * entirely when [selectionCount] == 0. Disabled (greyed) while [isCommitting],
- * so a second tap does nothing extra during an in-flight write.
+ * [ctaLabel] is the button's visible words, a bare verb ("Add"): the count
+ * already sits to its left, and "Add 3 people to Inner orbit" beside "3
+ * selected" said the number twice and squeezed the bar until 2026-10-07.
+ * [ctaDescription], when given, is what TalkBack says instead: the whole
+ * sentence, since a TalkBack user does not see the count and the list at a
+ * glance. It begins with the visible verb, so a voice-control user who says
+ * "Tap Add" still reaches it. Hidden entirely when [selectionCount] == 0.
+ * Disabled (greyed) while [isCommitting], so a second tap does nothing extra
+ * during an in-flight write.
  */
 @Composable
 fun BatchCounter(
@@ -45,7 +52,8 @@ fun BatchCounter(
     isCommitting: Boolean,
     onClear: () -> Unit,
     onCommit: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    ctaDescription: String? = null
 ) {
     if (selectionCount == 0) return
 
@@ -86,22 +94,29 @@ fun BatchCounter(
             OrbitButton(
                 text = ctaLabel,
                 onClick = onCommit,
-                enabled = !isCommitting
+                enabled = !isCommitting,
+                modifier = if (ctaDescription != null) {
+                    Modifier.semantics { contentDescription = ctaDescription }
+                } else {
+                    Modifier
+                }
             )
         }
     }
 }
 
 /**
- * The contact picker's bar: the CTA names the mode and the target.
+ * The contact picker's bar: the button says the mode's verb, and TalkBack
+ * hears the verb with the count and the target.
  *
- * CTA copy (the plurals say the noun, "Add 1 person to Inner orbit", "Add 3
- * people to Inner orbit", as the title and the snackbars do):
- *   - [PickerMode.Add]  → "Add {N} people to {targetListName}"
- *   - [PickerMode.Move] → "Move {N} people to {targetListName}"
- *   - [PickerMode.Copy] → "Copy {N} people to {targetListName}"
- *   - [PickerMode.Relink] → "Re-link {orphan name}" (CONTACT-07; the picker
- *     passes the orphan's name as [targetListName], and N is always 1)
+ * CTA copy, shown / spoken (the plurals say the noun, "Add 1 person to Inner
+ * orbit", "Add 3 people to Inner orbit", as the snackbars do):
+ *   - [PickerMode.Add]  → "Add" / "Add {N} people to {targetListName}"
+ *   - [PickerMode.Move] → "Move" / "Move {N} people to {targetListName}"
+ *   - [PickerMode.Copy] → "Copy" / "Copy {N} people to {targetListName}"
+ *   - [PickerMode.Relink] → "Re-link {orphan name}" both ways (CONTACT-07;
+ *     the picker passes the orphan's name as [targetListName], and N is
+ *     always 1, so there is no count to repeat and the name is the point)
  *
  * PRIV-03: under the privacy curtain the name reads "List" for a list and
  * "Contact" for the person a Re-link merges into. It read "Re-link List" for
@@ -125,16 +140,23 @@ fun BatchCounter(
         mode == PickerMode.Relink -> stringResource(R.string.components_curtain_contact)
         else -> stringResource(R.string.components_curtain_list)
     }
-    val ctaCopy: String = when (mode) {
+    val ctaSentence: String = when (mode) {
         PickerMode.Add -> pluralStringResource(R.plurals.picker_commit_add, selectionCount, selectionCount, name)
         PickerMode.Move -> pluralStringResource(R.plurals.picker_commit_move, selectionCount, selectionCount, name)
         PickerMode.Copy -> pluralStringResource(R.plurals.picker_commit_copy, selectionCount, selectionCount, name)
         PickerMode.Relink -> stringResource(R.string.picker_commit_relink, name)
     }
+    val ctaVerb: String? = when (mode) {
+        PickerMode.Add -> stringResource(R.string.picker_commit_add_short)
+        PickerMode.Move -> stringResource(R.string.picker_commit_move_short)
+        PickerMode.Copy -> stringResource(R.string.picker_commit_copy_short)
+        PickerMode.Relink -> null
+    }
 
     BatchCounter(
         selectionCount = selectionCount,
-        ctaLabel = ctaCopy,
+        ctaLabel = ctaVerb ?: ctaSentence,
+        ctaDescription = if (ctaVerb != null) ctaSentence else null,
         isCommitting = isCommitting,
         onClear = onClear,
         onCommit = onCommit,
@@ -211,7 +233,8 @@ private fun BatchCounterListsPreview() {
     OrbitTheme {
         BatchCounter(
             selectionCount = 2,
-            ctaLabel = pluralStringResource(R.plurals.picker_lists_commit, 2, 2),
+            ctaLabel = stringResource(R.string.picker_commit_add_short),
+            ctaDescription = pluralStringResource(R.plurals.picker_lists_commit, 2, 2),
             isCommitting = false,
             onClear = {},
             onCommit = {}

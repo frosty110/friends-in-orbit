@@ -3,7 +3,7 @@
 **Route:** `pick/lists?contactId={contactId}`
 **Group:** People
 **Status:** active
-**Last reviewed:** 2026-10-06
+**Last reviewed:** 2026-10-07
 **Spec:** [orbit-lists](../orbit-lists/README.md): BULK-06, PICK-06, PICK-09; PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
@@ -17,13 +17,13 @@
 
 - App bar: Back, and "Add {name} to lists" ("Add to lists" under the curtain)
 - One row per regular list, with a checkbox (a smart list fills itself from its rule, so it is not offered as a row); a list the person is already on says "Already added" and cannot be picked
-- A bar docked under the list once anything is selected: "2 selected", "Clear", and "Add to 2 lists" (the one accent; PICK-06)
+- A bar docked under the list once anything is selected: "2 selected", "Clear", and "Add" (TalkBack hears "Add to 2 lists"; the one accent; PICK-06)
 
 ## Actions and menus
 
 - Tap a row to pick or unpick a list
 - "Clear" empties the selection
-- "Add to N lists" closes the picker, and the snackbar shows on the screen you came from: "Added to 2 lists" with Undo, which removes only what was just added and never a membership the person already had; "Couldn't save that" when nothing could be written (a smart list is refused the same way)
+- "Add" closes the picker, and the snackbar shows on the screen you came from: "Added to 2 lists" with Undo, which removes only what was just added and never a membership the person already had; "Couldn't save that" when nothing could be written (a smart list is refused the same way)
 - "New list", offered only when you have no lists yet (BULK-06): a dialog, "New list", with "Name this list", "Create" and "Cancel" (a blank name cancels); the new list appears, ready to pick; "Couldn't create the list" if it could not be made
 
 ## States

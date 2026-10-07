@@ -3,8 +3,8 @@
 **Route:** `call-log` (everyone's calls); `call-log?contactId={contactId}` (one person's calls, LOG-04)
 **Group:** Settings & data
 **Status:** active
-**Last reviewed:** 2026-10-06
-**Spec:** [call-history](../call-history/README.md): LOG-01, LOG-03 (defined this round), LOG-04, LOG-05; IGNORE-09 in [settings](../settings/README.md) (defined this round); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
+**Last reviewed:** 2026-10-07
+**Spec:** [call-history](../call-history/README.md): LOG-01, LIST-24 in [orbit-lists](../orbit-lists/README.md), LOG-03 (defined this round), LOG-04, LOG-05; IGNORE-09 in [settings](../settings/README.md) (defined this round); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
 
@@ -19,7 +19,7 @@
 - Filter chips "All", "Incoming", "Outgoing", one always chosen; the row scrolls sideways rather than breaking a label at large text
 - When call log access is off but calls were recorded earlier, a notice above them: "Orbit can't see new calls, so some may be missing here." with "Open settings"
 - Rows grouped under sticky day headers: "Today", "Yesterday", then "Wednesday 3 June"
-- Each row: face, name (greyed, with "(ignored)", for someone you ignore), "from {list}", the length, an icon and word for its kind ("Outgoing", "Incoming", "Logged" for a connection you logged by hand, "Attempted" for a call that did not connect; the last two show no length), the time ("4:30pm"), and a "More actions for {name}" button
+- Each row: face, name (greyed, with "(ignored)", for someone you ignore), "from {list}" (their newest list that isn't archived; LIST-24), the length, an icon and word for its kind ("Outgoing", "Incoming", "Logged" for a connection you logged by hand, "Attempted" for a call that did not connect; the last two show no length), the time ("4:30pm"), and a "More actions for {name}" button
 - In one person's log the rows say what happened instead: "You called", "{Name} called", "You logged a connection", "You tried to reach them"
 - A footer, "Show 200 more" (n is how many come next), until everything is shown
 - No control on the page is in the accent; the denied state's "Open settings" and the error's Try again carry their own
@@ -52,7 +52,7 @@
 
 ## Tests that pin it
 
-- `CallLogViewModelTest` (day grouping, one-person mode, the Logged and Attempted kinds with no length, the filters, ignored rows, denied and unknown permission, Error and recovery, paging)
+- `CallLogViewModelTest` (an archived list is never the "from {list}"; day grouping, one-person mode, the Logged and Attempted kinds with no length, the filters, ignored rows, denied and unknown permission, Error and recovery, paging)
 - `CallLogRowMenuTest` (added this round: "Call again", "Open details", neither destructive)
 - `CallEventDaoLogTest`
 - `OrbitNavHostTest` (added this round: "Open settings" pops back when Call history came from Settings and pushes Settings otherwise, LOG-05; "View all calls" and back return to the same person, LOG-04)
