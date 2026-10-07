@@ -1,7 +1,9 @@
 // android/app/src/main/java/app/orbit/widget/WidgetContent.kt
 //
 // Shared Glance composables used by OrbitWidget2x2 ("Next call") and
-// OrbitWidget4x2 ("Call suggestions").
+// OrbitWidget4x2 ("Call suggestions"). Composables only: the intents they
+// fire are built in WidgetIntents.kt, so this file can be left out of the
+// unit-test coverage count as UI (see the Kover filter in app/build.gradle.kts).
 //
 // THEME NOTE: All color access is via GlanceTheme.colors.* (M3 slot aliases)
 // inside OrbitWidgetTheme, plus the avatar's day and night pairs from
@@ -25,9 +27,6 @@
 // a FLAG_IMMUTABLE PendingIntent. No CALL_PHONE (PRIV-05).
 package app.orbit.widget
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.glance.ColorFilter
@@ -60,38 +59,10 @@ import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
-import app.orbit.MainActivity
 import app.orbit.R
-import app.orbit.data.entity.ContactEntity
 import app.orbit.ui.theme.OrbitWidgetTextStyles
 import app.orbit.ui.theme.WidgetSizes
 import app.orbit.ui.theme.WidgetSpacing
-
-// ─── Intent helpers ──────────────────────────────────────────────────────────
-
-/**
- * Builds an ACTION_DIAL intent for the given contact. Uses [ContactEntity.phoneNumber]
- * (the display-number field) as the dialer data URI.
- *
- * [Uri.fromParts] (not `Uri.parse`) so numbers containing `#` or wait/pause
- * characters (`555-1234,,123#`) are opaque-encoded instead of being truncated
- * at the URI fragment delimiter (review WR-04).
- *
- * Never uses CALL_PHONE or ACTION_CALL (PRIV-05). Glance wraps this in a
- * FLAG_IMMUTABLE PendingIntent via actionStartActivity.
- */
-fun dialIntent(contact: ContactEntity): Intent =
-    Intent(Intent.ACTION_DIAL).apply {
-        data = Uri.fromParts("tel", contact.phoneNumber, null)
-    }
-
-/**
- * Opens Orbit's Home screen (default start destination) — used by the empty
- * state tap target. No NAVIGATE_TO extra; MainActivity starts normally and
- * lands on Home per NavGraph default.
- */
-fun openHomeIntent(context: Context): Intent =
-    Intent(context, MainActivity::class.java)
 
 // ─── Entry points ────────────────────────────────────────────────────────────
 

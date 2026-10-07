@@ -69,6 +69,22 @@ class WidgetUpdateSchedulerTest {
         )
     }
 
+    /**
+     * The domain's one door to a widget refresh (WIDGET-06):
+     * [WorkManagerWidgetRefreshTrigger], the production binding every use case
+     * gets, enqueues the same unique immediate update. Use-case tests inject a
+     * no-op trigger, so until 2026-10-07 nothing showed the real one reaches
+     * WorkManager at all.
+     */
+    @Test
+    fun refreshTrigger_enqueuesTheImmediateUpdate() {
+        WorkManagerWidgetRefreshTrigger(context).scheduleRefresh()
+
+        val infos = wm.getWorkInfosForUniqueWork(WidgetUpdateScheduler.UNIQUE_WORK).get()
+        assertEquals(1, infos.size, "one immediate update is enqueued")
+        assertEquals(WorkInfo.State.ENQUEUED, infos.single().state)
+    }
+
     /** Scheduling a periodic update enqueues a unique periodic work item. */
     @Test
     fun schedulePeriodic_enqueuesUniquePeriodicWork() {

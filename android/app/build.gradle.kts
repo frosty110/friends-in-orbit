@@ -186,7 +186,21 @@ kover {
                     "app.orbit.MainActivity",
                     "app.orbit.MainActivity*",
                     "app.orbit.OrbitApp",
-                    "app.orbit.OrbitApp*"
+                    "app.orbit.OrbitApp*",
+                    // The widget's Glance UI. The @Composable filter above
+                    // drops the composable functions themselves, but Kotlin 2
+                    // compiles each content lambda (a Row's or Column's body)
+                    // into a synthetic `Name$lambda$N` method on the file
+                    // class, and those carry no annotation, so a file of
+                    // nothing but composables still counted 107 uncovered
+                    // lines. Glance cannot be composed by the JVM unit tests;
+                    // the screenshot job's PlatformSurfacesGalleryTest renders
+                    // every arrangement instead. WidgetContent.kt holds only
+                    // composables (its intent builders live in
+                    // WidgetIntents.kt, measured). Screens under ui/ leak
+                    // their lambda bodies the same way and stay counted:
+                    // their Robolectric Compose tests do run many of them.
+                    "app.orbit.widget.WidgetContentKt"
                 )
             }
         }
