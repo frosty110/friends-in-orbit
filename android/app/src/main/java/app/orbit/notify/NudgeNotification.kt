@@ -14,8 +14,10 @@ import app.orbit.nav.AppLinks
 import app.orbit.nav.Routes
 
 /**
- * Builds a list's nudge. The only notification Orbit posts (ADR 0009), so the
- * lock-screen rule below covers every notification the app can show.
+ * Builds a list's nudge. Until 2026-10-07 it was the only notification Orbit
+ * posted (ADR 0009); the notification after a call ([PostCallNotification],
+ * NOTIF-16) follows the same lock-screen rule below, so it still covers every
+ * notification the app can show.
  *
  * ### Lock screen (NOTIF-13, UX rubric gate G6)
  * Every nudge is [NotificationCompat.VISIBILITY_PRIVATE] with a public version

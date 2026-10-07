@@ -47,3 +47,16 @@ fun Context.isDndBlocking(): Boolean {
     val nm = getSystemService<NotificationManager>() ?: return false
     return nm.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
 }
+
+/**
+ * Returns `true` unless the user has turned [channelId] off in Android's
+ * notification settings (importance NONE). NOTIF-16's notification has a
+ * channel of its own so it can be switched off alone; checking before the
+ * work of building it keeps a switched-off channel from costing anything.
+ * A channel that does not exist yet counts as on: it is created on every
+ * cold start ([OrbitNotifications.ensureChannels]).
+ */
+fun Context.isChannelEnabled(channelId: String): Boolean {
+    val channel = NotificationManagerCompat.from(this).getNotificationChannel(channelId) ?: return true
+    return channel.importance != NotificationManager.IMPORTANCE_NONE
+}

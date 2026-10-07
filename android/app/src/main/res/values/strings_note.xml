@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The page for writing about a call (NOTE-04), opened from Home's calls waiting for a
+    note, from the notification after a call, and from Card view's "Called Kai".
+    Keys are area_what (features/_foundations/voice.md, "Where copy lives").
+    Sentence case, no exclamation marks.
+-->
+<resources>
+
+    <!-- The page's title. %1$s: the person's first name. -->
+    <string name="note_title_named">Your call with %1$s</string>
+    <!-- The title while the app is covered (privacy curtain), or before the person has loaded. -->
+    <string name="note_title">Your call</string>
+    <!-- Leaves the page without writing a note. -->
+    <string name="note_not_now">Not now</string>
+
+    <!-- The call, in one line under the title. %1$s: the person's first name, %2$s: how long
+         it lasted ("14 min"), %3$s: when ("Today at 4:30pm"). -->
+    <string name="note_call_you_called">You called %1$s · %2$s · %3$s</string>
+    <string name="note_call_they_called">%1$s called you · %2$s · %3$s</string>
+    <!-- The same line while the app is covered (privacy curtain): no name. %1$s: how long,
+         %2$s: when. -->
+    <string name="note_call_you_called_masked">You called · %1$s · %2$s</string>
+    <string name="note_call_they_called_masked">They called · %1$s · %2$s</string>
+    <!-- When the call was. %1$s: the day ("Today", "Yesterday", "Wednesday 3 June"), %2$s: the
+         time in the phone's own style ("4:30pm" or "16:30"). -->
+    <string name="note_call_when">%1$s at %2$s</string>
+
+    <!-- The writing field's placeholder, and its label for TalkBack while it is empty. -->
+    <string name="note_prompt">How did it go? What do you want to remember?</string>
+    <!-- What the field shows while the app is covered (privacy curtain). -->
+    <string name="note_hidden">Note hidden</string>
+    <string name="note_save">Save note</string>
+
+    <!-- What TalkBack says for the timer in the top bar, which counts up from 0:00. It
+         changes once a minute, so TalkBack is not read the time every second. -->
+    <string name="note_timer_under_a_minute">Writing for less than a minute</string>
+    <plurals name="note_timer_minutes">
+        <item quantity="one">Writing for %1$d minute</item>
+        <item quantity="other">Writing for %1$d minutes</item>
+    </plurals>
+
+    <!-- Leaving with words written. -->
+    <string name="note_discard_title">Discard this note?</string>
+    <string name="note_discard_keep">Keep writing</string>
+    <string name="note_discard_confirm">Discard</string>
+
+    <!-- After saving, on the screen the page returns to. -->
+    <string name="note_snackbar_saved">Note saved</string>
+    <!-- The note could not be written. The words stay on the page. -->
+    <string name="note_snackbar_save_failed">Couldn\'t save your note. Try again.</string>
+</resources>

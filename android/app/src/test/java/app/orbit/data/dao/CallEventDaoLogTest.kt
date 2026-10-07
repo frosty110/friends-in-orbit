@@ -9,7 +9,6 @@ import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.CallSource
 import app.orbit.data.entity.ContactEntity
-import app.orbit.data.entity.NoteEntity
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -23,8 +22,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Exercises [CallEventDao.observeForLog], [CallEventDao.latestUnnotedOutgoing],
- * and [CallEventDao.getById] against an in-memory Room database.
+ * Exercises [CallEventDao.observeForLog] and [CallEventDao.getById] against an
+ * in-memory Room database. The query for calls waiting for a note (NOTE-05),
+ * which replaced `latestUnnotedOutgoing` on 2026-10-07, is pinned by
+ * `WaitingCallsTest`.
  *
  * NOTE on the `observeForLog filters contactId IS NOT NULL` test contract:
  * [CallEventEntity.contactId] is non-nullable on the current schema, so the
@@ -40,7 +41,6 @@ class CallEventDaoLogTest {
     private lateinit var db: OrbitDatabase
     private lateinit var callEventDao: CallEventDao
     private lateinit var contactDao: ContactDao
-    private lateinit var noteDao: NoteDao
 
     private val NOW: Instant = Instant.parse("2026-04-26T12:00:00Z")
     private val FIRST_SEEN: Instant = Instant.parse("2026-01-01T00:00:00Z")
@@ -53,7 +53,6 @@ class CallEventDaoLogTest {
             .build()
         callEventDao = db.callEventDao()
         contactDao = db.contactDao()
-        noteDao = db.noteDao()
     }
 
     @After
@@ -103,52 +102,6 @@ class CallEventDaoLogTest {
             )
             cancelAndIgnoreRemainingEvents()
         }
-    }
-
-    @Test
-    fun `latestUnnotedOutgoing returns null when matching note exists`() = runTest {
-        val cid = seedContact(1L)
-        val callAt = NOW.minusSeconds(60)
-        callEventDao.insert(event(cid, callAt, direction = CallDirection.OUTGOING))
-        // Note created AFTER the call → call is "noted".
-        noteDao.insert(NoteEntity(contactId = cid, createdAt = callAt.plusSeconds(5), body = "post-call"))
-
-        val result = callEventDao.latestUnnotedOutgoing(since = NOW.minusSeconds(60 * 60))
-        assertNull(result, "covering note should suppress the banner")
-    }
-
-    @Test
-    fun `latestUnnotedOutgoing returns event when no covering note exists`() = runTest {
-        val cid = seedContact(1L)
-        val callAt = NOW.minusSeconds(120)
-        callEventDao.insert(event(cid, callAt, direction = CallDirection.OUTGOING))
-        // Note created BEFORE the call → does NOT cover (Pitfall 5).
-        noteDao.insert(NoteEntity(contactId = cid, createdAt = callAt.minusSeconds(60), body = "older note"))
-
-        val result = callEventDao.latestUnnotedOutgoing(since = NOW.minusSeconds(60 * 60))
-        assertNotNull(result)
-        assertEquals(callAt, result.occurredAt)
-        assertEquals(CallDirection.OUTGOING, result.direction)
-    }
-
-    @Test
-    fun `latestUnnotedOutgoing ignores INCOMING calls`() = runTest {
-        val cid = seedContact(1L)
-        val callAt = NOW.minusSeconds(60)
-        callEventDao.insert(event(cid, callAt, direction = CallDirection.INCOMING))
-
-        val result = callEventDao.latestUnnotedOutgoing(since = NOW.minusSeconds(60 * 60))
-        assertNull(result, "incoming calls must not trigger the post-call banner")
-    }
-
-    @Test
-    fun `latestUnnotedOutgoing ignores events before since window`() = runTest {
-        val cid = seedContact(1L)
-        // Call 2 hours ago; window starts 1 hour ago.
-        callEventDao.insert(event(cid, NOW.minusSeconds(60 * 60 * 2), direction = CallDirection.OUTGOING))
-
-        val result = callEventDao.latestUnnotedOutgoing(since = NOW.minusSeconds(60 * 60))
-        assertNull(result)
     }
 
     @Test

@@ -2,6 +2,7 @@
 
 **Status:** accepted
 **Date:** 2026-07-03
+**Amended:** 2026-10-07 (one event-driven notification, after a call; see §Amendment)
 **Deciders:** the maintainer
 **Supersedes:** none
 **Refines:** mission principles 1 ("Reduce activation energy — notifications bring the
@@ -84,6 +85,35 @@ Concretely:
   nudges to opt-in would be a separate decision, not implied here.
 - **No change to in-app surfacing** beyond the missed-call "due since they rang"
   behavior already shipped.
+
+## Amendment (2026-10-07): the notification after a call
+
+**Status:** amended. The decision above stands for every notification but one;
+its rationale is unchanged.
+
+Reviewing the prototype, the owner asked whether Home's "Add a note while it's
+fresh" banner could be a notification, and decided it should be
+(`vision/flows/owner-review-2026-10-07.md`, decision 12). That notification
+reacts to an event, a call ending, which the decision above forbids "without
+superseding this ADR". This amendment allows exactly that one notification
+(NOTIF-16, `features/notifications/README.md`) and nothing like it by
+extension:
+
+- **It is about a call the user had, never about absence.** Only a connected
+  call of a minute or more with someone on a list, that ended in the last two
+  hours, with nothing written about that person since and not dismissed on
+  Home (NOTE-05). A missed or declined call still fires nothing, and the
+  follow-up removed on 2026-07-03 stays removed.
+- **It asks once and goes away by itself.** One per person per call, posted
+  only while Orbit is not on screen, never for a first import or a resync, and
+  cancelled as soon as the call stops waiting (a note saved, a dismissal, a day
+  gone). No reminder chain, no repeat.
+- **The user owns it.** It has its own channel, "After a call", so it can be
+  turned off without touching the list nudges; it respects the same gates as a
+  nudge (notifications allowed, Do Not Disturb), and its lock-screen version
+  names no one (NOTIF-13's rule).
+
+Any other event-driven notification still needs a new decision.
 
 ## Related
 

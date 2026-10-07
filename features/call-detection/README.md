@@ -1,10 +1,10 @@
 # call-detection
 
 **Status:** in-progress
-**Last reviewed:** 2026-10-06 (attempts, the encrypted store, where the type filter runs)
+**Last reviewed:** 2026-10-07 (the call-log trigger that wakes Orbit after a call, for NOTIF-16)
 **Ground truth:**
-- Code: `android/app/src/main/java/app/orbit/calllog/` (`CallLogSyncWorker`, `CallLogReconciler`, `ContentObserverController`, `PhoneNumberNormalizer`), `android/app/src/main/java/app/orbit/data/android/CallLogReader.kt`
-- Tests: `android/app/src/test/java/app/orbit/calllog/` (`CallLogSyncWorkerTest`, `CallLogReconcilerTest`, `ContentObserverControllerTest`, `PhoneNumberNormalizerTest`)
+- Code: `android/app/src/main/java/app/orbit/calllog/` (`CallLogSyncWorker`, `CallLogReconciler`, `ContentObserverController`, `CallLogTriggerWorker`, `PhoneNumberNormalizer`), `android/app/src/main/java/app/orbit/data/android/CallLogReader.kt`
+- Tests: `android/app/src/test/java/app/orbit/calllog/` (`CallLogSyncWorkerTest`, `CallLogReconcilerTest`, `ContentObserverControllerTest`, `CallLogTriggerWorkerTest`, `PhoneNumberNormalizerTest`)
 
 ---
 
@@ -28,6 +28,8 @@ As a user, I grant CALL_LOG permission during onboarding. From then on, the app 
 
 **Resume sync.** On every app foreground the call log is re-read incrementally (TTL-gated) so a call completed while the app was backgrounded/killed still surfaces without a manual tap. See `real-time-detection-exploration.md` for why live in-call detection is deliberately not built.
 
+**Woken after a call (2026-10-07).** The resume sync reads a finished call only when Orbit next comes to the front, which is too late to ask about the call in the notification shade (NOTIF-16 in `features/notifications/README.md`). So Orbit also arms a WorkManager content URI trigger on `CallLog.Calls.CONTENT_URI` (`CallLogTriggerWorker`): when the call log changes, Android starts Orbit even if its process was killed during the call, and the worker runs the ordinary incremental sync and arms itself again. No new permission: it rides on READ_CALL_LOG, is armed only while that is granted, and is disarmed with the observers (a reset, a revoked permission). The content observer stays, because it reacts at once while Orbit is alive (the card's return from the dialer counts on that, CORE-04), while JobScheduler batches the trigger and Doze can defer it. Both enqueue the same unique sync with KEEP, so a change heard twice is still one sync, and there is no second ingest path.
+
 **Filter.** Inbound non-events are not counted and never enter the domain model: missed calls, declined calls, voicemails and blocked calls, because the user did not reach out. An incoming call is ingested once it was answered (a duration of 1 second or more). An outgoing call is always ingested: one that connected (1 second or more) as a call (`source = CALL_LOG`), and one nobody answered (under 1 second) as an attempt (`source = ATTEMPT`), a reach-out the user placed that Call history shows as "Attempted" and the stats leave out (`features/call-history/README.md`, the glossary's "Attempt" in `voice.md`). `CallLogReconciler.isIngestable` and `toCallSource` are the mechanism. Until 2026-10-06 this paragraph said unanswered calls were never ingested, which the reconciler had not done for some time.
 
 **Direction.** Outgoing and incoming stored separately.
@@ -36,7 +38,7 @@ As a user, I grant CALL_LOG permission during onboarding. From then on, the app 
 
 **Cooldown weighting.** Incoming calls count as 50% cooldown reset by default; user-configurable per rule (see `features/rule-engine/README.md`).
 
-**Incoming call follow-up.** When an incoming call from a tracked contact completes or is missed, `features/notifications/README.md` raises a "they called you, want to call back?" prompt. If notifications are disabled, the prompt surfaces on next app open instead.
+**After a call.** A missed call raises no notification: it surfaces the person in the deck (ADR 0009; the "they called you, want to call back?" follow-up was removed on 2026-07-03, and this paragraph described it until 2026-10-07). A connected call of a minute or more with someone on a list waits for a note on Home (NOTE-05), and, when it ends while Orbit is closed, the sync that reads it posts "How was your call with Kai?" (NOTIF-16).
 
 ### Acceptance criteria
 
@@ -67,10 +69,11 @@ As a user, I grant CALL_LOG permission during onboarding. From then on, the app 
 ### Architecture
 
 - `CallLogReader` — thin wrapper over `CallLog.Calls` ContentResolver query. Pure Android, no Room dependency.
-- `CallLogSyncWorker` (`@HiltWorker`, WorkManager per ADR 0004) — runs on four triggers, all funnelling through the `orbit.call_log_sync` unique work: (1) **app foreground** — `MainActivity` ON_START calls `ContentObserverController.enqueueResumeSyncIfStale()`, an incremental, TTL-gated re-read that closes the process-death gap (a call that completes while Orbit's process is dead is never observed live, so the next foreground catches it); (2) **content-observer trigger** (debounced); (3) **manual resync** (Settings → "Sync now", full window); (4) **first-run import**. Reads since the last-sync cursor (DataStore key `last_call_log_sync_at_ms`), hands rows to `CallLogReconciler`.
+- `CallLogSyncWorker` (`@HiltWorker`, WorkManager per ADR 0004) runs on five triggers, all funnelling through the `orbit.call_log_sync` unique work: (1) **app foreground**: `MainActivity` ON_START calls `ContentObserverController.enqueueResumeSyncIfStale()`, an incremental, TTL-gated re-read that closes the process-death gap (a call that completes while Orbit's process is dead is never observed live, so the next foreground catches it); (2) **content-observer trigger** (debounced); (3) **the call-log trigger** (`CallLogTriggerWorker`, 2026-10-07), which enqueues the observer's own debounced request from a process WorkManager started; (4) **manual resync** (Settings → "Sync now", full window); (5) **first-run import**. Reads since the last-sync cursor (DataStore key `last_call_log_sync_at_ms`), hands rows to `CallLogReconciler`, and after a pass that inserted rows hands the new calls to `PostCallNotifier` (NOTIF-16; never for a first import or a full resync, and a failure there never fails the sync).
+- `CallLogTriggerWorker` (`@HiltWorker`, unique work `orbit.call_log_trigger`) is a one-time request constrained by `Constraints.Builder().addContentUriTrigger(CallLog.Calls.CONTENT_URI, true)`. `ContentObserverController.start()` arms it with KEEP whenever READ_CALL_LOG is granted (app start and the permission grant); each run re-arms it with APPEND_OR_REPLACE (a content URI trigger fires once per enqueue, and the running worker still holds the unique name, so KEEP would add nothing and REPLACE would cancel it) and enqueues the sync; without the permission it does neither and the chain ends. `ContentObserverController.stop()` cancels it.
 - `CallLogReconciler` — matches call-log numbers against the `contact_phones` table (every number per contact — multi-number matching), normalized via `PhoneNumberNormalizer`; writes `CallEventEntity` rows idempotently.
 - `CallEventRepository` — UI never touches ContentResolver directly.
-- `ContentObserverController` — observes `CallLog.Calls.CONTENT_URI` for live updates and triggers a sync. There is no `PHONE_STATE` BroadcastReceiver; the incoming-call follow-up notification (`features/notifications/README.md`) is unbuilt.
+- `ContentObserverController` observes `CallLog.Calls.CONTENT_URI` for live updates and triggers a sync, and arms and disarms the call-log trigger. There is no `PHONE_STATE` BroadcastReceiver; the incoming-call follow-up notification was removed (ADR 0009).
 
 ### Data model
 
@@ -103,7 +106,7 @@ No `CallStatEntity` — stats (last-call, count, avg-duration, longest-gap) are 
 
 ### Not in scope (technical)
 
-- `PHONE_STATE` BroadcastReceiver. Content observation on `CallLog.Calls.CONTENT_URI` (`ContentObserverController`) covers live updates.
+- `PHONE_STATE` BroadcastReceiver. Content observation on `CallLog.Calls.CONTENT_URI` (`ContentObserverController`) covers live updates, and the call-log trigger (`CallLogTriggerWorker`) covers a dead process.
 - Syncing call log across devices. Local-only per `features/privacy-and-lock/README.md`.
 
 ### Open technical questions

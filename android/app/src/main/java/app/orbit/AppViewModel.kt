@@ -3,25 +3,37 @@ package app.orbit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.orbit.data.AppPrefs
-import app.orbit.data.repository.CallEventRepository
-import app.orbit.data.repository.ContactRepository
+import app.orbit.data.dao.WaitingCallRow
 import app.orbit.data.repository.ResetOutcome
 import app.orbit.data.repository.ResetService
+import app.orbit.data.repository.WaitingCalls
 import app.orbit.domain.clock.Clock
 import app.orbit.nav.Routes
+import app.orbit.ui.components.NoteWaiting
 import app.orbit.ui.screens.onboarding.OnboardingStep
 import app.orbit.ui.theme.OrbitDarkMode
 import app.orbit.ui.theme.OrbitThemeId
 import app.orbit.ui.theme.ThemeSettings
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.formatDuration
+import app.orbit.ui.util.formatRelativeFine
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.Duration
+import java.time.Instant
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -33,12 +45,14 @@ import kotlinx.coroutines.launch
  *   - privacy curtain (auto-only — flips on focus loss, restores on focus regain).
  *   - the reset's outcome ([resetOutcome], SET-06), read from the app-scoped
  *     [ResetService] so MainActivity can act on it wherever the user is.
+ *   - the calls waiting for a note on Home ([notesWaiting], HOME-14 over
+ *     NOTE-05's [WaitingCalls]) and their dismissals.
  *
  * Hilt constructs this VM via `@AndroidEntryPoint` on MainActivity +
  * `by viewModels<AppViewModel>()`; there is no manual factory companion. The
  * VM does not own a repository for permission checks — per-screen VMs check
  * their own permissions, and call-log ingestion lives in `CallLogSyncWorker`.
- * Both exposed StateFlows use `WhileSubscribed(5_000L)` per ARCH-02.
+ * The derived StateFlows use `WhileSubscribed(5_000L)` per ARCH-02.
  *
  * 2026-04-28: removed biometric-lock flag and the user-toggled minimal-mode
  * half of the privacy curtain combine. Quick-hide on focus loss survives —
@@ -47,8 +61,7 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class AppViewModel @Inject constructor(
     private val appPrefs: AppPrefs,
-    private val callEventRepo: CallEventRepository,
-    private val contactRepo: ContactRepository,
+    private val waitingCalls: WaitingCalls,
     private val clock: Clock,
     private val resetService: ResetService,
 ) : ViewModel() {
@@ -81,28 +94,49 @@ class AppViewModel @Inject constructor(
     fun onResetOutcomeHandled() = resetService.clearOutcome()
 
     /**
-     * NOTE-02 — post-call banner state.
+     * HOME-14 / NOTE-05: the calls waiting for a note, for Home's stack.
      *
-     * Re-derived imperatively on every app resume (HomeScreen calls
-     * [checkPostCallPrompt] inside `LifecycleResumeEffect` — do NOT use
-     * `LaunchedEffect(Unit)`; that fires once per composition and misses the
-     * dialer→app return because Home stays composed).
+     * [WaitingCalls] owns the rules and re-emits live (a note saved on
+     * another screen, a dismissal, a new call). What Home controls is the
+     * start of the 24 hour window: [onHomeResumed] moves it on every resume,
+     * so a call slides out once a day has passed even while Home stays
+     * composed (Home is the root destination and survives the dialer
+     * round-trip). Until the first resume nothing is read.
      *
-     * `dismissedCallEventIds` is intentionally process-scoped (in-memory): a
-     * fresh process should re-prompt — feature, not bug. The set is keyed by
-     * callEventId so a retroactive note about an older call can't suppress a
-     * banner for a newer one.
+     * The time since each call is worded at each emission, against the
+     * clock, so a call synced while Home is open says "just now" rather than
+     * being measured from the last resume.
+     *
+     * A failed read shows no stack rather than crashing the screen: Home's
+     * own state reads the same database and says "Orbit couldn't load your
+     * lists" when it cannot (HOME-10), and this list is an extra on top of it.
+     * The catch is inside the resume's flow, so the next resume reads again.
      */
-    data class PostCallPromptState(
-        val callEventId: Long,
-        val contactId: Long,
-        val contactName: String
-    )
+    private val homeResumedAt = MutableStateFlow<Instant?>(null)
 
-    private val dismissedCallEventIds = mutableSetOf<Long>()
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val notesWaiting: StateFlow<List<NoteWaiting>> =
+        homeResumedAt
+            .filterNotNull()
+            .flatMapLatest { resumedAt ->
+                waitingCalls.observe(resumedAt)
+                    .map { rows ->
+                        val now = clock.now()
+                        rows.map { it.toNoteWaiting(now) }
+                    }
+                    .catch { emit(emptyList()) }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
-    private val _postCallPrompt = MutableStateFlow<PostCallPromptState?>(null)
-    val postCallPrompt: StateFlow<PostCallPromptState?> = _postCallPrompt.asStateFlow()
+    /**
+     * HOME-14: what a dismissal says ("Dismissed 3 calls" with Undo), or that
+     * it could not be saved. The ids ride the event, so its Undo needs nothing
+     * the screen might have lost (the Home README's snackbar note).
+     */
+    data class NotesWaitingEvent(val message: UiText, val undoCallEventIds: List<Long> = emptyList())
+
+    private val _notesWaitingEvents = MutableSharedFlow<NotesWaitingEvent>(extraBufferCapacity = 4)
+    val notesWaitingEvents: SharedFlow<NotesWaitingEvent> = _notesWaitingEvents.asSharedFlow()
 
     /** True if list / contact names should render as generic "Contact" because
      *  the app is currently backgrounded — protects the app-switcher snapshot
@@ -179,44 +213,65 @@ class AppViewModel @Inject constructor(
     }
 
     /**
-     * NOTE-02 — re-derive [postCallPrompt] from disk. Called from
-     * [HomeScreen]'s `LifecycleResumeEffect` (NOT `LaunchedEffect(Unit)` —
-     * a single-fire effect misses the dialer-return path because Home stays
-     * composed across the call).
-     *
-     * Window: 10 minutes. Suppression: in-memory dismissed-set, NOT a Room
-     * column — the user dismissing a banner is process-scoped intent, not a
-     * persistent fact about the call. Process death wipes the set; the next
-     * cold launch re-prompts — feature, not bug.
+     * HOME-14: Home resumed (and on first composition). Moves the 24 hour
+     * window to now. Called from HomeScreen's `LifecycleResumeEffect`, not a
+     * `LaunchedEffect(Unit)`, which fires once per composition and misses the
+     * return from the dialer because Home stays composed across the call.
      */
-    fun checkPostCallPrompt() {
+    fun onHomeResumed() {
+        homeResumedAt.value = clock.now()
+    }
+
+    /**
+     * HOME-14: "Dismiss" on one call, or "Dismiss all". Persisted (NOTE-05),
+     * so the calls stay closed after a restart, with an Undo; a write that
+     * fails says "Couldn't save your change" and offers nothing to undo
+     * (rules.md Code 3). The post-call notification for these people goes
+     * away by itself once the store changes (NOTIF-16, `PostCallNotifier`).
+     */
+    fun dismissNotesWaiting(callEventIds: List<Long>) {
+        if (callEventIds.isEmpty()) return
         viewModelScope.launch {
-            val since = clock.now().minus(Duration.ofMinutes(10))
-            val event = callEventRepo.latestUnnotedOutgoing(since)
-            if (event == null || event.id in dismissedCallEventIds) {
-                _postCallPrompt.value = null
-                return@launch
+            val saved = writeOrSayFailed { waitingCalls.dismiss(callEventIds) }
+            if (saved) {
+                _notesWaitingEvents.tryEmit(
+                    NotesWaitingEvent(
+                        message = callEventIds.size.let { n ->
+                            UiText.plural(R.plurals.home_snackbar_calls_dismissed, n, n)
+                        },
+                        undoCallEventIds = callEventIds,
+                    ),
+                )
             }
-            // CallEventEntity.contactId is non-nullable in the current schema.
-            // Defensive lookup still: if the contact row is gone (orphaned /
-            // deleted in another flow) we suppress rather than render a banner
-            // with a blank name.
-            val contact = contactRepo.getById(event.contactId) ?: run {
-                _postCallPrompt.value = null
-                return@launch
-            }
-            _postCallPrompt.value = PostCallPromptState(
-                callEventId = event.id,
-                contactId = event.contactId,
-                contactName = contact.displayName
-            )
         }
     }
 
-    /** NOTE-02 — record dismissal in the process-scoped set and clear the
-     *  visible banner state. */
-    fun dismissPostCallPrompt(callEventId: Long) {
-        dismissedCallEventIds += callEventId
-        _postCallPrompt.value = null
+    /** HOME-14: the dismissal's Undo. The calls wait again. */
+    fun undoDismissNotesWaiting(callEventIds: List<Long>) {
+        viewModelScope.launch { writeOrSayFailed { waitingCalls.undoDismiss(callEventIds) } }
     }
+
+    private suspend fun writeOrSayFailed(write: suspend () -> Unit): Boolean =
+        try {
+            write()
+            true
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t // rules.md Code 5
+            _notesWaitingEvents.tryEmit(NotesWaitingEvent(UiText.res(R.string.components_snackbar_save_failed)))
+            false
+        }
+
+    /** "14 min · 2 hours ago": the app's duration and time-since words. */
+    private fun WaitingCallRow.toNoteWaiting(now: Instant): NoteWaiting = NoteWaiting(
+        callEventId = callEventId,
+        contactId = contactId,
+        name = displayName,
+        photoUri = photoUri,
+        direction = direction,
+        meta = UiText.res(
+            R.string.components_notes_waiting_meta,
+            formatDuration(durationSeconds),
+            formatRelativeFine(occurredAt, now),
+        ),
+    )
 }

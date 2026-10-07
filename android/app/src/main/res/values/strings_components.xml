@@ -91,13 +91,38 @@
     <string name="components_curtain_list">List</string>
     <string name="components_curtain_someone">Someone</string>
 
-    <!-- Banner after the user returns from a call. -->
-    <string name="components_post_call_heading_generic">You just made a call</string>
-    <!-- %1$s: the person's name. -->
-    <string name="components_post_call_heading_named">You just called %1$s</string>
-    <string name="components_post_call_body">Add a note while it\'s fresh</string>
-    <string name="components_post_call_add_note">Add a note</string>
-    <string name="components_post_call_dismiss">Dismiss</string>
+    <!-- Home's calls waiting for a note: a call of a minute or more in the last day with
+         someone on a list, with nothing written about them since. One shows as a card; two
+         or more stack like a pile of cards that opens into one row per call.
+         %1$s: the person's first name. -->
+    <string name="components_notes_waiting_you_called">You called %1$s</string>
+    <string name="components_notes_waiting_they_called">%1$s called you</string>
+    <!-- The same two lines while the app is covered (privacy curtain): no name. -->
+    <string name="components_notes_waiting_you_called_someone">You called someone</string>
+    <string name="components_notes_waiting_someone_called">Someone called you</string>
+    <!-- Under each call: how long it lasted and how long ago. "14 min · 2 hours ago". -->
+    <string name="components_notes_waiting_meta">%1$s · %2$s</string>
+    <!-- The line on the pile, and what TalkBack calls the pile. -->
+    <plurals name="components_notes_waiting_count">
+        <item quantity="one">%1$d call to write about</item>
+        <item quantity="other">%1$d calls to write about</item>
+    </plurals>
+    <!-- Whether the pile is open, said by TalkBack after the line above. -->
+    <string name="components_notes_waiting_collapsed">Collapsed</string>
+    <string name="components_notes_waiting_expanded">Expanded</string>
+    <!-- What a tap on the pile does, for TalkBack ("Double-tap to show each call"). -->
+    <string name="components_notes_waiting_show_each">Show each call</string>
+    <string name="components_notes_waiting_show_less">Show less</string>
+    <string name="components_notes_waiting_add_note">Add a note</string>
+    <string name="components_notes_waiting_dismiss">Dismiss</string>
+    <string name="components_notes_waiting_dismiss_all">Dismiss all</string>
+    <!-- TalkBack names for the two buttons on a call, which say whose call it is.
+         %1$s: the person's first name. -->
+    <string name="components_notes_waiting_add_note_named">Add a note about your call with %1$s</string>
+    <string name="components_notes_waiting_dismiss_named">Dismiss your call with %1$s</string>
+    <!-- The same while the app is covered (privacy curtain). -->
+    <string name="components_notes_waiting_add_note_masked">Add a note about this call</string>
+    <string name="components_notes_waiting_dismiss_masked">Dismiss this call</string>
     <!-- TalkBack label for the X that closes a snackbar. -->
     <string name="components_snackbar_dismiss">Dismiss</string>
 

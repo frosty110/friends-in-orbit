@@ -10,6 +10,7 @@ import app.orbit.ui.screens.contact.ContactDetailScreen
 import app.orbit.ui.screens.home.HomeScreen
 import app.orbit.ui.screens.lists.ListConfigScreen
 import app.orbit.ui.screens.lists.ListsManagerScreen
+import app.orbit.ui.screens.note.PostCallNoteScreen
 import app.orbit.ui.screens.onboarding.OnboardingDoneScreen
 import app.orbit.ui.screens.onboarding.OnboardingFirstListScreen
 import app.orbit.ui.screens.onboarding.OnboardingPermCallLogScreen
@@ -51,6 +52,7 @@ interface OrbitNavScreens {
         onAddPeopleToList: (listId: String) -> Unit,
         onOpenListSettings: (listId: String) -> Unit,
         onOpenContactWithFocus: (contactId: String, focusNote: Boolean) -> Unit,
+        onOpenPostCallNote: (contactId: String, callEventId: Long) -> Unit,
     )
 
     @Composable
@@ -167,6 +169,14 @@ interface OrbitNavScreens {
     fun PickLists(onBack: () -> Unit, onCommit: () -> Unit)
 
     /**
+     * NOTE-04: the page for writing about a call. The real screen reads
+     * [contactId] and [callEventId] from its own SavedStateHandle; they are in
+     * the slot so a stub can show which call the graph opened.
+     */
+    @Composable
+    fun PostCallNote(contactId: String, callEventId: String?, onLeave: () -> Unit)
+
+    /**
      * The app-level snackbar host for picker commits. It is drawn over the
      * whole graph because the pickers pop on commit, so their "Added N" and
      * "Couldn't save that" must outlive the picker's own composition.
@@ -199,6 +209,7 @@ interface OrbitNavScreens {
             onAddPeopleToList: (listId: String) -> Unit,
             onOpenListSettings: (listId: String) -> Unit,
             onOpenContactWithFocus: (contactId: String, focusNote: Boolean) -> Unit,
+            onOpenPostCallNote: (contactId: String, callEventId: Long) -> Unit,
         ) = HomeScreen(
             onOpenList = onOpenList,
             onOpenSearch = onOpenSearch,
@@ -208,6 +219,7 @@ interface OrbitNavScreens {
             onAddPeopleToList = onAddPeopleToList,
             onOpenListSettings = onOpenListSettings,
             onOpenContactWithFocus = onOpenContactWithFocus,
+            onOpenPostCallNote = onOpenPostCallNote,
         )
 
         @Composable
@@ -384,6 +396,10 @@ interface OrbitNavScreens {
         @Composable
         override fun PickLists(onBack: () -> Unit, onCommit: () -> Unit) =
             ListPickerScreen(onBack = onBack, onCommit = onCommit)
+
+        @Composable
+        override fun PostCallNote(contactId: String, callEventId: String?, onLeave: () -> Unit) =
+            PostCallNoteScreen(onLeave = onLeave)
 
         @Composable
         override fun CommitSnackbarHost(modifier: Modifier) =

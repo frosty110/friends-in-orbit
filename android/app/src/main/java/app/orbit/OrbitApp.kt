@@ -13,6 +13,7 @@ import app.orbit.launcher.LauncherShortcuts
 import app.orbit.logging.OrbitDebugTree
 import app.orbit.notify.NudgeScheduler
 import app.orbit.notify.OrbitNotifications
+import app.orbit.notify.PostCallNotifier
 import app.orbit.ui.util.TimeStyle
 import app.orbit.widget.WidgetUpdateScheduler
 import coil.ImageLoader
@@ -57,6 +58,8 @@ class OrbitApp : Application(), Configuration.Provider, ImageLoaderFactory {
 
     @Inject lateinit var smartListMembershipSync: SmartListMembershipSync
 
+    @Inject lateinit var postCallNotifier: PostCallNotifier
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override val workManagerConfiguration: Configuration
@@ -93,17 +96,26 @@ class OrbitApp : Application(), Configuration.Provider, ImageLoaderFactory {
         // call; safe every launch (creating an existing channel is a no-op).
         OrbitNotifications.ensureChannels(applicationContext)
 
-        // Start the CallLog observer. Safe without permission — only the
-        // worker touches the content provider and checks READ_CALL_LOG.
+        // Start the CallLog observer, and arm the call-log trigger that wakes
+        // Orbit after a call even when this process is dead (NOTIF-16). Both
+        // wait for READ_CALL_LOG: without it, start() registers and arms
+        // nothing, and the grant calls it again.
         contentObserverController.start()
 
         // Cancel the legacy periodic work by literal name so any installed-device
         // WorkManager record is cleaned up. The string "orbit.daily_digest"
         // is byte-identical to the old worker's UNIQUE_NAME so the stale record is
-        // actually cancelled on existing installs (NOTIF-08). One notification
-        // worker remains: ListPromptWorker (the incoming follow-up was removed
-        // 2026-07-03 — Orbit only sends user-defined reminders).
+        // actually cancelled on existing installs (NOTIF-08). The nudge
+        // (ListPromptWorker) is the one scheduled notification; the incoming
+        // follow-up was removed 2026-07-03, and the one notification a call
+        // earns is NOTIF-16's, posted from the call-log sync.
         WorkManager.getInstance(applicationContext).cancelUniqueWork("orbit.daily_digest")
+
+        // NOTIF-16: the notification after a call goes away once its call no
+        // longer waits for a note (a note saved anywhere, a dismissal on Home,
+        // a day gone). Watched for the life of the process; the first read
+        // also clears what went stale while it was dead.
+        postCallNotifier.startShadeReconciliation(appScope)
 
         // Re-anchor all per-list nudge chains on every cold start so
         // WorkManager persistence aligns with the current schedule (accounts for

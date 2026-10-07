@@ -3,8 +3,8 @@
 **Route:** `card/{listId}`
 **Group:** Core loop
 **Status:** active
-**Last reviewed:** 2026-10-06
-**Spec:** [card-view](../card-view/README.md): CARD-01, CARD-02, CARD-03, CARD-04, CARD-05, CARD-06, CARD-07 (defined this round), CORE-04; NOTE-02 in [contact-detail](../contact-detail/README.md); PRIV-03 and PRIV-05 in [privacy-and-lock](../privacy-and-lock/README.md)
+**Last reviewed:** 2026-10-07
+**Spec:** [card-view](../card-view/README.md): CARD-01, CARD-02, CARD-03, CARD-04, CARD-05, CARD-06, CARD-07 (defined this round), CORE-04; NOTE-04 in [contact-detail](../contact-detail/README.md); PRIV-03 and PRIV-05 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
 
@@ -33,7 +33,7 @@
 - Tap the card face, or "Open details": opens the person's page; the face never dials (CARD-01)
 - "Later" (or a left swipe): moves them further out on this list; "{Name} will come up again {tomorrow / on Tuesday / in 2 weeks}." with Undo. "Sooner" (or a right swipe): brings them forward; "{Name} comes up {when}." with Undo. Each undo is its own, and a swipe that commits gives a haptic (CARD-02)
 - A move that could not be saved says so: "Couldn't move {name} to later. Try again.", "Couldn't move {name} sooner. Try again.", "Couldn't undo that. Try again."
-- After a call placed from the card, once the call log confirms it and the deck moves on by itself (CORE-04): "Called {first name}" with "Add a note", which opens the person with the note field focused (CARD-03, NOTE-02)
+- After a call placed from the card, once the call log confirms it and the deck moves on by itself (CORE-04): "Called {first name}" with "Add a note", which opens the note page for that person's latest call (CARD-03, NOTE-04; until 2026-10-07 it opened the person with the note field focused)
 - "More actions for {list}", in order: "Browse people" (opens Browse for this list), "Add people" (opens the Add people picker; not offered on smart lists, nor on the Loading and Error decks, where the list's type is not yet known), "List settings"
 - "Open settings" on the notice: opens Orbit's Settings, where the Call log row hosts the grant
 - "Go home" on the empty, quiet and error decks: leaves the deck the same way Back does, to the screen that opened it; on the error deck for a list id that never parsed it is the one action
@@ -51,7 +51,8 @@
 ## Leads to
 
 - The dialer (Call)
-- Contact detail (the face, "Open details"; "Add a note", with the note field focused)
+- Contact detail (the face, "Open details")
+- The note page ("Add a note" on "Called {first name}"); "Not now", Back or a saved note ("Note saved") returns here
 - Browse people (menu; "Browse this list")
 - The Add people picker (menu; the empty deck); it returns here with "Added 3 people to {list}" and Undo
 - List settings (menu; the smart list's empty deck); Done or Back returns here
@@ -65,5 +66,5 @@
 - `CardListMenuTest` (added this round: menu order, Add people absent on smart lists and while the list's type is unknown)
 - `CardViewScreenTest` (added this round: the face opens details and never dials; Call is on screen in landscape; a failed read offers Try again and Go home while a malformed id offers Go home alone; every Error deck has a pane title)
 - `WhyLineVoiceTest` (added this round: the rendered why-now line, for one gap in every bucket, breaks no voice rule)
-- `OrbitNavHostTest` (added this round: "Add a note" opens the person with the note field focused, NOTE-02; a nudge for the deck already open does not stack a second deck, while another list gets its own)
+- `OrbitNavHostTest` ("Add a note" opens the note page for that person, NOTE-04, changed 2026-10-07 from the person's page with the note field focused; a nudge for the deck already open does not stack a second deck, while another list gets its own)
 - Gallery previews: `CardViewContentPreview`, `CardViewContentAheadOfTodayPreview`, `CardViewContentLongNamesPreview`, `CardViewContentNoMembersPreview`, `CardViewContentNothingEligiblePreview`, `CardViewContentCallLogDeniedPreview`, and the Loading, Error and bad-link (`CardViewContentBadLinkPreview`) previews added this round, with the curtain pass
