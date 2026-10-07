@@ -403,7 +403,8 @@ textarea.fb:focus { outline: 2px solid var(--markup); outline-offset: 0; border-
 .lrow { display: flex; align-items: center; gap: 12px; padding: 12px 16px; min-height: 76px; border-bottom: 1px solid var(--line-soft); cursor: pointer; position: relative; }
 .lrow:hover { background: var(--bg-subtle); }
 .lrow .pos { width: 24px; text-align: center; font-size: 17px; font-weight: 600; color: var(--fg-muted); font-variant-numeric: tabular-nums; flex: none; }
-.lrow .pos.head { color: var(--accent); }
+/* The head of the order is ink since 2026-10-05: the "worth a call" dot is Browse's one accent. */
+.lrow .pos.head { color: var(--fg); }
 .lrow .nm { font-size: 18px; font-weight: 600; color: var(--fg); line-height: 1.25; }
 .lrow .sub { font-size: 15px; color: var(--fg-muted); }
 .lrow.sel { background: var(--accent-tint); }
@@ -414,10 +415,11 @@ textarea.fb:focus { outline: 2px solid var(--markup); outline-offset: 0; border-
 .radio { width: 24px; height: 24px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--line); flex: none; display: grid; place-items: center; }
 .radio.on { box-shadow: inset 0 0 0 2px var(--accent); }
 .radio.on::after { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
-.switch { width: 52px; height: 32px; border-radius: 999px; background: var(--line); position: relative; flex: none; cursor: pointer; border: 0; }
-.switch::after { content: ""; position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: left var(--dur) var(--ease); }
-.switch.on { background: var(--accent); }
-.switch.on::after { left: 24px; }
+/* OrbitSwitch: ink when on, so a toggle never spends the screen's accent (LIST-21); outlined when off. */
+.switch { width: 52px; height: 32px; border-radius: 999px; background: var(--bg-subtle); box-shadow: inset 0 0 0 1.5px var(--fg-subtle); position: relative; flex: none; cursor: pointer; border: 0; }
+.switch::after { content: ""; position: absolute; top: 6px; left: 6px; width: 20px; height: 20px; border-radius: 50%; background: var(--fg-subtle); transition: left var(--dur) var(--ease); }
+.switch.on { background: var(--fg); box-shadow: none; }
+.switch.on::after { left: 26px; background: var(--bg); }
 
 /* heat strip + bars */
 .heat { display: grid; grid-template-columns: repeat(24, 1fr); gap: 3px; align-items: end; height: 44px; }
@@ -527,6 +529,42 @@ textarea.fb:focus { outline: 2px solid var(--markup); outline-offset: 0; border-
 .heat i.h2 { background: color-mix(in srgb, var(--accent-deep) 45%, var(--line-soft)); }
 .heat i.h3 { background: color-mix(in srgb, var(--accent-deep) 68%, var(--line-soft)); }
 .heat i.h4 { background: var(--accent-deep); }
+
+/* HOME-14: calls waiting for a note. A pile's lower cards show only their rounded bottoms
+   (NotesWaitingStack's PileEdge: tucked under the card above, hairline outline). */
+.nw { position: relative; z-index: 2; padding: 16px; border-radius: 20px; }
+.nw-pile { margin: 0 16px; }
+.nw-edge { position: relative; height: 24px; margin-top: -16px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow-card), inset 0 0 0 1px var(--line); }
+.nw-edge.e1 { z-index: 1; margin-left: 12px; margin-right: 12px; }
+.nw-edge.e2 { z-index: 0; margin-left: 24px; margin-right: 24px; }
+.nw-sep { height: 1px; background: var(--line-soft); margin: 12px 0; }
+.nw-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.nw-acts .btn.sm { font-size: 15px; padding: 0 14px; }
+.nw-acts .btn.sm svg.i { width: 18px; height: 18px; }
+
+/* BROWSE-07/08/09: one 48dp leading cell (grip + number), the Stone "On your card" chip. */
+.lrow .cell { display: flex; align-items: center; width: 48px; min-height: 48px; margin-left: -8px; flex: none; }
+.lrow .cell .grip { width: 24px; display: grid; place-items: center; color: var(--fg-subtle); }
+.lrow .cell .grip svg.i { width: 16px; height: 16px; }
+.lrow .cell[data-drag] { cursor: grab; touch-action: none; }
+.lrow.dragging { z-index: 3; background: var(--surface); box-shadow: var(--shadow-pop); cursor: grabbing; }
+.seq-moving .lrow:not(.dragging) { transition: transform 150ms var(--ease); }
+.mark { display: inline-flex; align-items: center; min-height: 24px; padding: 0 10px; border-radius: 999px; background: var(--p-stone-bg); color: var(--p-stone-fg); font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+
+/* NOTE-04: the note page. The field fills what the bar, the call line and Save leave. */
+.notescr { overflow: hidden; }
+.note-wrap { flex: 1 0 auto; display: flex; flex-direction: column; padding: 4px 20px 0; min-height: 0; }
+.note-field { flex: 1; width: 100%; min-height: 96px; border: 0; background: transparent; resize: none; outline: none; padding: 0; font: inherit; font-size: 16px; line-height: 1.5; color: var(--fg); caret-color: var(--accent); }
+.note-field::placeholder { color: var(--fg-subtle); opacity: 1; }
+.note-timer { flex: none; padding: 0 12px; font-size: 16px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+
+/* LIST-26: the title is the rename control; while renaming it is a field. */
+.ttl { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 48px; border: 0; background: transparent; cursor: pointer; padding: 0 4px; border-radius: 12px; text-align: left; font: inherit; color: var(--fg); }
+.ttl span { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ttl svg.i { width: 18px; height: 18px; color: var(--fg-muted); }
+.ttl-field { flex: 1; min-width: 0; position: relative; margin: 8px 4px 4px 12px; }
+.ttl-field label { position: absolute; top: -8px; left: 10px; padding: 0 4px; font-size: 12px; color: var(--accent); background: var(--bg); }
+.ttl-field input { width: 100%; font: inherit; font-size: 16px; border: 1.5px solid var(--accent); border-radius: 12px; padding: 12px; background: transparent; color: var(--fg); outline: none; }
 </style>
 </head>
 <body>
@@ -629,7 +667,7 @@ textarea.fb:focus { outline: 2px solid var(--markup); outline-offset: 0; border-
    Screens are plain render functions registered with screen({...}).
    Everything the phone shows is rebuilt from S (navigation) and D (demo
    data that taps change). Copy is taken from the string resources
-   (android/app/src/main/res/values/strings_*.xml) as of 2026-10-05; the app
+   (android/app/src/main/res/values/strings_*.xml) as of 2026-10-07; the app
    has no em dashes any more, so none are shown here.
    ════════════════════════════════════════════════════════════════════ */
 
@@ -664,15 +702,58 @@ const P = {
 const first = (id) => P[id].name.split(' ')[0];
 const initials = (name) => name.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
+// `queue` is everyone the list's rule places; `other` holds the paused and the ignored
+// (BROWSE-07 gives each its own group). Mia is ignored but still on In touch.
 const L = {
   touch:  { name: 'In touch', template: 'Keep in touch', interval: 2, tone: 'A',
-            queue: ['kai', 'luma', 'owen', 'rhea', 'alex', 'priya', 'jamie', 'sarah', 'nia', 'theo'], due: 6, other: ['marcus'], paused: ['marcus'] },
-  late:   { name: 'Late night', template: 'Late night', tone: 'B', queue: ['dana', 'jamie', 'nia', 'theo'], due: 1, other: [] },
-  recent: { name: 'Recently added, not called', smart: true, rule: 'Recently added · 30 days', tone: 'A', queue: ['ama', 'leo'], due: 2, other: [], preview: ['ama', 'leo'] },
+            queue: ['kai', 'luma', 'owen', 'rhea', 'alex', 'priya', 'jamie', 'sarah', 'nia', 'theo'], other: ['marcus', 'mia'], paused: ['marcus'], ignored: ['mia'] },
+  // LIST-24: a Late night list's real base interval is 3 days, and that is what every screen says.
+  late:   { name: 'Late night', template: 'Late night', interval: 3, tone: 'B', queue: ['dana', 'jamie', 'nia', 'theo'], other: [] },
+  recent: { name: 'Recently added, not called', smart: true, rule: 'Recently added · 30 days', interval: 2, tone: 'A', queue: ['ama', 'leo'], other: [], preview: ['ama', 'leo'] },
 };
 const LIST_ORDER = ['touch', 'late', 'recent'];
+// Renaming from List settings' title (LIST-26) writes L[lid].name; Restart puts these back.
+const LIST_NAMES = Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.name]));
 const members = (lid) => [...L[lid].queue, ...L[lid].other];
 const listsOf = (pid) => LIST_ORDER.filter((l) => members(l).includes(pid));
+
+/* Each person's next turn on a list, in days from today (Sunday 4 October); zero or less is
+   "Up now", the most negative first. The card shows the earliest; Browse lists everyone in
+   this order (BROWSE-07, the card's own SurfaceOrder in the app). Later, Sooner, a call and a
+   drag in Browse each write a new turn, so the card and Browse never disagree. */
+const TURNS = {
+  touch: { kai: -6, luma: -5, owen: -4, rhea: -3, alex: -2, priya: -1, jamie: 1, sarah: 4, nia: 6, theo: 14 },
+  late: { dana: -1, jamie: 1, nia: 3, theo: 14 },
+  recent: { ama: -2, leo: -1 },
+};
+const PAUSED_UNTIL = { marcus: 'Until 12 Oct' };
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const seqOf = (lid) => (L[lid] ? L[lid].queue.slice().sort((a, b) => D.turns[lid][a] - D.turns[lid][b]) : []);
+const turnOf = (lid, pid) => (D.turns[lid] && pid in D.turns[lid] ? D.turns[lid][pid] : 0);
+// strings_browse.xml browse_when_*, in ComesUp's buckets: later today, tomorrow, a weekday, a span.
+function whenOf(t) {
+  if (t <= 0) return 'Up now';
+  if (t < 1) return 'Later today';
+  const d = Math.floor(t);
+  if (d === 1) return 'Tomorrow';
+  if (d < 7) return WEEKDAYS[d % 7];
+  return `In ${d < 14 ? `${d} days` : d < 60 ? `${Math.floor(d / 7)} weeks` : `${Math.floor(d / 30)} months`}`;
+}
+// A fresh turn for a move, nudged by a hair each time so two moves never tie.
+function setTurn(lid, pid, days) { D.tick += 0.001; D.turns[lid][pid] = days + D.tick; }
+function resetTurns(lid) { D.turns[lid] = { ...TURNS[lid] }; }
+
+/* NOTE-05: calls that wait for a note on Home. Nia's and Theo's are the rhythm strip's calls
+   from this morning and yesterday; Kai's is the call the prototype lets you make (any demo
+   call counts as 14 minutes, so it always qualifies). "How long ago" is formatRelativeFine. */
+const CALLS = {
+  kai: { pid: 'kai', dir: 'out', min: 14, ago: '14 minutes ago', day: 'Today', at: '9:27am' },
+  nia: { pid: 'nia', dir: 'in', min: 22, ago: '1 hour ago', day: 'Today', at: '8:05am' },
+  theo: { pid: 'theo', dir: 'out', min: 10, ago: '18 hours ago', day: 'Yesterday', at: '3:05pm' },
+};
+const callFor = (pid) => CALLS[pid] || { pid, dir: 'out', min: 14, ago: '14 minutes ago', day: 'Today', at: '9:27am' };
+const homeStateFor = () => (D.waiting.length === 0 ? 'default' : D.waiting.length === 1 ? 'one' : 'pile');
+const everyLine = (days) => (days === 1 ? 'Every day' : `Every ${days} days`);
 
 /* Last 7 days, Monday 28 Sep to today, Sunday 4 Oct 2026. Only calls of 3 minutes or more count. */
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -694,9 +775,15 @@ const NOW_HOUR = 9; // the status bar says 9:41
 
 /* ───────── Mutable demo state (what taps change) ───────── */
 function freshData() {
+  Object.entries(LIST_NAMES).forEach(([k, n]) => { L[k].name = n; });
   return {
-    cardPos: { touch: 0, late: 0, recent: 0 },
-    banner: false,
+    turns: Object.fromEntries(Object.entries(TURNS).map(([k, v]) => [k, { ...v }])),
+    tick: 0,
+    waiting: [],
+    browseFocus: true,
+    intervals: Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.interval])),
+    timeOfDay: 'any',
+    noteStart: Date.now(), noteDraft: '',
     sel: new Set(),
     bq: '', sq: '', pq: '',
     bchips: new Set(),
@@ -711,9 +798,7 @@ function freshData() {
     template: null,
     newName: '',
     created: null,
-    cadence: 'Keep in touch',
-    interval: 2,
-    alwaysOn: true,
+    flInterval: 2, flTime: 'any',
     reminders: true,
     days: new Set([0, 1, 2, 3, 4, 5, 6]),
     archivedOpen: false,
@@ -721,7 +806,6 @@ function freshData() {
     logWhen: 'Today',
     ignored: ['jordan', 'mia'],
     newMembers: [],
-    bannerFor: 'kai',
     theme: 'Warm', mode: 'System', range: '3 months',
     focusId: null,
   };
@@ -1198,38 +1282,48 @@ function cadenceRows(sel, actName) {
   return [['Keep in touch', 'Surfaces each person on a steady rhythm you set.'], ['Late night', 'A slower, more patient rhythm for people you reach at night.'], ['Energize', 'A quicker rhythm that brings people back sooner after a call.']]
     .map(([n, d]) => `<div class="gi tap" ${A.act(actName, n)}><div class="grow"><div class="gt">${n}</div><div class="gs">${d}</div></div><div class="radio${sel === n ? ' on' : ''}"></div></div>`).join('');
 }
-function intervalBlock(cadence, days) {
-  if (cadence === 'Late night') return '<div class="gi"><div class="gs">This list keeps the late night rhythm on its own: slower and more patient, with nothing to set.</div></div>';
-  if (cadence === 'Energize') return '<div class="gi"><div class="gs">This list keeps the energize rhythm on its own: quicker, with nothing to set.</div></div>';
+// LIST-24: "How often", the one rhythm control, for every list (HowOftenSlider). One sentence
+// over the slider, the interval as its argument; one day has its own sentence.
+function intervalBlock(days, actArg = '') {
   const pct = ((days - 1) / 59) * 100;
   // Ink, not accent: List settings spends its one accent on Done (LIST-21).
-  return `<div style="padding:16px"><div class="row" style="justify-content:space-between"><span class="body">Aim for every</span><span class="h3">${days} day${days === 1 ? '' : 's'}</span></div>
-    <div style="position:relative;height:28px;margin-top:8px" ${A.act('bumpInterval')} role="slider" aria-label="How often to aim for" aria-valuetext="Every ${days} day${days === 1 ? '' : 's'}"><div style="position:absolute;top:12px;left:0;right:0;height:4px;border-radius:4px;background:var(--line)"></div><div style="position:absolute;top:4px;left:calc(${pct}% - 10px);width:20px;height:20px;border-radius:50%;background:var(--surface);box-shadow:inset 0 0 0 2px var(--fg)"></div></div>
+  return `<div style="padding:16px"><div class="body">${days === 1 ? 'Aim for every day' : `Aim for every ${days} days`}</div>
+    <div style="position:relative;height:28px;margin-top:8px;cursor:pointer" ${A.act('bumpInterval', actArg)} role="slider" aria-label="How often to aim for" aria-valuetext="${everyLine(days)}"><div style="position:absolute;top:12px;left:0;right:0;height:4px;border-radius:4px;background:var(--line)"></div><div style="position:absolute;top:4px;left:calc(${pct}% - 10px);width:20px;height:20px;border-radius:50%;background:var(--surface);box-shadow:inset 0 0 0 2px var(--fg)"></div></div>
     <div style="position:relative;height:18px" class="micro"><span style="position:absolute;left:0">1 day</span><span style="position:absolute;left:22%">2 weeks</span><span style="position:absolute;left:49%">1 month</span><span style="position:absolute;right:0">2 months</span></div></div>`;
 }
-function hoursBlock() {
-  const tog = `<div class="gi"><div class="grow"><div class="gt">Always active</div><div class="gs">Suggest at any time of day</div></div><button class="switch${D.alwaysOn ? ' on' : ''}" ${A.act('toggleHours')} aria-label="Always active"></button></div>`;
-  if (D.alwaysOn) return tog;
-  return tog + `<div style="padding:12px 16px 16px" class="gap8"><div class="row"><button class="btn tonal sm grow" style="font-weight:500" ${A.st('time')}>${ic('clock')}9am</button><span class="meta">to</span><button class="btn tonal sm grow" style="font-weight:500" ${A.st('time')}>${ic('clock')}5pm</button></div>
-    <div style="position:relative;height:6px;border-radius:6px;background:var(--line-soft)"><div style="position:absolute;left:37.5%;width:33.3%;top:0;bottom:0;border-radius:6px;background:var(--accent)"></div></div>
-    <div class="row micro" style="justify-content:space-between"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div></div>`;
+// LIST-25: Time of day (TimeOfDayPicker). One radio group of chips; a window set with the old
+// pickers that matches no part shows as one more chip, selected, until another part is picked.
+const DAY_PARTS = [['any', 'Any time'], ['mornings', 'Mornings', 'in the morning', '7am', '12pm'], ['afternoons', 'Afternoons', 'in the afternoon', '12pm', '5pm'], ['evenings', 'Evenings', 'in the evening', '5pm', '9pm'], ['nights', 'Nights', 'at night', '9pm', '7am']];
+function timeOfDayBlock(sel, actArg = '') {
+  const chip = (label, on, attrs) => `<button class="chip${on ? ' on' : ''}" role="radio" aria-checked="${on}" ${attrs}>${on ? ic('check') : ''}${label}</button>`;
+  // Tapping the chip that is already selected writes nothing, as in the app.
+  const chips = DAY_PARTS.map(([k, label]) => chip(label, sel === k, sel === k ? A.act('noop') : A.act('timeOfDay', actArg + ':' + k))).join('')
+    + (sel === 'custom' ? chip('Custom: 9am to 5pm', true, A.act('noop')) : '');
+  const part = DAY_PARTS.find(([k]) => k === sel);
+  const note = sel === 'custom' ? 'Nudges for this list come only from 9am to 5pm.'
+    : !part || part[0] === 'any' ? 'Nudges can come at any time of day.'
+      : `Nudges for this list come only ${part[2]}, from ${part[3]} to ${part[4]}.`;
+  return `<div style="padding:12px 16px 14px"><div class="chips" role="radiogroup" aria-label="Time of day">${chips}</div><div class="meta" style="margin-top:8px">${note}</div></div>`;
 }
-function membersBlock(ids, removable = true, addAttrs = '') {
+// LIST-27: People, with "Add people" on the right of the header row (regular lists only).
+// The row that sat under the last person is gone, so there is one way to do it.
+function peopleBlock(ids, { smart = false, addAttrs = '', removeAttrs = null } = {}) {
   const rows = ids.length
-    ? ids.map((id) => `<div class="row" style="padding:5px 16px">${avatar(id, 32)}<div class="grow body">${P[id].name}</div>${removable ? iconBtn('x', A.act('removeMember', id), 'Remove ' + P[id].name, 'muted') : ''}</div>`).join('')
-    : '<div class="body muted" style="padding:4px 16px 8px">No one in this list yet.</div>';
-  return `<div style="padding:12px 0 4px"><div class="eyebrow" style="padding:0 16px 6px">${ids.length} ${ids.length === 1 ? 'person' : 'people'}</div>${rows}
-    <div class="row" style="padding:0 16px;min-height:48px;cursor:pointer" ${addAttrs}>${ic('user-plus')}<span class="body">Add people</span></div></div>`;
+    ? ids.map((id) => `<div class="row" style="padding:5px 16px">${avatar(id, 32)}<div class="grow body">${esc(P[id].name)}</div>${smart || !removeAttrs ? '' : iconBtn('x', removeAttrs(id), 'Remove ' + P[id].name + ' from list', 'muted')}</div>`).join('')
+    : `<div class="body muted" style="padding:4px 16px 8px">${smart ? 'No one matches this rule right now.' : 'No one in this list yet.'}</div>`;
+  const add = smart ? '' : `<button class="btn text" style="color:var(--fg);font-weight:600;padding:0 10px;gap:6px" ${addAttrs}>${ic('plus').replace('class="i"', 'class="i" style="width:18px;height:18px"')}Add people</button>`;
+  return `<div style="padding:4px 0 8px"><div class="row" style="padding:0 6px 0 16px;min-height:48px"><div class="eyebrow grow">${plural(ids.length, 'person', 'people')}</div>${add}</div>${rows}</div>`;
 }
+const nudgesToggle = () => `<div class="gi"><div class="grow"><div class="gt">Send nudges</div><div class="gs">A gentle nudge when someone here is worth a call.</div></div><button class="switch${D.reminders ? ' on' : ''}" ${A.act('toggleReminders')} aria-label="Send nudges"></button></div>`;
 
 screen({
   id: 'S07', group: 'onboarding', name: 'Make your first list', route: 'onboard/first-list/{listId}',
   spec: 'features/page-views/onboarding-first-list.md', code: 'ui/screens/onboarding/OnboardingFirstListScreen.kt',
   purpose: 'Leave onboarding with one real list: a name and at least 3 people.',
-  owes: ['Name the list and pick at least 3 people', 'The same controls as the real Edit list screen', 'Finish, or add another list', 'Clear gating until name and 3 people are in'],
+  owes: ['Name the list and pick at least 3 people', 'The same controls as List settings: How often (LIST-24), Time of day (LIST-25), Nudges, and People with "Add people" in its header (LIST-27); only the name is its own field here', 'Finish, or add another list', 'Clear gating until name and 3 people are in'],
   drift: 'There is no back arrow; system back returns to the sync screen, whose Continue now comes straight back to this same list (fixed 2026-10-05, B6). "Removed {name}" with Undo now shows (B8).',
   states: [['default', 'From the suggestions'], ['blank', 'Started blank (gated)']],
-  to: [['S32', 'Add people'], ['S08', 'Done'], ['S07', 'Add another list']],
+  to: [['S32', 'Add people (People header)'], ['S08', 'Done'], ['S07', 'Add another list']],
   enter(e) { if (e.st === 'blank') ACT.startBlank(); else ACT.acceptPreview(); },
   render(st) {
     const ok = D.flName.trim() && D.flMembers.length >= 3;
@@ -1239,19 +1333,23 @@ screen({
       body: `${helper}
         <div class="sec-label">Name</div>
         <div class="group"><div class="gi"><input id="fl-name" data-bind="flName" class="grow" value="${esc(D.flName)}" aria-label="List name" style="font:inherit;font-size:16px;border:1.5px solid var(--line);border-radius:12px;padding:12px;background:transparent;color:var(--fg);min-width:0"></div></div>
-        <div class="sec-label">Rhythm</div><div class="group">${cadenceRows(D.cadence, 'setCadence')}</div>
-        <div class="sec-label">How often</div><div class="group">${intervalBlock(D.cadence, D.interval)}</div>
-        <div class="sec-label">Active hours</div><div class="group">${hoursBlock()}</div>
-        <div class="sec-label">Nudges</div><div class="group"><div class="gi"><div class="grow"><div class="gt">Send nudges</div><div class="gs">A gentle notification when someone here is worth a call.</div></div><button class="switch${D.reminders ? ' on' : ''}" ${A.act('toggleReminders')} aria-label="Send nudges"></button></div>${D.reminders ? '<div style="padding:0 16px 14px"><div class="meta" style="color:var(--fg)">Every day at 10am</div><div class="micro">Change the days or time any time in this list\'s settings.</div></div>' : ''}</div>
-        <div class="sec-label">Members preview</div><div class="group">${membersBlock(D.flMembers, true, A.go('S32', null, 'fl'))}</div>
+        <div class="sec-label">How often</div><div class="group">${intervalBlock(D.flInterval, 'fl')}</div>
+        <div class="sec-label">Time of day</div><div class="group">${timeOfDayBlock(D.flTime, 'fl')}</div>
+        <div class="sec-label">Nudges</div><div class="group">${nudgesToggle()}${D.reminders ? '<div style="padding:0 16px 14px"><div class="meta" style="color:var(--fg)">Every day at 10am</div><div class="micro">Change the days or time any time in this list\'s settings.</div></div>' : ''}</div>
+        <div class="sec-label">People</div><div class="group">${peopleBlock(D.flMembers, { addAttrs: A.go('S32', null, 'fl'), removeAttrs: (id) => A.act('removeMember', id) })}</div>
         <div style="height:16px"></div>`,
       foot: `<div class="bottom-cta"><button class="btn text block${ok ? '' : ' disabled'}" ${ok ? `${A.act('addAnother')}` : ''}>Add another list</button><button class="btn primary block${ok ? '' : ' disabled'}" ${ok ? A.go('S08') : ''}>Done</button></div>`,
     });
   },
 });
-ACT.setCadence = (n) => { D.cadence = n; };
-ACT.bumpInterval = () => { D.interval = D.interval >= 60 ? 1 : D.interval < 7 ? D.interval + 5 : D.interval + 14; if (D.interval > 60) D.interval = 60; };
-ACT.toggleHours = () => { D.alwaysOn = !D.alwaysOn; };
+// The demo slider steps through a few values on each tap; the app's is a real slider.
+const nextInterval = (d) => Math.min(60, d >= 60 ? 1 : d < 7 ? d + 5 : d + 14);
+ACT.bumpInterval = (key) => {
+  if (key === 'fl') D.flInterval = nextInterval(D.flInterval);
+  else if (key === 'new' && D.created) D.created.interval = nextInterval(D.created.interval);
+  else if (L[key]) D.intervals[key] = nextInterval(D.intervals[key]);
+};
+ACT.timeOfDay = (arg) => { const [key, part] = String(arg).split(':'); if (key === 'fl') D.flTime = part; else D.timeOfDay = part; };
 ACT.toggleReminders = () => { D.reminders = !D.reminders; };
 ACT.removeMember = (id) => { D.flMembers = D.flMembers.filter((x) => x !== id); };
 ACT.addAnother = () => { ACT.startBlank(); setSt('blank'); snack('First list saved. This is a new, empty one.'); return false; };
@@ -1310,7 +1408,7 @@ function rhythmStrip(lid, live) {
 function listCard(lid, idx) {
   const l = L[lid];
   const n = l.queue.length + l.other.length;
-  const head = l.queue.length ? l.queue[D.cardPos[lid] % l.queue.length] : null;
+  const head = cardPerson(lid);
   // HOME-9: a quiet, muted dial per "Next up" row (rules.md Design 6); the rest of the card opens the deck.
   const next = head
     ? `${avatar(head, 44)}<div class="grow"><div class="lbl">Next up</div><div class="who">${first(head)}</div><div class="why">${spoke(P[head].last)}</div></div><button class="ib muted" ${A.go('S53', null, head)} aria-label="Call ${esc(first(head))}">${ic('phone-call')}</button>`
@@ -1320,24 +1418,54 @@ function listCard(lid, idx) {
     <div class="lc-bot">${rhythmStrip(lid)}</div></div>`;
 }
 
+/* HOME-14: the calls waiting for a note (NotesWaitingStack). One is a card; two or more lie in
+   a pile that opens, accordion style, into a row per call with "Dismiss all" under them.
+   Nothing here spends the accent: with lists on the page Home has none to spend, so
+   "Add a note" is Secondary. Each call's buttons name the person for TalkBack. */
+function waitingSummary(c) {
+  const name = esc(first(c.pid));
+  return `<div class="row">${avatar(c.pid, 40)}<div class="grow"><div class="body" style="font-weight:500">${c.dir === 'out' ? `You called ${name}` : `${name} called you`}</div><div class="meta">${c.min} min · ${c.ago}</div></div></div>`;
+}
+function waitingActions(c) {
+  const name = esc(first(c.pid));
+  return `<div class="nw-acts"><button class="btn tonal sm" ${A.go('S23', null, c.pid)} aria-label="Add a note about your call with ${name}">${ic('note-pencil')}Add a note</button><button class="btn text" ${A.act('dismissCall', c.pid)} aria-label="Dismiss your call with ${name}">Dismiss</button></div>`;
+}
+function notesStack(calls, open) {
+  if (!calls.length) return '';
+  const count = `${calls.length} ${calls.length === 1 ? 'call' : 'calls'} to write about`;
+  const caret = (turn) => `<span style="color:var(--fg-muted);display:inline-block${turn ? ';transform:rotate(180deg)' : ''}">${ic('caret-down').replace('class="i"', 'class="i" style="width:18px;height:18px"')}</span>`;
+  if (calls.length === 1) return `<div class="card nw" style="margin:0 16px">${waitingSummary(calls[0])}${waitingActions(calls[0])}</div>`;
+  // Closed: the whole top card is one button that says how many and that it is collapsed.
+  if (!open) {
+    return `<div class="nw-pile"><div class="card nw" role="button" aria-label="${count}" aria-expanded="false" style="cursor:pointer" ${A.st('pileopen')}>${waitingSummary(calls[0])}<div class="row" style="margin-top:12px"><div class="meta grow">${count}</div>${caret(false)}</div></div><div class="nw-edge e1"></div>${calls.length > 2 ? '<div class="nw-edge e2"></div>' : ''}</div>`;
+  }
+  return `<div class="card nw" style="margin:0 16px"><div class="row" role="button" aria-label="${count}" aria-expanded="true" style="min-height:48px;cursor:pointer;border-radius:12px" ${A.st('pile')}><div class="body grow" style="font-weight:500">${count}</div>${caret(true)}</div>
+    ${calls.map((c) => `<div class="nw-sep"></div>${waitingSummary(c)}${waitingActions(c)}`).join('')}
+    <div class="nw-sep"></div><button class="btn text" style="padding:0 8px" ${A.act('dismissAll')}>Dismiss all</button></div>`;
+}
+
 screen({
   id: 'S10', group: 'loop', name: 'Home', route: 'home',
   spec: 'features/page-views/home.md', code: 'ui/screens/home/HomeScreen.kt',
-  purpose: 'The front door: every list, who is next on each, and the last week at a glance.',
-  owes: ['A calm date header, no count of people "due" (HOME-6)', 'Every active list as a card with its "Next up" person and a quiet Call button (HOME-9)', 'A 7-day rhythm strip per list; tap a day to see who (HOME-8)', 'New list in one tap', 'Search, Lists, and Settings in the app bar', 'After a call, a banner offers to add a note', '"Orbit couldn\'t load your lists" with Try again if reading fails (HOME-10)'],
+  purpose: 'The front door: every list, who is next on each, the last week at a glance, and the calls still waiting for a note.',
+  owes: ['A calm date header, no count of people "due" (HOME-6)', 'The calls waiting for a note, under the date: one as a card ("You called Kai", "14 min · 14 minutes ago", Add a note, Dismiss); two or more as a pile ("3 calls to write about") that opens into rows, with "Dismiss all" (HOME-14, NOTE-05)', 'Every active list as a card with its "Next up" person and a quiet Call button (HOME-9)', 'A 7-day rhythm strip per list; tap a day to see who (HOME-8)', 'New list in one tap', 'Search, Lists, and Settings in the app bar', '"Orbit couldn\'t load your lists" with Try again if reading fails (HOME-10)'],
   drift: null,
-  states: [['default', 'Lists'], ['banner', 'After a call'], ['quick', 'Long-press a list', 'overlay'], ['delete', 'Delete this list?', 'overlay'], ['day', 'A day on the strip', 'overlay'], ['empty', 'No lists yet']],
-  to: [['S11', 'Tap a list card'], ['S53', 'Call on a card\'s Next up'], ['S22', 'Search icon'], ['S30', 'Lists icon, or New list'], ['S40', 'Settings icon'], ['S20', 'Banner: Add a note (note field focused)'], ['S32', 'Long-press: Add people'], ['S31', 'Long-press: List settings']],
+  states: [['default', 'Lists'], ['one', 'A call waiting for a note'], ['pile', 'Three calls waiting (a pile)'], ['pileopen', 'The pile, open'], ['quick', 'Long-press a list', 'overlay'], ['delete', 'Delete this list?', 'overlay'], ['day', 'A day on the strip', 'overlay'], ['empty', 'No lists yet']],
+  to: [['S11', 'Tap a list card'], ['S53', 'Call on a card\'s Next up'], ['S22', 'Search icon'], ['S30', 'Lists icon, or New list'], ['S40', 'Settings icon'], ['S23', 'A call waiting for a note: Add a note'], ['S32', 'Long-press: Add people'], ['S31', 'Long-press: List settings']],
+  // The waiting states follow a call with Kai just now, so In touch has already moved past him.
+  prep(st) {
+    if (['default', 'one', 'pile', 'pileopen'].includes(st)) resetTurns('touch');
+    if (st === 'one') D.waiting = [CALLS.kai];
+    else if (st === 'pile' || st === 'pileopen') D.waiting = [CALLS.kai, CALLS.nia, CALLS.theo];
+    else if (st === 'default' || st === 'empty') D.waiting = [];
+    if (D.waiting.some((c) => c.pid === 'kai')) setTurn('touch', 'kai', D.intervals.touch);
+  },
   render(st, p) {
     const bar = appBar({ back: false, word: true, title: 'Orbit', actions: iconBtn('magnifying-glass', A.go('S22'), 'Search') + iconBtn('list', A.go('S30'), 'Lists') + iconBtn('gear', A.go('S40'), 'Settings') });
-    const showBanner = st === 'banner' || (D.banner && st !== 'empty');
-    const banner = showBanner ? `<div class="card" style="margin:12px 24px;padding:16px;border-radius:16px">
-      <div class="row" style="gap:12px"><span style="color:var(--accent)">${ic('note-pencil').replace('class="i"', 'class="i" style="width:18px;height:18px"')}</span><div class="body">You just called ${P[D.bannerFor || 'kai'].name}</div></div>
-      <div class="meta" style="padding-left:30px">Add a note while it's fresh</div>
-      <div class="row" style="padding-left:30px;margin-top:10px"><button class="btn primary sm" ${A.go('S20', 'note', D.bannerFor || 'kai')} ${A.act('dismissBanner')}>Add a note</button><button class="btn text" ${A.act('dismissBanner')} ${A.st('default')}>Dismiss</button></div></div>` : '';
     if (st === 'empty') {
       return view({ bar, center: true, body: `<div class="pad center-t gap16" style="align-items:center;display:flex;flex-direction:column;padding:0 32px 80px"><div class="body muted">Start with the people you keep meaning to call.</div><button class="btn primary" ${A.go('S30', 'create')}>Create your first list</button></div>` });
     }
+    const stack = D.waiting.length ? `<div style="padding-bottom:12px">${notesStack(D.waiting, st === 'pileopen')}</div>` : '';
     let layer = '';
     if (st === 'quick') {
       const lid = p || 'touch';
@@ -1366,27 +1494,49 @@ screen({
     }
     return view({
       bar,
-      body: `${banner}<div style="padding:4px 20px 12px"><div class="eyebrow">Today</div><div class="h2">Sunday 4 October</div></div>
-        <div class="gap12">${LIST_ORDER.map((l, i) => listCard(l, i)).join('')}</div>
+      body: `<div style="padding:4px 20px 12px"><div class="eyebrow">Today</div><div class="h2">Sunday 4 October</div></div>
+        ${stack}<div class="gap12">${LIST_ORDER.map((l, i) => listCard(l, i)).join('')}</div>
         <button class="btn text block" style="margin-top:4px;font-size:14px" ${A.go('S30', 'create')}>${ic('plus').replace('class="i"', 'class="i" style="width:16px;height:16px"')}New list</button>
         <div class="body muted center-t" style="padding:24px 32px 32px">The call that makes your day can make someone else's. You deserve to be the one who reaches out.</div>`,
       layer,
     });
   },
 });
-ACT.dismissBanner = () => { D.banner = false; };
+// "Dismissed 1 call" / "Dismissed 3 calls" with Undo (home_snackbar_calls_dismissed). An open
+// pile stays open while two or more are left; one left is a single card.
+function dismissWaiting(pids) {
+  const before = D.waiting.slice(); const st = cur().st;
+  D.waiting = D.waiting.filter((c) => !pids.includes(c.pid));
+  const n = before.length - D.waiting.length;
+  setSt(st === 'pileopen' && D.waiting.length >= 2 ? 'pileopen' : homeStateFor());
+  snack(n === 1 ? 'Dismissed 1 call' : `Dismissed ${n} calls`, 'Undo');
+  S.snack.undo = () => { D.waiting = before; if (cur().id === 'S10') setSt(st); };
+  return false;
+}
+ACT.dismissCall = (pid) => dismissWaiting([pid]);
+ACT.dismissAll = () => dismissWaiting(D.waiting.map((c) => c.pid));
 
-function cardPerson(lid) { const q = L[lid].queue; return q.length ? q[D.cardPos[lid] % q.length] : null; }
+// The card shows the head of the list's order, the same order Browse lists (BROWSE-07).
+function cardPerson(lid) { return seqOf(lid)[0] || null; }
+// CARD-03: once the call log confirms a call placed from the card, "Called Kai" with "Add a
+// note", which opens the note page (NOTE-04). The snackbar's action runs `undo`, whatever its label.
+function calledSnack(pid) { snack(`Called ${first(pid)}`, 'Add a note'); S.snack.undo = () => go('S23', 'default', pid); }
 const CARD_NOTES = { kai: [['27 days ago', 'Asked about the move to Lisbon. Follow up on the new job.']], priya: [['6 days ago', 'Her sister is visiting in October.']] };
 screen({
   id: 'S11', group: 'loop', name: 'Card view', route: 'card/{listId}',
   spec: 'features/page-views/card-view.md', code: 'ui/screens/card/CardViewScreen.kt',
   purpose: 'Hand you one name with enough context to say yes.',
-  owes: ['One person at a time, with "Up now" or "Coming up" over the name', 'Why now: how long it has been, the pair\'s usual rhythm, the last note (CARD-04)', 'When they usually answer, plus Last call, Average length, Total calls', 'Call with the labelled button, the only control that dials (CARD-01)', 'Later and Sooner, named, by swipe or button, each with its own Undo (CARD-02)', 'Open details, and a three-dots menu: Browse people, Add people, List settings', 'Honest empty states with a way home; an error with Try again (CARD-07)'],
-  drift: null,
-  states: [['default', 'Ready'], ['menu', 'More actions menu', 'overlay'], ['nolog', 'Call log permission off'], ['empty', 'No one in this list'], ['none', 'All quiet for now']],
-  to: [['S53', 'Call'], ['S20', 'Open details, or tap the card face'], ['S13', 'Menu: Browse people'], ['S32', 'Menu: Add people'], ['S31', 'Menu: List settings'], ['S40', 'Notice: Open settings'], ['S10', 'Back, or Go home']],
+  owes: ['One person at a time, with "Up now" or "Coming up" over the name', 'Why now: how long it has been, the pair\'s usual rhythm, the last note (CARD-04)', 'When they usually answer, plus Last call, Average length, Total calls', 'Call with the labelled button, the only control that dials (CARD-01)', 'Later and Sooner, named, by swipe or button, each with its own Undo (CARD-02)', 'After a call placed from the card, once the call log confirms it: "Called Kai" with "Add a note", which opens the note page (CARD-03, NOTE-04)', 'Open details, and a three-dots menu: Browse people (opens on the card\'s person, BROWSE-09), Add people, List settings', 'Honest empty states with a way home; an error with Try again (CARD-07)'],
+  drift: 'CARD-11 (open the note page by itself after a call of a minute or more placed from the card) is decided but not built yet, so after any call the card shows "Called Kai" with "Add a note", as here.',
+  states: [['default', 'Ready'], ['called', 'After a call: Called Kai'], ['menu', 'More actions menu', 'overlay'], ['nolog', 'Call log permission off'], ['empty', 'No one in this list'], ['none', 'All quiet for now']],
+  to: [['S53', 'Call'], ['S23', 'After a call: "Called Kai", Add a note'], ['S20', 'Open details, or tap the card face'], ['S13', 'Menu: Browse people (on the card\'s person)'], ['S32', 'Menu: Add people'], ['S31', 'Menu: List settings'], ['S40', 'Notice: Open settings'], ['S10', 'Back, or Go home']],
+  // The state after a call: the deck has moved past Kai and the snackbar says so.
+  prep(st) {
+    const lid = cur().p && L[cur().p] ? cur().p : 'touch';
+    if (st === 'called') { resetTurns(lid); setTurn(lid, 'kai', D.intervals[lid] || 2); calledSnack('kai'); }
+  },
   render(st, p) {
+    if (st === 'called') st = 'default';
     const lid = p || 'touch';
     const l = L[lid];
     if (st === 'default' && !l.queue.length) st = 'empty'; // a list with no stored members (smart lists store their matches since the B1 fix)
@@ -1395,7 +1545,8 @@ screen({
     const notice = st === 'nolog' ? `<div style="margin:0 16px 4px;padding:8px 8px 8px 14px;border-radius:12px;background:var(--bg-subtle)" class="row"><div class="meta grow">Orbit can't see your calls, so cards won't move on by themselves.</div><button class="btn text" style="color:var(--fg);font-weight:600" ${A.go('S40')}>Open settings</button></div>` : '';
     let layer = '';
     if (st === 'menu') layer = menu([
-      { label: 'Browse people', icon: 'list-bullets', attrs: A.go('S13', null, lid) },
+      // BROWSE-09: Browse opens on the person the card shows, marked "On your card".
+      { label: 'Browse people', icon: 'list-bullets', attrs: `${A.act('browseFocus', 'card')} ${A.go('S13', null, lid)}` },
       { label: 'Add people', icon: 'user-plus', attrs: A.go('S32', null, lid) },
       { label: 'List settings', icon: 'sliders-horizontal', attrs: A.go('S31', null, lid) },
     ], { top: 100, right: 12 });
@@ -1404,12 +1555,12 @@ screen({
       return view({ bar, center: true, layer, body: `<div class="center-t" style="padding:0 40px 80px;display:flex;flex-direction:column;gap:12px;align-items:center">
         <div class="h2">${empty ? 'No one is in this list yet.' : 'All quiet for now.'}</div>
         <div class="body muted">${empty ? 'Add a few people to start surfacing names.' : 'Marcus comes up on Thursday.'}</div>
-        <button class="btn primary sm" ${empty ? A.go('S32', null, lid) : A.go('S13', null, lid)}>${empty ? 'Add people' : 'Browse this list'}</button>
+        <button class="btn primary sm" ${empty ? A.go('S32', null, lid) : `${A.act('browseFocus', '')} ${A.go('S13', null, lid)}`}>${empty ? 'Add people' : 'Browse this list'}</button>
         <button class="btn text" data-back>Go home</button></div>` });
     }
     const pid = cardPerson(lid);
     const pp = P[pid];
-    const ahead = (D.cardPos[lid] % l.queue.length) >= l.due;
+    const ahead = turnOf(lid, pid) > 0;
     const now = pp.heat ? pp.heat[NOW_HOUR] : 0;
     const chip = now >= 0.6 ? '<span class="good-chip">Good time to call</span>' : now >= 0.3 ? '<span class="good-chip" style="background:var(--warn-tint);color:var(--warn)">Sometimes answers now</span>' : '<span class="good-chip" style="background:var(--p-stone-bg);color:var(--p-stone-fg)">Rarely answers now</span>';
     const panel = pp.calls >= 3 ? `<div class="tint-box" style="width:100%;border-radius:18px">
@@ -1432,7 +1583,7 @@ screen({
           <div class="meta" style="margin-bottom:14px">${whyNow(pp.last)}</div>
           ${panel}
           <div style="flex:1;min-height:12px"></div>
-          <div class="stats3" style="width:100%"><div><div class="k">Last call</div><div class="v">${rel(pp.last) || 'Never called'}</div></div><div><div class="k">Average length</div><div class="v">${pp.avg || 'Not enough calls yet'}</div></div><div><div class="k">Total calls</div><div class="v">${pp.calls || 'Never called'}</div></div></div>
+          <div class="stats3" style="width:100%"><div><div class="k">Last call</div><div class="v">${pp.last == null ? 'Never called' : ago(pp.last)}</div></div><div><div class="k">Average length</div><div class="v">${pp.avg || 'Not enough calls yet'}</div></div><div><div class="k">Total calls</div><div class="v">${pp.calls || 'Never called'}</div></div></div>
         </div></div>${notes}`,
       foot: `<div class="cv-actions" style="padding:14px 24px 6px"><button class="round" ${A.act('defer', lid)} aria-label="Later">${ic('arrow-left')}</button>
         <button class="btn primary grow" style="min-width:0" ${A.go('S53', null, pid)}>${ic('phone-call')}Call ${first(pid)}</button>
@@ -1468,10 +1619,20 @@ screen({
     card.addEventListener('pointerup', end); card.addEventListener('pointercancel', end);
   },
 });
-function shiftCard(lid, by) { const n = L[lid].queue.length; if (!n) return; D.cardPos[lid] = ((D.cardPos[lid] + by) % n + n) % n; }
-// CARD-02: the snackbar names the person and says when they come back; never "due".
-ACT.defer = (lid) => { lid = lid || 'touch'; const who = first(cardPerson(lid)); shiftCard(lid, 1); snack(`${who} will come up again on Thursday.`, 'Undo'); S.snack.undo = () => shiftCard(lid, -1); return false; };
-ACT.sooner = (lid) => { lid = lid || 'touch'; const who = first(cardPerson(lid)); shiftCard(lid, 1); snack(`${who} comes up tomorrow.`, 'Undo'); S.snack.undo = () => shiftCard(lid, -1); return false; };
+// CARD-02: the snackbar names the person and says when they come back; never "due". Each move
+// writes the person's next turn, so Browse shows them there too, and Undo puts the turn back.
+function moveOn(lid, days, say) {
+  lid = lid || 'touch';
+  const pid = cardPerson(lid); if (!pid) return false;
+  const prior = D.turns[lid][pid];
+  setTurn(lid, pid, days);
+  snack(say(first(pid)), 'Undo');
+  S.snack.undo = () => { D.turns[lid][pid] = prior; };
+  return false;
+}
+ACT.defer = (lid) => moveOn(lid, 4, (who) => `${who} will come up again on Thursday.`);
+ACT.sooner = (lid) => moveOn(lid, 1, (who) => `${who} comes up tomorrow.`);
+ACT.browseFocus = (arg) => { D.browseFocus = arg === 'card'; };
 ACT.undo = () => { if (S.snack && S.snack.undo) S.snack.undo(); S.snack = null; return false; };
 </script>
 <script>
@@ -1482,15 +1643,28 @@ P.mia = { name: 'Mia Santos', tone: 'terracotta', phone: '+1 415-555-0161', last
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 function phoneIcon(pid) { return `<button class="ib muted" ${A.go('S53', null, pid)} aria-label="Call ${esc(first(pid))}">${ic('phone-call')}</button>`; }
-function browseRow({ pid, pos = null, head = false, due = false, status = '', sel = null, lp = 'rowmenu', tapAttrs }) {
+/* BrowseRow, for Browse and Search. Browse's order (2026-10-07) adds, all optional:
+   `when` opens the second line ("Up now · Last call: 3 weeks ago", BROWSE-07; "Until 12 Oct"
+   on a paused row), `marker` is the Stone "On your card" chip over the name (BROWSE-09), and
+   `cell` swaps the number column for one 48dp cell holding the grip and the number: 'drag'
+   on a row in the order (BROWSE-08), 'blank' so other rows' faces line up while any can move.
+   The last call reads like everywhere else ("3 weeks ago", RelativeTime). In multi-select the
+   dial is hidden rather than left inert. */
+function browseRow({ pid, pos = null, head = false, due = false, status = '', sel = null, lp = 'rowmenu', tapAttrs, when = null, marker = null, cell = null }) {
   const pp = P[pid];
   const muted = !!status;
   const check = sel == null ? '' : `<div class="check${sel ? ' on' : ''}" style="margin-left:-4px">${sel ? ic('check') : ''}</div>`;
-  return `<div class="lrow${sel ? ' sel' : ''}${muted ? ' dim' : ''}" ${tapAttrs || A.go('S20', null, pid)} ${lp ? `data-lp="${lp}" data-p="${pid}"` : ''}>
-    ${check}<div class="pos${head ? ' head' : ''}">${pos ?? ''}</div>${avatar(pid, 48)}
-    <div class="grow"><div class="nm"${muted ? ' style="color:var(--fg-muted)"' : ''}>${esc(pp.name)}${due && !status ? '<span class="due-dot" aria-label="Worth a call now"></span>' : ''}${status ? ` <span class="meta" style="color:var(--fg-subtle);font-weight:400">${status}</span>` : ''}</div>
-    ${D.noLog ? '' : `<div class="sub">${pp.last == null ? 'Never called' : 'Last call: ' + rel(pp.last)}</div>`}</div>
-    ${phoneIcon(pid)}</div>`;
+  const num = `<div class="pos${head ? ' head' : ''}">${pos ?? ''}</div>`;
+  const lead = cell
+    ? `<div class="cell"${cell === 'drag' ? ` data-drag="${pid}" ${A.act('noop')} role="button" aria-label="Reorder ${esc(pp.name)}"` : ''}><span class="grip">${cell === 'drag' ? ic('dots-six-vertical') : ''}</span>${num}</div>`
+    : num;
+  const lastLine = D.noLog ? null : pp.last == null ? 'Never called' : 'Last call: ' + ago(pp.last);
+  const sub = when && lastLine ? `${when} · ${lastLine}` : when || lastLine;
+  return `<div class="lrow${sel ? ' sel' : ''}${muted ? ' dim' : ''}" ${tapAttrs || A.go('S20', null, pid)} ${lp ? `data-lp="${lp}" data-p="${pid}"` : ''}${cell === 'drag' ? ` data-seq="${pid}"` : ''}>
+    ${check}${lead}${avatar(pid, 48)}
+    <div class="grow">${marker ? `<span class="mark">${marker}</span>` : ''}<div class="nm"${muted ? ' style="color:var(--fg-muted)"' : ''}>${esc(pp.name)}${due && !status ? '<span class="due-dot" aria-label="Worth a call now"></span>' : ''}${status ? ` <span class="meta" style="color:var(--fg-subtle);font-weight:400">${status}</span>` : ''}</div>
+    ${sub ? `<div class="sub">${sub}</div>` : ''}</div>
+    ${sel == null ? phoneIcon(pid) : ''}</div>`;
 }
 function searchField(id, bind, placeholder) {
   const v = D[bind] || '';
@@ -1500,17 +1674,45 @@ ACT.clearQ = (bind) => { D[bind] = ''; };
 const matchQ = (pid, q) => !q || P[pid].name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q.toLowerCase())) || P[pid].name.toLowerCase().includes(q.toLowerCase());
 
 /* ════════ Browse ════════ */
+/* BROWSE-08: a drop writes the person a new turn between their new neighbours' turns
+   (ReorderSequenceUseCase): to the top, before everyone and "Up now"; between two people,
+   between their turns, and "Up now" when the person above is; to the end, just after the last.
+   Dropped where it was, nothing is written. Undo puts the old turn back exactly. */
+function reorder(lid, pid, above) {
+  const T = D.turns[lid];
+  const seq = seqOf(lid);
+  const from = seq.indexOf(pid);
+  const rest = seq.filter((x) => x !== pid);
+  const at = above == null ? 0 : rest.indexOf(above) + 1;
+  if (from < 0 || at === from) return false;
+  const a = above == null ? null : T[above];
+  const b = at < rest.length ? T[rest[at]] : null;
+  const prior = T[pid];
+  if (a == null) T[pid] = Math.min(0, b ?? 0) - 1;
+  else if (b == null) T[pid] = a <= 0 ? a / 2 : a + 0.5;
+  else if (a <= 0) T[pid] = b <= 0 ? (a + b) / 2 : a / 2;
+  else T[pid] = (a + b) / 2;
+  snack(`Moved ${first(pid)} ${at < from ? 'earlier' : 'later'}`, 'Undo');
+  S.snack.undo = () => { T[pid] = prior; };
+  return true;
+}
+
 screen({
-  id: 'S13', group: 'loop', name: 'Browse people', route: 'browse/{listId}',
+  id: 'S13', group: 'loop', name: 'Browse people', route: 'browse/{listId}?focus={focus}',
   spec: 'features/page-views/browse.md', code: 'ui/screens/browse/BrowseListScreen.kt',
-  purpose: 'See a whole list as the queue it is; find someone; manage people in bulk.',
-  owes: ['Search the list by name or number and clear it fast', 'Filter: Recently called, Not called yet', 'The queue under "Next up", in the order Orbit will suggest people; everyone else below (BROWSE-01)', 'Tap a person for details; tap the muted phone to dial (Design 6)', 'Long-press for Quick actions: Call, Select, Pause, Ignore', 'A visible Select button, so multi-select is not gesture-only (BROWSE-2)', 'Multi-select to move, copy, remove, pause all, ignore all; undo any of them', 'A skeleton while loading, never a false "No one here yet" (BROWSE-06)', 'Add people with the + in the app bar'],
+  purpose: 'See a whole list in the order the card brings people up, change that order by hand, find someone, and manage people in bulk.',
+  owes: ['One numbered sequence under "Next up", in the card\'s own order, each row opening with when: "Up now", "Tomorrow", "Thursday", "In 2 weeks" (BROWSE-07)', 'Then "Everyone else" for anyone the rule cannot place, "Paused" with until when, and "Ignored" (BROWSE-07)', 'Opened from the card\'s menu: that person first, marked "On your card" (BROWSE-09)', 'A drag handle on each row in the order; a drop says "Moved Kai earlier" or "Moved Kai later", with Undo (BROWSE-08)', 'One quiet line under the order: a call, Later or Sooner moves people again', 'Search by name or number and clear it fast; filter: Recently called, Not called yet; both keep the order and its numbers', 'Tap a person for details; tap the muted phone to dial (Design 6)', 'Long-press for Quick actions: Call, Select, Pause, Ignore', 'A visible Select button, so multi-select is not gesture-only (BROWSE-2)', 'Multi-select to move, copy, remove, pause all, ignore all; undo any of them', 'A skeleton while loading, never a false "No one here yet" (BROWSE-06)', 'Add people with the + in the app bar'],
   drift: null,
-  states: [['default', 'Queue'], ['filtered', 'Filter on'], ['rowmenu', 'Long-press a row', 'overlay'], ['pause', 'Pause one person', 'overlay'], ['select', 'Multi-select'], ['selmore', 'More batch actions', 'overlay'], ['pauseall', 'Pause all', 'overlay'], ['move', 'Move to which list?', 'overlay'], ['copy', 'Copy to which list?', 'overlay'], ['nolog', 'Call log permission off'], ['nomatch', 'No search matches'], ['empty', 'Empty list']],
-  to: [['S20', 'Tap a person'], ['S53', 'Phone icon, or long-press Call'], ['S32', '+ Add people']],
+  states: [['default', 'The order, opened from the card'], ['moved', 'After a drag'], ['filtered', 'Filter on'], ['rowmenu', 'Long-press a row', 'overlay'], ['pause', 'Pause one person', 'overlay'], ['select', 'Multi-select'], ['selmore', 'More batch actions', 'overlay'], ['pauseall', 'Pause all', 'overlay'], ['move', 'Move to which list?', 'overlay'], ['copy', 'Copy to which list?', 'overlay'], ['nolog', 'Call log permission off'], ['nomatch', 'No search matches'], ['empty', 'Empty list']],
+  to: [['S20', 'Tap a person'], ['S53', 'Phone icon, or long-press Call'], ['S32', '+ Add people'], ['S40', 'Notice: Open settings'], ['S11', 'Back (the card follows the order)']],
+  // A state opened from the review panel starts from the list's usual order, as if opened
+  // from the card's menu; "After a drag" then moves Theo up under Kai.
   prep(st) {
     D.bq = st === 'nomatch' ? 'zz' : ''; D.bchips = new Set(st === 'filtered' ? ['recent'] : []); D.noLog = st === 'nolog';
     if (['select', 'selmore', 'pauseall', 'move', 'copy'].includes(st)) D.sel = new Set(['luma', 'owen']); else D.sel = new Set();
+    const lid = L[cur().p] ? cur().p : 'touch';
+    resetTurns(lid); D.browseFocus = true;
+    if (st === 'moved') reorder(lid, 'theo', 'kai');
   },
   enter() { D.bq = ''; D.bchips = new Set(); D.sel = new Set(); D.noLog = false; },
   render(st, p) {
@@ -1529,23 +1731,46 @@ screen({
     const chipOn = (k) => D.bchips.has(k);
     const passChips = (pid) => !D.bchips.size || (chipOn('recent') && P[pid].last != null && P[pid].last <= 30) || (chipOn('never') && P[pid].last == null);
     const q = D.bq.trim();
-    const qRows = l.queue.map((pid, i) => [pid, i]).filter(([pid]) => matchQ(pid, q) && passChips(pid));
-    const oRows = l.other.filter((pid) => matchQ(pid, q) && passChips(pid));
-    const row = (pid, i) => browseRow({ pid, pos: i == null ? null : i + 1, head: i === 0, due: i != null && i < l.due, status: l.paused && l.paused.includes(pid) ? 'Paused' : '', sel: selecting ? D.sel.has(pid) : null, lp: selecting ? null : 'rowmenu', tapAttrs: selecting ? A.act('toggleSel', pid) : null });
-    // Sections are headings: "Next up" over the queue, then "Everyone else" (or "On this list" when nobody is queued).
-    let list = qRows.length ? `<div class="eyebrow" role="heading" aria-level="2" style="padding:8px 20px 8px">Next up</div>` + qRows.map(([pid, i]) => row(pid, i)).join('') : '';
-    if (oRows.length) list += `<div class="eyebrow" role="heading" aria-level="2" style="padding:16px 20px 8px">${qRows.length ? 'Everyone else' : 'On this list'}</div>` + oRows.map((pid) => row(pid, null)).join('');
-    if (!qRows.length && !oRows.length) {
+    const keep = (pid) => matchQ(pid, q) && passChips(pid);
+    // BROWSE-07: the order is the card's (seqOf); the rest are grouped. Search and the filters
+    // keep each group's order and the order's numbers.
+    const seq = seqOf(lid);
+    const paused = l.paused || [];
+    const ignored = l.ignored || [];
+    const elsewhere = l.other.filter((x) => !paused.includes(x) && !ignored.includes(x));
+    const canReorder = !selecting && seq.length > 1;
+    const row = (pid, extra) => browseRow({ pid, sel: selecting ? D.sel.has(pid) : null, lp: selecting ? null : 'rowmenu', tapAttrs: selecting ? A.act('toggleSel', pid) : null, ...extra });
+    const seqRow = (pid, i) => {
+      const t = turnOf(lid, pid);
+      // The dot marks someone worth a call now: on a row in the order, exactly when it says "Up now".
+      return row(pid, { pos: i + 1, head: i === 0, due: t <= 0, when: whenOf(t), marker: D.browseFocus && i === 0 ? 'On your card' : null, cell: canReorder ? 'drag' : null });
+    };
+    const otherRow = (pid, status, when) => row(pid, { status, when, cell: canReorder ? 'blank' : null });
+    // Sections are headings for TalkBack.
+    const heading = (text, top) => `<div class="eyebrow" role="heading" aria-level="2" style="padding:${top}px 20px 8px">${text}</div>`;
+    const shownSeq = seq.map((pid, i) => [pid, i]).filter(([pid]) => keep(pid));
+    let list = '';
+    if (shownSeq.length) {
+      list += heading('Next up', 8) + `<div id="seq">${shownSeq.map(([pid, i]) => seqRow(pid, i)).join('')}</div>`;
+      if (canReorder) list += '<div class="meta" style="padding:12px 20px 4px">Drag to change who comes up next. A call, Later or Sooner moves people again.</div>';
+    }
+    const els = elsewhere.filter(keep);
+    const ps = paused.filter(keep);
+    const igs = ignored.filter(keep);
+    if (els.length) list += heading(shownSeq.length ? 'Everyone else' : 'On this list', 16) + els.map((pid) => otherRow(pid, '', null)).join('');
+    if (ps.length) list += heading('Paused', 16) + ps.map((pid) => otherRow(pid, 'Paused', PAUSED_UNTIL[pid] || 'Until you unpause')).join('');
+    if (igs.length) list += heading('Ignored', 16) + igs.map((pid) => otherRow(pid, 'Ignored', null)).join('');
+    if (!list) {
       list = q ? `<div class="center-t" style="padding:48px 32px"><div class="h2">Nothing matches “${esc(q)}”</div><div class="body muted" style="margin-top:6px">Try a shorter name, or part of their number.</div><button class="btn text" ${A.act('clearQ', 'bq')}>Clear search</button></div>`
         : `<div class="center-t" style="padding:48px 32px"><div class="h2">No one matches these filters</div><div class="body muted" style="margin-top:6px">Everyone on this list is hidden by the filters you chose.</div><button class="btn text" ${A.act('clearChips')}>Clear filters</button></div>`;
     }
     const chips = `<div class="chips" style="padding:0 16px 8px"><button class="chip${chipOn('recent') ? ' on' : ''}" ${A.act('chip', 'recent')}>${chipOn('recent') ? ic('check') : ''}Recently called</button><button class="chip${chipOn('never') ? ' on' : ''}" ${A.act('chip', 'never')}>${chipOn('never') ? ic('check') : ''}Not called yet</button></div>`;
-    const notice = D.noLog ? '<div class="meta" style="padding:0 20px 8px">Orbit can\'t see your calls, so call times are hidden.</div>' : '';
+    const notice = D.noLog ? `<div style="margin:0 16px 8px;padding:8px 8px 8px 14px;border-radius:12px;background:var(--bg-subtle)" class="row"><div class="meta grow">Orbit can't see your calls, so call times are hidden.</div><button class="btn text" style="color:var(--fg);font-weight:600" ${A.go('S40')}>Open settings</button></div>` : '';
     let layer = '';
     const who = p && P[p] ? p : 'luma';
     if (st === 'rowmenu') {
-      const idx = Math.max(0, l.queue.indexOf(who));
-      const isPaused = !!(l.paused && l.paused.includes(who));
+      const idx = Math.max(0, seq.indexOf(who));
+      const isPaused = paused.includes(who);
       layer = menu([
         { label: 'Call', icon: 'phone-call', attrs: A.go('S53', null, who) },
         { label: 'Select', attrs: A.act('startSel', who) },
@@ -1567,6 +1792,52 @@ screen({
       layer = sheet(`<div class="sh-title" style="font-size:18px">${st === 'move' ? 'Move' : 'Copy'} to which list?</div>${targets.map((x) => `<div class="gi tap" style="padding:0 24px;min-height:52px" ${A.act('bulk', st + ':' + x)}><span class="body">${esc(L[x].name)}</span></div>`).join('')}`, 'select');
     }
     return view({ bar, body: `${searchField('bq', 'bq', 'Search your people')}${chips}${notice}<div>${list}</div><div style="height:24px"></div>`, layer });
+  },
+  /* BROWSE-08: drag a row by its handle. The row follows the pointer, the others make room, and
+     the drop lands after the row now above it, as the app's drop does. A tap on the handle does
+     nothing; the row's own tap and long-press are elsewhere on it. */
+  mount(ph, t) {
+    const box = $('#seq', ph);
+    if (!box) return;
+    const lid = L[t.p] ? t.p : 'touch';
+    box.querySelectorAll('[data-drag]').forEach((h) => h.addEventListener('pointerdown', (e) => {
+      // The handle owns this gesture: not the row's long-press, not a text selection.
+      e.stopPropagation(); e.preventDefault();
+      const row = h.closest('.lrow');
+      const rows = [...box.querySelectorAll('.lrow')];
+      const from = rows.indexOf(row);
+      const scale = row.getBoundingClientRect().height / row.offsetHeight || 1;
+      const mids = rows.map((r) => r.offsetTop + r.offsetHeight / 2);
+      const tall = row.offsetHeight;
+      const y0 = e.clientY;
+      let to = from;
+      row.classList.add('dragging'); box.classList.add('seq-moving');
+      try { h.setPointerCapture(e.pointerId); } catch (er) { /* synthetic events */ }
+      const move = (ev) => {
+        const dy = (ev.clientY - y0) / scale;
+        if (Math.abs(dy) > 4) dragMoved = true;
+        row.style.transform = `translateY(${dy}px)`;
+        to = mids.filter((m, i) => i !== from && m < mids[from] + dy).length;
+        rows.forEach((r, i) => {
+          if (r === row) return;
+          const shift = from < to && i > from && i <= to ? -tall : from > to && i >= to && i < from ? tall : 0;
+          r.style.transform = shift ? `translateY(${shift}px)` : '';
+        });
+      };
+      const end = () => {
+        h.removeEventListener('pointermove', move);
+        rows.forEach((r) => { r.style.transform = ''; });
+        row.classList.remove('dragging'); box.classList.remove('seq-moving');
+        setTimeout(() => { dragMoved = false; }, 0);
+        if (to === from) return;
+        const order = rows.map((r) => r.dataset.seq).filter((x) => x !== row.dataset.seq);
+        order.splice(to, 0, row.dataset.seq);
+        if (reorder(lid, row.dataset.seq, to > 0 ? order[to - 1] : null)) afterNav('');
+      };
+      h.addEventListener('pointermove', move);
+      h.addEventListener('pointerup', end, { once: true });
+      h.addEventListener('pointercancel', end, { once: true });
+    }));
   },
 });
 function pauseSheet(name, closeSt) {
@@ -1628,7 +1899,7 @@ screen({
     const notes = (NOTES[pid] || []).map(([w, t]) => `<div style="background:var(--surface);border-radius:14px;padding:12px;margin-top:8px" data-lp="noteedit"><div class="meta">${w}</div><div class="body">${t}</div></div>`).join('') || '<div class="meta" style="margin-top:8px">No notes yet.</div>';
     const multi = lists.length >= 2;
     const override = st === 'override'
-      ? `<div class="group" style="margin:8px 0 0">${cadenceRows('Keep in touch', 'noop')}${intervalBlock('Keep in touch', 5)}</div><button class="btn text" ${A.st('default')}>Reset to default</button>`
+      ? `<div class="group" style="margin:8px 0 0">${cadenceRows('Keep in touch', 'noop')}${intervalBlock(5)}</div><button class="btn text" ${A.st('default')}>Reset to default</button>`
       : `<div class="body muted">Follows the keep in touch rhythm from ${esc(L[lists[0]] ? L[lists[0]].name : 'In touch')}.</div><button class="btn tonal sm" style="margin-top:8px" ${A.st('override', pid)}>Set a schedule for this person</button>`;
     const body = `<div style="padding:0 24px 32px" class="gap16">
       ${st === 'unpaused' ? `<div class="tint-box row" style="border-radius:16px;cursor:pointer" ${A.st('default')}>${ic('phone-pause').replace('class="i"', 'class="i" style="width:18px;height:18px;color:var(--fg-muted)"')}<div class="grow"><div class="body">${esc(pp.name)} is unpaused</div><div class="meta">They'll surface again on this list.</div></div>${iconBtn('x', A.st('default'), 'Dismiss unpause notice', 'muted')}</div>` : ''}
@@ -1728,6 +1999,83 @@ screen({
     return view({ bar: appBar({ title: 'Search' }), body: `${searchField('sq', 'sq', 'Search people')}${body}` });
   },
 });
+
+/* ════════ Your call: the post-call note page (NOTE-04) ════════ */
+// The page opens with the cursor in the field and the keyboard up, so "Save note" sits above it.
+const KEYBOARD_DOCKED = KEYBOARD.replace('position:absolute;left:0;right:0;bottom:0;height:272px;', 'position:relative;flex:none;height:236px;').replace('padding:10px 4px 30px', 'padding:10px 4px 6px');
+const NOTE_SAMPLE = 'Kai sounded tired but happy. The new job starts in March and he is nervous about the commute. Ask about the flat viewing next time.';
+// m:ss, then h:mm:ss from an hour on (formatElapsed). TalkBack hears whole minutes instead,
+// words that change once a minute and are never announced by themselves.
+const fmtElapsed = (s) => { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`; };
+const spokenElapsed = (s) => { const m = Math.floor(s / 60); return m < 1 ? 'Writing for less than a minute' : `Writing for ${m} minute${m === 1 ? '' : 's'}`; };
+// One interval for the timer, started by the page and stopped on the first tick after it leaves.
+let noteTick = null;
+function tickNote() {
+  const el = document.getElementById('note-timer');
+  if (!el || cur().id !== 'S23') { clearInterval(noteTick); noteTick = null; return; }
+  const s = Math.max(0, Math.floor((Date.now() - D.noteStart) / 1000));
+  el.textContent = fmtElapsed(s);
+  el.setAttribute('aria-label', spokenElapsed(s));
+}
+screen({
+  id: 'S23', group: 'people', name: 'Your call (note page)', route: 'note/{contactId}?callEventId={callEventId}',
+  spec: 'features/page-views/post-call-note.md', code: 'ui/screens/note/PostCallNoteScreen.kt',
+  purpose: 'Write about one call while it is fresh. The timer in the bar counts up from 0:00: a nudge to keep it short, not a limit.',
+  owes: ['"Not now", "Your call with Kai" and a timer counting up from 0:00, in the bar so it stays in view however long the entry gets (NOTE-04)', 'The call in one line: "You called Kai · 14 min · Today at 9:27am", or "Nia called you · ..."', 'One large writing field, "How did it go? What do you want to remember?", with the cursor in it and the keyboard up', '"Save note", the one accent, disabled while the field is blank; it writes an ordinary note and returns with "Note saved", and the call stops waiting on Home', 'Leaving with words written asks "Discard this note?" (Keep writing, Discard); with nothing written it just leaves', 'A person no longer in Orbit, or a failed read, says so with a way back'],
+  drift: null,
+  states: [['default', 'Ready, nothing written'], ['writing', 'Words written'], ['incoming', 'A call they made'], ['discard', 'Discard this note?', 'overlay'], ['notfound', 'Not in Orbit anymore'], ['error', 'Couldn\'t load this person']],
+  to: [['S10', 'Save note, Not now, Discard or Back (opened from Home or the notification)'], ['S11', 'The same, when the card\'s "Called Kai" opened it']],
+  enter() { D.noteStart = Date.now(); D.noteDraft = ''; D.focusId = 'note-text'; },
+  prep(st) { D.noteStart = Date.now(); D.noteDraft = st === 'writing' || st === 'discard' ? NOTE_SAMPLE : ''; },
+  render(st, p) {
+    const pid = st === 'incoming' ? 'nia' : p && P[p] ? p : 'kai';
+    if (st === 'notfound' || st === 'error') {
+      // The only thing to do here, so it takes the accent (Contact detail's precedent).
+      const nf = st === 'notfound';
+      return view({ bar: appBar({}), center: true, body: `<div class="center-t" style="padding:0 32px 80px;display:flex;flex-direction:column;gap:12px;align-items:center"><span style="color:var(--fg-muted)">${ic(nf ? 'user' : 'warning-circle')}</span><div class="h3">${nf ? 'This person isn\'t in Orbit anymore' : 'Couldn\'t load this person'}</div><div class="body muted">${nf ? 'They may have been removed from your phone\'s contacts.' : 'Nothing is lost. Try again in a moment.'}</div><button class="btn primary sm" ${nf ? 'data-back' : A.st('default')}>${nf ? 'Go back' : 'Try again'}</button></div>` });
+    }
+    const c = D.waiting.find((x) => x.pid === pid) || callFor(pid);
+    const name = esc(first(pid));
+    const secs = Math.max(0, Math.floor((Date.now() - D.noteStart) / 1000));
+    const bar = `<div class="ab"><button class="btn text" style="min-width:48px;padding:0 10px;color:var(--fg-muted);font-weight:600" ${A.act('noteLeave')}>Not now</button><div class="t" style="font-size:20px">Your call with ${name}</div><span class="note-timer" id="note-timer" role="timer" aria-label="${spokenElapsed(secs)}">${fmtElapsed(secs)}</span></div>`;
+    const blank = !D.noteDraft.trim();
+    const body = `<div class="note-wrap"><div class="meta" style="padding-bottom:16px">${c.dir === 'out' ? `You called ${name}` : `${name} called you`} · ${c.min} min · ${c.day} at ${c.at}</div>
+      <textarea class="note-field" id="note-text" placeholder="How did it go? What do you want to remember?" aria-label="How did it go? What do you want to remember?">${esc(D.noteDraft)}</textarea></div>`;
+    const foot = `<div class="bottom-cta" style="padding-top:8px"><button class="btn primary block${blank ? ' disabled' : ''}" id="note-save" ${A.act('noteSave', pid)} aria-disabled="${blank}">Save note</button></div>${st === 'discard' ? '' : KEYBOARD_DOCKED}`;
+    const layer = st === 'discard'
+      ? dialog(`<div class="dt">Discard this note?</div><div class="da"><button class="btn text" style="color:var(--fg-muted)" ${A.act('noteKeep')}>Keep writing</button><button class="btn outline sm danger" ${A.act('noteDiscard')}>Discard</button></div>`, 'writing')
+      : '';
+    return view({ bar, body, foot, layer, scrCls: 'notescr' });
+  },
+  // The field writes the draft one way (no re-render per keystroke, so the caret stays put);
+  // Save follows whether there are words.
+  mount(ph) {
+    const ta = $('#note-text', ph);
+    const save = $('#note-save', ph);
+    if (ta && save) {
+      ta.addEventListener('input', () => {
+        D.noteDraft = ta.value;
+        const blank = !ta.value.trim();
+        save.classList.toggle('disabled', blank);
+        save.setAttribute('aria-disabled', String(blank));
+      });
+    }
+    if (!noteTick) noteTick = setInterval(tickNote, 1000);
+  },
+});
+ACT.noteLeave = () => { if (D.noteDraft.trim()) setSt('discard'); else back(); return false; };
+ACT.noteKeep = () => { setSt(D.noteDraft.trim() ? 'writing' : 'default'); D.focusId = 'note-text'; return false; };
+ACT.noteDiscard = () => { D.noteDraft = ''; back(); return false; };
+// Save writes an ordinary note, returns with "Note saved", and the call stops waiting on Home.
+ACT.noteSave = (pid) => {
+  if (!D.noteDraft.trim()) return false;
+  D.noteDraft = '';
+  D.waiting = D.waiting.filter((c) => c.pid !== pid);
+  back('Note saved');
+  const t = cur();
+  if (t.id === 'S10') t.st = t.st === 'pileopen' && D.waiting.length >= 2 ? 'pileopen' : homeStateFor();
+  return false;
+};
 </script>
 <script>
 'use strict';
@@ -1751,7 +2099,7 @@ screen({
   id: 'S30', group: 'lists', name: 'Lists', route: 'lists',
   spec: 'features/page-views/lists-manager.md', code: 'ui/screens/lists/ListsManagerScreen.kt',
   purpose: 'Shape your lists: order them, archive them, start new ones.',
-  owes: ['Every list, reorderable by drag (order is Home order)', 'Tap a list to open its cards, as on Home (LIST-23)', 'Per list: name, a rhythm or rule line, member count, + to add people', 'Row menu: Rename, List settings, Move up or down, then Archive', 'One New list control, floating with lists and centred without (LIST-20)', 'Archived lists to restore, delete (with Undo), or configure', 'Undo archive'],
+  owes: ['Every list, reorderable by drag (order is Home order)', 'Tap a list to open its cards, as on Home (LIST-23)', 'Per list: name, its rhythm as an interval ("Every 14 days", "Every 3 days" for Late night, "Every day"; never a rhythm\'s name, LIST-24) or its rule, member count, + to add people', 'Row menu: Rename, List settings, Move up or down, then Archive', 'One New list control, floating with lists and centred without (LIST-20)', 'Archived lists to restore, delete (with Undo), or configure', 'Undo archive'],
   drift: null,
   states: [['default', 'Lists'], ['rowmenu', 'Row menu', 'overlay'], ['rename', 'Rename list', 'overlay'], ['archived', 'Archived open'], ['delete', 'Delete this list?', 'overlay'], ['create', 'New list sheet', 'overlay'], ['empty', 'No lists yet']],
   to: [['S11', 'Tap a list'], ['S31', 'Create, or menu: List settings'], ['S32', '+ on a static list'], ['S10', 'Back']],
@@ -1763,18 +2111,19 @@ screen({
     if (st === 'empty') {
       return view({ bar, center: true, body: `<div class="center-t" style="padding:0 36px 120px;display:flex;flex-direction:column;gap:12px;align-items:center"><div class="h2">No lists yet</div><div class="body muted">Add a list to start grouping the people you want to stay in touch with.</div><button class="btn primary sm" ${A.st('create')}>${ic('plus')}New list</button></div>` });
     }
-    // LISTS-3 / lists-10 (2026-10-05): a regular list carries its rhythm where a smart list carries its rule.
-    const rhythmLine = (l) => l.smart ? l.rule : l.template === 'Late night' ? 'Late night rhythm' : l.template === 'Energize' ? 'Energize rhythm' : `Every ${l.interval} days`;
+    // A regular list carries its rhythm where a smart list carries its rule (LISTS-3). Since
+    // LIST-24 the rhythm is said as its interval whatever engine runs it, never "Late night rhythm".
+    const rhythmLine = (lid) => L[lid].smart ? L[lid].rule : everyLine(D.intervals[lid]);
     const rows = LIST_ORDER.map((lid) => {
       const l = L[lid]; const n = members(lid).length;
       return `<div class="card row" style="border-radius:20px;padding:10px 4px 10px 0;min-height:76px;cursor:pointer" ${A.go('S11', null, lid)} aria-label="Open list">
         <button class="ib muted" aria-label="Reorder list" ${A.snack('Drag the handle to reorder. Lists higher up show first on home.')}>${ic('dots-six-vertical').replace('class="i"', 'class="i" style="width:18px;height:18px"')}</button>
-        <div class="grow"><div class="body">${esc(l.name)}</div><div class="meta">${rhythmLine(l)}</div></div>
+        <div class="grow"><div class="body">${esc(l.name)}</div><div class="meta">${rhythmLine(lid)}</div></div>
         ${l.smart ? '<span class="chip ctx" style="font-size:12px;min-height:24px;padding:0 8px"><span class="dot"></span>Smart list</span>' : ''}
         ${n ? `<span class="pill">${n}</span>` : ''}
         ${l.smart ? '' : iconBtn('plus', A.go('S32', null, lid), 'Add people to ' + l.name, 'muted')}
         ${iconBtn('dots-three-vertical', A.st('rowmenu', lid), 'More actions for ' + l.name, 'muted')}</div>`;
-    }).join('') + (D.created ? `<div class="card row" style="border-radius:20px;padding:10px 4px 10px 0;min-height:76px;cursor:pointer" ${A.snack("Opens the new list's cards; empty until people are added")}><button class="ib muted" aria-label="Reorder list">${ic('dots-six-vertical').replace('class="i"', 'class="i" style="width:18px;height:18px"')}</button><div class="grow"><div class="body">${esc(D.created.name)}</div><div class="meta">Every 14 days</div></div>${(D.newMembers || []).length ? `<span class="pill">${D.newMembers.length}</span>` : ''}${iconBtn('plus', A.go('S32', null, 'new'), 'Add people to ' + D.created.name, 'muted')}${iconBtn('dots-three-vertical', A.st('rowmenu', 'touch'), 'More actions', 'muted')}</div>` : '');
+    }).join('') + (D.created ? `<div class="card row" style="border-radius:20px;padding:10px 4px 10px 0;min-height:76px;cursor:pointer" ${A.snack("Opens the new list's cards; empty until people are added")}><button class="ib muted" aria-label="Reorder list">${ic('dots-six-vertical').replace('class="i"', 'class="i" style="width:18px;height:18px"')}</button><div class="grow"><div class="body">${esc(D.created.name)}</div><div class="meta">${D.created.smart ? 'Recently added · 30 days' : everyLine(D.created.interval)}</div></div>${(D.newMembers || []).length ? `<span class="pill">${D.newMembers.length}</span>` : ''}${iconBtn('plus', A.go('S32', null, 'new'), 'Add people to ' + D.created.name, 'muted')}${iconBtn('dots-three-vertical', A.st('rowmenu', 'touch'), 'More actions', 'muted')}</div>` : '');
     const open = st === 'archived' || st === 'delete' || D.archivedOpen;
     const archived = `<button class="row btn text" style="color:var(--fg);padding:0 4px;justify-content:flex-start;font-size:20px;font-weight:600;min-height:56px" ${A.st(open ? 'default' : 'archived')}>${ic(open ? 'caret-down' : 'caret-right')}Archived (1)</button>
       ${open ? `<div class="row" style="background:var(--surface-alt);border-radius:20px;padding:8px 4px 8px 16px;min-height:68px"><span class="grow body muted">Old team</span><button class="btn text" ${A.snack('List restored.')}>Restore</button>${iconBtn('trash', A.st('delete'), 'Delete Old team', '')}${iconBtn('sliders-horizontal', A.go('S31', null, 'touch'), 'List settings for Old team', 'muted')}</div>` : ''}`;
@@ -1801,7 +2150,10 @@ screen({
   },
 });
 ACT.template = (k) => { k = +k; D.template = k; if (!D.newName.trim() && k !== 5) D.newName = TEMPLATES[k][0]; return false; };
-ACT.createList = () => { D.created = { name: D.newName.trim(), smart: D.template === 4 }; setSt('default'); go('S31', D.created.smart ? 'smart' : 'new', 'new'); return false; };
+// Each template writes its own rhythm (TemplateChoice: 7, 14, 60 and 30 days; the smart list and
+// Start from blank keep Keep in touch's 2 days).
+const TEMPLATE_DAYS = [7, 14, 60, 30, 2, 2];
+ACT.createList = () => { D.created = { name: D.newName.trim(), smart: D.template === 4, interval: TEMPLATE_DAYS[D.template] || 2 }; setSt('default'); go('S31', D.created.smart ? 'smart' : 'new', 'new'); return false; };
 
 /* ════════ List settings ════════ */
 function nudgesBlock() {
@@ -1816,39 +2168,70 @@ function nudgesBlock() {
 screen({
   id: 'S31', group: 'lists', name: 'List settings', route: 'lists/{listId}/config',
   spec: 'features/page-views/list-config.md', code: 'ui/screens/lists/ListConfigScreen.kt',
-  purpose: 'Define a list\'s rhythm and membership in plain terms; changes save as you go.',
-  owes: ['Name the list', 'Choose a rhythm (Keep in touch, Late night, Energize) and how often to aim for, in plain words', 'Active hours, or always active', 'Nudges on or off, with the days and times they come', 'Preview members and remove with undo', 'Smart lists: edit the rule, or make it a regular list', 'Changes save as you go; Done is the only accent on the screen (LIST-21)'],
+  purpose: 'Define a list\'s rhythm, its time of day and its people in plain terms; changes save as you go.',
+  owes: ['The name is the title: tap it or the pencil to rename, in a field with Cancel and "Save list name"; a blank name keeps the old one (LIST-26)', '"How often" for every list, smart lists too: "Aim for every 14 days"; a Late night list shows its real 3 days, and moving the slider makes it an ordinary list (LIST-24)', '"Time of day": Any time, Mornings, Afternoons, Evenings or Nights, or "Custom: 9am to 5pm" for a window set before, with one line on what it does (LIST-25)', 'Nudges on or off, with the days and times they come', 'People: the count with "Add people" beside it (LIST-27); remove with undo', 'Smart lists: edit the rule, or make it a regular list', 'Changes save as you go; Done is the only accent on the screen (LIST-21)'],
   drift: null,
-  states: [['default', 'Regular list'], ['new', 'Just created (empty)'], ['hours', 'Active hours set'], ['time', 'Time picker', 'overlay'], ['smart', 'Smart list'], ['convert', 'Make this a regular list?', 'overlay']],
-  to: [['S32', 'Add people'], ['S30', 'Done, or back']],
-  prep(st) { D.alwaysOn = st !== 'hours'; D.cadence = 'Keep in touch'; D.interval = 2; },
+  states: [['default', 'Regular list'], ['rename', 'Renaming from the title'], ['new', 'Just created (empty)'], ['latenight', 'A Late night list (every 3 days)'], ['evenings', 'Time of day: Evenings'], ['custom', 'Time of day: Custom (set before)'], ['time', 'Time picker', 'overlay'], ['smart', 'Smart list'], ['convert', 'Make this a regular list?', 'overlay']],
+  to: [['S32', 'Add people (People header)'], ['S30', 'Done, or back']],
+  prep(st) {
+    D.timeOfDay = st === 'evenings' ? 'evenings' : st === 'custom' ? 'custom' : 'any';
+    D.intervals = Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.interval]));
+    if (st === 'rename') D.focusId = 'list-name';
+  },
   render(st, p) {
     const smart = st === 'smart' || st === 'convert' || (p === 'new' && D.created && D.created.smart) || p === 'recent';
     const isNew = st === 'new' || p === 'new';
-    const lid = smart && !isNew ? 'recent' : L[p] ? p : 'touch';
+    const lid = st === 'latenight' ? 'late' : smart && !isNew ? 'recent' : L[p] ? p : 'touch';
+    const key = isNew ? 'new' : lid;
     const name = isNew ? (D.created ? D.created.name : 'Family') : L[lid].name;
+    const days = isNew ? (D.created ? D.created.interval : 14) : D.intervals[lid];
     const mem = isNew ? (D.newMembers || []) : smart ? (L[lid].preview || []) : members(lid);
-    const bar = appBar({ title: esc(name), actions: `<button class="btn text accent-t" data-back aria-label="Done, back to your lists">Done</button>` });
-    let body = `<div class="sec-label">Name</div><div class="group"><div class="gi tap" ${A.snack('Tap to rename in place')}><span class="grow body">${esc(name)}</span>${ic('pencil-simple').replace('class="i"', 'class="i" style="color:var(--fg-muted)"')}</div></div>`;
-    body += `<div class="sec-label">Rhythm</div><div class="group">${cadenceRows(D.cadence, 'setCadence')}</div><div class="sec-label">How often</div><div class="group">${intervalBlock(D.cadence, D.interval)}</div>`;
-    body += `<div class="sec-label">Active hours</div><div class="group">${hoursBlock()}</div>
-      <div class="sec-label">Nudges</div><div class="group"><div class="gi"><div class="grow"><div class="gt">Send nudges</div><div class="gs">A gentle notification when someone here is worth a call.</div></div><button class="switch${D.reminders ? ' on' : ''}" ${A.act('toggleReminders')} aria-label="Send nudges"></button></div></div>
+    // LIST-26: the title is the rename control. While renaming it is a field labelled "List
+    // name", with Cancel and "Save list name" where Done was and no back arrow.
+    const bar = st === 'rename'
+      ? `<div class="ab"><div class="ttl-field"><label for="list-name">List name</label><input id="list-name" data-key="${key}" value="${esc(name)}" autocomplete="off"></div>${iconBtn('x', A.act('cancelRename'), 'Cancel')}${iconBtn('check', A.act('saveListName', key), 'Save list name')}</div>`
+      : `<div class="ab">${iconBtn('arrow-left', 'data-back', 'Back')}<button class="ttl" ${A.act('startRename', key)} aria-label="Rename list, ${esc(name)}"><span>${esc(name)}</span>${ic('pencil-simple')}</button><button class="btn text accent-t" data-back>Done</button></div>`;
+    let body = `<div class="sec-label">How often</div><div class="group">${intervalBlock(days, key)}</div>`;
+    body += `<div class="sec-label">Time of day</div><div class="group">${timeOfDayBlock(D.timeOfDay)}</div>
+      <div class="sec-label">Nudges</div><div class="group">${nudgesToggle()}</div>
       <div class="sec-label">When to nudge</div><div class="group">${nudgesBlock()}</div>`;
-    if (smart) body += `<div class="sec-label">Smart rule</div><div class="group"><div style="padding:16px"><div class="row" style="justify-content:space-between"><span class="body">Added within the last</span><span class="h3">30 days</span></div>
+    if (smart) body += `<div class="sec-label">Smart rule</div><div class="group"><div style="padding:16px"><div class="body">Added in the last 30 days</div>
       <div style="position:relative;height:28px;margin-top:8px"><div style="position:absolute;top:12px;left:0;right:0;height:4px;border-radius:4px;background:var(--line)"></div><div style="position:absolute;top:4px;left:calc(13% - 10px);width:20px;height:20px;border-radius:50%;background:var(--surface);box-shadow:inset 0 0 0 2px var(--fg)"></div></div>
       <div class="row micro" style="justify-content:space-between"><span>7 days</span><span>180 days</span></div></div></div>`;
-    const memRows = mem.length ? mem.map((id) => `<div class="row" style="padding:5px 16px">${avatar(id, 32)}<div class="grow body">${P[id].name}</div>${smart ? '' : iconBtn('x', A.snack('Removed ' + P[id].name, 'Undo'), 'Remove ' + P[id].name + ' from list', 'muted')}</div>`).join('')
-      : `<div class="body muted" style="padding:4px 16px 8px">${smart ? 'No one matches this rule right now.' : 'No one in this list yet.'}</div>`;
-    body += `<div class="sec-label">Members preview</div><div class="group"><div style="padding:12px 0 4px"><div class="eyebrow" style="padding:0 16px 6px">${plural(mem.length, 'person', 'people')}</div>${memRows}
-      ${smart ? '' : `<div class="row" style="padding:0 16px;min-height:48px;cursor:pointer" ${A.go('S32', null, isNew ? 'new' : lid)}>${ic('user-plus')}<span class="body">Add people</span></div>`}</div></div>`;
+    body += `<div class="sec-label">People</div><div class="group">${peopleBlock(mem, { smart, addAttrs: A.go('S32', null, key), removeAttrs: (id) => A.snack('Removed ' + P[id].name, 'Undo') })}</div>`;
     if (smart) body += `<div style="padding:20px 16px 0" class="gap8"><button class="btn outline block sm danger" ${A.st('convert')}>Make this a regular list</button><div class="micro center-t">The people here now stay, and the list stops adding people by itself. This can't be undone.</div></div>`;
-    body += `<div style="padding:24px 16px 32px"><button class="btn primary block" data-back>Done</button></div>`;
+    // Secondary, not Primary: the app bar's Done is the screen's one accent (LIST-21).
+    body += `<div style="padding:24px 16px 32px"><button class="btn tonal block" data-back>Done</button></div>`;
     let layer = '';
     if (st === 'time') layer = dialog(`<div class="dt" style="font-size:14px;color:var(--fg-muted);font-weight:500">Select time</div><div class="row" style="justify-content:center;gap:8px;margin:8px 0 16px"><div style="font-size:48px;background:var(--accent-tint);color:var(--accent-press);border-radius:12px;padding:4px 16px">10</div><div style="font-size:48px">:</div><div style="font-size:48px;background:var(--bg-subtle);border-radius:12px;padding:4px 16px">00</div><div class="gap8" style="margin-left:8px"><span class="chip on" style="min-height:30px">AM</span><span class="chip" style="min-height:30px">PM</span></div></div><div style="width:220px;height:220px;border-radius:50%;background:var(--bg-subtle);margin:0 auto;position:relative"><div style="position:absolute;left:50%;top:50%;width:2px;height:80px;background:var(--accent);transform-origin:top;transform:rotate(120deg)"></div></div><div class="da"><button class="btn text" style="color:var(--fg-muted)" ${A.st('default')}>Cancel</button><button class="btn primary sm" ${A.st('default')}>OK</button></div>`);
     if (st === 'convert') layer = dialog(`<div class="dt">Make this a regular list?</div><div class="db">The 2 people here now stay, and the list stops adding people by itself. This can't be undone.<br><br>Including: Ama Owusu, Leo Brandt</div><div class="da"><button class="btn text" style="color:var(--fg-muted)" ${A.st('smart')}>Cancel</button><button class="btn outline sm danger" ${A.st('default')} ${A.snack('This is now a regular list.')}>Make it regular</button></div>`, 'smart');
     return view({ bar, body, layer });
   },
+  // The keyboard's Done saves the name; Escape stands in for Back, which cancels the edit.
+  mount(ph) {
+    const f = $('#list-name', ph);
+    if (!f) return;
+    f.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); ACT.saveListName(f.dataset.key); afterNav(''); }
+      if (e.key === 'Escape') { ACT.cancelRename(); afterNav(''); }
+    });
+  },
 });
+// The rename keeps the list it was opened on (Late night, a smart list, a new one) as the
+// screen's parameter, so leaving the edit returns to that same list.
+ACT.startRename = (key) => { setSt('rename', key); D.focusId = 'list-name'; return false; };
+ACT.cancelRename = () => { setSt('default'); return false; };
+// A blank name keeps the old one; an unchanged one writes nothing.
+ACT.saveListName = (key) => {
+  const f = document.getElementById('list-name');
+  const name = f ? f.value.trim() : '';
+  if (name) {
+    if (key === 'new') D.created = { ...(D.created || { smart: false, interval: 14 }), name };
+    else if (L[key]) L[key].name = name;
+  }
+  setSt('default');
+  return false;
+};
 ACT.day = (i) => { i = +i; D.days.has(i) ? D.days.delete(i) : D.days.add(i); return false; };
 
 /* ════════ Add contacts (contact picker) ════════ */
@@ -2068,7 +2451,7 @@ function lockClock() { return `<div class="sys-fg" style="text-align:center;padd
 screen({
   id: 'S50', group: 'outside', name: 'List nudge notification', route: 'notification: orbit.list_prompt', chrome: false,
   spec: 'features/notifications/README.md', code: 'notify/ListPromptWorker.kt',
-  purpose: 'Bring the list\'s suggestion to you, once per list per slot: the only notification Orbit sends (ADR 0009: pull, never push).',
+  purpose: 'Bring the list\'s suggestion to you, once per list per slot: a scheduled reminder the user owns (ADR 0009). The only other notification Orbit sends is the one after a call (S54).',
   owes: ['One quiet nudge per list per slot, by default at 10am; never a count, never shame', 'The list\'s next person by first name, with their face and a Call action (NOTIF-14); a name is never repeated two nudges running (NOTIF-15)', 'On a locked phone that hides sensitive content: "Someone is ready when you are." and nothing else (NOTIF-13)', 'Tap to land on that list\'s card'],
   drift: null,
   states: [['default', 'Named (unlocked)'], ['one', 'Name-free (nobody to name)'], ['lock', 'Lock screen, sensitive content hidden']],
@@ -2138,9 +2521,9 @@ screen({
   spec: 'features/card-view/README.md', code: 'ui/util/Dialer.kt',
   purpose: 'Where every Call button lands. Orbit never places the call itself.',
   owes: ['The number filled in, so you press call yourself', 'Coming back to Orbit afterwards'],
-  drift: 'Back on Card view, Orbit re-reads the call log and moves to the next person if the call connected, with no confirmation. The "add a note" banner shows only once you get back to Home, within 10 minutes of the call.',
+  drift: 'Back on Card view, Orbit re-reads the call log and moves to the next person once the call is confirmed, then says "Called Kai" with "Add a note" (CARD-03). Back on Home, a call of a minute or more waits for a note at the top for a day (HOME-14). In this prototype every demo call counts as 14 minutes, however long the dialer\'s timer ran.',
   states: [['default', 'Number filled in'], ['incall', 'On the call']],
-  to: [['S11', 'End the call and return (deck moves on)'], ['S10', 'Return to Home (note banner)']],
+  to: [['S11', 'End the call and return (deck moves on, "Called Kai")'], ['S10', 'Return to Home (the call waits for a note)']],
   render(st, p) {
     const pid = p && P[p] ? p : 'kai';
     const pp = P[pid];
@@ -2167,14 +2550,44 @@ screen({
     const iv = setInterval(() => { const el = $('#call-timer'); if (!el || cur().id !== 'S53') { clearInterval(iv); return; } s += 1; el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 1000);
   },
 });
+// Ending the call returns to Orbit. The call waits for a note on Home (NOTE-05); a card that
+// placed it moves past the person (their next turn is a rhythm away) and says "Called Kai".
 ACT.endCall = (pid) => {
-  D.bannerFor = pid || 'kai';
+  pid = pid || 'kai';
   S.stack.pop();
+  D.waiting = [callFor(pid), ...D.waiting.filter((c) => c.pid !== pid)];
+  S.stack.forEach((e) => { if (e.id === 'S10' && ['default', 'one', 'pile', 'pileopen'].includes(e.st)) e.st = homeStateFor(); });
   const t = cur();
-  D.banner = true;
-  if (t && t.id === 'S11') { shiftCard(t.p || 'touch', 1); t.st = 'default'; }
-  if (t && t.id === 'S10') t.st = 'banner';
-  if (!S.stack.length) S.stack = [{ id: 'S10', st: 'banner', p: null }];
+  if (t && t.id === 'S11') {
+    const lid = L[t.p] ? t.p : 'touch';
+    if (pid in D.turns[lid]) setTurn(lid, pid, D.intervals[lid] || 2);
+    t.st = 'default';
+    calledSnack(pid);
+  }
+  if (!S.stack.length) S.stack = [{ id: 'S10', st: homeStateFor(), p: null }];
+  return false;
+};
+
+screen({
+  id: 'S54', group: 'outside', name: 'Notification after a call', route: 'notification: orbit.after_call', chrome: false,
+  spec: 'features/notifications/README.md', code: 'notify/PostCallNotification.kt',
+  purpose: 'When a call worth a note ends while Orbit is closed, ask once how it went, and open the page for writing about it (NOTIF-16).',
+  owes: ['After a call of a minute or more with someone on a list, only while Orbit is not on screen: "How was your call with Kai?" / "Add a note while it\'s fresh." (NOTIF-16)', 'No face and no action: the note is the only thing to do, and it is the tap', 'On a locked phone that hides sensitive content: "How was your call?", with no name', 'Its own channel, "After a call", so it can be turned off without the nudges; it is never called a nudge', 'Gone once a note is saved or the call is dismissed on Home'],
+  drift: null,
+  states: [['default', 'Named (unlocked)'], ['lock', 'Lock screen, sensitive content hidden']],
+  to: [['S23', 'Tap the notification (opens over Home)']],
+  render(st) {
+    const lock = st === 'lock';
+    return `<div class="wall"></div>${statusBar(true)}<div style="position:relative;flex:1;display:flex;flex-direction:column">${lockClock()}
+      <div style="margin-top:40px"><div class="notif" ${A.act('openAfterCall', 'kai')} role="button"><div class="nh"><span class="app-dot">O</span>Orbit · now</div><div class="nt">${lock ? 'How was your call?' : 'How was your call with Kai?'}</div><div class="nb">Add a note while it's fresh.</div></div></div>
+      <div style="flex:1"></div><div class="sys-fg center-t" style="font-size:13px;opacity:.8;padding-bottom:12px">Swipe up to open</div></div>${gestBar(true)}<div class="sys-tag">Outside Orbit: lock screen</div>`;
+  },
+});
+// The tap opens the note page over Home, so Back lands there; the same call waits on Home too.
+ACT.openAfterCall = (pid) => {
+  if (!D.waiting.some((c) => c.pid === pid)) D.waiting = [callFor(pid), ...D.waiting];
+  S.stack = [{ id: 'S10', st: homeStateFor(), p: null }];
+  go('S23', 'default', pid, { push: true });
   return false;
 };
 </script>
@@ -2218,7 +2631,7 @@ const openBugsFor = (id) => bugsFor(id).filter(([, b]) => b.status !== 'fixed');
 <script>
 'use strict';
 /* ════════ Review chrome: rail, inspector, boards, flow player ════════ */
-const PARENT = { S02: 'S01', S03: 'S02', S04: 'S03', S05: 'S03', S06: 'S05', S07: 'S05', S11: 'S10', S13: 'S11', S20: 'S11', S21: 'S20', S22: 'S10', S30: 'S10', S31: 'S30', S32: 'S31', S40: 'S10', S41: 'S40', S42: 'S40', S53: 'S11' };
+const PARENT = { S02: 'S01', S03: 'S02', S04: 'S03', S05: 'S03', S06: 'S05', S07: 'S05', S11: 'S10', S13: 'S11', S20: 'S11', S21: 'S20', S22: 'S10', S23: 'S10', S30: 'S10', S31: 'S30', S32: 'S31', S40: 'S10', S41: 'S40', S42: 'S40', S53: 'S11' };
 function naturalStack(id, st, p) {
   const chain = [];
   let x = PARENT[id];
@@ -2490,28 +2903,30 @@ const FLOWS = [
       { id: 'S05', say: 'A blocking gate while call history is read, 3 of 4. Continue unlocks only when it finishes.', do: () => { D.syncAuto = true; } },
       { id: 'S05', st: 'done', say: 'Finished, with a count of what was read.', tap: '[data-go="S06"]' },
       { id: 'S06', say: 'Orbit suggests a first list from people you already call. Everyone starts ticked.', tap: '.bottom-cta .btn.primary' },
-      { id: 'S07', say: 'The real List settings controls, with Done locked until there is a name and 3 people.', tap: '.bottom-cta .btn.primary', from: ['S05'] },
+      { id: 'S07', say: 'The same controls as List settings (How often, Time of day, People with Add people in its header) under a name field, with Done locked until there is a name and 3 people.', tap: '.bottom-cta .btn.primary', from: ['S05'] },
       { id: 'S08', say: 'Setup done. The swipe hint teaches Later and Sooner, and only now does Orbit ask about nudges.', tap: '[data-st="system"]', from: [] },
       { id: 'S08', st: 'nudged', say: 'Nudges allowed; the ask becomes a plain line. Each list can change when they come.', tap: '.bottom-cta .btn.primary', from: [] },
       { id: 'S10', say: 'Home, with the whole onboarding back stack cleared.', from: [] },
     ] },
-  { id: 'F2', name: 'Call someone from a list', why: 'The core loop: list, card, phone app, back to a new card, then a nudge to write a note.',
+  { id: 'F2', name: 'Call someone from a list', why: 'The core loop: list, card, phone app, back to a new card, then a note about the call while it is fresh.',
     steps: [
-      { id: 'S10', say: 'Home shows each list with the next person up.', tap: '.lc', do: () => { D.cardPos.touch = 0; D.banner = false; } },
-      { id: 'S11', p: 'touch', say: 'One person, with when they usually answer and how long it has been.', tap: '.cv-actions .btn.primary', do: () => { D.cardPos.touch = 0; } },
+      { id: 'S10', say: 'Home shows each list with the next person up.', tap: '.lc', do: () => { resetTurns('touch'); D.waiting = []; } },
+      { id: 'S11', p: 'touch', say: 'One person, with when they usually answer and how long it has been.', tap: '.cv-actions .btn.primary', do: () => { resetTurns('touch'); } },
       { id: 'S53', p: 'kai', say: 'Orbit opens your phone app with the number filled in. You press call there.', tap: '[data-st="incall"]' },
       { id: 'S53', st: 'incall', p: 'kai', say: 'On the call. Orbit is not involved until you come back.', tap: '[data-act="endCall"]' },
-      { id: 'S11', p: 'touch', say: 'Back on the card, the deck has moved to the next person by itself. No prompt, no snackbar.', tap: '.ab [data-back]', do: () => { D.cardPos.touch = 1; D.banner = true; D.bannerFor = 'kai'; } },
-      { id: 'S10', st: 'banner', say: 'Within 10 minutes of the call, Home offers to capture a note.', tap: '[data-go="S20:note"]', do: () => { D.banner = true; } },
-      { id: 'S20', st: 'note', p: 'kai', say: 'Contact detail opens with the note field focused and the keyboard up.', from: ['S10'] },
+      { id: 'S11', p: 'touch', say: 'Back on the card, the deck has moved past Kai by itself once the call log shows the call, and "Called Kai" offers "Add a note" for a few seconds. Back goes Home.', tap: '.ab [data-back]', do: () => { resetTurns('touch'); setTurn('touch', 'kai', 2); D.waiting = [CALLS.kai]; S.stack.forEach((e) => { if (e.id === 'S10') e.st = 'one'; }); calledSnack('kai'); } },
+      { id: 'S10', st: 'one', say: 'The call waits for a note at the top of Home, as one card, until you write one or dismiss it.', tap: '[data-go="S23"]', do: () => { D.waiting = [CALLS.kai]; } },
+      { id: 'S23', p: 'kai', say: 'The note page: the timer in the bar counts up from 0:00, a nudge to keep it short. Type a few words; Save note waits for them.', tap: '#note-text', from: ['S10'], do: () => { D.waiting = [CALLS.kai]; } },
+      { id: 'S10', say: 'Saved. Home says "Note saved", and the call no longer waits.', snack: 'Note saved', do: () => { D.waiting = []; } },
     ] },
-  { id: 'F3', name: 'Decide on the card: later, sooner, browse', why: 'Everything you can do with one name besides calling.',
+  { id: 'F3', name: 'Decide on the card: later, sooner, browse', why: 'Everything you can do with one name besides calling, and the order the card follows.',
     steps: [
-      { id: 'S11', p: 'touch', say: 'Swipe left or tap Later: both mean Later, and the button says so.', tap: '.round[aria-label="Later"]', do: () => { D.cardPos.touch = 0; } },
-      { id: 'S11', p: 'touch', say: 'The next person slides in and a snackbar names the last one and says when they come back, with Undo.', snack: 'Kai will come up again on Thursday.', undo: true, do: () => { D.cardPos.touch = 1; }, tap: '.round[aria-label="Sooner"]' },
-      { id: 'S11', p: 'touch', say: 'Sooner, by button or a right swipe, brings someone forward instead.', snack: 'Luma comes up tomorrow.', undo: true, do: () => { D.cardPos.touch = 2; }, tap: '[aria-label^="More actions"]' },
-      { id: 'S11', st: 'menu', p: 'touch', say: 'The three-dots menu: Browse people, Add people, List settings, the same words as Home.', tap: '[data-go="S13"]' },
-      { id: 'S13', p: 'touch', say: 'Browse is the queue in order, under Next up. Number 1, in ink, is who the card shows next.' },
+      { id: 'S11', p: 'touch', say: 'Swipe left or tap Later: both mean Later, and the button says so.', tap: '.round[aria-label="Later"]', do: () => { resetTurns('touch'); } },
+      { id: 'S11', p: 'touch', say: 'The next person slides in and a snackbar names the last one and says when they come back, with Undo.', snack: 'Kai will come up again on Thursday.', undo: true, do: () => { resetTurns('touch'); setTurn('touch', 'kai', 4); }, tap: '.round[aria-label="Sooner"]' },
+      { id: 'S11', p: 'touch', say: 'Sooner, by button or a right swipe, brings someone forward instead.', snack: 'Luma comes up tomorrow.', undo: true, do: () => { resetTurns('touch'); setTurn('touch', 'kai', 4); setTurn('touch', 'luma', 1); }, tap: '[aria-label^="More actions"]' },
+      { id: 'S11', st: 'menu', p: 'touch', say: 'The three-dots menu: Browse people, Add people, List settings, the same words as Home.', tap: '[data-go="S13"]', do: () => { resetTurns('touch'); setTurn('touch', 'kai', 4); setTurn('touch', 'luma', 1); } },
+      { id: 'S13', p: 'touch', say: 'Browse is the order the card follows, numbered, each row saying when. Owen, on the card now, is first and marked "On your card"; Luma and Kai sit where Sooner and Later put them. Drag a handle to move someone.', tap: '[data-drag="theo"]', do: () => { resetTurns('touch'); setTurn('touch', 'kai', 4); setTurn('touch', 'luma', 1); D.browseFocus = true; } },
+      { id: 'S13', st: 'moved', p: 'touch', say: 'Theo, dragged up under Owen, is "Up now". "Moved Theo earlier" has Undo, and the line under the order says a call, Later or Sooner moves people again.', do: () => { resetTurns('touch'); setTurn('touch', 'kai', 4); setTurn('touch', 'luma', 1); reorder('touch', 'theo', 'owen'); } },
       { id: 'S11', st: 'none', p: 'touch', say: 'If no one is eligible (everyone paused), the card says so and offers Browse.', from: ['S10'] },
     ] },
   { id: 'F4', name: 'Start a new list', why: 'From Home to a list with people in it.',
@@ -2519,11 +2934,11 @@ const FLOWS = [
       { id: 'S10', say: 'New list sits quietly under the cards.', tap: '[data-go="S30:create"]' },
       { id: 'S30', st: 'create', say: 'Lists opens with the template sheet up. Picking a template fills in the name.', tap: '[data-act="template"][data-arg="1"]' },
       { id: 'S30', st: 'create', say: 'Family picked. Create is enabled once there is a template and a name.', do: () => { D.template = 1; D.newName = 'Family'; }, tap: '[data-act="createList"]' },
-      { id: 'S31', st: 'new', p: 'new', say: 'Create goes straight to List settings for the new list. Everything saves as you change it.', do: () => { D.created = { name: 'Family', smart: false }; D.newMembers = []; }, tap: '[data-go="S32"]' },
+      { id: 'S31', st: 'new', p: 'new', say: 'Create goes straight to List settings for the new list: its name is the title (tap it to rename), How often starts at the template\'s 14 days, and Add people sits in the People header. Everything saves as you change it.', do: () => { D.created = { name: 'Family', smart: false, interval: 14 }; D.newMembers = []; }, tap: '[data-go="S32"]' },
       { id: 'S32', p: 'new', say: 'Add people opens the address book picker, with filters and an A to Z rail.', tap: '.row[data-act="psel"]' },
       { id: 'S32', st: 'selected', p: 'new', say: 'Three picked. The docked bar says exactly what will happen.', tap: '[data-act="pcommit"]' },
       { id: 'S31', st: 'new', p: 'new', say: 'Back on List settings, a snackbar confirms with Undo.', snack: 'Added 3 to Family', undo: true, do: () => { D.newMembers = ['ava', 'beth', 'grace']; }, tap: '.ab [data-back]' },
-      { id: 'S30', say: 'Done returns to Lists. Home order follows this order.', do: () => { D.created = D.created || { name: 'Family', smart: false }; } },
+      { id: 'S30', say: 'Done returns to Lists. Home order follows this order.', do: () => { D.created = D.created || { name: 'Family', smart: false, interval: 14 }; } },
     ] },
   { id: 'F5', name: 'Tidy a list in bulk', why: 'Long-press, select several, move them to another list, undo if wrong.',
     steps: [
@@ -2577,6 +2992,17 @@ const FLOWS = [
       { id: 'S40', st: 'restore', say: 'A last check before everything is replaced.' },
       { id: 'S40', st: 'reset', say: 'Reset Orbit erases Orbit\'s data, never the phone\'s contacts or call log.', tap: '[data-act="resetAll"]' },
       { id: 'S01', say: 'After a reset the app restarts at Welcome.', from: [] },
+    ] },
+  { id: 'F11', name: 'Write about a call after it ends', why: 'The notification after a call, the note page, and the calls waiting on Home (NOTE-04, NOTE-05, HOME-14, NOTIF-16).',
+    steps: [
+      { id: 'S54', say: 'A call with Kai ended while Orbit was closed. One notification asks how it was. It is not a nudge: it has its own channel, "After a call".', tap: '.notif', do: () => { D.waiting = [CALLS.nia, CALLS.theo]; } },
+      { id: 'S23', p: 'kai', from: ['S10'], say: 'The tap opens the note page over Home. The timer counts up from 0:00 while you write.', do: () => { D.waiting = [CALLS.kai, CALLS.nia, CALLS.theo]; } },
+      { id: 'S23', st: 'writing', p: 'kai', from: ['S10'], say: 'With words written, Not now asks first.', tap: '[data-act="noteLeave"]', do: () => { D.waiting = [CALLS.kai, CALLS.nia, CALLS.theo]; } },
+      { id: 'S23', st: 'discard', p: 'kai', from: ['S10'], say: 'Keep writing keeps every word; Discard leaves without a note.', tap: '[data-act="noteKeep"]', do: () => { D.waiting = [CALLS.kai, CALLS.nia, CALLS.theo]; } },
+      { id: 'S23', st: 'writing', p: 'kai', from: ['S10'], say: 'Save note writes an ordinary note about Kai and goes back to Home.', tap: '#note-save', do: () => { D.waiting = [CALLS.kai, CALLS.nia, CALLS.theo]; } },
+      { id: 'S10', st: 'pile', say: '"Note saved". Two more calls from the last day still wait, stacked as a pile that says "2 calls to write about".', snack: 'Note saved', tap: '[data-st="pileopen"]', do: () => { D.waiting = [CALLS.nia, CALLS.theo]; } },
+      { id: 'S10', st: 'pileopen', say: 'Open, each call has Add a note and Dismiss, and Dismiss all clears the lot.', tap: '[data-act="dismissAll"]', do: () => { D.waiting = [CALLS.nia, CALLS.theo]; } },
+      { id: 'S10', say: '"Dismissed 2 calls", with Undo. Nothing waits now, so the cards start under the date.', snack: 'Dismissed 2 calls', undo: true, do: () => { D.waiting = []; } },
     ] },
 ];
 boot();
