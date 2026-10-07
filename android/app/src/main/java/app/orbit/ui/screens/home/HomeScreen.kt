@@ -9,7 +9,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,7 +28,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -45,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -788,9 +787,10 @@ private fun NextUpRow(
  * faint dot. Reflection, not a dashboard: no numbers, no targets.
  *
  * HOME-8 layers two things on top without changing that reading:
- *   - a **direction rim** on each bar (cool violet = you called, cool blue =
- *     they called). Fill stays the person, rim is the direction — two channels,
- *     never confusable, so "how much am I reaching out vs being reached" is
+ *   - a **direction rim** on each bar (pink = you called, teal = they
+ *     called), cut off from the fill by a near-black ring ([directionMark]).
+ *     Fill stays the person, rim is the direction: two channels, never
+ *     confusable, so "how much am I reaching out vs being reached" is
  *     answerable at a glance.
  *   - a **tap target per day**, which opens [RhythmDaySheet] with that day's
  *     calls: who, which way, how long, when.
@@ -858,8 +858,8 @@ private fun RhythmStrip(
 }
 
 /** Two-swatch key for the direction rims. Swatches mirror the bar mark exactly:
- *  neutral fill, coloured rim — so the legend teaches the encoding, not a
- *  second one. */
+ *  coloured rim, black ring, neutral fill. The legend teaches the encoding,
+ *  not a second one. */
 @Composable
 private fun DirectionLegend() {
     val legendDescription = stringResource(R.string.home_rhythm_legend_a11y)
@@ -881,12 +881,14 @@ private fun LegendSwatch(label: String, rim: Color) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1),
     ) {
+        // The neutral fill is the old 22% subtle wash, composited onto the
+        // surface first: the mark paints its black ring under the content, so
+        // a translucent fill would come out near-black.
         Box(
             Modifier
-                .size(width = 12.dp, height = 10.dp)
-                .clip(RHYTHM_BAR_SHAPE)
-                .background(OrbitTheme.colors.fgSubtle.copy(alpha = 0.22f))
-                .border(RHYTHM_RIM, rim, RHYTHM_BAR_SHAPE),
+                .size(width = 16.dp, height = RHYTHM_BAR_MIN)
+                .directionMark(rim = rim, separator = OrbitTheme.colors.directionSeparator, corner = RHYTHM_BAR_CORNER)
+                .background(OrbitTheme.colors.fgSubtle.copy(alpha = 0.22f).compositeOver(OrbitTheme.colors.surface)),
         )
         Text(
             text = label,
@@ -956,11 +958,13 @@ private fun DayColumn(
                         .background(OrbitTheme.colors.line),
                 )
             } else {
-                // Per-bar floor. The rim wants 10dp (a 6dp bar minus a 2dp rim
-                // top and bottom leaves a 2dp sliver of person-colour, and the
-                // fill stops reading) — but a busy day has to stay inside the
-                // 48dp strip, so the floor yields to an even split of whatever
-                // height the gaps leave over.
+                // Per-bar floor. The mark wants 14dp: 3dp of rim and 1.5dp of
+                // ring top and bottom leave 5dp of person colour, about the
+                // least that still reads as a hue. But a busy day has to stay
+                // inside the 48dp strip, so the floor yields to an even split
+                // of whatever height the gaps leave over, and below the floor
+                // the rim and ring shrink with the bar so the fill never
+                // vanishes (chrome).
                 val n = day.calls.size
                 val budget = RHYTHM_BAR_AREA.value - RHYTHM_BAR_GAP.value * (n - 1)
                 val minBar = (budget / n).coerceIn(4f, RHYTHM_BAR_MIN.value)
@@ -968,13 +972,19 @@ private fun DayColumn(
                     day.calls.forEach { call ->
                         val frac = (call.durationSeconds / scaleMax).coerceIn(0f, 1f)
                         val h = (frac * RHYTHM_BAR_AREA.value).coerceAtLeast(minBar).dp
+                        val chrome = (h / RHYTHM_BAR_MIN).coerceAtMost(1f)
                         Box(
                             Modifier
                                 .height(h)
                                 .width(RHYTHM_BAR_WIDTH)
-                                .clip(RHYTHM_BAR_SHAPE)
-                                .background(OrbitTheme.tones.rhythmBarForId(call.contactId))
-                                .border(RHYTHM_RIM, directionColor(call.direction), RHYTHM_BAR_SHAPE),
+                                .directionMark(
+                                    rim = directionColor(call.direction),
+                                    separator = OrbitTheme.colors.directionSeparator,
+                                    corner = RHYTHM_BAR_CORNER,
+                                    rimWidth = DIRECTION_RIM * chrome,
+                                    separatorWidth = DIRECTION_SEPARATOR * chrome,
+                                )
+                                .background(OrbitTheme.tones.rhythmBarForId(call.contactId)),
                         )
                     }
                 }
@@ -1068,13 +1078,12 @@ private const val RHYTHM_HEADROOM: Float = 1.25f
 // card narrower than NARROW_CARD, so it never has to grow.
 private val NAME_COLUMN_WIDTH: Dp = 118.dp
 
-// HOME-8 — the direction rim. 2dp is the smallest width that still holds a
-// legible hue at this bar size; the shape is shared with the legend swatch so
-// the key and the mark are literally the same object.
-private val RHYTHM_BAR_SHAPE = RoundedCornerShape(6.dp)
-private val RHYTHM_RIM: Dp = 2.dp
+// HOME-8: the bar's outer corner, shared with the legend swatch so the key and
+// the mark are literally the same object. The rim and ring widths live with
+// [directionMark] because the day sheet's avatar rings use them too.
+private val RHYTHM_BAR_CORNER: Dp = 6.dp
 private val RHYTHM_BAR_GAP: Dp = 3.dp
-private val RHYTHM_BAR_MIN: Dp = 10.dp
+private val RHYTHM_BAR_MIN: Dp = 14.dp
 
 // ---- Previews ----
 

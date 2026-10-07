@@ -2,7 +2,6 @@ package app.orbit.ui.screens.home
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -27,10 +27,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.orbit.R
 import app.orbit.data.entity.CallDirection
@@ -148,6 +150,51 @@ internal fun directionColor(direction: CallDirection): Color =
         OrbitTheme.colors.directionIncoming
     }
 
+/**
+ * HOME-8: the direction mark, one modifier for the rhythm bars, their legend
+ * and this sheet's avatar rings, so the key and the mark are the same object.
+ * Three layers from the outside in: the [rim] in the call's direction colour,
+ * the [separator] ring (the theme's near-black `directionSeparator`) that
+ * insulates it, then whatever the caller draws next (the person's fill, or
+ * their avatar), clipped to the inner shape.
+ *
+ * Until 2026-10-07 the rim was a 2dp border drawn straight onto the person
+ * fill, and a fill of similar lightness swallowed it: the owner could not tell
+ * who called whom. The ring gives the rim a hard edge on both sides.
+ *
+ * The layers are stacked backgrounds, not borders, so there is no anti-aliased
+ * seam of card colour between rim and ring. The cost: the separator is painted
+ * under the content too, so the content must be opaque.
+ *
+ * [corner] is the outer corner radius; null is a circle. Each inner layer's
+ * radius shrinks by its inset, so the rim and the ring keep an even width
+ * round the bend.
+ */
+internal fun Modifier.directionMark(
+    rim: Color,
+    separator: Color,
+    corner: Dp? = null,
+    rimWidth: Dp = DIRECTION_RIM,
+    separatorWidth: Dp = DIRECTION_SEPARATOR,
+): Modifier {
+    fun layer(inset: Dp): Shape =
+        if (corner == null) CircleShape else RoundedCornerShape((corner - inset).coerceAtLeast(0.dp))
+    return this
+        .clip(layer(0.dp))
+        .background(rim)
+        .padding(rimWidth)
+        .clip(layer(rimWidth))
+        .background(separator)
+        .padding(separatorWidth)
+        .clip(layer(rimWidth + separatorWidth))
+}
+
+// 3dp is the rim the owner could read at a glance on a 26dp bar (2dp was not);
+// 1.5dp of near-black is enough to cut it off from the fill without the ring
+// becoming a third colour to decode.
+internal val DIRECTION_RIM: Dp = 3.dp
+internal val DIRECTION_SEPARATOR: Dp = 1.5.dp
+
 @Composable
 private fun RhythmCallRow(
     call: RhythmCall,
@@ -212,18 +259,18 @@ private fun RhythmCallRow(
     }
 }
 
-/** 40dp avatar wearing the call's direction rim. */
+/** 36dp avatar wearing the call's direction mark: rim, black ring, face. */
 @Composable
 private fun RowAvatar(photoUri: String?, name: String, rim: Color) {
     val ring = Modifier
-        .size(40.dp)
-        .border(width = 2.dp, color = rim, shape = CircleShape)
-        .padding(OrbitTheme.spacing.hair)
-        .clip(CircleShape)
+        .size(ROW_AVATAR + (DIRECTION_RIM + DIRECTION_SEPARATOR) * 2)
+        .directionMark(rim = rim, separator = OrbitTheme.colors.directionSeparator)
     Box(modifier = ring, contentAlignment = Alignment.Center) {
-        Avatar(name = name, size = 36.dp, photoUri = photoUri)
+        Avatar(name = name, size = ROW_AVATAR, photoUri = photoUri)
     }
 }
+
+private val ROW_AVATAR: Dp = 36.dp
 
 // ---- Previews ----
 //

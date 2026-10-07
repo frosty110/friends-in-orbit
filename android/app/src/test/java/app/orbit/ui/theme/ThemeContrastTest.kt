@@ -145,6 +145,43 @@ class ThemeContrastTest {
         assertNoFailures()
     }
 
+    // HOME-8: the rhythm bars' direction rims. Each is a non-text mark, so it
+    // must clear 3:1 against the card it sits on (the surface and every list
+    // wash) and against the near-black ring that insulates it from the fill.
+    // The two rims must also differ in lightness, not only hue: that is what
+    // still separates them for a colour-blind reader once red-green collapses.
+    // 1.5:1 is the floor the 2026-10-07 pair was chosen above (1.6 light, 2.4
+    // dark); the violet/blue pair it replaced was the one the owner could not
+    // read, and a same-lightness pink/teal would fail here.
+    private fun checkDirection(name: String, c: OrbitColors, tones: OrbitTones) {
+        val cards = listOf("surface" to c.surface) +
+            tones.listTones.mapIndexed { i, t -> "wash$i" to t.wash }
+        for ((dir, rim) in listOf("outgoing" to c.directionOutgoing, "incoming" to c.directionIncoming)) {
+            for ((cardName, card) in cards) assertContrast("$name $dir rim/$cardName", rim, card, uiAA)
+            assertContrast("$name $dir rim/separator", rim, c.directionSeparator, uiAA)
+        }
+        assertContrast("$name outgoing/incoming lightness", c.directionOutgoing, c.directionIncoming, 1.5f)
+    }
+
+    @Test
+    fun `direction rims stand off the card, their ring and each other in every theme`() {
+        for (def in OrbitThemes.all) {
+            for (isDark in listOf(false, true)) {
+                val resolved = OrbitThemes.resolve(ThemeSettings(themeId = def.id), isDark = isDark)
+                checkDirection("${def.id.name} ${if (isDark) "dark" else "light"}", resolved.colors, resolved.tones)
+            }
+        }
+        var hue = 0
+        while (hue < 360) {
+            for (isDark in listOf(false, true)) {
+                val dial = OrbitThemes.resolve(ThemeSettings(themeId = OrbitThemeId.WARM, accentHue = hue), isDark = isDark)
+                checkDirection("accent hue=$hue ${if (isDark) "dark" else "light"}", dial.colors, dial.tones)
+            }
+            hue += 15
+        }
+        assertNoFailures()
+    }
+
     @Test
     fun `chip tones stay legible (fg on bg) for every theme and mode`() {
         for (def in OrbitThemes.all) {

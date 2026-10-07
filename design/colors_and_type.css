@@ -64,14 +64,18 @@
   --orbit-slate:             #6B7570;
   --orbit-slate-tint:         #DCE1DE;
 
-  /* Call direction (HOME-8: the rim on a rhythm bar). Deliberately cool and outside every
-     theme's warm range: a bar's fill is the person, its rim is the direction, and the two
-     channels must never be confusable. Violet and blue are ~65 degrees apart and differ in
-     lightness, so the pair survives a colour-vision deficiency at 2px. */
-  --orbit-violet:            #5E3D96;   /* outgoing, light: you reached out */
-  --orbit-blue:              #2F84B8;   /* incoming, light: they reached you */
-  --orbit-violet-soft:       #B49BEA;   /* outgoing, dark */
-  --orbit-blue-soft:         #6FBBE0;   /* incoming, dark */
+  /* Call direction (HOME-8: the rim on a rhythm bar and on a day-sheet avatar). Outside
+     every theme's warm range: a bar's fill is the person, its rim is the direction, and the
+     two channels must never be confusable. Pink and teal sit ~180 degrees apart and differ
+     in lightness (1.6:1 light, 2.4:1 dark), so the pair survives a colour-vision deficiency.
+     A 1.5px near-black ring sits between the 3px rim and the fill so a fill of similar
+     lightness cannot swallow the rim. Was violet #5E3D96 / blue #2F84B8 at 2px with no ring
+     until 2026-10-07: the owner could not tell who called whom. */
+  --orbit-pink:              #BE185D;   /* outgoing, light: you reached out */
+  --orbit-teal:              #0D9488;   /* incoming, light: they reached you */
+  --orbit-pink-neon:         #EC4899;   /* outgoing, dark */
+  --orbit-teal-neon:         #5EEAD4;   /* incoming, dark */
+  --orbit-direction-ring:    #141210;   /* the insulating ring, both modes */
 
   /* Neutrals — warm, not gray */
   --orbit-cream:             #FAF6F0;   /* light bg */
@@ -127,8 +131,9 @@
   --info:          var(--orbit-slate);
   --info-tint:     var(--orbit-slate-tint);
   /* Rhythm-bar direction rims (HOME-8). Semantic, not personality: every theme keeps this pair. */
-  --direction-outgoing: var(--orbit-violet);
-  --direction-incoming: var(--orbit-blue);
+  --direction-outgoing:  var(--orbit-pink);
+  --direction-incoming:  var(--orbit-teal);
+  --direction-separator: var(--orbit-direction-ring);
   /* Swipe ghosts (the hint under a dragged card). Later is muted ink, never the danger family;
      Sooner is the positive sage. */
   --swipe-ghost-later:  var(--orbit-ink-soft);
@@ -234,8 +239,8 @@
 
   --positive-text: var(--orbit-sage);   /* sage itself clears 4.5:1 on the dark surfaces */
   --danger:        var(--orbit-clay-soft);
-  --direction-outgoing: var(--orbit-violet-soft);
-  --direction-incoming: var(--orbit-blue-soft);
+  --direction-outgoing: var(--orbit-pink-neon);
+  --direction-incoming: var(--orbit-teal-neon);
   --swipe-ghost-later:  #DDD5CC;   /* dark fg-soft */
   --swipe-ghost-sooner: var(--orbit-sage);
 

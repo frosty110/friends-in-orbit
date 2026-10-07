@@ -47,7 +47,7 @@
   --accent-tint:  var(--orbit-terracotta-tint);
   --accent-fg:    #FFFFFF;
   --positive-text: var(--orbit-sage-text);
-  --direction-outgoing: #5E3D96; --direction-incoming: #2F84B8;
+  --direction-outgoing: #BE185D; --direction-incoming: #0D9488; --direction-separator: #141210;
   --swipe-ghost-later: var(--orbit-ink-soft); --swipe-ghost-sooner: var(--orbit-sage);
 
   /* Avatar / rhythm palette — restrained warm family, NOT a rainbow.
@@ -122,7 +122,7 @@
   --accent-tint: #4A2D24;
   --accent-fg:   #211E1C;
   --positive-text: var(--orbit-sage);
-  --direction-outgoing: #B49BEA; --direction-incoming: #6FBBE0;
+  --direction-outgoing: #EC4899; --direction-incoming: #5EEAD4;
   --swipe-ghost-later: #DDD5CC; --swipe-ghost-sooner: var(--orbit-sage);
 
   --p-terracotta-bg: #4A2D24; --p-terracotta-fg: #EDC3B4; --p-terracotta-bar: #D87560; --p-terracotta-head: #5E382B; --p-terracotta-wash: #382722;

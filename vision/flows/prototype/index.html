@@ -39,7 +39,7 @@
   --shadow-pop: 0 12px 32px rgba(33,30,28,0.18), 0 2px 6px rgba(33,30,28,0.08);
   --bezel: #1B1917; --bezel-edge: #3A3531;
   --wallpaper-a: #6F8B6B; --wallpaper-b: #2E3B33;
-  --dir-out: #5E3D96; --dir-in: #2F84B8;
+  --dir-out: #BE185D; --dir-in: #0D9488; --dir-sep: #141210;
   --accent-deep: #90412C; --tone-b-band: #F2ECE2;
 
   /* Review chrome tokens (light) */
@@ -71,7 +71,7 @@
     --shadow-pop: 0 12px 32px rgba(0,0,0,0.5);
     --bezel: #0E0D0C; --bezel-edge: #2A2622;
     --wallpaper-a: #3C4D3A; --wallpaper-b: #161D18;
-    --dir-out: #B49BEA; --dir-in: #6FBBE0;
+    --dir-out: #EC4899; --dir-in: #5EEAD4;
     --accent-deep: #D87560; --tone-b-band: #35302C;
     --chrome-bg: #141210; --chrome-panel: #1C1917; --chrome-fg: #EDE7E0; --chrome-muted: #A39C94;
     --chrome-line: #322D29; --chrome-hover: #26221F;
@@ -98,7 +98,7 @@
   --shadow-pop: 0 12px 32px rgba(0,0,0,0.5);
   --bezel: #0E0D0C; --bezel-edge: #2A2622;
   --wallpaper-a: #3C4D3A; --wallpaper-b: #161D18;
-  --dir-out: #B49BEA; --dir-in: #6FBBE0;
+  --dir-out: #EC4899; --dir-in: #5EEAD4;
   --accent-deep: #D87560; --tone-b-band: #35302C;
   --chrome-bg: #141210; --chrome-panel: #1C1917; --chrome-fg: #EDE7E0; --chrome-muted: #A39C94;
   --chrome-line: #322D29; --chrome-hover: #26221F;
@@ -365,6 +365,7 @@ textarea.fb:focus { outline: 2px solid var(--markup); outline-offset: 0; border-
 .av.s48 { width: 48px; height: 48px; font-size: 17px; }
 .av.s44 { width: 44px; height: 44px; font-size: 16px; }
 .av.s32 { width: 32px; height: 32px; font-size: 12px; }
+.av.s36 { width: 36px; height: 36px; font-size: 14px; }
 .av.s96 { width: 96px; height: 96px; font-size: 34px; }
 .av.s112 { width: 112px; height: 112px; font-size: 40px; }
 .tone-terracotta { background: var(--p-terracotta-bg); color: var(--p-terracotta-fg); }
@@ -508,14 +509,16 @@ textarea.fb:focus { outline: 2px solid var(--markup); outline-offset: 0; border-
 .lc-bot { background: var(--wash); padding: 12px 16px 16px; }
 .rh-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--fg-subtle); margin-bottom: 6px; }
 .rh-head .lg { display: flex; gap: 10px; align-items: center; }
-.rh-head .sw { display: inline-block; width: 12px; height: 10px; border-radius: 6px; background: color-mix(in srgb, var(--fg-subtle) 22%, transparent); border: 2px solid var(--dir-out); vertical-align: -1px; margin-right: 4px; }
+/* HOME-8: the direction mark. A 3px rim (pink you, teal them), a 1.5px near-black ring
+   that insulates it, then the fill. The swatch is the same object as the bar. */
+.rh-head .sw { display: inline-block; width: 16px; height: 14px; border-radius: 6px; background: color-mix(in srgb, var(--fg-subtle) 22%, var(--surface)); border: 3px solid var(--dir-out); box-shadow: inset 0 0 0 1.5px var(--dir-sep); vertical-align: -3px; margin-right: 4px; }
 .rh-head .sw.in { border-color: var(--dir-in); }
 .rh-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
 .rh-day { display: flex; flex-direction: column; align-items: center; gap: 7px; border: 0; background: transparent; padding: 0; font: inherit; color: inherit; }
 .rh-day.has { cursor: pointer; }
 .rh-col { height: 48px; width: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
 .rh-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
-.rh-bar { width: 26px; border-radius: 6px; border: 2px solid var(--dir-out); }
+.rh-bar { width: 26px; border-radius: 6px; border: 3px solid var(--dir-out); box-shadow: inset 0 0 0 1.5px var(--dir-sep); }
 .rh-bar.in { border-color: var(--dir-in); }
 .rh-l { font-size: 12px; color: var(--fg-subtle); }
 .rh-l.today { color: var(--accent); font-weight: 600; }
@@ -1296,7 +1299,7 @@ function rhythmStrip(lid, live) {
   const days = RHYTHM[lid];
   const max = Math.max(1, ...days.map((d) => d.reduce((a, c) => a + c.m, 0)));
   const cols = days.map((calls, i) => {
-    const bars = calls.map((c) => `<div class="rh-bar${c.d === 'in' ? ' in' : ''}" style="height:${Math.max(10, Math.round((c.m / (1.25 * max)) * 48))}px;background:var(--p-${P[c.p].tone}-bar)"></div>`).join('');
+    const bars = calls.map((c) => `<div class="rh-bar${c.d === 'in' ? ' in' : ''}" style="height:${Math.max(14, Math.round((c.m / (1.25 * max)) * 48))}px;background:var(--p-${P[c.p].tone}-bar)"></div>`).join('');
     const inner = `<div class="rh-col">${calls.length ? bars : '<div class="rh-dot"></div>'}</div><div class="rh-l${i === 6 ? ' today' : ''}">${DAYS[i]}</div>`;
     return calls.length && live !== false
       ? `<button class="rh-day has" ${A.st('day', lid + ':' + i)} aria-label="See this day">${inner}</button>`
@@ -1356,7 +1359,7 @@ screen({
       const out = calls.filter((c) => c.d === 'out').length, inn = calls.length - out;
       const summary = [out ? `You called ${out}` : '', inn ? `They called ${inn}` : ''].filter(Boolean).join(' · ');
       const rows = calls.map((c) => `<div class="row" style="padding:8px 24px;min-height:56px;cursor:pointer" ${A.go('S20', null, c.p)}>
-          <div class="av s40 tone-${P[c.p].tone}" style="box-shadow:0 0 0 2px var(--dir-${c.d})">${initials(P[c.p].name)}</div>
+          <div class="av s36 tone-${P[c.p].tone}" style="margin:4.5px;box-shadow:0 0 0 1.5px var(--dir-sep),0 0 0 4.5px var(--dir-${c.d})">${initials(P[c.p].name)}</div>
           <div class="grow"><div class="body">${P[c.p].name}</div><div class="meta">${c.d === 'out' ? 'You called' : 'They called'} · ${c.m} min · ${c.at}</div></div>
           <span style="color:var(--dir-${c.d})">${ic(c.d === 'out' ? 'phone-outgoing' : 'phone-incoming').replace('class="i"', 'class="i" style="width:18px;height:18px"')}</span></div>`).join('');
       layer = sheet(`<div class="sh-title">${DAY_NAMES[+di]}</div><div class="sh-sub">${summary}</div>${rows}`);
