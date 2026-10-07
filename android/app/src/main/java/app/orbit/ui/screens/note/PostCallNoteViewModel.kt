@@ -69,6 +69,9 @@ class PostCallNoteViewModel @Inject constructor(
 
     private val contactId: Long? =
         savedStateHandle.get<String>(ARG_CONTACT_ID)?.removePrefix("c-")?.toLongOrNull()
+
+    /** The person this page is about; the screen withdraws their notification after a call (NOTIF-16). */
+    val personId: Long? get() = contactId
     private val callEventId: Long? = savedStateHandle.get<String>(ARG_CALL_EVENT_ID)?.toLongOrNull()
 
     /**

@@ -294,7 +294,7 @@ private fun ContactDetailContent(
     // CONTACT-04, IGNORE-02 — overflow + pause sheet
     // visibility flags. `showOverflow` is non-saveable (transient); the
     // pause sheet flag uses rememberSaveable so a configuration change while
-    // the sheet is open keeps it open (matches CreateListBottomSheet pattern).
+    // the sheet is open keeps it open.
     var showOverflow by remember { mutableStateOf(false) }
     var showPauseSheet by rememberSaveable { mutableStateOf(false) }
     // Manual connection log: same rememberSaveable rationale as the pause sheet.
@@ -422,7 +422,7 @@ private fun ContactDetailContent(
                     isArchived = state.isArchived,
                     callLogDenied = state.callLogDenied,
                     customScheduleVisible = state.customScheduleVisible,
-                    currentTemplateName = state.currentTemplateName,
+                    inheritedRhythm = state.inheritedRhythm,
                     primaryListName = state.primaryListName,
                     hasOverride = state.hasOverride,
                     currentParams = state.currentParams,
@@ -472,7 +472,7 @@ private fun ContactDetailContent(
                         // wraps in its own AnimatedVisibility on listsOnSize >= 2,
                         // and edit affordances are off per the orphan banner copy.
                         customScheduleVisible = false,
-                        currentTemplateName = null,
+                        inheritedRhythm = null,
                         primaryListName = "",
                         hasOverride = false,
                         currentParams = null,
@@ -601,7 +601,7 @@ private fun ContactBodyLazyColumn(
     isArchived: Boolean,
     callLogDenied: Boolean,
     customScheduleVisible: Boolean,
-    currentTemplateName: UiText?,
+    inheritedRhythm: UiText?,
     primaryListName: String,
     hasOverride: Boolean,
     currentParams: RuleParams?,
@@ -990,12 +990,12 @@ private fun ContactBodyLazyColumn(
                 // for the in/out animation. Pitfall 6 corrupted-JSON recovery flows
                 // a fresh KeepInTouch default down so the editor still renders when
                 // currentParams == null, under the usual "Custom schedule" label
-                // (no special copy: currentTemplateName is null and nothing shows it).
+                // (no special copy: inheritedRhythm is null and nothing shows it).
                 ContactDetailItemKey.SCHEDULE -> {
                     Spacer(Modifier.height(OrbitTheme.spacing.x6))
                     RuleOverrideSection(
                         listsOnSize = listsOn.size,
-                        currentTemplateName = currentTemplateName,
+                        inheritedRhythm = inheritedRhythm,
                         // List names are masked under the curtain (ListContextChip):
                         // null makes the section say "from its list".
                         primaryListName = if (curtain) null else primaryListName,

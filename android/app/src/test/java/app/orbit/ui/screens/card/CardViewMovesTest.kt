@@ -1,8 +1,6 @@
 package app.orbit.ui.screens.card
 
 import android.app.Application
-import android.app.NotificationManager
-import android.content.Context
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,13 +19,10 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
-import androidx.core.app.NotificationCompat
-import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.orbit.R
 import app.orbit.data.Contact
 import app.orbit.domain.usecase.LogConnectionWhen
-import app.orbit.notify.NotificationIds
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.theme.LocalReducedMotion
 import app.orbit.ui.theme.OrbitTheme
@@ -39,7 +34,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 
 /**
@@ -335,11 +329,10 @@ class CardViewMovesTest {
     // CARD-11 ------------------------------------------------------------
 
     @Test
-    fun `CARD-11 - a call worth a note opens its page with no snackbar, and its notification goes`() {
-        val context = ApplicationProvider.getApplicationContext<Application>()
-        val manager = context.getSystemService(NotificationManager::class.java)
-        manager.notify(NotificationIds.postCall(1L), notification(context))
-        manager.notify(NotificationIds.postCall(2L), notification(context))
+    fun `CARD-11 - a call worth a note opens its page with no snackbar`() {
+        // The page withdraws the person's notification after a call as it
+        // opens, whichever way it is reached (PostCallNoteScreenTest), so the
+        // card only has to open it.
         val opened = mutableListOf<Pair<Long, Long?>>()
         setCard(onAddNote = { id, call -> opened += id to call })
 
@@ -347,11 +340,6 @@ class CardViewMovesTest {
 
         compose.runOnIdle { assertEquals(listOf<Pair<Long, Long?>>(1L to 41L), opened) }
         compose.onAllNodesWithText("Called", substring = true).assertCountEquals(0)
-        assertEquals(
-            listOf(NotificationIds.postCall(2L)),
-            Shadows.shadowOf(manager).activeNotifications.map { it.id },
-            "the page's person's notification is withdrawn; another person's stays",
-        )
     }
 
     @Test
@@ -365,10 +353,4 @@ class CardViewMovesTest {
 
         compose.runOnIdle { assertEquals(listOf<Pair<Long, Long?>>(1L to null), opened) }
     }
-
-    private fun notification(context: Context) =
-        NotificationCompat.Builder(context, "test")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("A call")
-            .build()
 }

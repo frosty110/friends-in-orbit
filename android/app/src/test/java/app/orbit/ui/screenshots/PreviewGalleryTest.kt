@@ -242,7 +242,7 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
         //   note (NotesWaitingStack) replaced PostCallBanner on 2026-10-07 and
         //   reads the curtain itself, so it is audited, not exempt.
         private val CURTAIN_EXEMPT = setOf(
-            "RuleTemplatePicker", "SmartRuleEditor", "NewListStartWith",
+            "SmartRuleEditor", "NewListStartWith",
             "Chip", "RhythmDaySheet", "UnpauseBanner", "RuleOverrideSection",
         )
         private val qualifiers: String? = System.getProperty("orbit.screenshots.qualifiers")?.takeIf { it.isNotBlank() }

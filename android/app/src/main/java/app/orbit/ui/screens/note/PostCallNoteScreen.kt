@@ -54,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import app.orbit.R
 import app.orbit.data.entity.CallDirection
+import app.orbit.notify.PostCallNotification
 import app.orbit.ui.components.CurtainMask
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
@@ -97,6 +98,10 @@ fun PostCallNoteScreen(
     LaunchedEffect(vm) {
         vm.events.collect { message -> snackbarHostState.showSnackbar(message.asString(context)) }
     }
+    // NOTIF-16: this page is the question the notification after a call
+    // asks, so opening it, by any way in (the card, Home's stack, the
+    // notification), withdraws that person's notification.
+    LaunchedEffect(vm.personId) { vm.personId?.let { PostCallNotification.cancel(context, it) } }
     // The write landed: leave. State, not an event, so a rotation during the
     // write cannot leave the page open over a note that is already saved.
     val saved = (state as? PostCallNoteUiState.Ready)?.saved == true

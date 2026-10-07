@@ -24,7 +24,7 @@
 - "Call" and "Log a connection"
 - "On these lists": a chip per list, or "Not on any list yet"; "Add to lists"
 - "Stats": "Last call", "Total calls", "Average length", "Longest gap" and "Usually" (the part of the day you talk: "Mornings", "Evenings") with an info tip; a stat without enough history says "Not enough calls yet" (CONTACT-02)
-- "Custom schedule", only for someone on two or more lists: "Follows the keep in touch rhythm from {list}." with "Set a schedule for this person"; once set, the rhythm picker, an "Aim for every 14 days" slider and "Reset to default" (CONTACT-03)
+- "Custom schedule", only for someone on two or more lists: "Comes up every 14 days, like the rest of {list}." ("Follows the rhythm of {list}." when the list's rhythm cannot be read) with "Set a schedule for this person"; once set, List settings' "How often" slider ("Aim for every 14 days", "Aim for every day" at one day) and "Reset to default" (CONTACT-03; no rhythm choice since LIST-24)
 - "Notes": a field ("Add a note") with "Add", then every note, newest first, with when it was written (NOTE-01)
 - "Recent calls": each with an icon for its kind, its length (or "Logged" / "Attempted"), and how long ago; "View all calls" in the overflow for the rest
 - The one accent element: "Call" (rules.md Design 6)
@@ -41,7 +41,7 @@
 - "Add to lists": opens the Add to lists picker
 - Notes: "Add" saves ("Note saved"). Each note's "More actions for this note" offers "Edit" and "Delete" ("Note deleted" with Undo); a long-press edits and a swipe deletes, as shortcuts to the same menu. Tapping a note's time switches between "3 days ago" and the date
 - Arriving from Call history: "Add a note about this call" sits under that call with "Add note to this call", and the note is dated to the call (LOG-03)
-- Custom schedule: "Set a schedule for this person", the rhythm picker and the slider save as you go; "Reset to default" returns to the list's rhythm
+- Custom schedule: "Set a schedule for this person", then the slider saves as you go (letting go where it started saves nothing); "Reset to default" returns to the list's rhythm
 - The orphan banner: "Re-link" opens the Add people picker in Re-link mode; it returns here with "Re-linked to {phone contact}" and Undo (Undo splits them again), or "Couldn't save that" with nothing changed (CONTACT-07). "Archive": "Archived {name}" with Undo
 - A write that fails says so: "Couldn't add note", "Couldn't log that", "Couldn't pause {name}", "Couldn't ignore {name}", "Couldn't archive {name}", "Couldn't undo"
 

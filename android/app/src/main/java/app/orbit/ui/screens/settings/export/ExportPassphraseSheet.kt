@@ -44,8 +44,9 @@ import kotlinx.coroutines.launch
 /**
  * SET-05 — encrypted-export passphrase bottom sheet.
  *
- * Material3 ModalBottomSheet shell mirroring
- * [app.orbit.ui.screens.lists.CreateListBottomSheet]. On submit, the sheet
+ * Material3 ModalBottomSheet shell, the app's sheet precedent (the Log a
+ * connection sheet, [app.orbit.ui.components.LogConnectionSheet], is built the
+ * same way). On submit, the sheet
  * calls [onSubmit] with the passphrase as a `CharArray`; the caller
  * (ExportViewModel) is responsible for wiping the array after the export
  * call resolves.

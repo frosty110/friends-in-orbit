@@ -1,40 +1,31 @@
 package app.orbit.ui.screens.contact.sections
 
 import android.content.res.Configuration
-import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import app.orbit.R
-import app.orbit.data.entity.RuleKind
 import app.orbit.domain.rule.RuleParams
+import app.orbit.domain.rule.baseIntervalHours
+import app.orbit.domain.rule.toKeepInTouchEvery
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
-import app.orbit.ui.components.OrbitSlider
 import app.orbit.ui.components.SectionLabel
-import app.orbit.ui.screens.lists.RuleTemplatePicker
+import app.orbit.ui.screens.lists.HowOftenSlider
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.asString
@@ -47,43 +38,30 @@ import app.orbit.ui.util.asString
  * section in/out as the contact's membership count crosses the threshold.
  *
  * **No-override branch (`hasOverride == false`):** shows eyebrow "Custom
- * schedule" + body "Follows the {template} rhythm from {primaryListName}."
- * ("from its list" when [primaryListName] is null, under the curtain) +
- * Secondary "Set a schedule for this person" button (2026-10-05: it was a
- * Primary "Override", a second accent element and engineering vocabulary).
+ * schedule", then how often the person comes up on the list they follow
+ * ("Comes up every 14 days, like the rest of Inner orbit."; "their list"
+ * under the curtain; "Follows the rhythm of Inner orbit." when the list's
+ * rhythm cannot be read), then a Secondary "Set a schedule for this person"
+ * button (2026-10-05: it was a Primary "Override", a second accent element
+ * and engineering vocabulary).
  *
- * **Override branch (`hasOverride == true`):** REUSES the List Configuration
- * [RuleTemplatePicker] to switch between [RuleKind] templates, plus — for
- * [RuleParams.KeepInTouch] only — an interval slider ("Aim for every N
- * days"). Both controls emit fresh [RuleParams] via `onParamsChange` on
- * commit. A Ghost "Reset to default" button calls `onResetDefault` to clear
- * `Contact.ruleOverrideJson`.
- *
- * **Interval commits through [RuleParams.KeepInTouch.withIntervalHours]** so
- * BOTH cooldown bounds move with the chosen interval, mirroring
- * ListConfigBody's slider. Committing only `cooldownMinHours` let the default
- * 336h cap silently turn "aim for every 30 days" into every 14 (see the
- * withIntervalHours KDoc). Late night and Energize carry no user-facing
- * tunables — like List Configuration, a quiet rhythm note replaces the slider
- * for those kinds.
- *
- * **Reuse, not duplication.** The kind picker is the same composable List
- * Configuration uses. The interval slider is the shared [OrbitSlider]
- * (DESIGN.md: one slider, ink track, a value TalkBack reads in words) and
- * mirrors the `IntervalSliderLocal` pattern in ListConfigBody: same
- * `onValueChangeFinished` save-on-commit semantics — but operates on
- * `RuleParams` rather than the list-level state because the per-contact
- * override path writes `Contact.ruleOverrideJson`. Until 2026-10-06 this
- * was a stock Material slider styled by hand, so the same control looked
- * different here and in List settings.
+ * **Override branch (`hasOverride == true`):** List settings' own "How
+ * often" control ([HowOftenSlider]) and a Ghost "Reset to default" that
+ * clears `Contact.ruleOverrideJson`. Since 2026-10-07 (LIST-24) there is no
+ * rhythm choice here either: Keep in touch, Late night and Energize are one
+ * calculation with different starting numbers, so a person's schedule is one
+ * number too. A Late night or Energize override set before then shows its
+ * real starting interval; letting go of the slider where it started writes
+ * nothing, so it stays what it was until it is moved, and moving it makes it
+ * Keep in touch at the chosen interval ([commitOverrideInterval]).
  *
  * **Corrupted JSON recovery.** When the VM cannot decode `ruleOverrideJson`
  * (`currentParams == null`), the screen passes a fresh default RuleParams
  * here; an override is stored, so the editor branch shows and the user can
  * tap Reset to default to clear the corrupted column.
  *
- * Copy lives in strings_contact.xml; the interval slider reuses List
- * settings' slider strings (strings_lists.xml), since it mirrors that slider.
+ * Copy lives in strings_contact.xml; the slider's words are List settings'
+ * (strings_lists.xml), because it is the same control.
  *
  * Token-clean — zero hardcoded color/shape/fontSize. Sentence case copy with
  * zero exclamation marks (voice contract).
@@ -91,7 +69,7 @@ import app.orbit.ui.util.asString
 @Composable
 fun RuleOverrideSection(
     listsOnSize: Int,
-    currentTemplateName: UiText?,
+    inheritedRhythm: UiText?,
     primaryListName: String?,
     hasOverride: Boolean,
     currentParams: RuleParams,
@@ -114,15 +92,19 @@ fun RuleOverrideSection(
             Spacer(Modifier.height(OrbitTheme.spacing.x3))
 
             if (!hasOverride) {
-                // The VM always names the inherited rhythm here; "keep in
-                // touch" is its own fallback for a list without a template.
-                val rhythm = currentTemplateName?.asString()
-                    ?: stringResource(R.string.contact_rhythm_name_keep_in_touch)
+                // How often, as it sits mid-sentence ("every 14 days"); null
+                // when the list's rhythm cannot be read, and then the
+                // sentence names the list alone.
+                val rhythm = inheritedRhythm?.asString()
                 Text(
-                    text = if (primaryListName != null) {
-                        stringResource(R.string.contact_schedule_follows, rhythm, primaryListName)
-                    } else {
-                        stringResource(R.string.contact_schedule_follows_hidden_list, rhythm)
+                    text = when {
+                        primaryListName != null && rhythm != null ->
+                            stringResource(R.string.contact_schedule_follows, rhythm, primaryListName)
+                        primaryListName != null ->
+                            stringResource(R.string.contact_schedule_follows_list, primaryListName)
+                        rhythm != null ->
+                            stringResource(R.string.contact_schedule_follows_hidden_list, rhythm)
+                        else -> stringResource(R.string.contact_schedule_follows_its_list)
                     },
                     style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted)
                 )
@@ -136,7 +118,14 @@ fun RuleOverrideSection(
                     variant = OrbitButtonVariant.Secondary
                 )
             } else {
-                OverrideEditor(params = currentParams, onChange = onParamsChange)
+                HowOftenSlider(
+                    intervalHours = currentParams.baseIntervalHours,
+                    onCommit = { hours ->
+                        if (hours != currentParams.baseIntervalHours) {
+                            onParamsChange(commitOverrideInterval(currentParams, hours / HOURS_PER_DAY))
+                        }
+                    },
+                )
                 Spacer(Modifier.height(OrbitTheme.spacing.x3))
                 OrbitButton(
                     text = stringResource(R.string.contact_schedule_reset),
@@ -149,145 +138,21 @@ fun RuleOverrideSection(
 }
 
 /**
- * Inner editor — REUSES the List Configuration [RuleTemplatePicker] for kind
- * selection. Keep in touch renders the interval slider; Late night / Energize
- * render a quiet rhythm note (no user-facing tunables — mirrors ListConfigBody).
+ * The per-contact interval commit: whatever the stored override was, the
+ * person now runs Keep in touch at [days], built through the one entry point
+ * List settings uses ([toKeepInTouchEvery], which moves both cooldown bounds
+ * together: committing `cooldownMinHours` alone let the 336h default cap
+ * lie about long intervals). Internal so the unit test can assert both
+ * bounds move and that a Late night override becomes Keep in touch.
  *
- * Switching kinds emits a fresh default RuleParams of the new subtype so
- * the contact's stored override doesn't carry stale fields after a kind
- * change (matches the List Configuration semantics).
- */
-@Composable
-private fun OverrideEditor(params: RuleParams, onChange: (RuleParams) -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // Kind picker — same composable List Configuration uses.
-        // `templates = emptyList()` is fine; the picker only consults its
-        // `currentKind` for the selected radio dot.
-        RuleTemplatePicker(
-            currentKind = params.toRuleKind(),
-            templates = emptyList(),
-            onSelect = { newKind -> onChange(defaultParamsFor(newKind)) }
-        )
-        Spacer(Modifier.height(OrbitTheme.spacing.x3))
-        when (params) {
-            is RuleParams.KeepInTouch -> IntervalDaysSlider(
-                currentHours = params.cooldownMinHours,
-                onCommit = { days -> onChange(commitOverrideInterval(params, days)) }
-            )
-            is RuleParams.LateNight, is RuleParams.Energize -> Text(
-                text = rhythmNoteFor(params.toRuleKind())?.let { stringResource(it) }.orEmpty(),
-                style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal = OrbitTheme.spacing.x4,
-                        vertical = OrbitTheme.spacing.x3
-                    )
-            )
-        }
-    }
-}
-
-/**
- * The per-contact interval commit. Routes through
- * [RuleParams.KeepInTouch.withIntervalHours] so BOTH cooldown bounds track
- * the chosen interval (same fix ListConfigBody's slider got — committing
- * `cooldownMinHours` alone let the 336h default cap lie about long
- * intervals). Internal so the unit test can assert both bounds move.
- *
- * Floors at 1 day per ADR 0010, matching `INTERVAL_MIN_DAY` in ListConfigBody —
- * the two sliders must stay in lockstep, so a change here needs the same change
- * there and an ADR to go with it.
+ * Floors at 1 day per ADR 0010, as List settings' slider does.
  */
 internal fun commitOverrideInterval(
-    params: RuleParams.KeepInTouch,
+    params: RuleParams,
     days: Int
-): RuleParams.KeepInTouch = params.withIntervalHours(days.coerceAtLeast(1) * 24)
+): RuleParams.KeepInTouch = params.toKeepInTouchEvery(days.coerceAtLeast(1) * HOURS_PER_DAY)
 
-/**
- * Interval slider — mirrors ListConfigBody's `IntervalSliderLocal` ("Aim for
- * every N days", 1..60). `onValueChangeFinished` is the commit point so the
- * VM only writes `Contact.ruleOverrideJson` once per drag, not on every frame.
- */
-@Composable
-private fun IntervalDaysSlider(currentHours: Int, onCommit: (days: Int) -> Unit) {
-    val initialDays = (currentHours / 24f).coerceAtLeast(1f)
-    var days by remember(currentHours) { mutableFloatStateOf(initialDays) }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4)
-    ) {
-        val rounded = days.toInt().coerceAtLeast(1)
-        val everyLabel = pluralStringResource(R.plurals.lists_interval_every_days, rounded, rounded)
-        // One sentence with the value inside it ("Aim for every 14 days"), the
-        // same string and shape as ListConfigBody's IntervalSliderLocal; the
-        // string took its argument on 2026-10-06 and a bare call rendered the
-        // placeholder.
-        val aimLabel = stringResource(
-            R.string.lists_interval_aim,
-            pluralStringResource(R.plurals.lists_interval_days, rounded, rounded),
-        )
-        Text(
-            text = aimLabel,
-            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-            modifier = Modifier.fillMaxWidth()
-        )
-        // The shared slider owns the look (ink, no accent) and the semantics:
-        // TalkBack reads "Every 14 days", not "10 percent" (rubric D8).
-        OrbitSlider(
-            value = days,
-            onValueChange = { days = it },
-            valueRange = 1f..60f,
-            valueDescription = everyLabel,
-            label = aimLabel,
-            // One step per day, so the thumb lands on whole days and TalkBack's
-            // adjust gesture moves a day at a time.
-            steps = 58,
-            onValueChangeFinished = { onCommit(days.toInt().coerceAtLeast(1)) },
-            modifier = Modifier.padding(top = OrbitTheme.spacing.x1)
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = OrbitTheme.spacing.x1),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = pluralStringResource(R.plurals.lists_interval_days, 1, 1),
-                style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle)
-            )
-            Text(
-                text = pluralStringResource(R.plurals.lists_interval_days, 60, 60),
-                style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle)
-            )
-        }
-    }
-}
-
-// ─── RuleParams ↔ RuleKind helpers ──────────────────────────────────────────
-
-private fun RuleParams.toRuleKind(): RuleKind = when (this) {
-    is RuleParams.KeepInTouch -> RuleKind.KEEP_IN_TOUCH
-    is RuleParams.LateNight -> RuleKind.LATE_NIGHT
-    is RuleParams.Energize -> RuleKind.ENERGIZE
-}
-
-/**
- * Mirrors ListConfigBody's `rhythmNoteFor` (private to the lists package, so
- * replicated rather than widened). Subject reworded from "This list" to the
- * rhythm itself — here the note describes a per-contact override, not a list.
- */
-@StringRes
-private fun rhythmNoteFor(kind: RuleKind): Int? = when (kind) {
-    RuleKind.KEEP_IN_TOUCH -> null
-    RuleKind.LATE_NIGHT -> R.string.contact_rhythm_note_late_night
-    RuleKind.ENERGIZE -> R.string.contact_rhythm_note_energize
-}
-
-private fun defaultParamsFor(kind: RuleKind): RuleParams = when (kind) {
-    RuleKind.KEEP_IN_TOUCH -> RuleParams.KeepInTouch()
-    RuleKind.LATE_NIGHT -> RuleParams.LateNight()
-    RuleKind.ENERGIZE -> RuleParams.Energize()
-}
+private const val HOURS_PER_DAY = 24
 
 // ─── Previews ──────────────────────────────────────────────────────────────
 
@@ -300,7 +165,7 @@ private fun PreviewNoOverrideLight() {
         ) {
             RuleOverrideSection(
                 listsOnSize = 2,
-                currentTemplateName = UiText.res(R.string.contact_rhythm_name_keep_in_touch),
+                inheritedRhythm = UiText.plural(R.plurals.contact_rhythm_every_days, 14, 14),
                 primaryListName = "Inner orbit",
                 hasOverride = false,
                 currentParams = RuleParams.KeepInTouch(),
@@ -321,7 +186,7 @@ private fun PreviewWithOverrideDark() {
         ) {
             RuleOverrideSection(
                 listsOnSize = 2,
-                currentTemplateName = UiText.res(R.string.contact_rhythm_name_keep_in_touch),
+                inheritedRhythm = UiText.plural(R.plurals.contact_rhythm_every_days, 14, 14),
                 primaryListName = "Inner orbit",
                 hasOverride = true,
                 // Built via withIntervalHours so the preview carries the same
@@ -344,7 +209,7 @@ private fun PreviewGatedOff() {
         ) {
             RuleOverrideSection(
                 listsOnSize = 1,
-                currentTemplateName = UiText.res(R.string.contact_rhythm_name_keep_in_touch),
+                inheritedRhythm = UiText.plural(R.plurals.contact_rhythm_every_days, 14, 14),
                 primaryListName = "Inner orbit",
                 hasOverride = false,
                 currentParams = RuleParams.KeepInTouch(),

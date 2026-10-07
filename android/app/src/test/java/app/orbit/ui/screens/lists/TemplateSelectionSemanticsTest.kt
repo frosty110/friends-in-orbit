@@ -16,7 +16,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import app.orbit.data.entity.RuleKind
 import app.orbit.ui.screens.lists.newlist.StartWithStep
 import app.orbit.ui.theme.OrbitTheme
 import org.junit.Rule
@@ -25,12 +24,12 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * The rhythm rows (Contact detail's per-person rhythm; List settings shows
- * one How often slider instead since LIST-24) and the template tiles on New
- * list's first step (LIST-29; the create sheet's until 2026-10-07) are one
- * choice each, so TalkBack must hear a radio button with its selected state
- * (WCAG 4.1.2) and not "Keep in touch, button". Until 2026-10-06 both were
- * plain clickables whose only selection cue was drawn: a dot, a tint.
+ * The template tiles on New list's first step (LIST-29; the create sheet's
+ * until 2026-10-07) are one choice, so TalkBack must hear a radio button with
+ * its selected state (WCAG 4.1.2) and not "Family, button". Until 2026-10-06
+ * they were plain clickables whose only selection cue was drawn: a tint.
+ * (This test also covered the rhythm rows, Keep in touch, Late night and
+ * Energize, until LIST-24 removed the last of them on 2026-10-07.)
  * The gallery's a11y audit checks labels and 48dp, not roles, so this test
  * reads the semantics tree directly.
  */
@@ -42,27 +41,6 @@ class TemplateSelectionSemanticsTest {
 
     private val radio = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
     private val group = SemanticsMatcher.keyIsDefined(SemanticsProperties.SelectableGroup)
-
-    @Test
-    fun rhythm_rows_are_one_radio_group_with_the_current_one_selected() {
-        compose.setContent {
-            OrbitTheme {
-                RuleTemplatePicker(
-                    currentKind = RuleKind.LATE_NIGHT,
-                    templates = emptyList(),
-                    onSelect = {},
-                )
-            }
-        }
-
-        compose.onNode(group).assertExists()
-        compose.onAllNodes(isSelectable()).assertCountEquals(3)
-        compose.onNode(isSelectable() and hasText("Late night")).assert(radio).assertIsSelected()
-        compose.onNode(isSelectable() and hasText("Keep in touch"))
-            .assert(radio)
-            .assertIsNotSelected()
-        compose.onNode(isSelectable() and hasText("Energize")).assert(radio).assertIsNotSelected()
-    }
 
     @Test
     fun template_tiles_are_one_radio_group_and_say_which_is_picked() {

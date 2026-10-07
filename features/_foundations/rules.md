@@ -82,7 +82,9 @@ Decorative images pass `null` deliberately.
 
 **Design 8 — Motion stays calm.** 250–350ms (`motion.durBase` / `motion.durSlow`),
 `easeOut` for entrances, `easeInOut` for layout shifts. No spring overshoot above
-5%, no infinite animation, no motion on idle surfaces (CORE-09). Screen changes
+5%, no infinite animation, no motion on idle surfaces (CORE-09; one exception, the card's
+swipe hints, CARD-09: the owner asked for them on 2026-10-07, and they are bounded so they
+stay calm: only two labels change opacity, a few times, until the swipe is learnt). Screen changes
 use the graph-wide `OrbitNavMotion` (a short directional slide and fade), never
 Navigation's 700ms default. When the user has turned animations off
 (`LocalReducedMotion`, read from the system's animator duration scale), every
