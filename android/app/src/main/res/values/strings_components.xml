@@ -81,6 +81,21 @@
     <!-- The open-ended choice. The status line and the snackbar use the same words. -->
     <string name="components_pause_until_unpause">Until you unpause</string>
 
+    <!-- The one Log a connection sheet (Contact detail, Card view): a call or a visit Orbit
+         couldn't see, or a call that didn't connect. -->
+    <string name="components_log_title_connection">Log a connection</string>
+    <string name="components_log_title_attempt">Log an attempt</string>
+    <string name="components_log_body_connection">For calls Orbit can\'t see, like a video call or time together in person.</string>
+    <string name="components_log_body_attempt">A voicemail or no answer: you reached out but didn\'t connect.</string>
+    <string name="components_log_mode_connected">We connected</string>
+    <string name="components_log_mode_attempt">Couldn\'t reach them</string>
+    <string name="components_log_today">Today</string>
+    <string name="components_log_yesterday">Yesterday</string>
+    <string name="components_log_pick_date">Pick a date</string>
+    <string name="components_log_note_hint">Add a note (optional)</string>
+    <string name="components_log_confirm_connection">Log connection</string>
+    <string name="components_log_confirm_attempt">Log attempt</string>
+
     <!-- A stat that has no value yet (Card view, Contact detail). Words, never a dash. -->
     <string name="components_stat_never_called">Never called</string>
     <string name="components_stat_not_enough_calls">Not enough calls yet</string>

@@ -34,7 +34,8 @@ import app.orbit.domain.usecase.ArchiveContactUseCase
 import app.orbit.domain.usecase.DeleteNoteUseCase
 import app.orbit.domain.usecase.EditNoteUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
-import app.orbit.domain.usecase.MarkCalledUseCase
+import app.orbit.domain.usecase.LogConnectionUseCase
+import app.orbit.domain.usecase.LogConnectionWhen
 import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
 import app.orbit.ui.screens.picker.SnackbarEvent
@@ -47,7 +48,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.inject.Inject
@@ -133,7 +133,9 @@ class ContactDetailViewModel @Inject constructor(
     private val archiveContactUseCase: ArchiveContactUseCase,
     private val ruleTemplateRepo: RuleTemplateRepository,
     private val addRetroactiveNoteUseCase: AddRetroactiveNoteUseCase,
-    private val markCalledUseCase: MarkCalledUseCase,
+    // CONTACT-09 / CARD-10: the one way to log a connection, shared with the
+    // card (it was MarkCalledUseCase plus this VM's own body until 2026-10-07).
+    private val logConnection: LogConnectionUseCase,
     private val undoStack: UndoStack,
     private val clock: Clock,
     // Buckets call times into day-parts for the "Usually" stat; injected (as on
@@ -587,73 +589,21 @@ class ContactDetailViewModel @Inject constructor(
     }
 
     /**
-     * Manual connection / attempt log — records something Orbit's call-log sync
-     * can't see as a [CallEventEntity] with `durationSeconds = 0`.
-     *
-     * When [isAttempt] is false the event is a connection (`source = MANUAL`) —
-     * another app, in person — and resets the full template cadence. When true
-     * it is a reach-out that didn't connect (`source = ATTEMPT` — voicemail / no
-     * answer) and advances the rotation by only the flat [app.orbit.domain.rule.AttemptCooldown]
-     * window, without claiming you actually talked (it never sets "last
-     * contacted" or feeds heat — see ContactMapper.withCallStats).
-     *
-     * Routes through [MarkCalledUseCase] — the same atomic path the call-log
-     * reconciler uses — so per-list `nextDueAt` recomputes for every list the
-     * contact is on (DOM-06 cross-list propagation). The engines treat MANUAL
-     * as "not a real call" for the short-call/incoming *adjustments* only;
-     * the base cooldown still keys off `occurredAt`, so the contact stops
-     * surfacing as due.
-     *
-     * `whenChoice` time resolution (single `clock.now()` read — B3):
-     *   - [LogConnectionWhen.Today] → now.
-     *   - [LogConnectionWhen.Yesterday] → now minus 24h.
-     *   - [LogConnectionWhen.OnDate] → the picker hands back UTC midnight of
-     *     the chosen calendar day; we pin to local noon so the event lands on
-     *     the chosen day in every timezone, then clamp to now (authoritative
-     *     no-future-events guard — the sheet's date bound is advisory).
-     *
-     * A non-blank note is attached via [AddRetroactiveNoteUseCase] back-dated
-     * to the same `occurredAt`, mirroring the LOG-03 retro-note convention.
-     * The screen's state refreshes by itself — [recentEventsSource] is a Room
-     * flow that re-emits on insert.
+     * Manual connection / attempt log ("Log a connection", CONTACT-09):
+     * records something Orbit's call-log sync can't see. The write is the
+     * shared [LogConnectionUseCase], the one the card calls too (CARD-10):
+     * a connection is `CallSource.MANUAL`, an attempt `CallSource.ATTEMPT`,
+     * through MarkCalledUseCase so every list's `nextDueAt` recomputes, with
+     * the optional note back-dated to the same moment. The use case owns how
+     * Today, Yesterday and a picked date become an instant. The screen's
+     * state refreshes by itself: [recentEventsSource] is a Room flow that
+     * re-emits on insert.
      */
     fun onLogConnection(whenChoice: LogConnectionWhen, note: String, isAttempt: Boolean = false) {
         val cid = contactId ?: return
         viewModelScope.launch {
             runMutation(UiText.res(R.string.contact_snackbar_log_failed)) {
-                val now = clock.now()
-                val occurredAt: Instant = when (whenChoice) {
-                    LogConnectionWhen.Today -> now
-                    LogConnectionWhen.Yesterday -> now.minus(Duration.ofDays(1))
-                    is LogConnectionWhen.OnDate ->
-                        Instant
-                            .ofEpochMilli(whenChoice.utcMidnightMillis)
-                            .atZone(ZoneOffset.UTC)
-                            .toLocalDate()
-                            .atTime(12, 0)
-                            // The injected zone, as the rest of the screen's
-                            // day grouping uses; production injects the
-                            // system zone. Until 2026-10-06 this alone read
-                            // ZoneId.systemDefault(), which the test fixture
-                            // cannot pin.
-                            .atZone(zoneId)
-                            .toInstant()
-                            .coerceAtMost(now)
-                }
-                val event = CallEventEntity(
-                    contactId = cid,
-                    occurredAt = occurredAt,
-                    // OUTGOING is the closest fit — the user reached out (or
-                    // met up). Engines ignore direction for MANUAL/ATTEMPT
-                    // anyway (isRealCall gate / attempt short-circuit).
-                    direction = app.orbit.data.entity.CallDirection.OUTGOING,
-                    durationSeconds = 0,
-                    source = if (isAttempt) CallSource.ATTEMPT else CallSource.MANUAL
-                )
-                markCalledUseCase(cid, event)
-                if (note.isNotBlank()) {
-                    addRetroactiveNoteUseCase(cid, note.trim(), occurredAt)
-                }
+                logConnection(cid, whenChoice, note, isAttempt)
                 _snackbarEvents.tryEmit(
                     SnackbarEvent(
                         UiText.res(
@@ -969,21 +919,6 @@ class ContactDetailViewModel @Inject constructor(
          */
         private const val RECENT_EVENTS_LIMIT: Int = 50
     }
-}
-
-/**
- * "When did you connect?" choice handed from the Log-connection sheet to
- * [ContactDetailViewModel.onLogConnection]. Plain data — lives beside the VM
- * (not under sections/) so the VM never imports from a composable package.
- *
- * [OnDate.utcMidnightMillis] is the raw Material DatePicker selection — UTC
- * midnight of the chosen calendar day. The VM converts it to a local-noon
- * Instant; the sheet never touches java.time "now".
- */
-sealed interface LogConnectionWhen {
-    data object Today : LogConnectionWhen
-    data object Yesterday : LogConnectionWhen
-    data class OnDate(val utcMidnightMillis: Long) : LogConnectionWhen
 }
 
 /** "12 Oct": short and unambiguous next to "Paused until". */

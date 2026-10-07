@@ -32,6 +32,8 @@ import app.orbit.domain.usecase.ArchiveContactUseCase
 import app.orbit.domain.usecase.DeleteNoteUseCase
 import app.orbit.domain.usecase.EditNoteUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
+import app.orbit.domain.usecase.LogConnectionUseCase
+import app.orbit.domain.usecase.LogConnectionWhen
 import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
@@ -178,7 +180,7 @@ class ContactDetailViewModelTest {
             archiveContactUseCase = archiveContactUseCase,
             ruleTemplateRepo = ruleTemplateRepo,
             addRetroactiveNoteUseCase = addRetroactiveNoteUseCase,
-            markCalledUseCase = markCalledUseCase,
+            logConnection = LogConnectionUseCase(markCalledUseCase, addRetroactiveNoteUseCase, clock, zoneId),
             undoStack = undoStack,
             clock = clock,
             zoneId = zoneId,

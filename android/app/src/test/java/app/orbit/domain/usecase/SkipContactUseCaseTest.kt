@@ -13,6 +13,7 @@ import app.orbit.domain.rule.RuleParams
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -165,5 +166,42 @@ class SkipContactUseCaseTest {
             listRepo.incrementSkipCalls.isEmpty(),
             "missing contact → no incrementSkipCount calls (race-with-delete safety)",
         )
+    }
+
+    // ============================================================================
+    // CARD-09: preview, what a Later would write without writing it. The
+    // card's idle hint says it, so it must equal what the Later then writes.
+    // ============================================================================
+
+    @Test
+    fun `preview is what the Later then writes, and writes nothing itself`() = runTest {
+        listOf(null, T0.minus(Duration.ofHours(5)), T0.plus(Duration.ofDays(4))).forEach { prior ->
+            val contactRepo = FakeContactRepository(listOf(contactFixture(id = 1L)))
+            val listRepo = FakeListRepository(listOf(listFixture(id = 10L, ruleTemplateId = 1L)))
+            listRepo.seedMemberships(listOf(membershipFixture(contactId = 1L, listId = 10L, nextDueAt = prior)))
+            val templateRepo = FakeRuleTemplateRepository(listOf(ruleTemplateFixture(id = 1L, params = params)))
+            val useCase = SkipContactUseCase(contactRepo, listRepo, templateRepo, TestClock(T0), JsonProvider.json)
+
+            val previewed = useCase.preview(contactId = 1L, listId = 10L)
+            assertTrue(listRepo.incrementSkipCalls.isEmpty(), "a preview writes nothing (prior $prior)")
+
+            useCase(contactId = 1L, listId = 10L)
+            assertEquals(listRepo.incrementSkipCalls.single().newNextDueAt, previewed, "prior $prior")
+        }
+    }
+
+    @Test
+    fun `preview is null when the move could not be made`() = runTest {
+        val contactRepo = FakeContactRepository(listOf(contactFixture(id = 1L)))
+        val listRepo = FakeListRepository(
+            listOf(listFixture(id = 10L, ruleTemplateId = 1L), listFixture(id = 20L, ruleTemplateId = null)),
+        )
+        listRepo.seedMemberships(listOf(membershipFixture(contactId = 1L, listId = 20L)))
+        val templateRepo = FakeRuleTemplateRepository(listOf(ruleTemplateFixture(id = 1L, params = params)))
+        val useCase = SkipContactUseCase(contactRepo, listRepo, templateRepo, TestClock(T0), JsonProvider.json)
+
+        assertNull(useCase.preview(contactId = 1L, listId = 10L), "not on that list")
+        assertNull(useCase.preview(contactId = 1L, listId = 20L), "a list with no rule template")
+        assertNull(useCase.preview(contactId = 2L, listId = 10L), "no such person")
     }
 }

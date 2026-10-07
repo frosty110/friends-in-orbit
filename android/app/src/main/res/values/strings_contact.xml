@@ -125,20 +125,8 @@
     <string name="contact_unpaused_body">They\'ll come up again on their lists.</string>
     <string name="contact_unpaused_dismiss">Dismiss unpause notice</string>
 
-    <!-- Log a connection sheet: a call or a visit Orbit couldn't see, or a call that didn't
-         connect. -->
-    <string name="contact_log_title_connection">Log a connection</string>
-    <string name="contact_log_title_attempt">Log an attempt</string>
-    <string name="contact_log_body_connection">For calls Orbit can\'t see, like a video call or time together in person.</string>
-    <string name="contact_log_body_attempt">A voicemail or no answer: you reached out but didn\'t connect.</string>
-    <string name="contact_log_mode_connected">We connected</string>
-    <string name="contact_log_mode_attempt">Couldn\'t reach them</string>
-    <string name="contact_log_today">Today</string>
-    <string name="contact_log_yesterday">Yesterday</string>
-    <string name="contact_log_pick_date">Pick a date</string>
-    <string name="contact_log_note_hint">Add a note (optional)</string>
-    <string name="contact_log_confirm_connection">Log connection</string>
-    <string name="contact_log_confirm_attempt">Log attempt</string>
+    <!-- The Log a connection sheet itself is shared with Card view (CARD-10); its words are
+         the components_log_ strings in strings_components.xml. -->
 
     <!-- A person's own schedule, when they are on two or more lists. -->
     <string name="contact_schedule_title">Custom schedule</string>

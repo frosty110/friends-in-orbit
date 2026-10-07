@@ -4,7 +4,7 @@
 **Group:** Core loop
 **Status:** active
 **Last reviewed:** 2026-10-07
-**Spec:** [card-view](../card-view/README.md): CARD-01, CARD-02, CARD-03, CARD-04, CARD-05, CARD-06, CARD-07 (defined this round), CORE-04; NOTE-04 in [contact-detail](../contact-detail/README.md); BROWSE-09 in [browse](../browse/README.md); PRIV-03 and PRIV-05 in [privacy-and-lock](../privacy-and-lock/README.md)
+**Spec:** [card-view](../card-view/README.md): CARD-01, CARD-02, CARD-03, CARD-04, CARD-05, CARD-06, CARD-07, CARD-08, CARD-09, CARD-10, CARD-11 (the last four from the owner review, 2026-10-07), CORE-04; NOTE-05 and CONTACT-09 in [contact-detail](../contact-detail/README.md); NOTIF-16 in [notifications](../notifications/README.md); NOTE-04 in [contact-detail](../contact-detail/README.md); BROWSE-09 in [browse](../browse/README.md); PRIV-03 and PRIV-05 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
 
@@ -23,7 +23,8 @@
 - One person at a time: a small label "Up now" or "Coming up" (a fact about the rhythm, never a deadline), their photo or initials, their name, and why now in human terms (CARD-04): when you last spoke ("You spoke today.", "You spoke yesterday.", "You spoke 3 weeks ago."), the pair's usual rhythm once there are four calls ("You usually talk about every 2 weeks."), and the last note you wrote about them in quotation marks with "Your note, 12 days ago"
 - "Usually answers": when they tend to pick up, from past calls, with an info tip ("Based on when you usually answer or call this person."); "Not enough calls yet to see a pattern" until there is one
 - Three stats, worded as everywhere else: "Last call", "Average length", "Total calls" ("Never called" and "Not enough calls yet" where there isn't the history)
-- Below the card: "Later", the labelled "Call {first name}", and "Sooner"; then "Open details"
+- Below the card: "Later", the labelled "Call {first name}", and "Sooner"; then "Open details" and "Log a connection" side by side in the same quiet style (on two lines with large text)
+- When the card has sat untouched for four seconds: two quiet hints at the card's top corners, an arrow pointing left with "Later · Thursday" and "Sooner · Tomorrow" with an arrow pointing right, each saying when the person would come up after that move ("Later" or "Sooner" alone when that cannot be worked out). They hold a moment, fade, come back every twelve seconds while nothing happens, at most three times for a person, and stop for good after five moves; any touch hides them at once; with animations off they appear and go without fading; TalkBack does not read them (CARD-09)
 - In landscape on a phone the card sits on the left and its actions in a column beside it; with large text, Call takes its own row (CARD-06)
 - The one accent element: the Call button, the only control that dials (CARD-01, rules.md Design 6)
 
@@ -31,9 +32,10 @@
 
 - "Call {first name}": opens the dialer with the number filled in; Orbit never places the call itself (PRIV-05)
 - Tap the card face, or "Open details": opens the person's page; the face never dials (CARD-01)
-- "Later" (or a left swipe): moves them further out on this list; "{Name} will come up again {tomorrow / on Tuesday / in 2 weeks}." with Undo. "Sooner" (or a right swipe): brings them forward; "{Name} comes up {when}." with Undo. Each undo is its own, and a swipe that commits gives a haptic (CARD-02)
+- "Later" (or a left swipe): flies the card off to the left as a swipe does, then moves them further out on this list (CARD-08); "{Name} will come up again {tomorrow / on Tuesday / in 2 weeks}." with Undo. "Sooner" (or a right swipe): flies the card off to the right, then brings them forward; "{Name} comes up {when}." with Undo. Each undo is its own, and a swipe that commits gives a haptic, the buttons' too (CARD-02). With animations off the move just happens, with no flight (CARD-08)
 - A move that could not be saved says so: "Couldn't move {name} to later. Try again.", "Couldn't move {name} sooner. Try again.", "Couldn't undo that. Try again."
-- After a call placed from the card, once the call log confirms it and the deck moves on by itself (CORE-04): "Called {first name}" with "Add a note", which opens the note page for that person's latest call (CARD-03, NOTE-04; until 2026-10-07 it opened the person with the note field focused)
+- After a call placed from the card, once the call log confirms it and the deck moves on by itself (CORE-04): a call that connected and lasted a minute or more opens the note page for that call by itself, once, in place of a snackbar, and the notification after that call is withdrawn (CARD-11); a shorter call says "Called {first name}" with "Add a note", which opens the note page for that person's latest call (CARD-03, NOTE-04; until 2026-10-07 it opened the person with the note field focused)
+- "Log a connection": opens the same sheet as Contact detail's, for the person on the card: "We connected" or "Couldn't reach them", "Today" / "Yesterday" / "Pick a date", "Add a note (optional)", then "Log connection" or "Log attempt". The deck then moves on, with "Logged. {Name} comes up again {in 2 weeks}." or "Attempt logged. {Name} comes up again {on Sunday}." ("Logged." alone when there is no time to name; "They" for the name under the curtain); a failure says "Couldn't save your change" (CARD-10)
 - "More actions for {list}", in order: "Browse people" (opens Browse for this list on the person the card shows, marked "On your card" and scrolled into view, BROWSE-09 in [browse](../browse/README.md)), "Add people" (opens the Add people picker; not offered on smart lists, nor on the Loading and Error decks, where the list's type is not yet known), "List settings"
 - "Open settings" on the notice: opens Orbit's Settings, where the Call log row hosts the grant
 - "Go home" on the empty, quiet and error decks: leaves the deck the same way Back does, to the screen that opened it; on the error deck for a list id that never parsed it is the one action
@@ -46,13 +48,14 @@
 - Error (CARD-07): "Something's off here." / "Nothing is lost. Try again in a moment." with Try again (the accent) and "Go home". A malformed list id is this error, never an empty deck, with "Go home" alone as the accent: there is nothing Try again could re-read. With no list name in the app bar, TalkBack announces the deck by its heading
 - Call log access off: the notice above the card; the deck still works, but only Later, Sooner and your own undo move it on
 - A paused person is skipped, and "All quiet for now" names when they come back; a pause until you unpause is not named
-- Privacy curtain: the name reads "Contact" and the initials come from that word, the last note is not shown at all, the title reads "List" (PRIV-03)
+- Privacy curtain: the name reads "Contact" and the initials come from that word, the last note is not shown at all, the title reads "List" (PRIV-03); the snackbar after Log a connection says "They" (CARD-10); the hints carry no name
 
 ## Leads to
 
 - The dialer (Call)
 - Contact detail (the face, "Open details")
-- The note page ("Add a note" on "Called {first name}"); "Not now", Back or a saved note ("Note saved") returns here
+- The note page ("Add a note" on "Called {first name}", or by itself after a call worth a note, CARD-11); "Not now", Back or a saved note ("Note saved") returns here, to the deck with the next person
+- The Log a connection sheet ("Log a connection"); saving or dismissing it returns to the deck
 - Browse people (menu, on the card's person; "Browse this list")
 - The Add people picker (menu; the empty deck); it returns here with "Added 3 people to {list}" and Undo
 - List settings (menu; the smart list's empty deck); Done or Back returns here
@@ -62,9 +65,11 @@
 ## Tests that pin it
 
 - `CardViewViewModelTest` (Ready before any empty state, Error on a failed read and recovery after Try again, the smart list's empty state, the pause hint, a malformed id and its unchanged state after Try again)
-- `CardViewViewModelInteractionTest` (Later and Sooner with their undo, failure snackbars, the Called acknowledgement and what cancels it, the rhythm sentence)
+- `CardViewViewModelInteractionTest` (Later and Sooner with their undo, failure snackbars, the Called acknowledgement and what cancels it, the rhythm sentence; added 2026-10-07: the hints' "when" against the move's snackbar and the five moves that stop them, Log a connection's write, deck, words and failure, the note page after a call worth a note, once, also after a process death)
+- `CardViewMovesTest` (added 2026-10-07: Later and Sooner fly the card off with one haptic and one commit, and land at once with animations off; the hints' clock on a real card and their absence from what TalkBack is given; the Log a connection sheet for the person it was opened over; the nameless snackbar under the curtain; the note page with no snackbar and the notification it withdraws)
+- `SwipeHintsStateTest` (added 2026-10-07: the hints' 4, 2.5 and 12 second timing, three at most, a touch's instant hide and restart, no fade with animations off)
 - `CardListMenuTest` (added this round: menu order, Add people absent on smart lists and while the list's type is unknown)
 - `CardViewScreenTest` (added this round: the face opens details and never dials; Call is on screen in landscape; a failed read offers Try again and Go home while a malformed id offers Go home alone; every Error deck has a pane title)
 - `WhyLineVoiceTest` (added this round: the rendered why-now line, for one gap in every bucket, breaks no voice rule)
-- `OrbitNavHostTest` ("Add a note" opens the note page for that person, NOTE-04, changed 2026-10-07 from the person's page with the note field focused; a nudge for the deck already open does not stack a second deck, while another list gets its own)
-- Gallery previews: `CardViewContentPreview`, `CardViewContentAheadOfTodayPreview`, `CardViewContentLongNamesPreview`, `CardViewContentNoMembersPreview`, `CardViewContentNothingEligiblePreview`, `CardViewContentCallLogDeniedPreview`, and the Loading, Error and bad-link (`CardViewContentBadLinkPreview`) previews added this round, with the curtain pass
+- `OrbitNavHostTest` ("Add a note" opens the note page for that person, NOTE-04, changed 2026-10-07 from the person's page with the note field focused; after a call worth a note the page opens for that call and leaving it returns to the deck, CARD-11; a nudge for the deck already open does not stack a second deck, while another list gets its own)
+- Gallery previews: `CardViewContentPreview`, `CardViewContentHintsPreview` (added 2026-10-07: the hints at full strength, light, dark and 200%, rendered in landscape and with the curtain too), `CardViewContentAheadOfTodayPreview`, `CardViewContentLongNamesPreview`, `CardViewContentNoMembersPreview`, `CardViewContentNothingEligiblePreview`, `CardViewContentCallLogDeniedPreview`, and the Loading, Error and bad-link (`CardViewContentBadLinkPreview`) previews added this round, with the curtain pass
