@@ -8,7 +8,7 @@
 
 **Bugs found while building it:** [findings.md](findings.md) lists 14, from smart lists that never surface anyone to an indefinite pause that cannot be undone. All 14 were fixed on 2026-10-05 (B14 in part), and the prototype now shows the fixed behaviour. Each bug still shows on its screen in the prototype's side panel, marked fixed, with what changed.
 
-**Built from:** the string resources (`android/app/src/main/res/values/strings_*.xml`) and the Compose source at commit `e1e21a3` (2026-10-07), screen by screen; first built from `15b6bfb` (2026-10-04), re-derived on 2026-10-05, and re-derived again on 2026-10-07 as the app took the owner's review ([owner-review-2026-10-07.md](owner-review-2026-10-07.md)): the first round at `12df9c7`, then the Week screen at `80a4ab6`, then the step-by-step New list at `7f38fe1`, then the card at `e1e21a3`. Copy is verbatim from the strings. The 2026-10-07 passes show:
+**Built from:** the string resources (`android/app/src/main/res/values/strings_*.xml`) and the Compose source at commit `cb23e87` (2026-10-07), screen by screen; first built from `15b6bfb` (2026-10-04), re-derived on 2026-10-05, and re-derived again on 2026-10-07 as the app took the owner's review ([owner-review-2026-10-07.md](owner-review-2026-10-07.md)): the first round at `12df9c7`, then the Week screen at `80a4ab6`, then the step-by-step New list at `7f38fe1`, then the card at `e1e21a3`, then the Contact detail schedule and the note page's withdrawn notification at `cb23e87`. Copy is verbatim from the strings. The 2026-10-07 passes show:
 
 - **List settings (S31) and Make your first list (S07):** the title is the rename control (LIST-26), "How often" for every list with a Late night list at its real 3 days (LIST-24), "Time of day" in place of active hours (LIST-25), and "Add people" in the People header (LIST-27). The Name section (on List settings), the Rhythm section and the Add people row at the foot are gone.
 - **Lists (S30):** every row's second line is its interval ("Every 3 days"), never a rhythm's name. The template sheet is gone: "New list" opens S33.
@@ -20,7 +20,8 @@
 - **The notification after a call (S54, new):** "How was your call with Kai?", which opens the note page (NOTIF-16).
 - **Browse (S13):** one sequence in the card's order, each row saying when, then the Paused and Ignored groups (BROWSE-07); handles that really drag, with "Moved Kai earlier" and Undo (BROWSE-08); "On your card" on the card's person (BROWSE-09).
 - **Card view (S11):** Later and Sooner fly the card off in their direction exactly as a swipe does, then the next person fades in; a real drag on the card does the same, and with reduced motion nothing flies (CARD-08). Left untouched for four seconds, "Later · Thursday" and "Sooner · Tomorrow" fade in at the card's top corners, over the list chip and the avatar, hold about 2.5 seconds, fade, and come back every 12 seconds, at most three times for a person; any touch hides them at once and restarts the clock, and after five moves they stop for good (CARD-09; Restart resets the count). "Log a connection" sits beside "Open details" and opens Contact detail's sheet; saving moves the deck on with "Logged. Kai comes up again on Tuesday." or "Attempt logged. Kai comes up again on Wednesday." (CARD-10). After a call placed from the card that lasted a minute or more, the note page opens by itself over the deck; a shorter call says "Called Kai" with "Add a note" (CARD-11). "Browse people" opens Browse on the card's person.
-- **Contact detail (S20):** "Log a connection" opens the same sheet as the card, in the same words (now `components_log_*`), and says "Logged." or "Attempt logged.". Its "Custom schedule" is unchanged: the single "How often" slider is not on the integration branch yet (`strings_contact.xml` still has `contact_rhythm_name_*`).
+- **Contact detail (S20):** "Log a connection" opens the same sheet as the card, in the same words (now `components_log_*`), and says "Logged." or "Attempt logged.". Its "Custom schedule" has no rhythm to choose any more (LIST-24): before a schedule is set it reads "Comes up every 2 days, like the rest of In touch." with "Set a schedule for this person"; once set, List settings' How often slider and "Reset to default" (`contact_schedule_*`, `contact_rhythm_every_*`).
+- **The notification after a call (S54):** the note page withdraws it as it opens, however the page is reached (the card after a call, Home's stack, the notification itself); a new state shows the lock screen once it has gone.
 
 The card and Browse share one order in the prototype too: Later, Sooner, a call and a drag each give the person a new next turn, so whatever one screen does, the other shows. The app has had no em dashes since 2026-10-05, so the prototype shows none.
 
@@ -112,7 +113,7 @@ IDs are stable handles for feedback. They are local to this document and the pro
 | S53 | Phone app | system dialer | [card view](../../features/card-view/README.md) |
 | S54 | Notification after a call | lock screen, shade | [notifications](../../features/notifications/README.md) (NOTIF-16) |
 
-Each screen's states (sheets, dialogs, menus, empty and error states) are listed in the prototype's right panel and can be opened directly. There are 151 in total.
+Each screen's states (sheets, dialogs, menus, empty and error states) are listed in the prototype's right panel and can be opened directly. There are 152 in total.
 
 ---
 
@@ -243,7 +244,7 @@ On S30 a row tap opens that list's cards (LIST-23); List settings is in the row 
 
 **F11. Write about a call after it ends.** The notification after a call, the note page, and the calls waiting on Home (NOTE-04, NOTE-05, HOME-14, NOTIF-16).
 1. S54: a call with Kai ended while Orbit was closed, so one notification asks "How was your call with Kai?" (on a locked phone that hides sensitive content, "How was your call?"). It is not a nudge: it has its own channel, "After a call".
-2. S23 opens over Home. With words written, "Not now" asks "Discard this note?" ("Keep writing", "Discard"); "Save note" writes the note.
+2. S23 opens over Home, and opening it withdraws the notification (it does however the page is reached). With words written, "Not now" asks "Discard this note?" ("Keep writing", "Discard"); "Save note" writes the note.
 3. Back on S10 with "Note saved", two older calls still wait, stacked as a pile, "2 calls to write about". A tap opens it into one row per call with "Add a note" and "Dismiss", then "Dismiss all" ("Dismissed 2 calls", with Undo).
 
 **F12. Look back over a list's week.** From the strip on Home to the Week screen and back through earlier weeks (HOME-13).

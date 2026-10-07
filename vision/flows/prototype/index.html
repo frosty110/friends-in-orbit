@@ -912,6 +912,11 @@ function freshData() {
     // CARD-09: Later and Sooner moves so far (five teach the swipe) and hints shown per person.
     cardMoves: 0, hintsShown: {},
     cardIn: false,
+    // CONTACT-03: a person's own interval once a schedule is set (RuleParams.KeepInTouch's 2 days
+    // until the slider moves).
+    personInterval: 2,
+    // NOTIF-16: whose notification after a call is up; the note page withdraws it as it opens.
+    postCall: ['kai'],
     ignored: ['jordan', 'mia'],
     theme: 'Warm', mode: 'System', range: '3 months',
     focusId: null,
@@ -1388,10 +1393,6 @@ ACT.allPreview = () => { D.preview = D.preview.size === PREVIEW_ORDER.length ? n
 ACT.acceptPreview = () => { D.flName = 'In touch'; D.flMembers = PREVIEW_ORDER.filter((x) => D.preview.has(x)); };
 ACT.startBlank = () => { D.flName = ''; D.flMembers = []; };
 
-function cadenceRows(sel, actName) {
-  return [['Keep in touch', 'Surfaces each person on a steady rhythm you set.'], ['Late night', 'A slower, more patient rhythm for people you reach at night.'], ['Energize', 'A quicker rhythm that brings people back sooner after a call.']]
-    .map(([n, d]) => `<div class="gi tap" ${A.act(actName, n)}><div class="grow"><div class="gt">${n}</div><div class="gs">${d}</div></div><div class="radio${sel === n ? ' on' : ''}"></div></div>`).join('');
-}
 // LIST-24: "How often", the one rhythm control, for every list (HowOftenSlider). One sentence
 // over the slider, the interval as its argument; one day has its own sentence.
 function intervalBlock(days, actArg = '') {
@@ -1457,6 +1458,7 @@ const nextInterval = (d) => Math.min(60, d >= 60 ? 1 : d < 7 ? d + 5 : d + 14);
 ACT.bumpInterval = (key) => {
   if (key === 'fl') D.flInterval = nextInterval(D.flInterval);
   else if (key === 'nl') { D.nl.interval = nextInterval(D.nl.interval); D.nl.moved = true; }
+  else if (key === 'person') D.personInterval = nextInterval(D.personInterval);
   else if (L[key]) D.intervals[key] = nextInterval(D.intervals[key]);
 };
 ACT.timeOfDay = (arg) => { const [key, part] = String(arg).split(':'); if (key === 'fl') D.flTime = part; else D.timeOfDay = part; };
@@ -2287,7 +2289,7 @@ screen({
   id: 'S20', group: 'people', name: 'Contact detail', route: 'contact/{contactId}',
   spec: 'features/page-views/contact-detail.md', code: 'ui/screens/contact/ContactDetailScreen.kt',
   purpose: 'The full picture of one person, and the place to act and remember.',
-  owes: ['Photo, name, number, and which lists they are on', 'Stats: Last call, Total calls, Average length, Longest gap, Usually; "Not enough calls yet" where history is thin', 'Recent call history, with Logged and Attempted rows', 'Add and read notes; some entry points jump straight to the note field', 'Log a connection, or an attempt ("Couldn\'t reach them"), in the sheet the card uses too (CARD-10): "Logged." or "Attempt logged."', 'Pause for a while (1 week, 1 month, until you unpause), or Unpause', 'Ignore, or add to more lists', 'Re-link if the phone contact was deleted'],
+  owes: ['Photo, name, number, and which lists they are on', 'Stats: Last call, Total calls, Average length, Longest gap, Usually; "Not enough calls yet" where history is thin', 'Recent call history, with Logged and Attempted rows', 'Add and read notes; some entry points jump straight to the note field', 'Log a connection, or an attempt ("Couldn\'t reach them"), in the sheet the card uses too (CARD-10): "Logged." or "Attempt logged."', 'Custom schedule, for someone on two or more lists: "Comes up every 2 days, like the rest of In touch." with "Set a schedule for this person"; once set, List settings\' How often slider ("Aim for every 2 days", "Aim for every day" at one day) and "Reset to default", with no rhythm to choose (CONTACT-03, LIST-24)', 'Pause for a while (1 week, 1 month, until you unpause), or Unpause', 'Ignore, or add to more lists', 'Re-link if the phone contact was deleted'],
   drift: 'An ignored person shows an "Ignored" line under the number from this round\'s contact-detail pass (2026-10-05); at the render this prototype was read from they looked no different here.',
   states: [['default', 'Ready'], ['note', 'Note field focused'], ['menu', 'More actions', 'overlay'], ['log', 'Log a connection', 'overlay'], ['pause', 'Pause for how long?', 'overlay'], ['paused', 'Paused indefinitely'], ['pmenu', 'More actions while paused', 'overlay'], ['unpaused', 'Pause just ended'], ['override', 'Custom schedule open'], ['retro', 'Opened from a call'], ['orphaned', 'Deleted from the phone']],
   to: [['S53', 'Call, or tap the number'], ['S21', 'Add to lists'], ['S42', 'More: View all calls'], ['S32', 'Orphaned: Re-link']],
@@ -2306,9 +2308,14 @@ screen({
     const noteFocus = st === 'note';
     const notes = (NOTES[pid] || []).map(([w, t]) => `<div style="background:var(--surface);border-radius:14px;padding:12px;margin-top:8px" data-lp="noteedit"><div class="meta">${w}</div><div class="body">${t}</div></div>`).join('') || '<div class="meta" style="margin-top:8px">No notes yet.</div>';
     const multi = lists.length >= 2;
+    // CONTACT-03, one interval since LIST-24 (RuleOverrideSection): before a schedule is set, how
+    // often they come up on their first list; once set, List settings' How often slider and
+    // Reset to default, with no rhythm to choose.
+    const own = L[lists[0]] ? lists[0] : 'touch';
+    const every = D.intervals[own] === 1 ? 'every day' : `every ${D.intervals[own]} days`;
     const override = st === 'override'
-      ? `<div class="group" style="margin:8px 0 0">${cadenceRows('Keep in touch', 'noop')}${intervalBlock(5)}</div><button class="btn text" ${A.st('default')}>Reset to default</button>`
-      : `<div class="body muted">Follows the keep in touch rhythm from ${esc(L[lists[0]] ? L[lists[0]].name : 'In touch')}.</div><button class="btn tonal sm" style="margin-top:8px" ${A.st('override', pid)}>Set a schedule for this person</button>`;
+      ? `<div class="group" style="margin:8px 0 0">${intervalBlock(D.personInterval, 'person')}</div><button class="btn text" ${A.act('resetSchedule')}>Reset to default</button>`
+      : `<div class="body muted">Comes up ${every}, like the rest of ${esc(L[own].name)}.</div><button class="btn tonal sm" style="margin-top:8px" ${A.st('override', pid)}>Set a schedule for this person</button>`;
     const body = `<div style="padding:0 24px 32px" class="gap16">
       ${st === 'unpaused' ? `<div class="tint-box row" style="border-radius:16px;cursor:pointer" ${A.st('default')}>${ic('phone-pause').replace('class="i"', 'class="i" style="width:18px;height:18px;color:var(--fg-muted)"')}<div class="grow"><div class="body">${esc(pp.name)} is unpaused</div><div class="meta">They'll surface again on this list.</div></div>${iconBtn('x', A.st('default'), 'Dismiss unpause notice', 'muted')}</div>` : ''}
       <div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:4px">
@@ -2366,6 +2373,8 @@ function mountLogNote(ph) {
   const f = $('#log-note', ph);
   if (f) f.addEventListener('input', () => { D.logNote = f.value; });
 }
+// Reset to default clears the person's own interval and returns to the list's.
+ACT.resetSchedule = () => { D.personInterval = 2; setSt('default'); return false; };
 ACT.logMode = (m) => { D.logMode = m; return false; };
 ACT.logWhen = (w) => { D.logWhen = w; return false; };
 /* Saving logs it (LogConnectionUseCase) and puts the person back into the rhythm on each of their
@@ -2470,11 +2479,12 @@ screen({
   id: 'S23', group: 'people', name: 'Your call (note page)', route: 'note/{contactId}?callEventId={callEventId}',
   spec: 'features/page-views/post-call-note.md', code: 'ui/screens/note/PostCallNoteScreen.kt',
   purpose: 'Write about one call while it is fresh. The timer in the bar counts up from 0:00: a nudge to keep it short, not a limit.',
-  owes: ['"Not now", "Your call with Kai" and a timer counting up from 0:00, in the bar so it stays in view however long the entry gets (NOTE-04)', 'The call in one line: "You called Kai · 14 min · Today at 9:27am", or "Nia called you · ..."', 'One large writing field, "How did it go? What do you want to remember?", with the cursor in it and the keyboard up', '"Save note", the one accent, disabled while the field is blank; it writes an ordinary note and returns with "Note saved", and the call stops waiting on Home', 'Leaving with words written asks "Discard this note?" (Keep writing, Discard); with nothing written it just leaves', 'A person no longer in Orbit, or a failed read, says so with a way back'],
+  owes: ['"Not now", "Your call with Kai" and a timer counting up from 0:00, in the bar so it stays in view however long the entry gets (NOTE-04)', 'The call in one line: "You called Kai · 14 min · Today at 9:27am", or "Nia called you · ..."', 'One large writing field, "How did it go? What do you want to remember?", with the cursor in it and the keyboard up', '"Save note", the one accent, disabled while the field is blank; it writes an ordinary note and returns with "Note saved", and the call stops waiting on Home', 'Leaving with words written asks "Discard this note?" (Keep writing, Discard); with nothing written it just leaves', 'A person no longer in Orbit, or a failed read, says so with a way back', 'Opening it, however it was reached, withdraws that person\'s notification after the call (NOTIF-16)'],
   drift: null,
   states: [['default', 'Ready, nothing written'], ['writing', 'Words written'], ['card', 'Opened by itself after a call from the card'], ['incoming', 'A call they made'], ['discard', 'Discard this note?', 'overlay'], ['notfound', 'Not in Orbit anymore'], ['error', 'Couldn\'t load this person']],
   to: [['S10', 'Save note, Not now, Discard or Back (opened from Home or the notification)'], ['S11', 'The same, back to the deck with the next person, when it opened by itself after a call from the card (CARD-11) or from "Called Kai"']],
-  enter() { D.noteStart = Date.now(); D.noteDraft = ''; D.focusId = 'note-text'; },
+  // Opening the page, by any way in, withdraws that person's notification after the call (NOTIF-16).
+  enter(e) { D.noteStart = Date.now(); D.noteDraft = ''; D.focusId = 'note-text'; const pid = e && P[e.p] ? e.p : 'kai'; D.postCall = D.postCall.filter((x) => x !== pid); },
   prep(st) {
     D.noteStart = Date.now(); D.noteDraft = st === 'writing' || st === 'discard' ? NOTE_SAMPLE : '';
     // CARD-11: over the deck, which has moved past Kai; the call waits on Home until a note.
@@ -3187,14 +3197,16 @@ screen({
   id: 'S54', group: 'outside', name: 'Notification after a call', route: 'notification: orbit.after_call', chrome: false,
   spec: 'features/notifications/README.md', code: 'notify/PostCallNotification.kt',
   purpose: 'When a call worth a note ends while Orbit is closed, ask once how it went, and open the page for writing about it (NOTIF-16).',
-  owes: ['After a call of a minute or more with someone on a list, only while Orbit is not on screen: "How was your call with Kai?" / "Add a note while it\'s fresh." (NOTIF-16)', 'No face and no action: the note is the only thing to do, and it is the tap', 'On a locked phone that hides sensitive content: "How was your call?", with no name', 'Its own channel, "After a call", so it can be turned off without the nudges; it is never called a nudge', 'Gone once a note is saved or the call is dismissed on Home'],
+  owes: ['After a call of a minute or more with someone on a list, only while Orbit is not on screen: "How was your call with Kai?" / "Add a note while it\'s fresh." (NOTIF-16)', 'No face and no action: the note is the only thing to do, and it is the tap', 'On a locked phone that hides sensitive content: "How was your call?", with no name', 'Its own channel, "After a call", so it can be turned off without the nudges; it is never called a nudge', 'Withdrawn as soon as the note page for that person opens, however it was reached; gone too once a note is saved or the call is dismissed on Home'],
   drift: null,
-  states: [['default', 'Named (unlocked)'], ['lock', 'Lock screen, sensitive content hidden']],
+  states: [['default', 'Named (unlocked)'], ['lock', 'Lock screen, sensitive content hidden'], ['gone', 'Withdrawn: the note page has opened']],
   to: [['S23', 'Tap the notification (opens over Home)']],
+  prep(st) { D.postCall = st === 'gone' ? [] : ['kai']; },
   render(st) {
     const lock = st === 'lock';
+    const up = D.postCall.includes('kai');
     return `<div class="wall"></div>${statusBar(true)}<div style="position:relative;flex:1;display:flex;flex-direction:column">${lockClock()}
-      <div style="margin-top:40px"><div class="notif" ${A.act('openAfterCall', 'kai')} role="button"><div class="nh"><span class="app-dot">O</span>Orbit · now</div><div class="nt">${lock ? 'How was your call?' : 'How was your call with Kai?'}</div><div class="nb">Add a note while it's fresh.</div></div></div>
+      <div style="margin-top:40px"><div class="notif"${up ? '' : ' hidden'} ${A.act('openAfterCall', 'kai')} role="button"><div class="nh"><span class="app-dot">O</span>Orbit · now</div><div class="nt">${lock ? 'How was your call?' : 'How was your call with Kai?'}</div><div class="nb">Add a note while it's fresh.</div></div></div>
       <div style="flex:1"></div><div class="sys-fg center-t" style="font-size:13px;opacity:.8;padding-bottom:12px">Swipe up to open</div></div>${gestBar(true)}<div class="sys-tag">Outside Orbit: lock screen</div>`;
   },
 });
@@ -3623,7 +3635,7 @@ const FLOWS = [
   { id: 'F11', name: 'Write about a call after it ends', why: 'The notification after a call, the note page, and the calls waiting on Home (NOTE-04, NOTE-05, HOME-14, NOTIF-16).',
     steps: [
       { id: 'S54', say: 'A call with Kai ended while Orbit was closed. One notification asks how it was. It is not a nudge: it has its own channel, "After a call".', tap: '.notif', do: () => { D.waiting = [CALLS.nia, CALLS.theo]; } },
-      { id: 'S23', p: 'kai', from: ['S10'], say: 'The tap opens the note page over Home. The timer counts up from 0:00 while you write.', do: () => { D.waiting = [CALLS.kai, CALLS.nia, CALLS.theo]; } },
+      { id: 'S23', p: 'kai', from: ['S10'], say: 'The tap opens the note page over Home, and the page withdraws the notification as it opens, as it does however it is reached. The timer counts up from 0:00 while you write.', do: () => { D.waiting = [CALLS.kai, CALLS.nia, CALLS.theo]; } },
       { id: 'S23', st: 'writing', p: 'kai', from: ['S10'], say: 'With words written, Not now asks first.', tap: '[data-act="noteLeave"]', do: () => { D.waiting = [CALLS.kai, CALLS.nia, CALLS.theo]; } },
       { id: 'S23', st: 'discard', p: 'kai', from: ['S10'], say: 'Keep writing keeps every word; Discard leaves without a note.', tap: '[data-act="noteKeep"]', do: () => { D.waiting = [CALLS.kai, CALLS.nia, CALLS.theo]; } },
       { id: 'S23', st: 'writing', p: 'kai', from: ['S10'], say: 'Save note writes an ordinary note about Kai and goes back to Home.', tap: '#note-save', do: () => { D.waiting = [CALLS.kai, CALLS.nia, CALLS.theo]; } },
