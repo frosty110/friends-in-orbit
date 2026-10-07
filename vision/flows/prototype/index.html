@@ -509,12 +509,16 @@ textarea.fb:focus { outline: 2px solid var(--markup); outline-offset: 0; border-
 .lc-next .who { font-size: 17px; font-weight: 600; line-height: 1.2; }
 .lc-next .why { font-size: 14px; color: var(--fg-muted); line-height: 1.3; }
 .lc-bot { background: var(--wash); padding: 12px 16px 16px; }
-.rh-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--fg-subtle); margin-bottom: 6px; }
-.rh-head .lg { display: flex; gap: 10px; align-items: center; }
+.rh-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--fg-subtle); margin-bottom: 2px; }
+.rh-head .lg, .wk-legend .lg { display: flex; gap: 10px; align-items: center; }
+/* HOME-13: "See your week" (the strip's header) and "See the whole week" (the day sheet's foot):
+   muted words and a chevron, a 48px button, never the accent (SeeWeekLink). */
+.see-week { border: 0; background: transparent; display: inline-flex; align-items: center; gap: 4px; min-height: 48px; padding: 0 4px 0 0; font: inherit; font-size: 14px; font-weight: 500; color: var(--fg-muted); cursor: pointer; border-radius: 8px; }
+.see-week svg.i { width: 14px; height: 14px; }
 /* HOME-8: the direction mark. A 3px rim (pink you, teal them), a 1.5px near-black ring
    that insulates it, then the fill. The swatch is the same object as the bar. */
-.rh-head .sw { display: inline-block; width: 16px; height: 14px; border-radius: 6px; background: color-mix(in srgb, var(--fg-subtle) 22%, var(--surface)); border: 3px solid var(--dir-out); box-shadow: inset 0 0 0 1.5px var(--dir-sep); vertical-align: -3px; margin-right: 4px; }
-.rh-head .sw.in { border-color: var(--dir-in); }
+.rh-head .sw, .wk-legend .sw { display: inline-block; width: 16px; height: 14px; border-radius: 6px; background: color-mix(in srgb, var(--fg-subtle) 22%, var(--surface)); border: 3px solid var(--dir-out); box-shadow: inset 0 0 0 1.5px var(--dir-sep); vertical-align: -3px; margin-right: 4px; }
+.rh-head .sw.in, .wk-legend .sw.in { border-color: var(--dir-in); }
 .rh-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
 .rh-day { display: flex; flex-direction: column; align-items: center; gap: 7px; border: 0; background: transparent; padding: 0; font: inherit; color: inherit; }
 .rh-day.has { cursor: pointer; }
@@ -557,6 +561,30 @@ textarea.fb:focus { outline: 2px solid var(--markup); outline-offset: 0; border-
 .note-field { flex: 1; width: 100%; min-height: 96px; border: 0; background: transparent; resize: none; outline: none; padding: 0; font: inherit; font-size: 16px; line-height: 1.5; color: var(--fg); caret-color: var(--accent); }
 .note-field::placeholder { color: var(--fg-subtle); opacity: 1; }
 .note-timer { flex: none; padding: 0 12px; font-size: 16px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+
+/* HOME-13: the Week screen. Seven columns the full width, a time axis from midnight at the top to
+   midnight at the bottom at 40px an hour; the day heads stay put while the chart scrolls. */
+.wk-head { flex: none; display: flex; align-items: center; padding: 0 8px; }
+.wk-head .ib[disabled] { color: var(--fg-muted); opacity: 0.4; cursor: default; }
+.wk-legend { flex: none; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; min-height: 48px; padding: 0 16px; font-size: 12px; color: var(--fg-subtle); }
+.wk-days { flex: none; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 0 16px; border-bottom: 1px solid var(--line-soft); }
+.wk-day { min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--fg-muted); border-radius: 8px; line-height: 1.3; }
+.wk-day.has { cursor: pointer; }
+.wk-day.today { color: var(--fg); font-weight: 600; }
+.wk-day .wl { font-size: 12px; }
+.wk-day .wn { font-size: 14px; }
+.wk-grid { position: relative; height: 960px; margin: 0 16px 24px; touch-action: pan-y; }
+.wk-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--line-soft); }
+.wk-line.strong { background: var(--line); }
+.wk-vline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line-soft); }
+.wk-hour { position: absolute; left: 4px; font-size: 11px; line-height: 11px; color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
+.wk-col { position: absolute; top: 0; bottom: 0; }
+.wk-col.has { cursor: pointer; }
+.wk-touch { position: absolute; cursor: pointer; }
+.wk-block { position: absolute; left: 2px; right: 2px; border-radius: 6px; border: 3px solid var(--dir-out); box-shadow: inset 0 0 0 1.5px var(--dir-sep); display: flex; justify-content: center; align-items: flex-start; overflow: hidden; }
+.wk-block.in { border-color: var(--dir-in); }
+.wk-name { margin-top: 3.5px; font-size: 12px; line-height: 16px; padding: 0 4px; border-radius: 4px; background: var(--surface); color: var(--fg); white-space: nowrap; }
+.wk-empty { position: sticky; top: 24px; z-index: 3; align-self: center; margin-bottom: -40px; padding: 8px 16px; border-radius: 12px; background: var(--surface); color: var(--fg-muted); font-size: 16px; }
 
 /* LIST-26: the title is the rename control; while renaming it is a field. */
 .ttl { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 48px; border: 0; background: transparent; cursor: pointer; padding: 0 4px; border-radius: 12px; text-align: left; font: inherit; color: var(--fg); }
@@ -757,12 +785,49 @@ const everyLine = (days) => (days === 1 ? 'Every day' : `Every ${days} days`);
 
 /* Last 7 days, Monday 28 Sep to today, Sunday 4 Oct 2026. Only calls of 3 minutes or more count. */
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const DAY_NAMES = ['Monday 28 September', 'Tuesday 29 September', 'Wednesday 30 September', 'Thursday 1 October', 'Friday 2 October', 'Yesterday', 'Today'];
 const RHYTHM = {
   touch: [[{ p: 'priya', d: 'out', m: 31, at: '8:10am' }], [], [{ p: 'alex', d: 'in', m: 9, at: '1:15pm' }, { p: 'sarah', d: 'out', m: 14, at: '6:40pm' }], [], [{ p: 'nia', d: 'in', m: 28, at: '7:30pm' }], [{ p: 'theo', d: 'out', m: 10, at: '3:05pm' }], [{ p: 'nia', d: 'in', m: 22, at: '8:05am' }]],
   late: [[], [{ p: 'jamie', d: 'out', m: 22, at: '10:40pm' }], [], [], [{ p: 'nia', d: 'out', m: 35, at: '11:20pm' }], [], []],
   recent: [[], [], [], [], [], [], []],
 };
+/* HOME-13: the weeks before, for the Week screen's arrows, newest first after RHYTHM's this week.
+   Weeks are rolling sevens ending on today's weekday (Sunday here), never Monday to Sunday by
+   rule; here they happen to be. In touch has calls close together (Saturday 26, Thursday 17)
+   and two calls long enough to carry a first name (Friday 25, Monday 14);
+   Late night has a week with no calls and, in its first week, a call that runs past midnight. */
+const RHYTHM_BEFORE = {
+  touch: [
+    // 21 to 27 September
+    [[], [{ p: 'rhea', d: 'out', m: 15, at: '6:10pm' }], [{ p: 'owen', d: 'out', m: 6, at: '2:20pm' }, { p: 'sarah', d: 'in', m: 12, at: '7:05pm' }], [], [{ p: 'nia', d: 'in', m: 52, at: '8:15pm' }], [{ p: 'priya', d: 'in', m: 26, at: '7:20am' }, { p: 'alex', d: 'out', m: 12, at: '1:40pm' }, { p: 'owen', d: 'in', m: 6, at: '2:10pm' }], [{ p: 'theo', d: 'out', m: 9, at: '3:30pm' }]],
+    // 14 to 20 September
+    [[{ p: 'priya', d: 'out', m: 46, at: '8:05am' }], [], [{ p: 'luma', d: 'in', m: 19, at: '7:40pm' }], [{ p: 'sarah', d: 'out', m: 14, at: '6:55pm' }, { p: 'nia', d: 'in', m: 25, at: '7:20pm' }], [], [{ p: 'theo', d: 'out', m: 10, at: '3:10pm' }], []],
+    // 7 to 13 September: the week of the list's earliest call, so Previous week stops here
+    [[{ p: 'kai', d: 'out', m: 11, at: '8:20am' }], [], [{ p: 'alex', d: 'in', m: 9, at: '12:30pm' }], [], [], [], [{ p: 'owen', d: 'out', m: 6, at: '2:45pm' }]],
+  ],
+  late: [
+    [[], [{ p: 'nia', d: 'out', m: 35, at: '11:05pm' }], [], [], [{ p: 'dana', d: 'in', m: 18, at: '10:30pm' }], [], []],
+    [[], [], [], [], [], [], []],
+    [[], [], [], [], [], [{ p: 'dana', d: 'out', m: 50, at: '11:40pm' }], []],
+  ],
+  recent: [],
+};
+const weeksOf = (lid) => [RHYTHM[lid] || RHYTHM.recent, ...(RHYTHM_BEFORE[lid] || [])];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+// Day `i` (0 = the week's first) of the week `wb` weeks back; this week ends today, 4 October 2026.
+const weekDate = (wb, i) => new Date(Date.UTC(2026, 8, 28 - 7 * wb + i));
+// formatDayHeader: "Today", "Yesterday", then "Wednesday 30 September".
+function dayTitle(wb, i) {
+  if (wb === 0 && i === 6) return 'Today';
+  if (wb === 0 && i === 5) return 'Yesterday';
+  const d = weekDate(wb, i);
+  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+}
+// weekRangeLabel's "d MMM to d MMM": "21 Sep to 27 Sep".
+function weekRange(wb) {
+  const f = (d) => `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()].slice(0, 3)}`;
+  return `${f(weekDate(wb, 0))} to ${f(weekDate(wb, 6))}`;
+}
+const minuteOf = (at) => { const m = /^(\d+):(\d+)(am|pm)$/.exec(at); return ((+m[1] % 12) + (m[3] === 'pm' ? 12 : 0)) * 60 + +m[2]; };
 
 const rel = (d) => d == null ? null : d === 0 ? 'today' : d === 1 ? 'yesterday' : d < 30 ? `${d} days ago` : d < 60 ? '1 month ago' : `${Math.floor(d / 30)} months ago`;
 /* strings_time.xml via RelativeTime.formatAgo: days below 14, weeks below 60 days, months below a year. */
@@ -781,6 +846,7 @@ function freshData() {
     tick: 0,
     waiting: [],
     browseFocus: true,
+    weekBack: 0, weekDay: null, weekScrolled: null,
     intervals: Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.interval])),
     timeOfDay: 'any',
     noteStart: Date.now(), noteDraft: '',
@@ -1403,7 +1469,23 @@ function rhythmStrip(lid, live) {
       ? `<button class="rh-day has" ${A.st('day', lid + ':' + i)} aria-label="See this day">${inner}</button>`
       : `<div class="rh-day">${inner}</div>`;
   }).join('');
-  return `<div class="rh-head"><span>Last 7 days</span><span class="lg"><span><span class="sw"></span>You</span><span><span class="sw in"></span>Them</span></span></div><div class="rh-days">${cols}</div>`;
+  // HOME-13: the line that said "Last 7 days" is the way into the Week screen, the key beside it.
+  return `<div class="rh-head"><button class="see-week" ${A.go('S12', null, lid)}>See your week${ic('caret-right')}</button>${legendHtml()}</div><div class="rh-days">${cols}</div>`;
+}
+// The strip's two-swatch key, the same on Home and the Week screen (DirectionLegend).
+const legendHtml = () => '<span class="lg"><span><span class="sw"></span>You</span><span><span class="sw in"></span>Them</span></span>';
+/* HOME-8's day sheet, shared by Home's strip and the Week screen. Opened from Home it ends in
+   "See the whole week" (HOME-13); the Week screen opens it without, as it is already there.
+   `rowAttrs` lets the Week screen close the sheet before a row opens the person. */
+function daySheet(calls, title, { seeWeek = '', closeSt = 'default', rowAttrs = '' } = {}) {
+  const out = calls.filter((c) => c.d === 'out').length, inn = calls.length - out;
+  const summary = [out ? `You called ${out}` : '', inn ? `They called ${inn}` : ''].filter(Boolean).join(' · ');
+  const rows = calls.map((c) => `<div class="row" style="padding:8px 24px;min-height:56px;cursor:pointer" ${rowAttrs} ${A.go('S20', null, c.p)}>
+      <div class="av s36 tone-${P[c.p].tone}" style="margin:4.5px;box-shadow:0 0 0 1.5px var(--dir-sep),0 0 0 4.5px var(--dir-${c.d})">${initials(P[c.p].name)}</div>
+      <div class="grow"><div class="body">${P[c.p].name}</div><div class="meta">${c.d === 'out' ? 'You called' : 'They called'} · ${c.m} min · ${c.at}</div></div>
+      <span style="color:var(--dir-${c.d})">${ic(c.d === 'out' ? 'phone-outgoing' : 'phone-incoming').replace('class="i"', 'class="i" style="width:18px;height:18px"')}</span></div>`).join('');
+  const foot = seeWeek ? `<div style="padding:8px 24px 0"><button class="see-week" ${seeWeek}>See the whole week${ic('caret-right')}</button></div>` : '';
+  return sheet(`<div class="sh-title">${title}</div><div class="sh-sub">${summary}</div>${rows}${foot}`, closeSt);
 }
 function listCard(lid, idx) {
   const l = L[lid];
@@ -1448,10 +1530,10 @@ screen({
   id: 'S10', group: 'loop', name: 'Home', route: 'home',
   spec: 'features/page-views/home.md', code: 'ui/screens/home/HomeScreen.kt',
   purpose: 'The front door: every list, who is next on each, the last week at a glance, and the calls still waiting for a note.',
-  owes: ['A calm date header, no count of people "due" (HOME-6)', 'The calls waiting for a note, under the date: one as a card ("You called Kai", "14 min · 14 minutes ago", Add a note, Dismiss); two or more as a pile ("3 calls to write about") that opens into rows, with "Dismiss all" (HOME-14, NOTE-05)', 'Every active list as a card with its "Next up" person and a quiet Call button (HOME-9)', 'A 7-day rhythm strip per list; tap a day to see who (HOME-8)', 'New list in one tap', 'Search, Lists, and Settings in the app bar', '"Orbit couldn\'t load your lists" with Try again if reading fails (HOME-10)'],
+  owes: ['A calm date header, no count of people "due" (HOME-6)', 'The calls waiting for a note, under the date: one as a card ("You called Kai", "14 min · 14 minutes ago", Add a note, Dismiss); two or more as a pile ("3 calls to write about") that opens into rows, with "Dismiss all" (HOME-14, NOTE-05)', 'Every active list as a card with its "Next up" person and a quiet Call button (HOME-9)', 'A 7-day rhythm strip per list, headed "See your week" with the You and Them key beside it; tap a day to see who, and "See the whole week" at the foot of that sheet (HOME-8, HOME-13)', 'New list in one tap', 'Search, Lists, and Settings in the app bar', '"Orbit couldn\'t load your lists" with Try again if reading fails (HOME-10)'],
   drift: null,
   states: [['default', 'Lists'], ['one', 'A call waiting for a note'], ['pile', 'Three calls waiting (a pile)'], ['pileopen', 'The pile, open'], ['quick', 'Long-press a list', 'overlay'], ['delete', 'Delete this list?', 'overlay'], ['day', 'A day on the strip', 'overlay'], ['empty', 'No lists yet']],
-  to: [['S11', 'Tap a list card'], ['S53', 'Call on a card\'s Next up'], ['S22', 'Search icon'], ['S30', 'Lists icon, or New list'], ['S40', 'Settings icon'], ['S23', 'A call waiting for a note: Add a note'], ['S32', 'Long-press: Add people'], ['S31', 'Long-press: List settings']],
+  to: [['S11', 'Tap a list card'], ['S12', '"See your week" on a strip, or "See the whole week" on a day\'s sheet'], ['S53', 'Call on a card\'s Next up'], ['S22', 'Search icon'], ['S30', 'Lists icon, or New list'], ['S40', 'Settings icon'], ['S23', 'A call waiting for a note: Add a note'], ['S32', 'Long-press: Add people'], ['S31', 'Long-press: List settings']],
   // The waiting states follow a call with Kai just now, so In touch has already moved past him.
   prep(st) {
     if (['default', 'one', 'pile', 'pileopen'].includes(st)) resetTurns('touch');
@@ -1484,13 +1566,8 @@ screen({
     if (st === 'day') {
       const [lid, di] = String(p || 'touch:6').split(':');
       const calls = (RHYTHM[lid] || RHYTHM.touch)[+di] || [];
-      const out = calls.filter((c) => c.d === 'out').length, inn = calls.length - out;
-      const summary = [out ? `You called ${out}` : '', inn ? `They called ${inn}` : ''].filter(Boolean).join(' · ');
-      const rows = calls.map((c) => `<div class="row" style="padding:8px 24px;min-height:56px;cursor:pointer" ${A.go('S20', null, c.p)}>
-          <div class="av s36 tone-${P[c.p].tone}" style="margin:4.5px;box-shadow:0 0 0 1.5px var(--dir-sep),0 0 0 4.5px var(--dir-${c.d})">${initials(P[c.p].name)}</div>
-          <div class="grow"><div class="body">${P[c.p].name}</div><div class="meta">${c.d === 'out' ? 'You called' : 'They called'} · ${c.m} min · ${c.at}</div></div>
-          <span style="color:var(--dir-${c.d})">${ic(c.d === 'out' ? 'phone-outgoing' : 'phone-incoming').replace('class="i"', 'class="i" style="width:18px;height:18px"')}</span></div>`).join('');
-      layer = sheet(`<div class="sh-title">${DAY_NAMES[+di]}</div><div class="sh-sub">${summary}</div>${rows}`);
+      // Every day the strip shows is in this week, so "See the whole week" opens it there.
+      layer = daySheet(calls, dayTitle(0, +di), { seeWeek: A.go('S12', null, L[lid] ? lid : 'touch') });
     }
     return view({
       bar,
@@ -1634,6 +1711,161 @@ ACT.defer = (lid) => moveOn(lid, 4, (who) => `${who} will come up again on Thurs
 ACT.sooner = (lid) => moveOn(lid, 1, (who) => `${who} comes up tomorrow.`);
 ACT.browseFocus = (arg) => { D.browseFocus = arg === 'card'; };
 ACT.undo = () => { if (S.snack && S.snack.undo) S.snack.undo(); S.snack = null; return false; };
+
+/* ════════ Your week: the Week screen (HOME-13) ════════ */
+// WeekScreen.kt's scale: about 40dp an hour, so a day is 960 tall. In minutes at that scale, the
+// strip's 14dp bar floor is 21 and the 48dp touch floor 72.
+const HOUR_PX = 40;
+const BLOCK_MIN_MINUTES = 21;
+const TOUCH_MIN_MINUTES = 72;
+/* placeDay (WeekLayout.kt): a block's top is its start time and it is as tall as the call, above
+   the floor; a call past midnight stops at the bottom edge; each has a 48dp target centred on it,
+   and calls whose targets would overlap share the column side by side, lanes counted per cluster. */
+function placeDay(calls) {
+  const spans = calls.map((c) => {
+    const start = Math.min(minuteOf(c.at), 24 * 60 - 1);
+    const end = Math.min(start + Math.max(1, c.m), 24 * 60);
+    const top = Math.min(start, 24 * 60 - BLOCK_MIN_MINUTES);
+    const bottom = Math.max(end, top + BLOCK_MIN_MINUTES);
+    const touch = Math.max(bottom - top, TOUCH_MIN_MINUTES);
+    const touchTop = Math.min(Math.max(Math.floor((top + bottom) / 2 - touch / 2), 0), 24 * 60 - touch);
+    return { c, top, bottom, touchTop, touchBottom: touchTop + touch };
+  }).sort((a, b) => a.touchTop - b.touchTop || a.top - b.top);
+  const placed = [];
+  let cluster = [];
+  let laneEnds = [];
+  let clusterEnd = 0;
+  const close = () => { cluster.forEach(([s, lane]) => placed.push({ ...s, lane, lanes: laneEnds.length })); cluster = []; laneEnds = []; };
+  spans.forEach((s) => {
+    if (cluster.length && s.touchTop >= clusterEnd) close();
+    let lane = laneEnds.findIndex((e) => e <= s.touchTop);
+    if (lane < 0) { lane = laneEnds.length; laneEnds.push(0); }
+    laneEnds[lane] = s.touchBottom;
+    clusterEnd = cluster.length ? Math.max(clusterEnd, s.touchBottom) : s.touchBottom;
+    cluster.push([s, lane]);
+  });
+  close();
+  return placed;
+}
+// weekDayDescription: one TalkBack item per day that reads its calls in time order.
+function weekDaySpoken(wb, i, calls) {
+  const day = dayTitle(wb, i);
+  if (!calls.length) return `${day}, No calls`;
+  const said = calls.slice().sort((a, b) => minuteOf(a.at) - minuteOf(b.at))
+    .map((c) => (c.d === 'out' ? `You called ${P[c.p].name} at ${c.at} for ${c.m} min.` : `${P[c.p].name} called you at ${c.at} for ${c.m} min.`)).join(' ');
+  return `${day}, ${calls.length === 1 ? '1 call' : `${calls.length} calls`}: ${said}`;
+}
+const weekListOf = (p) => (L[p] ? p : 'touch');
+// Which of the screen's states the week on show is: this week, an earlier one, or an empty one.
+function weekStateFor(lid) {
+  if (!D.weekBack) return 'default';
+  const w = weeksOf(lid)[D.weekBack];
+  return w && w.every((d) => !d.length) ? 'empty' : 'earlier';
+}
+screen({
+  id: 'S12', group: 'loop', name: 'Your week', route: 'week/{listId}',
+  spec: 'features/page-views/week.md', code: 'ui/screens/week/WeekScreen.kt',
+  purpose: 'One list\'s calls as a calendar of seven days: who you called and when, a week at a time, back to the list\'s first call.',
+  owes: ['Opens on this week, the seven days the strip on Home shows; the arrows, or a sideways swipe on the chart, step a week back or forward (HOME-13)', '"This week", or an earlier week by its dates ("21 Sep to 27 Sep"), between "Previous week" and "Next week": next is off on this week, previous on the week of the list\'s first call; "This week" comes back', 'The strip\'s own "You" / "Them" key', 'Seven day columns, today in ink and heavier type, never the accent; a time axis from midnight to midnight, a line every hour and labels every three hours ("3am" to "9pm"), opening just above the week\'s earliest call, or at 8am', 'Each call of three minutes or more a block at its start time, as tall as it lasted (above a small floor), in the person\'s colour with the strip\'s direction mark; the first name where it fits; calls close together side by side; a call past midnight stops at the bottom', 'Tap a block for the person; tap anywhere else in a day for its sheet, without "See the whole week"', '"No calls this week." over an empty week; quiet chrome while loading; Try again on a failed read, Go back alone for a list that is gone', 'Spends no accent (rules.md Design 5); each day is one TalkBack item that reads its calls'],
+  drift: null,
+  states: [['default', 'This week'], ['earlier', 'An earlier week'], ['empty', 'A week with no calls'], ['day', 'A day\'s sheet', 'overlay'], ['loading', 'Loading'], ['error', 'Couldn\'t load (Try again)'], ['gone', 'List gone (Go back)']],
+  to: [['S20', 'Tap a block, or a row of a day\'s sheet'], ['S10', 'Back']],
+  // It always opens on this week (week.md); which week is on show is the screen's own.
+  enter() { D.weekBack = 0; D.weekDay = null; D.weekScrolled = null; },
+  // "A week with no calls" is Late night two weeks back; "A day's sheet" is today on this week.
+  prep(st) {
+    D.weekBack = st === 'earlier' ? 1 : st === 'empty' ? 2 : 0;
+    D.weekDay = st === 'day' ? 6 : null;
+    D.weekScrolled = null;
+    if (st === 'empty') cur().p = 'late';
+  },
+  render(st, p) {
+    const lid = weekListOf(p);
+    // Quiet chrome while loading: the bar with its back arrow and nothing else.
+    if (st === 'loading') return view({ bar: appBar({}) });
+    if (st === 'error' || st === 'gone') {
+      // The only thing to do here, so it takes the accent; Go back alone when a retry could not help.
+      const retry = st === 'error';
+      return view({ bar: appBar({}), center: true, body: `<div class="center-t" style="padding:0 32px 80px;display:flex;flex-direction:column;gap:12px;align-items:center"><span style="color:var(--fg-muted)">${ic('warning-circle')}</span><div class="h3">Orbit couldn't load this week</div><div class="body muted">Nothing is lost. Try again in a moment.</div><button class="btn primary sm" ${retry ? A.st('default') : 'data-back'}>${retry ? 'Try again' : 'Go back'}</button></div>` });
+    }
+    const weeks = weeksOf(lid);
+    const wb = Math.max(0, Math.min(D.weekBack, weeks.length - 1));
+    const days = weeks[wb];
+    const arrow = (icon, label, on, arg) => `<button class="ib"${on ? ` ${A.act('weekStep', arg)}` : ' disabled aria-disabled="true"'} aria-label="${label}">${ic(icon)}</button>`;
+    const head = `<div class="wk-head">${arrow('caret-left', 'Previous week', wb < weeks.length - 1, 'back')}<div class="h3 grow center-t" role="heading" aria-level="2" aria-live="polite">${wb === 0 ? 'This week' : weekRange(wb)}</div>${arrow('caret-right', 'Next week', wb > 0, 'on')}</div>`;
+    // "This week" sits beside the key while an earlier week is showing (Secondary, no accent).
+    const legend = `<div class="wk-legend">${legendHtml()}${wb ? `<button class="btn tonal sm" ${A.act('weekStep', 'this')}>This week</button>` : ''}</div>`;
+    // The day heads: the letter and date, today in ink and heavier type; each day is the one
+    // item TalkBack reads, and a day with calls opens its sheet.
+    const heads = days.map((calls, i) => {
+      const d = weekDate(wb, i);
+      return `<div class="wk-day${wb === 0 && i === 6 ? ' today' : ''}${calls.length ? ' has' : ''}" ${calls.length ? `${A.act('weekDay', i)} role="button"` : ''} aria-label="${esc(weekDaySpoken(wb, i, calls))}"><span class="wl" aria-hidden="true">${WEEKDAYS[d.getUTCDay()][0]}</span><span class="wn" aria-hidden="true">${d.getUTCDate()}</span></div>`;
+    }).join('');
+    const lines = Array.from({ length: 25 }, (_, h) => `<div class="wk-line${h % 3 === 0 ? ' strong' : ''}" style="top:${Math.min(h * HOUR_PX, 24 * HOUR_PX - 1)}px"></div>`).join('')
+      + [1, 2, 3, 4, 5, 6].map((d) => `<div class="wk-vline" style="left:${(d * 100) / 7}%"></div>`).join('');
+    // hourLabels: every three hours, sitting just above their lines at the start edge.
+    const labels = [3, 6, 9, 12, 15, 18, 21].map((h) => `<span class="wk-hour" aria-hidden="true" style="top:${h * HOUR_PX - 13}px">${h % 12 || 12}${h < 12 ? 'am' : 'pm'}</span>`).join('');
+    const cols = days.map((calls, i) => {
+      const blocks = placeDay(calls).map((s) => {
+        const share = 100 / s.lanes;
+        const tall = ((s.bottom - s.top) / 60) * HOUR_PX;
+        const name = first(s.c.p);
+        // The first name on a chip, only when the whole chip fits inside the rim and ring (4.5
+        // each side) with 2 to spare at the top: in practice calls of about 44 minutes or more.
+        // Its width is checked once drawn (mount), against the real text.
+        const fits = tall - 9 >= 16 + 4;
+        return `<div class="wk-touch" ${A.go('S20', null, s.c.p)} aria-hidden="true" style="top:${(s.touchTop / 60) * HOUR_PX}px;height:${((s.touchBottom - s.touchTop) / 60) * HOUR_PX}px;left:calc(${share * s.lane}% + ${s.lane ? 1 : 0}px);width:calc(${share}% - ${s.lanes > 1 ? 1 : 0}px)"><div class="wk-block${s.c.d === 'in' ? ' in' : ''}" style="top:${((s.top - s.touchTop) / 60) * HOUR_PX}px;height:${tall}px;background:var(--p-${P[s.c.p].tone}-bar)">${fits ? `<span class="wk-name">${esc(name)}</span>` : ''}</div></div>`;
+      }).join('');
+      return `<div class="wk-col${calls.length ? ' has' : ''}" ${calls.length ? A.act('weekDay', i) : ''} aria-hidden="true" style="left:${(i * 100) / 7}%;width:${100 / 7}%">${blocks}</div>`;
+    }).join('');
+    const empty = days.every((d) => !d.length) ? '<div class="wk-empty">No calls this week.</div>' : '';
+    // The day's sheet, the strip's own, with no "See the whole week": this is the whole week.
+    const layer = st === 'day' && D.weekDay != null && days[D.weekDay] && days[D.weekDay].length
+      ? daySheet(days[D.weekDay], dayTitle(wb, D.weekDay), { closeSt: weekStateFor(lid), rowAttrs: A.act('weekLeaveDay') })
+      : '';
+    return view({ bar: `${appBar({ title: esc(L[lid].name) })}${head}${legend}<div class="wk-days">${heads}</div>`, body: `${empty}<div class="wk-grid" id="wk-grid">${lines}${labels}${cols}</div>`, layer });
+  },
+  // Each week opens a little above its earliest call (8am for a quiet one), once per week shown;
+  // a sideways swipe on the chart steps weeks, right for the week before.
+  mount(ph, t) {
+    const scr = $('#scr', ph);
+    const grid = $('#wk-grid', ph);
+    if (!scr || !grid) return;
+    // A name chip wider than the space inside its block's ring is not drawn at all (BlockName).
+    grid.querySelectorAll('.wk-name').forEach((n) => { if (n.offsetWidth > n.parentElement.clientWidth - 3) n.remove(); });
+    const lid = weekListOf(t.p);
+    const key = `${lid}:${D.weekBack}`;
+    if (D.weekScrolled !== key) {
+      const mins = (weeksOf(lid)[D.weekBack] || []).flat().map((c) => minuteOf(c.at));
+      scr.scrollTop = (Math.max(0, (mins.length ? Math.min(...mins) : 8 * 60) - 30) / 60) * HOUR_PX;
+      D.weekScrolled = key;
+    }
+    let x0 = null;
+    let y0 = 0;
+    grid.addEventListener('pointerdown', (e) => { x0 = e.clientX; y0 = e.clientY; });
+    grid.addEventListener('pointerup', (e) => {
+      if (x0 == null) return;
+      const dx = e.clientX - x0, dy = e.clientY - y0;
+      x0 = null;
+      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      dragMoved = true;
+      setTimeout(() => { dragMoved = false; }, 0);
+      ACT.weekStep(dx > 0 ? 'back' : 'on');
+      afterNav('');
+    });
+  },
+});
+ACT.weekStep = (arg) => {
+  const lid = weekListOf(cur().p);
+  const last = weeksOf(lid).length - 1;
+  D.weekBack = arg === 'this' ? 0 : arg === 'back' ? Math.min(last, D.weekBack + 1) : Math.max(0, D.weekBack - 1);
+  D.weekDay = null;
+  setSt(weekStateFor(lid));
+  return false;
+};
+ACT.weekDay = (i) => { D.weekDay = +i; setSt('day'); return false; };
+// A row of the day's sheet closes it before opening the person, so Back returns to the week.
+ACT.weekLeaveDay = () => { D.weekDay = null; setSt(weekStateFor(weekListOf(cur().p))); };
 </script>
 <script>
 'use strict';
@@ -2631,7 +2863,7 @@ const openBugsFor = (id) => bugsFor(id).filter(([, b]) => b.status !== 'fixed');
 <script>
 'use strict';
 /* ════════ Review chrome: rail, inspector, boards, flow player ════════ */
-const PARENT = { S02: 'S01', S03: 'S02', S04: 'S03', S05: 'S03', S06: 'S05', S07: 'S05', S11: 'S10', S13: 'S11', S20: 'S11', S21: 'S20', S22: 'S10', S23: 'S10', S30: 'S10', S31: 'S30', S32: 'S31', S40: 'S10', S41: 'S40', S42: 'S40', S53: 'S11' };
+const PARENT = { S02: 'S01', S03: 'S02', S04: 'S03', S05: 'S03', S06: 'S05', S07: 'S05', S11: 'S10', S13: 'S11', S12: 'S10', S20: 'S11', S21: 'S20', S22: 'S10', S23: 'S10', S30: 'S10', S31: 'S30', S32: 'S31', S40: 'S10', S41: 'S40', S42: 'S40', S53: 'S11' };
 function naturalStack(id, st, p) {
   const chain = [];
   let x = PARENT[id];
@@ -3003,6 +3235,18 @@ const FLOWS = [
       { id: 'S10', st: 'pile', say: '"Note saved". Two more calls from the last day still wait, stacked as a pile that says "2 calls to write about".', snack: 'Note saved', tap: '[data-st="pileopen"]', do: () => { D.waiting = [CALLS.nia, CALLS.theo]; } },
       { id: 'S10', st: 'pileopen', say: 'Open, each call has Add a note and Dismiss, and Dismiss all clears the lot.', tap: '[data-act="dismissAll"]', do: () => { D.waiting = [CALLS.nia, CALLS.theo]; } },
       { id: 'S10', say: '"Dismissed 2 calls", with Undo. Nothing waits now, so the cards start under the date.', snack: 'Dismissed 2 calls', undo: true, do: () => { D.waiting = []; } },
+    ] },
+  { id: 'F12', name: 'Look back over a list\'s week', why: 'From the strip on Home to the Week screen and back through earlier weeks (HOME-13).',
+    steps: [
+      { id: 'S10', say: 'Each list\'s strip is headed "See your week", with the You and Them key beside it.', tap: '.lc [data-go="S12"]' },
+      { id: 'S12', p: 'touch', say: 'This week: the strip\'s seven days as a calendar, midnight at the top. Each call sits at its start time, as tall as it lasted, in the person\'s colour with the strip\'s outline; a long one shows the first name. It opens just above the week\'s earliest call.', tap: '[aria-label="Previous week"]' },
+      { id: 'S12', st: 'earlier', p: 'touch', say: 'An earlier week, by its dates. Calls close together sit side by side (Saturday 26). A sideways swipe on the chart steps weeks too. Tap a day for its calls.', tap: '.wk-day[data-arg="5"]', do: () => { D.weekBack = 1; } },
+      { id: 'S12', st: 'day', p: 'touch', say: 'A day opens the strip\'s own sheet, here without "See the whole week". A row, like a block, opens the person.', tap: '.sheet [data-go="S20"]', do: () => { D.weekBack = 1; D.weekDay = 5; } },
+      { id: 'S20', p: 'priya', from: ['S10', 'S12'], say: 'Back returns to the Week screen, on the same week.', tap: '.ab [data-back]', do: () => { D.weekBack = 1; D.weekDay = null; S.stack.forEach((e) => { if (e.id === 'S12') { e.st = 'earlier'; e.p = 'touch'; } }); } },
+      { id: 'S12', st: 'earlier', p: 'touch', say: '"This week" beside the key comes back to the strip\'s seven days.', tap: '[data-act="weekStep"][data-arg="this"]', do: () => { D.weekBack = 1; } },
+      { id: 'S12', p: 'touch', say: 'This week again. Next week is off here, and Previous week stops at the week of the list\'s first call. Back goes Home.', tap: '.ab [data-back]' },
+      { id: 'S10', st: 'day', p: 'touch:4', say: 'On Home, a day\'s sheet ends in "See the whole week".', tap: '.sheet [data-go="S12"]' },
+      { id: 'S12', p: 'touch', say: 'It opens the same screen, always on this week.' },
     ] },
 ];
 boot();

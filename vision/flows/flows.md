@@ -8,11 +8,12 @@
 
 **Bugs found while building it:** [findings.md](findings.md) lists 14, from smart lists that never surface anyone to an indefinite pause that cannot be undone. All 14 were fixed on 2026-10-05 (B14 in part), and the prototype now shows the fixed behaviour. Each bug still shows on its screen in the prototype's side panel, marked fixed, with what changed.
 
-**Built from:** the string resources (`android/app/src/main/res/values/strings_*.xml`) and the Compose source at commit `12df9c7` (2026-10-07), screen by screen; first built from `15b6bfb` (2026-10-04), re-derived on 2026-10-05, and re-derived again on 2026-10-07 after the app took the first round of the owner's review ([owner-review-2026-10-07.md](owner-review-2026-10-07.md)). Copy is verbatim from the strings. The 2026-10-07 pass shows:
+**Built from:** the string resources (`android/app/src/main/res/values/strings_*.xml`) and the Compose source at commit `80a4ab6` (2026-10-07), screen by screen; first built from `15b6bfb` (2026-10-04), re-derived on 2026-10-05, and re-derived again on 2026-10-07 as the app took the owner's review ([owner-review-2026-10-07.md](owner-review-2026-10-07.md)): the first round at `12df9c7`, then the Week screen at `80a4ab6`. Copy is verbatim from the strings. The 2026-10-07 passes show:
 
 - **List settings (S31) and Make your first list (S07):** the title is the rename control (LIST-26), "How often" for every list with a Late night list at its real 3 days (LIST-24), "Time of day" in place of active hours (LIST-25), and "Add people" in the People header (LIST-27). The Name section (on List settings), the Rhythm section and the Add people row at the foot are gone.
 - **Lists (S30):** every row's second line is its interval ("Every 3 days"), never a rhythm's name.
-- **Home (S10):** the calls waiting for a note (HOME-14, NOTE-05), one as a card, two or more as a pile, in place of the post-call banner.
+- **Home (S10):** the calls waiting for a note (HOME-14, NOTE-05), one as a card, two or more as a pile, in place of the post-call banner. The strip's "Last 7 days" line is now "See your week", with the You and Them key beside it, and a day's sheet ends in "See the whole week"; both open the Week screen on this week (HOME-13).
+- **Your week (S12, new):** a list's calls as a calendar of seven day columns, midnight at the top, each call a block at its start time, as tall as it lasted, in the person's colour with the strip's direction mark (HOME-13). "Previous week" and "Next week" (and a sideways swipe on the chart) step through the demo's earlier weeks, back to the list's first call; "This week" comes back; a day opens its sheet; a block opens the person.
 - **The note page (S23, new):** "Your call with Kai" with a timer that counts up while it is open (NOTE-04).
 - **The notification after a call (S54, new):** "How was your call with Kai?", which opens the note page (NOTIF-16).
 - **Browse (S13):** one sequence in the card's order, each row saying when, then the Paused and Ignored groups (BROWSE-07); handles that really drag, with "Moved Kai earlier" and Undo (BROWSE-08); "On your card" on the card's person (BROWSE-09).
@@ -20,7 +21,7 @@
 
 The card and Browse share one order in the prototype too: Later, Sooner, a call and a drag each give the person a new next turn, so whatever one screen does, the other shows. The app has had no em dashes since 2026-10-05, so the prototype shows none.
 
-*What the prototype does not yet show (as of 2026-10-07):* the owner's decisions that are not in the app yet (the Week screen, HOME-13; the card's swiping buttons, hints and "Log a connection", CARD-08 to CARD-10; the card opening the note page by itself after a call, CARD-11; the step-by-step New list flow, LIST-28 and LIST-29), so New list still uses the template sheet. Nor does it show TalkBack's "Move up" and "Move down" on Browse rows (the drag is pointer only here), the privacy curtain on the note page and the waiting calls (the prototype has no curtain toggle; S52 shows the curtain in the app switcher), a slider you can slide (How often steps through a few values on each tap), Contact detail's "Ignored" status line, the picker's "Select all" cap at 200, Settings' "Last synced 5 minutes ago" in minutes and hours, the Wallpaper swatch's real wallpaper hue, the gallery's exact spacing and type sizes, and any skeleton while a screen loads. Every demo call counts as 14 minutes, so it always waits for a note. It is a review surface for flows, not a pixel reference: the gallery renders in `vision/*/actual-*.png` are. Data is the synthetic cast from `android/scripts/seed-avd.py` plus a few invented address-book names. Nothing here is a real contact.
+*What the prototype does not yet show (as of 2026-10-07):* the owner's decisions that are not in the app yet (the card's swiping buttons, hints and "Log a connection", CARD-08 to CARD-10; the card opening the note page by itself after a call, CARD-11; the step-by-step New list flow, LIST-28 and LIST-29), so New list still uses the template sheet. Nor does it show TalkBack's "Move up" and "Move down" on Browse rows (the drag is pointer only here), the privacy curtain on the note page, the waiting calls and the Week screen (the prototype has no curtain toggle; S52 shows the curtain in the app switcher), the Week screen's 24-hour axis ("03:00" to "21:00") and its large-text layout (the prototype draws the 12-hour axis at one text size), the Week screen's pager animation (a step redraws at once), a slider you can slide (How often steps through a few values on each tap), Contact detail's "Ignored" status line, the picker's "Select all" cap at 200, Settings' "Last synced 5 minutes ago" in minutes and hours, the Wallpaper swatch's real wallpaper hue, the gallery's exact spacing and type sizes, and any skeleton while a screen loads. Every demo call counts as 14 minutes, so it always waits for a note. It is a review surface for flows, not a pixel reference: the gallery renders in `vision/*/actual-*.png` are. Data is the synthetic cast from `android/scripts/seed-avd.py` plus a few invented address-book names. Nothing here is a real contact.
 
 ---
 
@@ -31,7 +32,7 @@ The prototype has four views, switched from the top bar:
 | View | What it is for |
 |---|---|
 | **Prototype** | A phone you can tap through. Long-press works where the app has it (right-click also works). Swipe the card left or right. The panel on the right shows the screen's ID, every state you can open directly, where it leads, where it is reached from, what it owes the user, and any gap between the docs and the code. |
-| **Flows** | Eleven journeys, step by step. The control to press next is outlined in blue. Use Next step, the arrow keys, or just tap the outlined control. |
+| **Flows** | Twelve journeys, step by step. The control to press next is outlined in blue. Use Next step, the arrow keys, or just tap the outlined control. |
 | **Map** | Every screen at once, laid out by area, with where each one leads. Click any screen to open it. |
 | **Feedback** | Every note you have left, grouped by journey and screen, with **Copy as markdown**. |
 
@@ -69,6 +70,7 @@ IDs are stable handles for feedback. They are local to this document and the pro
 |---|---|---|---|
 | S10 | Home | `home` | [page view](../../features/page-views/home.md) |
 | S11 | Card view | `card/{listId}` | [page view](../../features/page-views/card-view.md) |
+| S12 | Your week (the Week screen) | `week/{listId}` | [page view](../../features/page-views/week.md) |
 | S13 | Browse people (the list in the card's order) | `browse/{listId}?focus={focus}` | [page view](../../features/page-views/browse.md) |
 
 ### People
@@ -106,7 +108,7 @@ IDs are stable handles for feedback. They are local to this document and the pro
 | S53 | Phone app | system dialer | [card view](../../features/card-view/README.md) |
 | S54 | Notification after a call | lock screen, shade | [notifications](../../features/notifications/README.md) (NOTIF-16) |
 
-Each screen's states (sheets, dialogs, menus, empty and error states) are listed in the prototype's right panel and can be opened directly. There are 133 in total.
+Each screen's states (sheets, dialogs, menus, empty and error states) are listed in the prototype's right panel and can be opened directly. There are 140 in total.
 
 ---
 
@@ -136,6 +138,8 @@ flowchart LR
 ```mermaid
 flowchart TD
   S10[S10 Home] -->|tap a list| S11[S11 Card view]
+  S10 -->|See your week, See the whole week| S12[S12 Your week]
+  S12 -->|a block, a day's row| S20
   S10 -->|Call on Next up| S53[S53 Phone app]
   S10 -->|search icon| S22[S22 Search]
   S10 -->|lists icon, New list| S30[S30 Lists]
@@ -223,6 +227,13 @@ Each journey is playable in the Flows view. Order matters within a journey, so t
 1. S54: a call with Kai ended while Orbit was closed, so one notification asks "How was your call with Kai?" (on a locked phone that hides sensitive content, "How was your call?"). It is not a nudge: it has its own channel, "After a call".
 2. S23 opens over Home. With words written, "Not now" asks "Discard this note?" ("Keep writing", "Discard"); "Save note" writes the note.
 3. Back on S10 with "Note saved", two older calls still wait, stacked as a pile, "2 calls to write about". A tap opens it into one row per call with "Add a note" and "Dismiss", then "Dismiss all" ("Dismissed 2 calls", with Undo).
+
+**F12. Look back over a list's week.** From the strip on Home to the Week screen and back through earlier weeks (HOME-13).
+1. S10: each list's strip is headed "See your week", with the You and Them key beside it.
+2. S12 opens on this week, the strip's seven days as a calendar from midnight to midnight, scrolled just above the earliest call. Each call is a block at its start time, as tall as it lasted, in the person's colour with the strip's outline; a long one shows the first name. Today's head is in ink and heavier type; nothing is in the accent.
+3. "Previous week" shows "21 Sep to 27 Sep", with "This week" beside the key to come back; a sideways swipe on the chart does the same. Calls close together sit side by side. Previous week stops at the week of the list's first call, and Next week is off on this week.
+4. A day opens the strip's own sheet, without "See the whole week"; a row, like a block, opens the person, and Back returns to the same week.
+5. On Home, a day's sheet ends in "See the whole week", which opens S12 on this week too.
 
 ---
 
