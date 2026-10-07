@@ -2,6 +2,7 @@ package app.orbit.ui.screens.picker
 
 import androidx.compose.runtime.Immutable
 import app.orbit.domain.search.ContactSearch
+import app.orbit.domain.smart.contactAddedAt
 import java.time.Instant
 
 /**
@@ -162,8 +163,10 @@ data class ContactPickerUiState(
                     // last-updated (min), so a pre-existing contact's older device
                     // timestamp — not the uniform bulk-import instant — decides its
                     // place. Falls back to firstSeenByAppAt when the device gave none.
+                    // The smart rule "Added in the last N days" reads the same
+                    // function, so the two "Recently added" surfaces cannot drift.
                     compareByDescending<PickerContact> { c ->
-                        c.deviceUpdatedAt?.let { minOf(c.firstSeenByAppAt, it) } ?: c.firstSeenByAppAt
+                        contactAddedAt(c.firstSeenByAppAt, c.deviceUpdatedAt)
                     }.thenBy { it.displayName }
                 )
         }

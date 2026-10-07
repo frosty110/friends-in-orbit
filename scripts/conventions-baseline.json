@@ -1,6 +1,6 @@
 {
   "_comment": "Ratchet baseline for scripts/check-conventions.py. Requirement IDs cited in Kotlin but defined in no spec. This number may fall, never rise \u2014 see features/_foundations/rules.md 'Known documentation debt'.",
-  "undocumented_requirement_ids": 39,
+  "undocumented_requirement_ids": 38,
   "prefixes": [
     "BULK",
     "CALL",
@@ -50,7 +50,6 @@
     "SMART-04",
     "SMART-05",
     "SMART-06",
-    "SMART-07",
-    "SMART-08"
+    "SMART-07"
   ]
 }

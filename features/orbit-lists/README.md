@@ -1,11 +1,11 @@
 # orbit-lists
 
 **Status:** in-progress
-**Last reviewed:** 2026-10-06
+**Last reviewed:** 2026-10-07
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/ui/screens/lists/` (`ListsManagerScreen`/`ViewModel`, `ListConfigScreen`/`Body`/`ViewModel`, `CreateListBottomSheet`, `TemplateChoice`, `RuleTemplatePicker`, `MembersPreview`, `ActiveHoursEditor`, `SmartRuleEditor`, …); list picker: `android/app/src/main/java/app/orbit/ui/screens/picker/ListPickerScreen.kt` + `ListPickerViewModel.kt`; smart-list membership: `android/app/src/main/java/app/orbit/data/feed/SmartListMembershipSync.kt`
 - Tests (pickers): `android/app/src/test/java/app/orbit/ui/screens/picker/` (`ContactPickerViewModelTest`, `ContactPickerUiStateTest`, `ListPickerViewModelTest`, `PickerModeTitleTest`)
-- Tests: `android/app/src/test/java/app/orbit/ui/screens/lists/` (`ListsManagerViewModelTest`, `ListConfigViewModelTest`, `ListRowMenuOrderTest`, `ListsManagerScreenTest`, `TemplateSelectionSemanticsTest`, `RenameListDialogCurtainTest`, `CreateListTemplateCatalogTest`, `ActiveHoursFormatterTest`, `IntervalScaleLabelsTest`, `SmartRuleEditIntegrationTest`), `android/app/src/test/java/app/orbit/ui/screens/picker/ListPickerViewModelTest.kt`, `android/app/src/test/java/app/orbit/data/feed/SmartListMembershipSyncTest.kt`
+- Tests: `android/app/src/test/java/app/orbit/ui/screens/lists/` (`ListsManagerViewModelTest`, `ListConfigViewModelTest`, `ListRowMenuOrderTest`, `ListsManagerScreenTest`, `TemplateSelectionSemanticsTest`, `RenameListDialogCurtainTest`, `CreateListTemplateCatalogTest`, `ActiveHoursFormatterTest`, `IntervalScaleLabelsTest`, `SmartRuleEditIntegrationTest`), `android/app/src/test/java/app/orbit/ui/screens/picker/ListPickerViewModelTest.kt`, `android/app/src/test/java/app/orbit/data/feed/SmartListMembershipSyncTest.kt`, `android/app/src/test/java/app/orbit/domain/smart/SmartListEngineTest.kt`
 - Page views: [Lists](../page-views/lists-manager.md), [List settings](../page-views/list-config.md)
 
 ---
@@ -56,6 +56,7 @@ As a user, I create lists that match how I actually think about my people. Each 
 - So smart lists surface wherever static lists do: Home ("Next up", due counts), Card view, Browse and its queue, and nudges. Before, their members existed only inside List settings.
 - A smart list with no cadence is given Keep in touch.
 - Convert to static keeps the current members as a snapshot and ends syncing (the list is no longer smart); a list with no cadence gets Keep in touch.
+- **SMART-08: "Added" means added to the phone.** The "Recently added, not called" rule ("Added in the last 30 days") dates a person by the earlier of two instants: when Orbit first saw them (`firstSeenByAppAt`) and the phone's own last-updated time for the contact, captured when Orbit first saw it and never moved after (`deviceUpdatedAt`). Both are upper bounds on when the person was saved, so the earlier is the closer one, and it can only make someone look older, never newer: an unreliable device time can drop a person from the list but never add an old contact to it. One function decides this (`contactAddedAt`, `domain/smart/ContactAddedAt.kt`), and the picker's "Recently added" sort reads it too. Until 2026-10-07 the rule read first sight alone; the first contacts sync (and a restore from backup) gives everyone already on the phone the same first-sight instant, so for the length of the window after a fresh install the list held every never-called contact and no setting could narrow it. A phone that reports no last-updated time still falls back to first sight. Pinned by `SmartListEngineTest`.
 
 **Pickers** (`ui/screens/picker/`; page views [Add people](../page-views/picker-contacts.md) and [Add to lists](../page-views/picker-lists.md)).
 - The contact picker (BULK-05) files people into a list: search by name or number, sort, filters, an A to Z rail, and a docked bar that commits ("Add 3 people to Inner orbit"). The list picker (BULK-06) is the reverse: one person, several lists.

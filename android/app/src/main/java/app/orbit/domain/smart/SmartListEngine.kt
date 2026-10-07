@@ -42,7 +42,7 @@ import kotlinx.coroutines.flow.map
  *     HAVING COUNT = 0). Snapshot variant
  *     [ContactRepository.snapshotNeverCalled] for the convert flow.
  *   - [SmartListRule.RecentlyAddedNotCalled] — `aggregates[id] == null` (no
- *     events) AND firstSeenByAppAt within window. Aggregates come from
+ *     events) AND [addedAt] within window (SMART-08). Aggregates come from
  *     [CallEventRepository.observeAggregatesForContacts].
  *   - [SmartListRule.LongGap] — `aggregates[id]?.lastAt` older than threshold.
  *   - [SmartListRule.CommonlyCalled] / [SmartListRule.RarelyCalled] — percentile
@@ -123,8 +123,11 @@ class SmartListEngine @Inject constructor(
         val selected: List<ContactEntity> = when (rule) {
             is SmartListRule.RecentlyAddedNotCalled -> {
                 val windowStart = now.minus(Duration.ofDays(rule.daysWindow.toLong()))
+                // addedAt, not firstSeenByAppAt: the first sync stamps every
+                // existing contact with one instant, so first sight alone
+                // matched the whole address book (SMART-08).
                 contacts.filter { c ->
-                    !c.firstSeenByAppAt.isBefore(windowStart) && callCount(c) == 0
+                    !c.addedAt.isBefore(windowStart) && callCount(c) == 0
                 }
             }
 
