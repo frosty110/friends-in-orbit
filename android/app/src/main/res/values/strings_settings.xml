@@ -144,7 +144,7 @@
         <item quantity="other">Recently added: the last %1$d days</item>
     </plurals>
     <!-- "Added" is when the person was saved to the phone (SMART-08), not when Orbit first saw them. -->
-    <string name="settings_thresholds_recently_added_helper">Days since they were saved to your phone</string>
+    <string name="settings_thresholds_recently_added_helper">Counted from when they were saved to your phone</string>
     <plurals name="settings_thresholds_long_gap">
         <item quantity="one">Long gap: no call in %1$d day</item>
         <item quantity="other">Long gap: no call in %1$d days</item>
