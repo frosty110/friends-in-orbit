@@ -8,7 +8,7 @@
 
 **Bugs found while building it:** [findings.md](findings.md) lists 14, from smart lists that never surface anyone to an indefinite pause that cannot be undone. All 14 were fixed on 2026-10-05 (B14 in part), and the prototype now shows the fixed behaviour. Each bug still shows on its screen in the prototype's side panel, marked fixed, with what changed.
 
-**Built from:** the string resources (`android/app/src/main/res/values/strings_*.xml`) and the Compose source at commit `7f38fe1` (2026-10-07), screen by screen; first built from `15b6bfb` (2026-10-04), re-derived on 2026-10-05, and re-derived again on 2026-10-07 as the app took the owner's review ([owner-review-2026-10-07.md](owner-review-2026-10-07.md)): the first round at `12df9c7`, then the Week screen at `80a4ab6`, then the step-by-step New list at `7f38fe1`. Copy is verbatim from the strings. The 2026-10-07 passes show:
+**Built from:** the string resources (`android/app/src/main/res/values/strings_*.xml`) and the Compose source at commit `e1e21a3` (2026-10-07), screen by screen; first built from `15b6bfb` (2026-10-04), re-derived on 2026-10-05, and re-derived again on 2026-10-07 as the app took the owner's review ([owner-review-2026-10-07.md](owner-review-2026-10-07.md)): the first round at `12df9c7`, then the Week screen at `80a4ab6`, then the step-by-step New list at `7f38fe1`, then the card at `e1e21a3`. Copy is verbatim from the strings. The 2026-10-07 passes show:
 
 - **List settings (S31) and Make your first list (S07):** the title is the rename control (LIST-26), "How often" for every list with a Late night list at its real 3 days (LIST-24), "Time of day" in place of active hours (LIST-25), and "Add people" in the People header (LIST-27). The Name section (on List settings), the Rhythm section and the Add people row at the foot are gone.
 - **Lists (S30):** every row's second line is its interval ("Every 3 days"), never a rhythm's name. The template sheet is gone: "New list" opens S33.
@@ -19,11 +19,12 @@
 - **The note page (S23, new):** "Your call with Kai" with a timer that counts up while it is open (NOTE-04).
 - **The notification after a call (S54, new):** "How was your call with Kai?", which opens the note page (NOTIF-16).
 - **Browse (S13):** one sequence in the card's order, each row saying when, then the Paused and Ignored groups (BROWSE-07); handles that really drag, with "Moved Kai earlier" and Undo (BROWSE-08); "On your card" on the card's person (BROWSE-09).
-- **Card view (S11):** "Called Kai" with "Add a note", which opens the note page; "Browse people" opens Browse on the card's person.
+- **Card view (S11):** Later and Sooner fly the card off in their direction exactly as a swipe does, then the next person fades in; a real drag on the card does the same, and with reduced motion nothing flies (CARD-08). Left untouched for four seconds, "Later · Thursday" and "Sooner · Tomorrow" fade in at the card's top corners, over the list chip and the avatar, hold about 2.5 seconds, fade, and come back every 12 seconds, at most three times for a person; any touch hides them at once and restarts the clock, and after five moves they stop for good (CARD-09; Restart resets the count). "Log a connection" sits beside "Open details" and opens Contact detail's sheet; saving moves the deck on with "Logged. Kai comes up again on Tuesday." or "Attempt logged. Kai comes up again on Wednesday." (CARD-10). After a call placed from the card that lasted a minute or more, the note page opens by itself over the deck; a shorter call says "Called Kai" with "Add a note" (CARD-11). "Browse people" opens Browse on the card's person.
+- **Contact detail (S20):** "Log a connection" opens the same sheet as the card, in the same words (now `components_log_*`), and says "Logged." or "Attempt logged.". Its "Custom schedule" is unchanged: the single "How often" slider is not on the integration branch yet (`strings_contact.xml` still has `contact_rhythm_name_*`).
 
 The card and Browse share one order in the prototype too: Later, Sooner, a call and a drag each give the person a new next turn, so whatever one screen does, the other shows. The app has had no em dashes since 2026-10-05, so the prototype shows none.
 
-*What the prototype does not yet show (as of 2026-10-07):* the owner's decisions that are not in the app yet (the card's swiping buttons, hints and "Log a connection", CARD-08 to CARD-10; the card opening the note page by itself after a call, CARD-11). Nor does it show TalkBack's "Move up" and "Move down" on Browse rows (the drag is pointer only here), the privacy curtain on the note page, the waiting calls and the Week screen (the prototype has no curtain toggle; S52 shows the curtain in the app switcher), the Week screen's 24-hour axis ("03:00" to "21:00") and its large-text layout (the prototype draws the 12-hour axis at one text size), the Week screen's pager animation (a step redraws at once), a slider you can slide (How often steps through a few values on each tap), Contact detail's "Ignored" status line, the picker's "Select all" cap at 200, its Collect mode with nobody left to add ("No people to add yet"), New list's message when Create fails, Settings' "Last synced 5 minutes ago" in minutes and hours, the Wallpaper swatch's real wallpaper hue, the gallery's exact spacing and type sizes, and any skeleton while a screen loads. Every demo call counts as 14 minutes, so it always waits for a note. It is a review surface for flows, not a pixel reference: the gallery renders in `vision/*/actual-*.png` are. Data is the synthetic cast from `android/scripts/seed-avd.py` plus a few invented address-book names. Nothing here is a real contact.
+*What the prototype does not yet show (as of 2026-10-07):* TalkBack's "Move up" and "Move down" on Browse rows (the drag is pointer only here), the privacy curtain on the note page, the waiting calls and the Week screen (the prototype has no curtain toggle; S52 shows the curtain in the app switcher), the Week screen's 24-hour axis ("03:00" to "21:00") and its large-text layout (the prototype draws the 12-hour axis at one text size), the Week screen's pager animation (a step redraws at once), a slider you can slide (How often steps through a few values on each tap), Contact detail's "Ignored" status line, the card's haptic on a move, a date picker behind the Log a connection sheet's "Pick a date" (here it stands for Thursday 1 October), the picker's "Select all" cap at 200, its Collect mode with nobody left to add ("No people to add yet"), New list's message when Create fails, Settings' "Last synced 5 minutes ago" in minutes and hours, the Wallpaper swatch's real wallpaper hue, the gallery's exact spacing and type sizes, and any skeleton while a screen loads. Every demo call counts as 14 minutes, so it always waits for a note, and after a call from the card the note page always opens by itself; S11's "After a short call" state shows the snackbar a shorter call gets. It is a review surface for flows, not a pixel reference: the gallery renders in `vision/*/actual-*.png` are. Data is the synthetic cast from `android/scripts/seed-avd.py` plus a few invented address-book names. Nothing here is a real contact.
 
 ---
 
@@ -34,7 +35,7 @@ The prototype has four views, switched from the top bar:
 | View | What it is for |
 |---|---|
 | **Prototype** | A phone you can tap through. Long-press works where the app has it (right-click also works). Swipe the card left or right. The panel on the right shows the screen's ID, every state you can open directly, where it leads, where it is reached from, what it owes the user, and any gap between the docs and the code. |
-| **Flows** | Twelve journeys, step by step. The control to press next is outlined in blue. Use Next step, the arrow keys, or just tap the outlined control. |
+| **Flows** | Thirteen journeys, step by step. The control to press next is outlined in blue. Use Next step, the arrow keys, or just tap the outlined control. |
 | **Map** | Every screen at once, laid out by area, with where each one leads. Click any screen to open it. |
 | **Feedback** | Every note you have left, grouped by journey and screen, with **Copy as markdown**. |
 
@@ -111,7 +112,7 @@ IDs are stable handles for feedback. They are local to this document and the pro
 | S53 | Phone app | system dialer | [card view](../../features/card-view/README.md) |
 | S54 | Notification after a call | lock screen, shade | [notifications](../../features/notifications/README.md) (NOTIF-16) |
 
-Each screen's states (sheets, dialogs, menus, empty and error states) are listed in the prototype's right panel and can be opened directly. There are 147 in total.
+Each screen's states (sheets, dialogs, menus, empty and error states) are listed in the prototype's right panel and can be opened directly. There are 151 in total.
 
 ---
 
@@ -154,8 +155,9 @@ flowchart TD
   S11 -->|Call| S53
   S53 -->|end call, deck moves on| S11
   S53 -->|back to Home, the call waits| S10
-  S11 -->|Called Kai: Add a note| S23
+  S11 -->|after a call of a minute or more, by itself; or Called Kai: Add a note| S23
   S23 -->|Save note, Not now, Back| S10
+  S23 -->|from the card: the deck, moved on| S11
   S11 -->|Open details, or tap the card| S20[S20 Contact detail]
   S11 -->|menu: Browse people, on the card's person| S13[S13 Browse people]
   S11 -->|menu: Add people| S32
@@ -207,15 +209,15 @@ Each journey is playable in the Flows view. Order matters within a journey, so t
 6. S07 Make your first list (4 of 4): a name field over the same controls as List settings (How often, Time of day, Nudges, People with "Add people" in its header); Done needs a name and at least 3 people.
 7. S08 Done: the swipe hint, then "Want a gentle nudge when someone is worth a call?" with Allow nudges, asked once there is a list to nudge about; answered, it becomes a plain line. Open Orbit, then Home with the onboarding back stack cleared.
 
-**F2. Call someone from a list.** The core loop.
+**F2. Call someone from a list.** The core loop, then the note page while the call is fresh (CARD-11).
 1. S10 Home, tap a list card.
 2. S11 Card view, Call.
 3. S53 Phone app opens with the number filled in; you press call there.
-4. End the call and come back: once the call log shows the call, S11 has moved past the person by itself and says "Called Kai" with "Add a note" (CARD-03), which opens S23.
-5. Back to S10: the call waits for a note at the top, as one card, "You called Kai" with "Add a note" and "Dismiss" (HOME-14). It waits for a day, until a note is written or it is dismissed.
-6. S23 the note page: "Your call with Kai", a timer counting up from 0:00 in the bar, the call in one line, one large field. "Save note" writes the note and returns to Home with "Note saved"; the call stops waiting.
+4. End the call and come back: once the call log shows a call that connected and lasted a minute or more, S23 opens by itself over the deck, which has already moved past the person. A shorter call would instead say "Called Kai" with "Add a note" (CARD-03), which opens the same page.
+5. S23 the note page: "Your call with Kai", a timer counting up from 0:00 in the bar, the call in one line, one large field. "Save note" writes the note and returns to the deck with "Note saved"; "Not now" or Back leaves it unwritten.
+6. Back to S10: a call left without a note waits at the top, as one card, "You called Kai" with "Add a note" and "Dismiss" (HOME-14), for a day, until a note is written or it is dismissed; this one has its note, so nothing waits.
 
-**F3. Decide on the card: later, sooner, browse.** Swipe left or tap Later; swipe right or tap Sooner. Both buttons are named, there is no Skip, and each move shows a snackbar that names the person and says when they come back ("Kai will come up again on Thursday."), with its own Undo. Only the Call button dials; tapping the card opens details. The three-dots menu's "Browse people" opens S13 on the card's person, first and marked "On your card" (BROWSE-09). S13 is one sequence in the card's order, numbered, each row saying when ("Up now", "Tomorrow", "Thursday", "In 2 weeks"), then the Paused and Ignored groups (BROWSE-07); a drag handle moves someone earlier or later, with "Moved Theo earlier" and Undo, and the line under the order says a call, Later or Sooner moves people again (BROWSE-08). If no one is eligible, S11 says "All quiet for now." and offers Browse.
+**F3. Decide on the card: later, sooner, browse.** Left untouched for four seconds, the card shows "Later · Thursday" and "Sooner · Tomorrow" at its top corners for a moment (CARD-09). Swipe left or tap Later; swipe right or tap Sooner: a button flies the card off in its direction just as the swipe does, then the next person fades in (CARD-08). Both buttons are named, there is no Skip, and each move shows a snackbar that names the person and says when they come back ("Kai will come up again on Thursday."), with its own Undo. Only the Call button dials; tapping the card opens details. The three-dots menu's "Browse people" opens S13 on the card's person, first and marked "On your card" (BROWSE-09). S13 is one sequence in the card's order, numbered, each row saying when ("Up now", "Tomorrow", "Thursday", "In 2 weeks"), then the Paused and Ignored groups (BROWSE-07); a drag handle moves someone earlier or later, with "Moved Theo earlier" and Undo, and the line under the order says a call, Later or Sooner moves people again (BROWSE-08). If no one is eligible, S11 says "All quiet for now." and offers Browse.
 
 **F4. Start a new list.** New list, one decision a step, from Home to a list with people on it (LIST-28, LIST-29).
 1. S10: "New list" sits quietly under the cards ("Create your first list" when there are none; Lists' "New list" opens the same flow).
@@ -250,6 +252,11 @@ On S30 a row tap opens that list's cards (LIST-23); List settings is in the row 
 3. "Previous week" shows "21 Sep to 27 Sep", with "This week" beside the key to come back; a sideways swipe on the chart does the same. Calls close together sit side by side. Previous week stops at the week of the list's first call, and Next week is off on this week.
 4. A day opens the strip's own sheet, without "See the whole week"; a row, like a block, opens the person, and Back returns to the same week.
 5. On Home, a day's sheet ends in "See the whole week", which opens S12 on this week too.
+
+**F13. Log a conversation Orbit could not see.** Dinner yesterday, not a call (CARD-10).
+1. S11: "Log a connection" sits beside "Open details" under the card, in the same quiet style.
+2. The sheet Contact detail opens: "We connected" or "Couldn't reach them", Today, Yesterday or "Pick a date", "Add a note (optional)", then "Log connection" (or "Log attempt"). It logs the person the card showed when it opened.
+3. Yesterday, with "Had dinner yesterday": Kai goes back into the rhythm from yesterday, the deck moves on, and the snackbar says "Logged. Kai comes up again tomorrow." An attempt says "Attempt logged." the same way, and "Logged." stands alone when the time it names would not be in the future.
 
 ---
 

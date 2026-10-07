@@ -462,7 +462,7 @@ textarea.fb:focus { outline: 2px solid var(--markup); outline-offset: 0; border-
 .menu { animation-name: fade; }
 
 /* card view */
-.cv { flex: 1; display: flex; flex-direction: column; padding: 4px 16px 0; min-height: 0; }
+.cv { flex: 1; display: flex; flex-direction: column; padding: 4px 16px 0; min-height: 0; position: relative; }
 .cv-card { flex: 1; min-height: 0; background: var(--surface); border-radius: 28px; box-shadow: var(--shadow-card); padding: 16px 20px 18px; display: flex; flex-direction: column; align-items: center; position: relative; touch-action: pan-y; transition: transform var(--dur) var(--ease); cursor: grab; }
 .cv-card.dragging { transition: none; cursor: grabbing; }
 .cv-hint { position: absolute; top: 18px; padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 600; opacity: 0; transition: opacity 120ms; }
@@ -470,7 +470,22 @@ textarea.fb:focus { outline: 2px solid var(--markup); outline-offset: 0; border-
 .cv-hint.r { right: 16px; background: var(--good-tint); color: var(--good); }
 .cv-actions { flex: none; display: flex; align-items: center; gap: 14px; padding: 14px 4px 4px; }
 .round { width: 60px; height: 60px; border-radius: 50%; border: 0; background: var(--surface); box-shadow: var(--shadow-card); display: grid; place-items: center; cursor: pointer; color: var(--fg-muted); flex: none; }
-.cv-links { display: flex; justify-content: center; gap: 24px; padding: 2px 0 6px; flex: none; }
+.cv-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 2px 0 6px; flex: none; }
+/* CARD-08: after a move the next face fades in (the card's crossfade, DurBaseMs). */
+.cv-card.cv-in { animation: fade var(--dur) var(--ease); }
+/* CARD-09: the idle hints over the card's top band (the list chip and the avatar), outside the
+   card so they never move with it: Later at the start edge, Sooner at the end, stacked when the
+   pair does not fit on one line. Fade in eases out, fade out eases in and out (DurSlowMs); a
+   touch hides them at once. The quiet look of the Later and Sooner buttons, never the accent. */
+.cv-idle { position: absolute; top: 16px; left: 24px; right: 24px; z-index: 2; display: flex; flex-wrap: wrap; gap: 8px; pointer-events: none; opacity: 0; transition: opacity 350ms cubic-bezier(0.65, 0, 0.35, 1); }
+.cv-idle.on { opacity: 1; transition-timing-function: var(--ease); }
+.cv-idle.now { transition: none; }
+.cv-pill { display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; border-radius: 999px; background: var(--bg-subtle); border: 1px solid var(--line); color: var(--fg); font-size: 14px; line-height: 18px; white-space: nowrap; }
+.cv-pill svg.i { width: 16px; height: 16px; color: var(--fg-muted); }
+.cv-pill.r { margin-left: auto; }
+.log-note { width: 100%; min-height: 48px; border: 0; border-radius: 12px; background: var(--bg-subtle); color: var(--fg); padding: 12px 16px; font: inherit; font-size: 16px; }
+.log-note::placeholder { color: var(--fg-muted); }
+@media (prefers-reduced-motion: reduce) { .cv-card.cv-in { animation: none; } }
 
 /* home tiles */
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 4px 16px; }
@@ -774,13 +789,15 @@ const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 const seqOf = (lid) => (L[lid] ? L[lid].queue.slice().sort((a, b) => D.turns[lid][a] - D.turns[lid][b]) : []);
 const turnOf = (lid, pid) => (D.turns[lid] && pid in D.turns[lid] ? D.turns[lid][pid] : 0);
 // strings_browse.xml browse_when_*, in ComesUp's buckets: later today, tomorrow, a weekday, a span.
+// formatSpan's buckets: days below 14, weeks below 60 days, then months.
+const spanOf = (d) => (d < 14 ? `${d} days` : d < 60 ? `${Math.floor(d / 7)} weeks` : `${Math.floor(d / 30)} months`);
 function whenOf(t) {
   if (t <= 0) return 'Up now';
   if (t < 1) return 'Later today';
   const d = Math.floor(t);
   if (d === 1) return 'Tomorrow';
   if (d < 7) return WEEKDAYS[d % 7];
-  return `In ${d < 14 ? `${d} days` : d < 60 ? `${Math.floor(d / 7)} weeks` : `${Math.floor(d / 30)} months`}`;
+  return `In ${spanOf(d)}`;
 }
 // A fresh turn for a move, nudged by a hair each time so two moves never tie.
 function setTurn(lid, pid, days) { D.tick += 0.001; D.turns[lid][pid] = days + D.tick; }
@@ -891,6 +908,10 @@ function freshData() {
     archivedOpen: false,
     logMode: 'conn',
     logWhen: 'Today',
+    logNote: '', logFor: null,
+    // CARD-09: Later and Sooner moves so far (five teach the swipe) and hints shown per person.
+    cardMoves: 0, hintsShown: {},
+    cardIn: false,
     ignored: ['jordan', 'mia'],
     theme: 'Warm', mode: 'System', range: '3 months',
     focusId: null,
@@ -994,6 +1015,8 @@ const gestBar = (light) => `<div class="gest"${light ? ' style="--fg:#F4F1EC"' :
 
 /* ───────── Gesture + click handling inside the phone ───────── */
 const ACT = {};
+// An action returns WAIT when it finishes later and renders then (the card's fly-off, CARD-08).
+const WAIT = 'wait';
 let lpTimer = null, lpFired = false, lpStart = null, dragMoved = false;
 function phoneClick(e) {
   if (lpFired) { lpFired = false; return; }
@@ -1003,7 +1026,7 @@ function phoneClick(e) {
   if (!el) { flashHot(); return; }
   const before = JSON.stringify([cur().id, cur().st]);
   const ds = el.dataset;
-  if (ds.act && ACT[ds.act]) { if (ACT[ds.act](ds.arg, el) === false) { afterNav(before); return; } }
+  if (ds.act && ACT[ds.act]) { const r = ACT[ds.act](ds.arg, el); if (r === WAIT) return; if (r === false) { afterNav(before); return; } }
   if ('back' in ds) back();
   else if (ds.go) { const [id, st] = ds.go.split(':'); go(id, st || 'default', ds.p || null); }
   else if (ds.st) setSt(ds.st, ds.p || null);
@@ -1062,12 +1085,13 @@ function renderPhone() {
   if (!ph) return;
   const t = cur();
   const sc = SC[t.id];
-  const prevScroll = ph.dataset.screen === t.id && $('#scr', ph) ? $('#scr', ph).scrollTop : 0;
+  const fresh = ph.dataset.screen !== t.id;
+  const prevScroll = !fresh && $('#scr', ph) ? $('#scr', ph).scrollTop : 0;
   ph.innerHTML = composePhone(t.id, t.st, t.p, true);
   ph.dataset.screen = t.id;
   const scr = $('#scr', ph);
   if (scr && prevScroll) scr.scrollTop = prevScroll;
-  if (sc.mount) sc.mount(ph, t);
+  if (sc.mount) sc.mount(ph, t, fresh);
   if (D.focusId) {
     const f = document.getElementById(D.focusId);
     if (f) { f.focus(); try { const n = f.value.length; f.setSelectionRange(n, n); } catch (e) { /* not a text field */ } }
@@ -1616,25 +1640,125 @@ ACT.dismissAll = () => dismissWaiting(D.waiting.map((c) => c.pid));
 
 // The card shows the head of the list's order, the same order Browse lists (BROWSE-07).
 function cardPerson(lid) { return seqOf(lid)[0] || null; }
-// CARD-03: once the call log confirms a call placed from the card, "Called Kai" with "Add a
-// note", which opens the note page (NOTE-04). The snackbar's action runs `undo`, whatever its label.
+// CARD-03: after a call placed from the card that was too short to wait for a note (under a
+// minute), "Called Kai" with "Add a note", which opens the note page (NOTE-04). A longer call
+// opens the page by itself instead (CARD-11, endCall). The snackbar's action runs `undo`,
+// whatever its label.
 function calledSnack(pid) { snack(`Called ${first(pid)}`, 'Add a note'); S.snack.undo = () => go('S23', 'default', pid); }
+/* ComesUp's buckets, as the card words them: a fragment that slots into a snackbar ("on
+   Thursday") and the same bucket standing alone for a hint ("Thursday"), so a hint and the
+   snackbar after the move always name the same day (CARD-02, CARD-09). Days count from today,
+   Sunday 4 October. */
+function comesUp(days) {
+  if (days < 1) return ['later today', 'Today'];
+  const d = Math.floor(days);
+  if (d === 1) return ['tomorrow', 'Tomorrow'];
+  if (d < 7) return [`on ${WEEKDAYS[d % 7]}`, WEEKDAYS[d % 7]];
+  return [`in ${spanOf(d)}`, `In ${spanOf(d)}`];
+}
+// What the demo's moves write: Later puts the person 4 days out, Sooner brings them to tomorrow.
+const LATER_DAYS = 4;
+const SOONER_DAYS = 1;
 const CARD_NOTES = { kai: [['27 days ago', 'Asked about the move to Lisbon. Follow up on the new job.']], priya: [['6 days ago', 'Her sister is visiting in October.']] };
+
+/* CARD-09: hints that teach the swipe (CardSwipeHints.kt). After 4 untouched seconds "Later ·
+   Thursday" and "Sooner · Tomorrow" fade in at the card's top corners, hold 2.5 seconds, fade
+   out, and come back every 12 seconds while nothing happens, at most 3 times for each person.
+   Any touch hides them at once and restarts the 4 seconds; they wait while a menu or the sheet
+   covers the card; after 5 Later or Sooner moves they stop for good (D.cardMoves, which Restart
+   resets). With reduced motion they appear and go without fading (the page's reduced-motion
+   rule zeroes every transition). The clock lives outside the phone's markup, so a re-render
+   neither restarts it nor loses a hint that is showing. */
+const HINT = { idle: 4000, hold: 2500, every: 12000, max: 3, fade: 350, learn: 5 };
+// The deck states the clock runs in; 'hints' shows them pinned for review, with no clock.
+const HINT_STATES = ['default', 'nolog', 'called', 'logged'];
+const hintClock = { timer: null, pid: null, running: false, visible: false, atOnce: false };
+function hintPaint() {
+  const el = $('#phone #cv-idle');
+  if (!el || cur().st === 'hints') return;
+  el.classList.toggle('now', hintClock.atOnce);
+  el.classList.toggle('on', hintClock.visible);
+}
+function hintStop() {
+  clearTimeout(hintClock.timer);
+  Object.assign(hintClock, { timer: null, running: false, visible: false, atOnce: true });
+  hintPaint();
+}
+// Still on this person's deck, uncovered? Otherwise the clock stops; coming back starts it again.
+function hintHere(pid) {
+  const t = cur();
+  return t.id === 'S11' && HINT_STATES.includes(t.st) && cardPerson(L[t.p] ? t.p : 'touch') === pid && !!$('#phone #cv-idle');
+}
+function hintArm(pid) {
+  hintStop();
+  hintClock.pid = pid;
+  if (D.cardMoves >= HINT.learn || (D.hintsShown[pid] || 0) >= HINT.max) return;
+  hintClock.running = true;
+  const show = () => {
+    if (!hintHere(pid) || D.cardMoves >= HINT.learn) { hintStop(); return; }
+    D.hintsShown[pid] = (D.hintsShown[pid] || 0) + 1;
+    Object.assign(hintClock, { visible: true, atOnce: false });
+    hintPaint();
+    hintClock.timer = setTimeout(() => {
+      hintClock.visible = false;
+      hintPaint();
+      if (D.hintsShown[pid] >= HINT.max) { hintClock.running = false; return; }
+      hintClock.timer = setTimeout(show, HINT.every - HINT.fade - HINT.hold);
+    }, HINT.fade + HINT.hold);
+  };
+  hintClock.timer = setTimeout(show, HINT.idle);
+}
+
+/* CARD-08: Later and Sooner fly the card off in their direction exactly as a released swipe
+   does (CardSwipeFrame's own settle: out to the card's width, turned 8 degrees, at 0.7
+   opacity), then the deck moves on and the next face fades in. With reduced motion nothing
+   flies: the move just happens. */
+const FLY_MS = 300;
+const reducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+let cardFlying = 0; // the flight's direction while the card is in the air
+function flyCard(dir, lid) {
+  const before = JSON.stringify([cur().id, cur().st]);
+  const card = $('#phone #cv-card');
+  const move = () => { cardFlying = 0; ACT[dir < 0 ? 'defer' : 'sooner'](lid); afterNav(before); };
+  hintStop();
+  if (!card || reducedMotion()) { move(); return; }
+  cardFlying = dir;
+  card.classList.remove('dragging');
+  card.style.transition = `transform ${FLY_MS}ms var(--ease), opacity ${FLY_MS}ms var(--ease)`;
+  card.style.transform = `translateX(${dir * card.offsetWidth}px) rotate(${dir * 8}deg)`;
+  card.style.opacity = '0.7';
+  setTimeout(move, FLY_MS);
+}
+// The buttons: the move finishes after the flight, so the click's own render waits for it.
+ACT.cardMove = (dir) => {
+  if (!cardFlying) flyCard(dir === 'sooner' ? 1 : -1, L[cur().p] ? cur().p : 'touch');
+  return WAIT;
+};
+ACT.openLog = (pid) => {
+  Object.assign(D, { logFor: pid, logMode: 'conn', logWhen: 'Today', logNote: '' });
+  setSt('log', cur().id === 'S20' ? pid : null);
+  return false;
+};
+
 screen({
   id: 'S11', group: 'loop', name: 'Card view', route: 'card/{listId}',
   spec: 'features/page-views/card-view.md', code: 'ui/screens/card/CardViewScreen.kt',
   purpose: 'Hand you one name with enough context to say yes.',
-  owes: ['One person at a time, with "Up now" or "Coming up" over the name', 'Why now: how long it has been, the pair\'s usual rhythm, the last note (CARD-04)', 'When they usually answer, plus Last call, Average length, Total calls', 'Call with the labelled button, the only control that dials (CARD-01)', 'Later and Sooner, named, by swipe or button, each with its own Undo (CARD-02)', 'After a call placed from the card, once the call log confirms it: "Called Kai" with "Add a note", which opens the note page (CARD-03, NOTE-04)', 'Open details, and a three-dots menu: Browse people (opens on the card\'s person, BROWSE-09), Add people, List settings', 'Honest empty states with a way home; an error with Try again (CARD-07)'],
-  drift: 'CARD-11 (open the note page by itself after a call of a minute or more placed from the card) is decided but not built yet, so after any call the card shows "Called Kai" with "Add a note", as here.',
-  states: [['default', 'Ready'], ['called', 'After a call: Called Kai'], ['menu', 'More actions menu', 'overlay'], ['nolog', 'Call log permission off'], ['empty', 'No one in this list'], ['none', 'All quiet for now']],
-  to: [['S53', 'Call'], ['S23', 'After a call: "Called Kai", Add a note'], ['S20', 'Open details, or tap the card face'], ['S13', 'Menu: Browse people (on the card\'s person)'], ['S32', 'Menu: Add people'], ['S31', 'Menu: List settings'], ['S40', 'Notice: Open settings'], ['S10', 'Back, or Go home']],
-  // The state after a call: the deck has moved past Kai and the snackbar says so.
+  owes: ['One person at a time, with "Up now" or "Coming up" over the name', 'Why now: how long it has been, the pair\'s usual rhythm, the last note (CARD-04)', 'When they usually answer, plus Last call, Average length, Total calls', 'Call with the labelled button, the only control that dials (CARD-01)', 'Later and Sooner, named, by swipe or button, each with its own Undo (CARD-02); the buttons fly the card off as the swipe does, and with reduced motion the move just happens (CARD-08)', 'Left untouched for four seconds, "Later · Thursday" and "Sooner · Tomorrow" fade in at the card\'s top corners, a few times, until the swipe is learnt; any touch hides them (CARD-09)', '"Open details" and "Log a connection" side by side; logging uses Contact detail\'s sheet, moves the deck on and says "Logged. Kai comes up again on Tuesday." (CARD-10)', 'After a call placed from the card that lasted a minute or more, the note page opens by itself; a shorter call says "Called Kai" with "Add a note" (CARD-11, CARD-03)', 'A three-dots menu: Browse people (opens on the card\'s person, BROWSE-09), Add people, List settings', 'Honest empty states with a way home; an error with Try again (CARD-07)'],
+  drift: null,
+  states: [['default', 'Ready'], ['hints', 'Hints after four untouched seconds'], ['called', 'After a short call: Called Kai'], ['log', 'Log a connection', 'overlay'], ['logged', 'After logging: the deck moved on'], ['menu', 'More actions menu', 'overlay'], ['nolog', 'Call log permission off'], ['empty', 'No one in this list'], ['none', 'All quiet for now']],
+  to: [['S53', 'Call'], ['S23', 'By itself after a call of a minute or more; or "Add a note" on "Called Kai"'], ['S20', 'Open details, or tap the card face'], ['S13', 'Menu: Browse people (on the card\'s person)'], ['S32', 'Menu: Add people'], ['S31', 'Menu: List settings'], ['S40', 'Notice: Open settings'], ['S10', 'Back, or Go home']],
+  // After a short call, or after logging: the deck has moved past Kai and the snackbar says so.
   prep(st) {
     const lid = cur().p && L[cur().p] ? cur().p : 'touch';
-    if (st === 'called') { resetTurns(lid); setTurn(lid, 'kai', D.intervals[lid] || 2); calledSnack('kai'); }
+    if (['called', 'logged', 'log'].includes(st)) resetTurns(lid);
+    if (st === 'called') { setTurn(lid, 'kai', D.intervals[lid] || 2); calledSnack('kai'); }
+    if (st === 'log') Object.assign(D, { logFor: cardPerson(lid), logMode: 'conn', logWhen: 'Today', logNote: '' });
+    if (st === 'logged') { setTurn(lid, 'kai', D.intervals[lid] || 2); snack(`Logged. Kai comes up again ${comesUp(D.intervals[lid] || 2)[0]}.`); }
   },
   render(st, p) {
-    if (st === 'called') st = 'default';
+    const shown = st;
+    if (st === 'called' || st === 'logged' || st === 'hints') st = 'default';
     // Restart removes lists made with New list, so an id that is gone falls back to In touch.
     const lid = p && L[p] ? p : 'touch';
     const l = L[lid];
@@ -1649,6 +1773,8 @@ screen({
       { label: 'Add people', icon: 'user-plus', attrs: A.go('S32', null, lid) },
       { label: 'List settings', icon: 'sliders-horizontal', attrs: A.go('S31', null, lid) },
     ], { top: 100, right: 12 });
+    // CARD-10: the sheet Contact detail opens, for the person the card showed at the tap.
+    if (st === 'log') layer = logSheet();
     if (st === 'empty' || st === 'none') {
       const empty = st === 'empty';
       return view({ bar, center: true, layer, body: `<div class="center-t" style="padding:0 40px 80px;display:flex;flex-direction:column;gap:12px;align-items:center">
@@ -1669,10 +1795,16 @@ screen({
         <div style="margin-top:10px">${chip}</div></div>`
       : '<div class="tint-box meta center-t" style="width:100%;border-radius:18px">Not enough calls yet to see a pattern</div>';
     const notes = (CARD_NOTES[pid] || []).map(([w, t]) => `<div style="padding:8px 24px 0;cursor:pointer" ${A.go('S20', null, pid)}><div class="meta">${w}</div><div class="body" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${t}</div></div>`).join('');
+    // CARD-09: the hints, outside the card so they sit still while it moves; decoration, so
+    // hidden from screen readers, and no accent. Once the swipe is learnt there are none.
+    const pinned = shown === 'hints';
+    const idle = pinned || D.cardMoves < HINT.learn
+      ? `<div class="cv-idle${pinned || (hintClock.visible && hintClock.pid === pid) ? ' on now' : ''}" id="cv-idle" aria-hidden="true"><span class="cv-pill">${ic('arrow-left')}Later · ${comesUp(LATER_DAYS)[1]}</span><span class="cv-pill r">Sooner · ${comesUp(SOONER_DAYS)[1]}${ic('arrow-right')}</span></div>`
+      : '';
     return view({
       bar,
       scrCls: 'cvscr',
-      body: `${notice}<div class="cv"><div class="cv-card" id="cv-card" ${A.go('S20', null, pid)} aria-label="Open details">
+      body: `${notice}<div class="cv"><div class="cv-card${D.cardIn ? ' cv-in' : ''}" id="cv-card" ${A.go('S20', null, pid)} aria-label="Open details">
           <span class="chip ctx" style="position:absolute;top:12px;right:12px;font-size:13px;min-height:28px;padding:0 10px"><span class="dot"></span>${esc(l.name)}</span>
           <div class="cv-hint l" id="hint-l">Later</div><div class="cv-hint r" id="hint-r">Sooner</div>
           <div style="height:24px"></div>
@@ -1683,20 +1815,37 @@ screen({
           ${panel}
           <div style="flex:1;min-height:12px"></div>
           <div class="stats3" style="width:100%"><div><div class="k">Last call</div><div class="v">${pp.last == null ? 'Never called' : ago(pp.last)}</div></div><div><div class="k">Average length</div><div class="v">${pp.avg || 'Not enough calls yet'}</div></div><div><div class="k">Total calls</div><div class="v">${pp.calls || 'Never called'}</div></div></div>
-        </div></div>${notes}`,
-      foot: `<div class="cv-actions" style="padding:14px 24px 6px"><button class="round" ${A.act('defer', lid)} aria-label="Later">${ic('arrow-left')}</button>
+        </div>${idle}</div>${notes}`,
+      foot: `<div class="cv-actions" style="padding:14px 24px 6px"><button class="round" ${A.act('cardMove', 'later')} aria-label="Later">${ic('arrow-left')}</button>
         <button class="btn primary grow" style="min-width:0" ${A.go('S53', null, pid)}>${ic('phone-call')}Call ${first(pid)}</button>
-        <button class="round" ${A.act('sooner', lid)} aria-label="Sooner">${ic('arrow-right')}</button></div>
-        <div class="cv-links"><button class="btn text" style="color:var(--fg-subtle);min-width:96px" ${A.go('S20', null, pid)}>Open details</button></div>`,
+        <button class="round" ${A.act('cardMove', 'sooner')} aria-label="Sooner">${ic('arrow-right')}</button></div>
+        <div class="cv-links"><button class="btn text" style="min-width:96px" ${A.go('S20', null, pid)}>Open details</button><button class="btn text" style="min-width:96px" ${A.act('openLog', pid)}>Log a connection</button></div>`,
       layer,
     });
   },
-  mount(ph, t) {
+  mount(ph, t, fresh) {
+    D.cardIn = false;
+    mountLogNote(ph);
     const card = $('#cv-card', ph);
+    const pid = card ? cardPerson(L[t.p] ? t.p : 'touch') : null;
+    // The idle clock: pinned for review, stopped while covered, kept across a re-render.
+    if (t.st === 'hints' || !card || !HINT_STATES.includes(t.st)) hintStop();
+    else if (fresh || !hintClock.running || hintClock.pid !== pid) hintArm(pid);
+    else hintPaint();
     if (!card) return;
+    // Redrawn mid-flight (a snackbar ending, say): the card stays where the flight has sent it.
+    if (cardFlying) { card.style.transform = `translateX(${cardFlying * card.offsetWidth}px) rotate(${cardFlying * 8}deg)`; card.style.opacity = '0.7'; }
+    // Any touch on the deck hides the hints at once; lifting the finger starts the 4 seconds again.
+    const watched = [$('#scr', ph), $('.cv-actions', ph), $('.cv-links', ph)].filter(Boolean);
+    watched.forEach((el) => {
+      el.addEventListener('pointerdown', () => { hintStop(); });
+      el.addEventListener('pointerup', () => { if (HINT_STATES.includes(cur().st) && cur().id === 'S11') hintArm(pid); });
+    });
+    // A real drag follows the finger; let go past a third of the card and it flies off the
+    // way the buttons send it (flyCard), otherwise it springs back.
     let x0 = null, dx = 0;
     const hl = $('#hint-l', ph), hr = $('#hint-r', ph);
-    card.addEventListener('pointerdown', (e) => { x0 = e.clientX; dx = 0; card.classList.add('dragging'); try { card.setPointerCapture(e.pointerId); } catch (er) { /* synthetic events */ } });
+    card.addEventListener('pointerdown', (e) => { if (cardFlying) return; x0 = e.clientX; dx = 0; card.classList.add('dragging'); try { card.setPointerCapture(e.pointerId); } catch (er) { /* synthetic events */ } });
     card.addEventListener('pointermove', (e) => {
       if (x0 == null) return;
       const scale = card.getBoundingClientRect().width / card.offsetWidth || 1;
@@ -1710,27 +1859,31 @@ screen({
     const end = () => {
       if (x0 == null) return;
       x0 = null; card.classList.remove('dragging');
-      if (Math.abs(dx) > card.offsetWidth * 0.3) {
-        card.style.transform = `translateX(${dx > 0 ? 500 : -500}px) rotate(${dx > 0 ? 8 : -8}deg)`;
-        setTimeout(() => { const before = ''; ACT[dx > 0 ? 'sooner' : 'defer'](t.p || 'touch'); afterNav(before); }, 220);
-      } else { card.style.transform = ''; card.style.opacity = ''; hl.style.opacity = 0; hr.style.opacity = 0; }
+      hl.style.opacity = 0; hr.style.opacity = 0;
+      if (Math.abs(dx) > card.offsetWidth * 0.3) flyCard(dx > 0 ? 1 : -1, L[t.p] ? t.p : 'touch');
+      else { card.style.transform = ''; card.style.opacity = ''; }
     };
     card.addEventListener('pointerup', end); card.addEventListener('pointercancel', end);
   },
 });
 // CARD-02: the snackbar names the person and says when they come back; never "due". Each move
 // writes the person's next turn, so Browse shows them there too, and Undo puts the turn back.
+// Every move counts toward the five that teach the swipe (CARD-09); the next face fades in.
 function moveOn(lid, days, say) {
   lid = lid || 'touch';
   const pid = cardPerson(lid); if (!pid) return false;
   const prior = D.turns[lid][pid];
   setTurn(lid, pid, days);
-  snack(say(first(pid)), 'Undo');
+  D.cardMoves += 1;
+  D.cardIn = true;
+  // A move from the pinned review state lands on the live deck.
+  if (cur().id === 'S11' && cur().st === 'hints') cur().st = 'default';
+  snack(say(first(pid), comesUp(days)[0]), 'Undo');
   S.snack.undo = () => { D.turns[lid][pid] = prior; };
   return false;
 }
-ACT.defer = (lid) => moveOn(lid, 4, (who) => `${who} will come up again on Thursday.`);
-ACT.sooner = (lid) => moveOn(lid, 1, (who) => `${who} comes up tomorrow.`);
+ACT.defer = (lid) => moveOn(lid, LATER_DAYS, (who, when) => `${who} will come up again ${when}.`);
+ACT.sooner = (lid) => moveOn(lid, SOONER_DAYS, (who, when) => `${who} comes up ${when}.`);
 ACT.browseFocus = (arg) => { D.browseFocus = arg === 'card'; };
 ACT.undo = () => { if (S.snack && S.snack.undo) S.snack.undo(); S.snack = null; return false; };
 
@@ -2134,10 +2287,11 @@ screen({
   id: 'S20', group: 'people', name: 'Contact detail', route: 'contact/{contactId}',
   spec: 'features/page-views/contact-detail.md', code: 'ui/screens/contact/ContactDetailScreen.kt',
   purpose: 'The full picture of one person, and the place to act and remember.',
-  owes: ['Photo, name, number, and which lists they are on', 'Stats: Last call, Total calls, Average length, Longest gap, Usually; "Not enough calls yet" where history is thin', 'Recent call history, with Logged and Attempted rows', 'Add and read notes; some entry points jump straight to the note field', 'Log a connection, or an attempt ("Couldn\'t reach them")', 'Pause for a while (1 week, 1 month, until you unpause), or Unpause', 'Ignore, or add to more lists', 'Re-link if the phone contact was deleted'],
+  owes: ['Photo, name, number, and which lists they are on', 'Stats: Last call, Total calls, Average length, Longest gap, Usually; "Not enough calls yet" where history is thin', 'Recent call history, with Logged and Attempted rows', 'Add and read notes; some entry points jump straight to the note field', 'Log a connection, or an attempt ("Couldn\'t reach them"), in the sheet the card uses too (CARD-10): "Logged." or "Attempt logged."', 'Pause for a while (1 week, 1 month, until you unpause), or Unpause', 'Ignore, or add to more lists', 'Re-link if the phone contact was deleted'],
   drift: 'An ignored person shows an "Ignored" line under the number from this round\'s contact-detail pass (2026-10-05); at the render this prototype was read from they looked no different here.',
   states: [['default', 'Ready'], ['note', 'Note field focused'], ['menu', 'More actions', 'overlay'], ['log', 'Log a connection', 'overlay'], ['pause', 'Pause for how long?', 'overlay'], ['paused', 'Paused indefinitely'], ['pmenu', 'More actions while paused', 'overlay'], ['unpaused', 'Pause just ended'], ['override', 'Custom schedule open'], ['retro', 'Opened from a call'], ['orphaned', 'Deleted from the phone']],
   to: [['S53', 'Call, or tap the number'], ['S21', 'Add to lists'], ['S42', 'More: View all calls'], ['S32', 'Orphaned: Re-link']],
+  prep(st) { if (st === 'log') Object.assign(D, { logMode: 'conn', logWhen: 'Today', logNote: '' }); },
   render(st, p) {
     const pid = p && P[p] ? p : (st === 'override' ? 'jamie' : 'kai');
     const pp = P[pid];
@@ -2162,7 +2316,7 @@ screen({
         <div class="h-hero center-t" style="margin-top:6px">${esc(pp.name)}</div>
         <button class="btn text" style="color:var(--fg-muted);font-size:17px" ${A.go('S53', null, pid)}>${pp.phone}</button>
         ${paused ? '<div class="meta">Paused until you unpause</div>' : ''}
-        <div class="row" style="width:100%;gap:12px">${orphan ? `<button class="btn tonal block sm" ${A.go('S53', null, pid)}>${ic('phone')}Call</button>` : `<button class="btn primary sm grow" ${A.go('S53', null, pid)}>${ic('phone')}Call</button><button class="btn tonal sm grow" style="padding:0 10px" ${A.st('log', pid)}>Log a connection</button>`}</div>
+        <div class="row" style="width:100%;gap:12px">${orphan ? `<button class="btn tonal block sm" ${A.go('S53', null, pid)}>${ic('phone')}Call</button>` : `<button class="btn primary sm grow" ${A.go('S53', null, pid)}>${ic('phone')}Call</button><button class="btn tonal sm grow" style="padding:0 10px" ${A.act('openLog', pid)}>Log a connection</button>`}</div>
       </div>
       <div><div class="eyebrow" style="margin-bottom:8px">On these lists</div><div class="chips">${chips}</div></div>
       <div><div class="eyebrow">Stats</div>${kv('Last call', pp.last == null ? 'Never called' : rel(pp.last))}${kv('Total calls', pp.calls)}${kv('Average length', pp.calls >= 3 ? pp.avg : 'Not enough calls yet')}${kv('Longest gap', pp.gap || 'Not enough calls yet')}${kv(`Usually <span style="display:inline-block;vertical-align:-3px">${ic('info').replace('class="i"', 'class="i" style="width:15px;height:15px"')}</span>`, pp.calls >= 3 && pp.usually ? pp.usually : 'Not enough calls yet')}</div>
@@ -2187,20 +2341,61 @@ screen({
       { label: 'Ignore', icon: 'eye-slash', danger: true, attrs: `${A.st('default')} ${A.snack('Ignored ' + pp.name, 'Undo')}` },
     ], { top: 100, right: 12 }, 'paused');
     if (st === 'pause') layer = pauseSheet(pp.name, 'default');
-    if (st === 'log') {
-      const conn = D.logMode === 'conn';
-      layer = sheet(`<div style="padding:0 24px" class="gap12"><div class="h3 center-t">${conn ? 'Log a connection' : 'Log an attempt'}</div>
-        <div class="body muted center-t">${conn ? "For calls Orbit can't see, like a video call or time together in person." : "A voicemail or no answer: you reached out but didn't connect."}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;background:var(--bg-subtle);border-radius:14px;padding:4px"><button class="btn sm" style="background:${conn ? 'var(--surface)' : 'transparent'};color:${conn ? 'var(--fg)' : 'var(--fg-muted)'};font-size:15px;padding:0 8px" ${A.act('logMode', 'conn')}>We connected</button><button class="btn sm" style="background:${conn ? 'transparent' : 'var(--surface)'};color:${conn ? 'var(--fg-muted)' : 'var(--fg)'};font-size:15px;padding:0 8px" ${A.act('logMode', 'try')}>Couldn't reach them</button></div>
-        <div>${['Today', 'Yesterday', 'Pick a date'].map((w) => `<div class="row" style="min-height:48px;padding:0 12px;border-radius:12px;cursor:pointer;${D.logWhen === w ? 'background:var(--bg-subtle)' : ''}" ${A.act('logWhen', w)}><span class="grow body">${w}</span>${D.logWhen === w ? ic('check') : ''}</div>`).join('')}</div>
-        <div style="background:var(--bg-subtle);border-radius:12px;padding:12px;color:var(--fg-subtle);min-height:48px">Add a note (optional)</div>
-        <button class="btn primary block" ${A.st('default')} ${A.snack(conn ? 'Logged.' : 'Attempt logged.')}>${conn ? 'Log connection' : 'Log attempt'}</button></div>`);
-    }
+    // CONTACT-09: the one Log a connection sheet, shared with the card (CARD-10).
+    if (st === 'log') layer = logSheet();
     return view({ bar, body, layer });
   },
+  mount(ph) { mountLogNote(ph); },
 });
+/* ════════ Log a connection (ui/components/LogConnectionSheet.kt) ════════ */
+// The one sheet for a conversation Orbit couldn't see, or an attempt: Contact detail opens it
+// (CONTACT-09) and so does the card (CARD-10). What happened, when, an optional note, one
+// confirm. Nothing in it names the person, and it starts fresh each time it opens (openLog).
+function logSheet() {
+  const conn = D.logMode === 'conn';
+  const seg = (mode, label) => { const on = D.logMode === mode; return `<button class="btn sm" role="tab" aria-selected="${on}" style="background:${on ? 'var(--surface)' : 'transparent'};color:${on ? 'var(--fg)' : 'var(--fg-muted)'};font-size:15px;padding:0 8px" ${A.act('logMode', mode)}>${label}</button>`; };
+  return sheet(`<div style="padding:0 24px" class="gap12"><div class="h3 center-t">${conn ? 'Log a connection' : 'Log an attempt'}</div>
+    <div class="body muted center-t">${conn ? "For calls Orbit can't see, like a video call or time together in person." : "A voicemail or no answer: you reached out but didn't connect."}</div>
+    <div role="tablist" style="display:grid;grid-template-columns:1fr 1fr;background:var(--bg-subtle);border-radius:14px;padding:4px">${seg('conn', 'We connected')}${seg('try', "Couldn't reach them")}</div>
+    <div role="radiogroup">${['Today', 'Yesterday', 'Pick a date'].map((w) => `<div class="row" role="radio" aria-checked="${D.logWhen === w}" style="min-height:48px;padding:0 12px;border-radius:12px;cursor:pointer;${D.logWhen === w ? 'background:var(--bg-subtle)' : ''}" ${A.act('logWhen', w)}><span class="grow body">${w}</span>${D.logWhen === w ? ic('check') : ''}</div>`).join('')}</div>
+    <input class="log-note" id="log-note" value="${esc(D.logNote)}" placeholder="Add a note (optional)" aria-label="Add a note (optional)" autocomplete="off">
+    <button class="btn primary block" ${A.act('logConfirm')}>${conn ? 'Log connection' : 'Log attempt'}</button></div>`);
+}
+// The note writes the draft one way, so the sheet is not redrawn under the typing.
+function mountLogNote(ph) {
+  const f = $('#log-note', ph);
+  if (f) f.addEventListener('input', () => { D.logNote = f.value; });
+}
 ACT.logMode = (m) => { D.logMode = m; return false; };
 ACT.logWhen = (w) => { D.logWhen = w; return false; };
+/* Saving logs it (LogConnectionUseCase) and puts the person back into the rhythm on each of their
+   lists: a connection a full rhythm from when it happened, an attempt AttemptCooldown's 3 days
+   from it. Contact detail says "Logged." or "Attempt logged."; the card moves on and says when
+   they come up again ("Logged." alone when that is not in the future). Pick a date stands for
+   Thursday 1 October here (the prototype has no date picker). */
+const LOG_AGO = { Today: 0, Yesterday: 1, 'Pick a date': 3 };
+ACT.logConfirm = () => {
+  const t = cur();
+  const onCard = t.id === 'S11';
+  const cardLid = onCard && L[t.p] ? t.p : 'touch';
+  const pid = onCard ? (D.logFor || cardPerson(cardLid)) : (t.p && P[t.p] ? t.p : 'kai');
+  const attempt = D.logMode !== 'conn';
+  const ago = LOG_AGO[D.logWhen] || 0;
+  let due = null;
+  listsOf(pid).forEach((lid) => {
+    if (!(pid in D.turns[lid])) return;
+    const days = (attempt ? 3 : D.intervals[lid] || 2) - ago;
+    setTurn(lid, pid, days);
+    if (lid === cardLid) due = days;
+  });
+  Object.assign(D, { logNote: '', logFor: null });
+  setSt('default');
+  const plain = attempt ? 'Attempt logged.' : 'Logged.';
+  if (!onCard) { snack(plain); return false; }
+  D.cardIn = true;
+  snack(due != null && due > 0 ? `${attempt ? 'Attempt logged' : 'Logged'}. ${first(pid)} comes up again ${comesUp(due)[0]}.` : plain);
+  return false;
+};
 ACT.noop = () => false;
 
 /* ════════ Add to lists (reverse picker) ════════ */
@@ -2277,10 +2472,14 @@ screen({
   purpose: 'Write about one call while it is fresh. The timer in the bar counts up from 0:00: a nudge to keep it short, not a limit.',
   owes: ['"Not now", "Your call with Kai" and a timer counting up from 0:00, in the bar so it stays in view however long the entry gets (NOTE-04)', 'The call in one line: "You called Kai · 14 min · Today at 9:27am", or "Nia called you · ..."', 'One large writing field, "How did it go? What do you want to remember?", with the cursor in it and the keyboard up', '"Save note", the one accent, disabled while the field is blank; it writes an ordinary note and returns with "Note saved", and the call stops waiting on Home', 'Leaving with words written asks "Discard this note?" (Keep writing, Discard); with nothing written it just leaves', 'A person no longer in Orbit, or a failed read, says so with a way back'],
   drift: null,
-  states: [['default', 'Ready, nothing written'], ['writing', 'Words written'], ['incoming', 'A call they made'], ['discard', 'Discard this note?', 'overlay'], ['notfound', 'Not in Orbit anymore'], ['error', 'Couldn\'t load this person']],
-  to: [['S10', 'Save note, Not now, Discard or Back (opened from Home or the notification)'], ['S11', 'The same, when the card\'s "Called Kai" opened it']],
+  states: [['default', 'Ready, nothing written'], ['writing', 'Words written'], ['card', 'Opened by itself after a call from the card'], ['incoming', 'A call they made'], ['discard', 'Discard this note?', 'overlay'], ['notfound', 'Not in Orbit anymore'], ['error', 'Couldn\'t load this person']],
+  to: [['S10', 'Save note, Not now, Discard or Back (opened from Home or the notification)'], ['S11', 'The same, back to the deck with the next person, when it opened by itself after a call from the card (CARD-11) or from "Called Kai"']],
   enter() { D.noteStart = Date.now(); D.noteDraft = ''; D.focusId = 'note-text'; },
-  prep(st) { D.noteStart = Date.now(); D.noteDraft = st === 'writing' || st === 'discard' ? NOTE_SAMPLE : ''; },
+  prep(st) {
+    D.noteStart = Date.now(); D.noteDraft = st === 'writing' || st === 'discard' ? NOTE_SAMPLE : '';
+    // CARD-11: over the deck, which has moved past Kai; the call waits on Home until a note.
+    if (st === 'card') { resetTurns('touch'); setTurn('touch', 'kai', D.intervals.touch); D.waiting = [CALLS.kai]; S.stack.forEach((e) => { if (e.id === 'S10') e.st = 'one'; }); }
+  },
   render(st, p) {
     const pid = st === 'incoming' ? 'nia' : p && P[p] ? p : 'kai';
     if (st === 'notfound' || st === 'error') {
@@ -2328,6 +2527,8 @@ ACT.noteSave = (pid) => {
   back('Note saved');
   const t = cur();
   if (t.id === 'S10') t.st = t.st === 'pileopen' && D.waiting.length >= 2 ? 'pileopen' : homeStateFor();
+  // Saved from over the deck (CARD-11): Home underneath stops showing the call too.
+  S.stack.forEach((e) => { if (e.id === 'S10' && e !== t && ['one', 'pile', 'pileopen'].includes(e.st)) e.st = homeStateFor(); });
   return false;
 };
 </script>
@@ -2933,9 +3134,9 @@ screen({
   spec: 'features/card-view/README.md', code: 'ui/util/Dialer.kt',
   purpose: 'Where every Call button lands. Orbit never places the call itself.',
   owes: ['The number filled in, so you press call yourself', 'Coming back to Orbit afterwards'],
-  drift: 'Back on Card view, Orbit re-reads the call log and moves to the next person once the call is confirmed, then says "Called Kai" with "Add a note" (CARD-03). Back on Home, a call of a minute or more waits for a note at the top for a day (HOME-14). In this prototype every demo call counts as 14 minutes, however long the dialer\'s timer ran.',
+  drift: 'Back on Card view, Orbit re-reads the call log and moves to the next person once the call is confirmed; a call that connected for a minute or more then opens the note page by itself (CARD-11), and a shorter one says "Called Kai" with "Add a note" (CARD-03). Back on Home, a call of a minute or more waits for a note at the top for a day (HOME-14). In this prototype every demo call counts as 14 minutes, however long the dialer\'s timer ran.',
   states: [['default', 'Number filled in'], ['incall', 'On the call']],
-  to: [['S11', 'End the call and return (deck moves on, "Called Kai")'], ['S10', 'Return to Home (the call waits for a note)']],
+  to: [['S23', 'End the call and return to the card: the deck moves on and the note page opens (CARD-11)'], ['S11', 'Under it, the deck; a shorter call stays on it with "Called Kai"'], ['S10', 'Return to Home (the call waits for a note)']],
   render(st, p) {
     const pid = p && P[p] ? p : 'kai';
     const pp = P[pid];
@@ -2962,8 +3163,10 @@ screen({
     const iv = setInterval(() => { const el = $('#call-timer'); if (!el || cur().id !== 'S53') { clearInterval(iv); return; } s += 1; el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 1000);
   },
 });
-// Ending the call returns to Orbit. The call waits for a note on Home (NOTE-05); a card that
-// placed it moves past the person (their next turn is a rhythm away) and says "Called Kai".
+// Ending the call returns to Orbit. The call waits for a note on Home (NOTE-05). A card that
+// placed it moves past the person (their next turn is a rhythm away), and since the call lasted a
+// minute or more (every demo call is 14 minutes) the note page for it opens by itself, in place
+// of the "Called Kai" snackbar a shorter call gets (CARD-11; S11's 'called' state).
 ACT.endCall = (pid) => {
   pid = pid || 'kai';
   S.stack.pop();
@@ -2974,7 +3177,7 @@ ACT.endCall = (pid) => {
     const lid = L[t.p] ? t.p : 'touch';
     if (pid in D.turns[lid]) setTurn(lid, pid, D.intervals[lid] || 2);
     t.st = 'default';
-    calledSnack(pid);
+    if (callFor(pid).min >= 1) go('S23', 'default', pid); else calledSnack(pid);
   }
   if (!S.stack.length) S.stack = [{ id: 'S10', st: homeStateFor(), p: null }];
   return false;
@@ -3045,7 +3248,8 @@ const openBugsFor = (id) => bugsFor(id).filter(([, b]) => b.status !== 'fixed');
 /* ════════ Review chrome: rail, inspector, boards, flow player ════════ */
 const PARENT = { S02: 'S01', S03: 'S02', S04: 'S03', S05: 'S03', S06: 'S05', S07: 'S05', S11: 'S10', S13: 'S11', S12: 'S10', S20: 'S11', S21: 'S20', S22: 'S10', S23: 'S10', S30: 'S10', S31: 'S30', S32: 'S31', S33: 'S10', S40: 'S10', S41: 'S40', S42: 'S40', S53: 'S11' };
 // The picker's Collect mode sits over New list's People step, not List settings.
-const parentOf = (id, st, p) => (id === 'S32' && (st === 'collect' || p === 'collect') ? 'S33' : PARENT[id]);
+// The note page that opened by itself after a call from the card sits over the deck (CARD-11).
+const parentOf = (id, st, p) => (id === 'S32' && (st === 'collect' || p === 'collect') ? 'S33' : id === 'S23' && st === 'card' ? 'S11' : PARENT[id]);
 function naturalStack(id, st, p) {
   const chain = [];
   let x = parentOf(id, st, p);
@@ -3305,6 +3509,13 @@ function boot() {
 <script>
 'use strict';
 /* ════════ Journeys. Each step is a screen + state; "tap" outlines what to press next. ════════ */
+// After a call from the card that lasted a minute or more: the deck has moved past Kai, the call
+// waits on Home, and the note page sits over the deck (CARD-11).
+function cardCallDone() {
+  resetTurns('touch'); setTurn('touch', 'kai', D.intervals.touch);
+  D.waiting = [CALLS.kai];
+  S.stack.forEach((e) => { if (e.id === 'S11') e.p = 'touch'; if (e.id === 'S10') e.st = 'one'; });
+}
 const FLOWS = [
   { id: 'F1', name: 'First run, from install to Home', why: 'Two permissions, a blocking sync, a suggested list, a required first list, then the nudge question on Done (ONB-30).',
     steps: [
@@ -3322,22 +3533,22 @@ const FLOWS = [
       { id: 'S08', st: 'nudged', say: 'Nudges allowed; the ask becomes a plain line. Each list can change when they come.', tap: '.bottom-cta .btn.primary', from: [] },
       { id: 'S10', say: 'Home, with the whole onboarding back stack cleared.', from: [] },
     ] },
-  { id: 'F2', name: 'Call someone from a list', why: 'The core loop: list, card, phone app, back to a new card, then a note about the call while it is fresh.',
+  { id: 'F2', name: 'Call someone from a list', why: 'The core loop: list, card, phone app, then the note page for the call while it is fresh, and back to a new card (CARD-11).',
     steps: [
       { id: 'S10', say: 'Home shows each list with the next person up.', tap: '.lc', do: () => { resetTurns('touch'); D.waiting = []; } },
       { id: 'S11', p: 'touch', say: 'One person, with when they usually answer and how long it has been.', tap: '.cv-actions .btn.primary', do: () => { resetTurns('touch'); } },
       { id: 'S53', p: 'kai', say: 'Orbit opens your phone app with the number filled in. You press call there.', tap: '[data-st="incall"]' },
       { id: 'S53', st: 'incall', p: 'kai', say: 'On the call. Orbit is not involved until you come back.', tap: '[data-act="endCall"]' },
-      { id: 'S11', p: 'touch', say: 'Back on the card, the deck has moved past Kai by itself once the call log shows the call, and "Called Kai" offers "Add a note" for a few seconds. Back goes Home.', tap: '.ab [data-back]', do: () => { resetTurns('touch'); setTurn('touch', 'kai', 2); D.waiting = [CALLS.kai]; S.stack.forEach((e) => { if (e.id === 'S10') e.st = 'one'; }); calledSnack('kai'); } },
-      { id: 'S10', st: 'one', say: 'The call waits for a note at the top of Home, as one card, until you write one or dismiss it.', tap: '[data-go="S23"]', do: () => { D.waiting = [CALLS.kai]; } },
-      { id: 'S23', p: 'kai', say: 'The note page: the timer in the bar counts up from 0:00, a nudge to keep it short. Type a few words; Save note waits for them.', tap: '#note-text', from: ['S10'], do: () => { D.waiting = [CALLS.kai]; } },
-      { id: 'S10', say: 'Saved. Home says "Note saved", and the call no longer waits.', snack: 'Note saved', do: () => { D.waiting = []; } },
+      { id: 'S23', p: 'kai', from: ['S10', 'S11'], say: 'Back in Orbit, once the call log shows a call that connected for a minute or more, the page for writing about it opens by itself, in place of a snackbar; behind it the deck has already moved past Kai. A shorter call would say "Called Kai" with "Add a note" instead. Type a few words.', tap: '#note-text', do: () => { cardCallDone(); } },
+      { id: 'S23', st: 'writing', p: 'kai', from: ['S10', 'S11'], say: 'Save note writes an ordinary note about Kai. Not now or Back would leave it unwritten, and the call would wait on Home.', tap: '#note-save', do: () => { cardCallDone(); } },
+      { id: 'S11', p: 'touch', say: 'Back on the deck with "Note saved", and the next person on the card. Back goes Home.', snack: 'Note saved', tap: '.ab [data-back]', do: () => { cardCallDone(); D.waiting = []; S.stack.forEach((e) => { if (e.id === 'S10') e.st = 'default'; }); } },
+      { id: 'S10', say: 'Home, with nothing waiting: the call has its note.', do: () => { D.waiting = []; } },
     ] },
   { id: 'F3', name: 'Decide on the card: later, sooner, browse', why: 'Everything you can do with one name besides calling, and the order the card follows.',
     steps: [
-      { id: 'S11', p: 'touch', say: 'Swipe left or tap Later: both mean Later, and the button says so.', tap: '.round[aria-label="Later"]', do: () => { resetTurns('touch'); } },
-      { id: 'S11', p: 'touch', say: 'The next person slides in and a snackbar names the last one and says when they come back, with Undo.', snack: 'Kai will come up again on Thursday.', undo: true, do: () => { resetTurns('touch'); setTurn('touch', 'kai', 4); }, tap: '.round[aria-label="Sooner"]' },
-      { id: 'S11', p: 'touch', say: 'Sooner, by button or a right swipe, brings someone forward instead.', snack: 'Luma comes up tomorrow.', undo: true, do: () => { resetTurns('touch'); setTurn('touch', 'kai', 4); setTurn('touch', 'luma', 1); }, tap: '[aria-label^="More actions"]' },
+      { id: 'S11', st: 'hints', p: 'touch', say: 'Left untouched for four seconds, two quiet hints fade in at the card\'s top corners: "Later · Thursday" and "Sooner · Tomorrow", what each move would do for Kai. They hold a moment and fade, come back every twelve seconds, at most three times for a person, and stop for good after five moves; any touch hides them. Swipe left or tap Later: the button flies the card off to the left, as the swipe does.', tap: '.round[aria-label="Later"]', do: () => { resetTurns('touch'); } },
+      { id: 'S11', p: 'touch', say: 'The next person fades in, and a snackbar names the last one and says when they come back, with Undo. With reduced motion nothing flies: the move just happens.', snack: 'Kai will come up again on Thursday.', undo: true, do: () => { resetTurns('touch'); setTurn('touch', 'kai', 4); }, tap: '.round[aria-label="Sooner"]' },
+      { id: 'S11', p: 'touch', say: 'Sooner, by button or a right swipe, flies the card off to the right and brings someone forward instead.', snack: 'Luma comes up tomorrow.', undo: true, do: () => { resetTurns('touch'); setTurn('touch', 'kai', 4); setTurn('touch', 'luma', 1); }, tap: '[aria-label^="More actions"]' },
       { id: 'S11', st: 'menu', p: 'touch', say: 'The three-dots menu: Browse people, Add people, List settings, the same words as Home.', tap: '[data-go="S13"]', do: () => { resetTurns('touch'); setTurn('touch', 'kai', 4); setTurn('touch', 'luma', 1); } },
       { id: 'S13', p: 'touch', say: 'Browse is the order the card follows, numbered, each row saying when. Owen, on the card now, is first and marked "On your card"; Luma and Kai sit where Sooner and Later put them. Drag a handle to move someone.', tap: '[data-drag="theo"]', do: () => { resetTurns('touch'); setTurn('touch', 'kai', 4); setTurn('touch', 'luma', 1); D.browseFocus = true; } },
       { id: 'S13', st: 'moved', p: 'touch', say: 'Theo, dragged up under Owen, is "Up now". "Moved Theo earlier" has Undo, and the line under the order says a call, Later or Sooner moves people again.', do: () => { resetTurns('touch'); setTurn('touch', 'kai', 4); setTurn('touch', 'luma', 1); reorder('touch', 'theo', 'owen'); } },
@@ -3431,6 +3642,13 @@ const FLOWS = [
       { id: 'S12', p: 'touch', say: 'This week again. Next week is off here, and Previous week stops at the week of the list\'s first call. Back goes Home.', tap: '.ab [data-back]' },
       { id: 'S10', st: 'day', p: 'touch:4', say: 'On Home, a day\'s sheet ends in "See the whole week".', tap: '.sheet [data-go="S12"]' },
       { id: 'S12', p: 'touch', say: 'It opens the same screen, always on this week.' },
+    ] },
+  { id: 'F13', name: 'Log a conversation Orbit could not see', why: 'Dinner yesterday, not a call: Log a connection on the card, in the sheet Contact detail uses, and the deck moves on (CARD-10).',
+    steps: [
+      { id: 'S11', p: 'touch', say: '"Log a connection" sits beside "Open details" under the card, in the same quiet style.', tap: '.cv-links [data-act="openLog"]', from: ['S10'], do: () => { resetTurns('touch'); } },
+      { id: 'S11', st: 'log', p: 'touch', say: 'The sheet Contact detail opens: "We connected" or "Couldn\'t reach them", Today, Yesterday or a date, and an optional note. Pick Yesterday.', tap: '[data-act="logWhen"][data-arg="Yesterday"]', from: ['S10'], do: () => { resetTurns('touch'); } },
+      { id: 'S11', st: 'log', p: 'touch', say: 'Yesterday, with "Had dinner yesterday" as the note. "Log connection" saves it for Kai, the person the card showed when the sheet opened.', tap: '[data-act="logConfirm"]', from: ['S10'], do: () => { D.logWhen = 'Yesterday'; D.logNote = 'Had dinner yesterday'; } },
+      { id: 'S11', p: 'touch', say: 'Kai goes back into the rhythm from yesterday, the deck moves on to Luma, and the snackbar says when Kai comes back. "Couldn\'t reach them" says "Attempt logged." the same way.', snack: 'Logged. Kai comes up again tomorrow.', from: ['S10'], do: () => { resetTurns('touch'); setTurn('touch', 'kai', D.intervals.touch - 1); } },
     ] },
 ];
 boot();
