@@ -8,10 +8,12 @@
 
 **Bugs found while building it:** [findings.md](findings.md) lists 14, from smart lists that never surface anyone to an indefinite pause that cannot be undone. All 14 were fixed on 2026-10-05 (B14 in part), and the prototype now shows the fixed behaviour. Each bug still shows on its screen in the prototype's side panel, marked fixed, with what changed.
 
-**Built from:** the string resources (`android/app/src/main/res/values/strings_*.xml`) and the Compose source at commit `80a4ab6` (2026-10-07), screen by screen; first built from `15b6bfb` (2026-10-04), re-derived on 2026-10-05, and re-derived again on 2026-10-07 as the app took the owner's review ([owner-review-2026-10-07.md](owner-review-2026-10-07.md)): the first round at `12df9c7`, then the Week screen at `80a4ab6`. Copy is verbatim from the strings. The 2026-10-07 passes show:
+**Built from:** the string resources (`android/app/src/main/res/values/strings_*.xml`) and the Compose source at commit `7f38fe1` (2026-10-07), screen by screen; first built from `15b6bfb` (2026-10-04), re-derived on 2026-10-05, and re-derived again on 2026-10-07 as the app took the owner's review ([owner-review-2026-10-07.md](owner-review-2026-10-07.md)): the first round at `12df9c7`, then the Week screen at `80a4ab6`, then the step-by-step New list at `7f38fe1`. Copy is verbatim from the strings. The 2026-10-07 passes show:
 
 - **List settings (S31) and Make your first list (S07):** the title is the rename control (LIST-26), "How often" for every list with a Late night list at its real 3 days (LIST-24), "Time of day" in place of active hours (LIST-25), and "Add people" in the People header (LIST-27). The Name section (on List settings), the Rhythm section and the Add people row at the foot are gone.
-- **Lists (S30):** every row's second line is its interval ("Every 3 days"), never a rhythm's name.
+- **Lists (S30):** every row's second line is its interval ("Every 3 days"), never a rhythm's name. The template sheet is gone: "New list" opens S33.
+- **New list (S33, new):** one decision a step under "New list" and "Step 1 of 4" (LIST-28): "How do you want to start?", with Start from blank first, then Inner orbit, Family and Drifted, each tinted a step along one ramp (warmest for the most often), then "Recently added, not called" under "Smart list" (LIST-29; Mentors is gone, since the slider reaches 60 days); the chosen tile is outlined in ink with a check. Then "Name your list" (filled from the template), "How often" (the List settings slider, set from the template) and "Add people". The list that fills itself has three steps and makes its list on How often, with "Create list". Back steps back and keeps everything; Close, from step 2, and Back on step 1 ask "Discard this list?" ("Keep going", "Discard") once something is entered. "Create list" makes the list, its rhythm and its people at once and returns to the screen that opened the flow with "Created Family.", the new list last on Home and on Lists. Home's "New list" and "Create your first list" and Lists' "New list" all open it.
+- **Add people (S32):** a Collect mode for New list's People step: everyone is offered, whoever is already chosen is ticked, and "Add 3 people" names no list, saves nothing and hands the people back.
 - **Home (S10):** the calls waiting for a note (HOME-14, NOTE-05), one as a card, two or more as a pile, in place of the post-call banner. The strip's "Last 7 days" line is now "See your week", with the You and Them key beside it, and a day's sheet ends in "See the whole week"; both open the Week screen on this week (HOME-13).
 - **Your week (S12, new):** a list's calls as a calendar of seven day columns, midnight at the top, each call a block at its start time, as tall as it lasted, in the person's colour with the strip's direction mark (HOME-13). "Previous week" and "Next week" (and a sideways swipe on the chart) step through the demo's earlier weeks, back to the list's first call; "This week" comes back; a day opens its sheet; a block opens the person.
 - **The note page (S23, new):** "Your call with Kai" with a timer that counts up while it is open (NOTE-04).
@@ -21,7 +23,7 @@
 
 The card and Browse share one order in the prototype too: Later, Sooner, a call and a drag each give the person a new next turn, so whatever one screen does, the other shows. The app has had no em dashes since 2026-10-05, so the prototype shows none.
 
-*What the prototype does not yet show (as of 2026-10-07):* the owner's decisions that are not in the app yet (the card's swiping buttons, hints and "Log a connection", CARD-08 to CARD-10; the card opening the note page by itself after a call, CARD-11; the step-by-step New list flow, LIST-28 and LIST-29), so New list still uses the template sheet. Nor does it show TalkBack's "Move up" and "Move down" on Browse rows (the drag is pointer only here), the privacy curtain on the note page, the waiting calls and the Week screen (the prototype has no curtain toggle; S52 shows the curtain in the app switcher), the Week screen's 24-hour axis ("03:00" to "21:00") and its large-text layout (the prototype draws the 12-hour axis at one text size), the Week screen's pager animation (a step redraws at once), a slider you can slide (How often steps through a few values on each tap), Contact detail's "Ignored" status line, the picker's "Select all" cap at 200, Settings' "Last synced 5 minutes ago" in minutes and hours, the Wallpaper swatch's real wallpaper hue, the gallery's exact spacing and type sizes, and any skeleton while a screen loads. Every demo call counts as 14 minutes, so it always waits for a note. It is a review surface for flows, not a pixel reference: the gallery renders in `vision/*/actual-*.png` are. Data is the synthetic cast from `android/scripts/seed-avd.py` plus a few invented address-book names. Nothing here is a real contact.
+*What the prototype does not yet show (as of 2026-10-07):* the owner's decisions that are not in the app yet (the card's swiping buttons, hints and "Log a connection", CARD-08 to CARD-10; the card opening the note page by itself after a call, CARD-11). Nor does it show TalkBack's "Move up" and "Move down" on Browse rows (the drag is pointer only here), the privacy curtain on the note page, the waiting calls and the Week screen (the prototype has no curtain toggle; S52 shows the curtain in the app switcher), the Week screen's 24-hour axis ("03:00" to "21:00") and its large-text layout (the prototype draws the 12-hour axis at one text size), the Week screen's pager animation (a step redraws at once), a slider you can slide (How often steps through a few values on each tap), Contact detail's "Ignored" status line, the picker's "Select all" cap at 200, its Collect mode with nobody left to add ("No people to add yet"), New list's message when Create fails, Settings' "Last synced 5 minutes ago" in minutes and hours, the Wallpaper swatch's real wallpaper hue, the gallery's exact spacing and type sizes, and any skeleton while a screen loads. Every demo call counts as 14 minutes, so it always waits for a note. It is a review surface for flows, not a pixel reference: the gallery renders in `vision/*/actual-*.png` are. Data is the synthetic cast from `android/scripts/seed-avd.py` plus a few invented address-book names. Nothing here is a real contact.
 
 ---
 
@@ -89,6 +91,7 @@ IDs are stable handles for feedback. They are local to this document and the pro
 | S30 | Lists | `lists` | [page view](../../features/page-views/lists-manager.md) |
 | S31 | List settings | `lists/{listId}/config` | [page view](../../features/page-views/list-config.md) |
 | S32 | Add people (contact picker) | `pick/contacts` | [page view](../../features/page-views/picker-contacts.md) |
+| S33 | New list | `lists/new` | [page view](../../features/page-views/new-list.md) |
 
 ### Settings and records
 
@@ -108,7 +111,7 @@ IDs are stable handles for feedback. They are local to this document and the pro
 | S53 | Phone app | system dialer | [card view](../../features/card-view/README.md) |
 | S54 | Notification after a call | lock screen, shade | [notifications](../../features/notifications/README.md) (NOTIF-16) |
 
-Each screen's states (sheets, dialogs, menus, empty and error states) are listed in the prototype's right panel and can be opened directly. There are 140 in total.
+Each screen's states (sheets, dialogs, menus, empty and error states) are listed in the prototype's right panel and can be opened directly. There are 147 in total.
 
 ---
 
@@ -142,7 +145,8 @@ flowchart TD
   S12 -->|a block, a day's row| S20
   S10 -->|Call on Next up| S53[S53 Phone app]
   S10 -->|search icon| S22[S22 Search]
-  S10 -->|lists icon, New list| S30[S30 Lists]
+  S10 -->|lists icon| S30[S30 Lists]
+  S10 -->|New list, Create your first list| S33[S33 New list]
   S10 -->|settings icon| S40[S40 Settings]
   S10 -->|waiting call: Add a note| S23[S23 Your call]
   S10 -->|long-press: Add people| S32[S32 Add people]
@@ -163,8 +167,12 @@ flowchart TD
   S20 -->|Add to lists| S21
   S20 -->|More: View all calls| S42[S42 Call history]
   S30 -->|tap a list| S11
-  S30 -->|Create, menu: List settings| S31
+  S30 -->|menu: List settings| S31
   S30 -->|+ on a list| S32
+  S30 -->|New list| S33
+  S33 -->|Add people, Collect mode| S32
+  S32 -->|Add 3 people| S33
+  S33 -->|Create list: Created Family.| S10
   S31 -->|Add people| S32
   S40 -->|Ignored| S41[S41 Ignored]
   S40 -->|Call history| S42
@@ -209,7 +217,15 @@ Each journey is playable in the Flows view. Order matters within a journey, so t
 
 **F3. Decide on the card: later, sooner, browse.** Swipe left or tap Later; swipe right or tap Sooner. Both buttons are named, there is no Skip, and each move shows a snackbar that names the person and says when they come back ("Kai will come up again on Thursday."), with its own Undo. Only the Call button dials; tapping the card opens details. The three-dots menu's "Browse people" opens S13 on the card's person, first and marked "On your card" (BROWSE-09). S13 is one sequence in the card's order, numbered, each row saying when ("Up now", "Tomorrow", "Thursday", "In 2 weeks"), then the Paused and Ignored groups (BROWSE-07); a drag handle moves someone earlier or later, with "Moved Theo earlier" and Undo, and the line under the order says a call, Later or Sooner moves people again (BROWSE-08). If no one is eligible, S11 says "All quiet for now." and offers Browse.
 
-**F4. Start a new list.** S10 New list, S30 template sheet (each template names the rhythm it sets), Create, S31 List settings (saves as you go: the name is the title and renames in place, How often starts at the template's interval, Add people is in the People header), S32 Add people, back to S31 with "Added 3 people to Family", Done to S30. On S30 a row tap opens that list's cards (LIST-23); List settings is in the row menu, and every row's second line is its interval ("Every 14 days").
+**F4. Start a new list.** New list, one decision a step, from Home to a list with people on it (LIST-28, LIST-29).
+1. S10: "New list" sits quietly under the cards ("Create your first list" when there are none; Lists' "New list" opens the same flow).
+2. S33, "Step 1 of 4": "How do you want to start?" Start from blank, then Inner orbit, Family and Drifted, tinted warmer the more often they bring people up, then "Recently added, not called" under "Smart list". Next waits for a choice; the chosen tile is outlined in ink with a check, and Next is the step's one accent.
+3. "Name your list": the field holds the template's name ("Family"); a blank name keeps Next off. Back steps back keeping everything; Close asks "Discard this list?" ("Keep going", "Discard").
+4. "How often": the List settings slider at the template's 14 days, "You can change this any time in the list's settings." A list that fills itself ends here, "Step 3 of 3", with "Create list".
+5. "Add people": with nobody chosen, "Add people" opens S32 in Collect mode, with "Create without people" above it. Tick three, "Add 3 people", and S33's People section shows them with the count, "Add people" and a remove each.
+6. "Create list" makes the list, its rhythm and its people, and returns to S10 with "Created Family."; the new list is last on Home and on S30, "Every 14 days". Opened from S30, it returns to S30.
+
+On S30 a row tap opens that list's cards (LIST-23); List settings is in the row menu, and every row's second line is its interval.
 
 **F5. Tidy a list in bulk.** S13, long-press a row, Select, tap more rows, Move to which list, snackbar with Undo.
 
