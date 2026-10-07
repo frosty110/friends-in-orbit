@@ -132,7 +132,7 @@ fun OrbitTextField(
                     )
                 }
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = if (singleLine) Alignment.CenterVertically else Alignment.Top,
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = OrbitTheme.spacing.tapMin)
@@ -140,8 +140,10 @@ fun OrbitTextField(
                         .border(ringWidth, ring, OrbitTheme.shapes.md)
                         .padding(start = OrbitTheme.spacing.x4, end = if (trailing != null) 0.dp else OrbitTheme.spacing.x4),
                 ) {
+                    // One line sits centred in the 48dp box; several start at
+                    // the top, where the first line of a note is written.
                     Box(
-                        contentAlignment = Alignment.CenterStart,
+                        contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart,
                         modifier = Modifier
                             .weight(1f)
                             .padding(vertical = OrbitTheme.spacing.x3),

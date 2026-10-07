@@ -1,17 +1,14 @@
 package app.orbit.ui.components
 
 import android.content.res.Configuration
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -21,25 +18,28 @@ import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.clickable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.key.Key
@@ -232,16 +232,8 @@ fun OrbitWheelPicker(
             },
     ) {
         val sidePadding = ((maxWidth - itemWidth) / 2).coerceAtLeast(0.dp)
-
-        // The centre band: where the chosen value sits. Quiet, not accent.
-        Box(
-            Modifier
-                .width(itemWidth)
-                .fillMaxHeight()
-                .heightIn(min = OrbitTheme.spacing.tapMin)
-                .background(c.bgSubtle, OrbitTheme.shapes.md)
-                .then(if (focused) Modifier.border(2.dp, c.fg, OrbitTheme.shapes.md) else Modifier),
-        )
+        val bandShape = OrbitTheme.shapes.md
+        val ringWidth = with(density) { 2.dp.toPx() }
 
         LazyRow(
             state = state,
@@ -250,6 +242,19 @@ fun OrbitWheelPicker(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
+                // The centre band, where the chosen value sits: drawn behind
+                // the row at the row's own height (a lazy row has no
+                // intrinsic height to size a sibling by), outside the fade
+                // below so it stays solid. Quiet, not accent; an ink ring
+                // under keyboard focus.
+                .drawBehind {
+                    val bandWidth = itemWidth.toPx()
+                    translate(left = (size.width - bandWidth) / 2f) {
+                        val outline = bandShape.createOutline(Size(bandWidth, size.height), layoutDirection, this)
+                        drawOutline(outline, color = c.bgSubtle)
+                        if (focused) drawOutline(outline, color = c.fg, style = Stroke(width = ringWidth))
+                    }
+                }
                 // Fade the far edges out. The mask colours are an alpha ramp,
                 // not visible colours, so they are not theme tokens.
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
