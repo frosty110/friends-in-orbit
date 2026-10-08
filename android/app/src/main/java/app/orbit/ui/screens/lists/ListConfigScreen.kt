@@ -100,7 +100,8 @@ import java.time.LocalTime
  *
  * `onSave` is the screen's "I'm finished here" exit — an app-bar **Done** and
  * a Done button at the foot of the form, both popping back to wherever the
- * user came from (Lists Manager for a list they just created). Nothing is
+ * user came from (Lists Manager for a list they just created), and neither
+ * shown while the title is being renamed (LIST-26). Nothing is
  * committed by it: the screen is still save-on-change, so Done only closes.
  * Before 2026-08-15 the parameter was unused and the back arrow was the only
  * way out, which read as "no way to finish" at the end of the create flow.
@@ -183,7 +184,8 @@ fun ListConfigScreen(
  * renames it. The name with a pencil is one button ("Rename list, Inner
  * orbit"); tapping it turns the title into a single-line field, with Cancel
  * and "Save list name" where Done was and no back arrow, so the bar holds the
- * edit and nothing else. "Save list name" and the keyboard's Done save; Cancel
+ * edit and nothing else, and the Done at the foot of the form goes too while
+ * the edit is open. "Save list name" and the keyboard's Done save; Cancel
  * and system Back leave the edit and keep the name (Back cancels the edit
  * before it leaves the screen). A blank name keeps the old one, and a name
  * that has not changed writes nothing. The owner's review asked for this in
@@ -348,7 +350,15 @@ internal fun ListConfigContent(
             snackbarHostState = snackbarHostState,
             // Foot-of-form Done, so the user who has just scrolled through
             // every setting doesn't have to travel back up to the app bar.
-            onDone = onDone,
+            // Not while the title is being renamed (LIST-26): the edit ends
+            // only in "Save list name" or Cancel, so the bar swaps its Done
+            // for those two and Back cancels first. A Done here closed the
+            // screen and dropped the typed name without a word. It goes,
+            // rather than saving the draft: the field saves only through its
+            // explicit Save (never on focus loss, see ListNameField), and a
+            // Done that also saved would be a third way to end the edit,
+            // with an outcome that depends on which button was in reach.
+            onDone = if (editing) null else onDone,
             onIntervalChange = onIntervalChange,
             onTimeOfDayChange = onTimeOfDayChange,
             onNotificationsToggle = onNotificationsToggle,

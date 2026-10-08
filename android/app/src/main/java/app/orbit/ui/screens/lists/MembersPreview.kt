@@ -66,6 +66,11 @@ import app.orbit.ui.theme.OrbitTheme
  * The section label ("People") is the parent [SettingGroup]'s; the header row
  * (the count and Add people) and the rows are this composable's. Make your
  * first list uses the same composable, so the header button is there too.
+ *
+ * [enabled] false makes Add people and every remove control inert, and
+ * TalkBack hears them as disabled: New list's People step while Create's
+ * write is in flight, which has already read who is chosen (LIST-28).
+ * "Show all" stays live; it only shows more of the same people.
  */
 @Composable
 fun MembersPreview(
@@ -74,6 +79,7 @@ fun MembersPreview(
     modifier: Modifier = Modifier,
     onRemoveMember: (Long, String) -> Unit = { _, _ -> },
     onAddContacts: () -> Unit = {},
+    enabled: Boolean = true,
 ) {
     Column(
         modifier = modifier
@@ -101,6 +107,7 @@ fun MembersPreview(
                     onClick = onAddContacts,
                     variant = OrbitButtonVariant.Ghost,
                     leadingIcon = "plus",
+                    enabled = enabled,
                 )
             }
         }
@@ -137,6 +144,7 @@ fun MembersPreview(
                     MemberRow(
                         snapshot = snapshot,
                         showRemove = !isSmart,
+                        removeEnabled = enabled,
                         onRemove = { onRemoveMember(snapshot.id, snapshot.displayName) },
                     )
                 }
@@ -193,6 +201,7 @@ private fun ShowAllRow(
 private fun MemberRow(
     snapshot: ListConfigContactSnapshot,
     showRemove: Boolean,
+    removeEnabled: Boolean,
     onRemove: () -> Unit,
 ) {
     // PRIV-03: the member's name, initials and face are masked under the
@@ -222,7 +231,7 @@ private fun MemberRow(
                         minWidth = OrbitTheme.spacing.tapMin,
                         minHeight = OrbitTheme.spacing.tapMin,
                     )
-                    .clickable(onClick = onRemove)
+                    .clickable(enabled = removeEnabled, onClick = onRemove)
                     .semantics {
                         contentDescription = removeDescription
                     },
@@ -230,7 +239,12 @@ private fun MemberRow(
                 PhIcon(
                     name = "x",
                     size = 18.dp,
-                    tint = OrbitTheme.colors.fgMuted,
+                    // Dimmed as a disabled OrbitButton's label is.
+                    tint = if (removeEnabled) {
+                        OrbitTheme.colors.fgMuted
+                    } else {
+                        OrbitTheme.colors.fgMuted.copy(alpha = 0.4f)
+                    },
                 )
             }
         }

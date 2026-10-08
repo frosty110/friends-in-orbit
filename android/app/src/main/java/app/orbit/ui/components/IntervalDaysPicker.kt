@@ -47,6 +47,8 @@ fun IntervalDaysPicker(
     // False when currentHours is only where the wheel opens (a list with no
     // rhythm yet): choosing that interval then saves it too.
     valueIsSet: Boolean = true,
+    // False holds the wheel still (New list while Create's write is in flight).
+    enabled: Boolean = true,
 ) {
     val saved = intervalDaysFromHours(currentHours)
     // What the sentence reads while the wheel turns; the wheel owns the value
@@ -68,6 +70,7 @@ fun IntervalDaysPicker(
             caption = { d -> dayLandmark(d) },
             modifier = Modifier.padding(top = OrbitTheme.spacing.x3),
             valueIsSet = valueIsSet,
+            enabled = enabled,
         )
     }
 }

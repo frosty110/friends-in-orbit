@@ -2,6 +2,7 @@ package app.orbit.ui.screens.lists
 
 import android.app.Application
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.Role
@@ -45,10 +46,15 @@ import org.robolectric.annotation.Config
  * roles or placement):
  *  - LIST-25: Time of day is one radio group with one selection, a custom
  *    window as one more selected chip, and taps that write only a change.
+ *  - LIST-25: "When to nudge" says when the nudge really comes under the
+ *    list's time of day ("Every day at 5pm" for Evenings on the default
+ *    10am, with a note on 10am), in List settings and in Make your first
+ *    list's summary.
  *  - LIST-26: the title is a "Rename list, {name}" button that becomes a
  *    field with labelled 48dp "Save list name" and "Cancel"; Save and the
  *    keyboard's Done save, a blank name keeps the old one, Cancel and Back
- *    leave without saving; under the curtain the title and field say "List".
+ *    leave without saving, and no Done is offered while the edit is open;
+ *    under the curtain the title and field say "List".
  *  - LIST-27: Add people sits in the People header, once, and smart lists
  *    have none.
  */
@@ -140,6 +146,7 @@ class ListSettingsControlsTest {
         state: ListConfigUiState.Ready = ready(),
         curtain: Boolean = false,
         renamed: MutableList<String> = mutableListOf(),
+        done: MutableList<String> = mutableListOf(),
     ) {
         compose.setContent {
             OrbitTheme {
@@ -148,7 +155,7 @@ class ListSettingsControlsTest {
                         state = state,
                         snackbarHostState = SnackbarHostState(),
                         onBack = {},
-                        onDone = {},
+                        onDone = { done += "done" },
                         onRename = { renamed += it },
                         onIntervalChange = {},
                         onTimeOfDayChange = {},
@@ -189,7 +196,8 @@ class ListSettingsControlsTest {
         compose.onNode(cancel).assert(button).assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
         // The bar holds the edit and nothing else.
         compose.onAllNodes(hasContentDescription("Back")).assertCountEquals(0)
-        compose.onAllNodes(hasText("Done") and button).assertCountEquals(1) // the foot-of-form Done only
+        // Neither Done: the edit ends in Save or Cancel (the foot's goes too).
+        compose.onAllNodes(hasText("Done") and button).assertCountEquals(0)
         // The pane title is still the screen's.
         compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "Inner orbit")).assertExists()
     }
@@ -252,6 +260,25 @@ class ListSettingsControlsTest {
     }
 
     @Test
+    fun the_foot_of_form_done_is_gone_while_renaming_so_it_cannot_drop_the_typed_name() {
+        // Until 2026-10-08 the foot's Done stayed during the edit: typing a
+        // name and tapping it closed the screen and dropped the name unsaved.
+        val renamed = mutableListOf<String>()
+        val done = mutableListOf<String>()
+        setScreen(renamed = renamed, done = done)
+        compose.onAllNodes(hasText("Done") and button).assertCountEquals(2) // the bar's and the foot's
+
+        compose.onNode(renameTitle).performClick()
+        compose.onNode(hasSetTextAction()).performTextReplacement("Close friends")
+        compose.onAllNodes(hasText("Done")).assertCountEquals(0)
+
+        compose.onNode(cancel).performClick()
+        compose.onAllNodes(hasText("Done") and button).assertCountEquals(2)
+        assertTrue(renamed.isEmpty())
+        assertTrue(done.isEmpty(), "nothing closed the screen")
+    }
+
+    @Test
     fun under_the_curtain_the_title_and_the_field_say_list() {
         setScreen(curtain = true)
 
@@ -261,6 +288,80 @@ class ListSettingsControlsTest {
 
         compose.onNode(hasContentDescription("Rename list")).performClick()
         compose.onNode(hasSetTextAction()).assert(editableTextIs("List"))
+    }
+
+    // ─── LIST-25: When to nudge says when the nudge really comes ────────────
+
+    private val evenings = ready().copy(activeHoursStart = LocalTime.of(17, 0), activeHoursEnd = LocalTime.of(21, 0))
+
+    @Test
+    fun under_evenings_the_plan_says_five_pm_and_why_ten_am_is_not_in_it() {
+        // The default schedule (every day at 10am) with Evenings: the
+        // scheduler adds 5pm and the gate holds 10am, so the nudge comes at
+        // 5pm. Until 2026-10-08 the line read the stored "Every day at 10am".
+        setScreen(state = evenings)
+
+        compose.onNodeWithText("Every day at 5pm").assertExists()
+        compose.onNodeWithText("10am is outside this list's time of day, so the nudge comes at 5pm instead.")
+            .assertExists()
+        compose.onAllNodes(hasText("Every day at 10am")).assertCountEquals(0)
+        // The chosen time is still the one to change.
+        compose.onNodeWithText("10am").assertExists()
+    }
+
+    @Test
+    fun a_time_outside_is_named_while_one_inside_still_comes() {
+        compose.setContent {
+            OrbitTheme {
+                NudgeScheduleSection(
+                    schedule = app.orbit.notify.NudgeSchedule(
+                        days = java.time.DayOfWeek.entries.toSet(),
+                        times = listOf(LocalTime.of(10, 0), LocalTime.of(18, 0)),
+                    ),
+                    activeHoursStart = DayPart.Evenings.start,
+                    activeHoursEnd = DayPart.Evenings.end,
+                    notificationsEnabled = true,
+                    onScheduleChange = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Every day at 6pm").assertExists()
+        compose.onNodeWithText("10am is outside this list's time of day, so no nudge comes then.").assertExists()
+    }
+
+    @Test
+    fun any_time_says_the_schedule_as_it_is_with_no_note() {
+        setScreen()
+
+        compose.onNodeWithText("Every day at 10am").assertExists()
+        compose.onAllNodes(hasText("outside this list's time of day", substring = true)).assertCountEquals(0)
+    }
+
+    @Test
+    fun make_your_first_lists_summary_says_five_pm_under_evenings_too() {
+        compose.setContent {
+            OrbitTheme {
+                Column {
+                    ListConfigBody(
+                        state = evenings,
+                        isOnboarding = true,
+                        snackbarHostState = SnackbarHostState(),
+                        onIntervalChange = {},
+                        onTimeOfDayChange = {},
+                        onNotificationsToggle = {},
+                        onNudgeScheduleChange = {},
+                        onSmartRuleChange = {},
+                        onConfirmConvert = {},
+                    )
+                }
+            }
+        }
+
+        compose.onNodeWithText("Every day at 5pm").assertExists()
+        compose.onAllNodes(hasText("Every day at 10am")).assertCountEquals(0)
+        // Onboarding shows no nudge times, so there is no 10am to explain.
+        compose.onAllNodes(hasText("outside this list's time of day", substring = true)).assertCountEquals(0)
     }
 
     // ─── LIST-27: Add people in the People header ────────────────────────────

@@ -4,12 +4,16 @@ import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -33,6 +37,9 @@ import org.robolectric.annotation.Config
  * leaves, and Back past the first step steps back. Each step's button and
  * its progress, including the list that fills itself ending at How often
  * with "Create list", and the People step's two ways on with nobody chosen.
+ * While Create's write is in flight nothing is pressable: the footer, the
+ * close control, the People section's Add people and remove controls, and
+ * the How often wheel.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [33], application = Application::class)
@@ -220,5 +227,40 @@ class NewListContentTest {
         )
 
         compose.onNodeWithText("Create list").assertIsNotEnabled()
+        // Until 2026-10-08 only the footer waited: Close (and Discard behind
+        // it), Add people and Remove stayed live while the list was written.
+        compose.onNodeWithContentDescription("Close").assertIsNotEnabled()
+        compose.onNode(hasText("Add people") and isButton).assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Remove Maya Okafor from list").assertIsNotEnabled()
+
+        compose.onNodeWithContentDescription("Close").performClick()
+        compose.onNodeWithContentDescription("Remove Maya Okafor from list").performClick()
+        compose.onNode(hasText("Add people") and isButton).performClick()
+
+        compose.onNodeWithText("Discard this list?").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(emptyList<String>(), fired) }
     }
+
+    @Test
+    fun the_how_often_wheel_holds_still_while_create_is_in_flight() {
+        // How often is the last step of the list that fills itself, so its
+        // wheel is on screen beside "Create list" while the list is written.
+        show(NewListUiState(step = NewListStep.HowOften, template = smart, name = "New faces", creating = true))
+
+        compose.onNode(hasContentDescription("How often to aim for"))
+            .assertIsNotEnabled()
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsActions.SetProgress))
+        compose.onNodeWithText("Create list").assertIsNotEnabled()
+    }
+
+    @Test
+    fun the_how_often_wheel_turns_when_nothing_is_in_flight() {
+        show(NewListUiState(step = NewListStep.HowOften, template = smart, name = "New faces"))
+
+        compose.onNode(hasContentDescription("How often to aim for"))
+            .assertIsEnabled()
+            .assert(SemanticsMatcher.keyIsDefined(SemanticsActions.SetProgress))
+    }
+
+    private val isButton = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)
 }

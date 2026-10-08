@@ -1,8 +1,5 @@
 package app.orbit.ui.screens.lists
 
-import android.app.Application
-import androidx.test.core.app.ApplicationProvider
-import app.orbit.domain.FakeListRepository
 import app.orbit.domain.usecase.timeOfDayPenalty
 import app.orbit.notify.NudgeSchedule
 import app.orbit.notify.NudgeScheduler
@@ -16,9 +13,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * LIST-25: the parts of the day are names for windows on the existing
@@ -34,11 +28,9 @@ import org.robolectric.annotation.Config
  * active-hours editor's two-segment bar; the editor is gone, the helper is
  * still the nudge schedule's, and its three cases are kept below.
  *
- * Robolectric only because [NudgeScheduler] takes an application Context;
- * `effectiveSchedule` itself never touches Android or WorkManager.
+ * Plain JVM: `effectiveSchedule` is on the scheduler's companion since
+ * 2026-10-08, so no scheduler (and no Context) is built for it.
  */
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33], application = Application::class)
 class TimeOfDayMappingTest {
 
     private fun t(hour: Int, minute: Int = 0): LocalTime = LocalTime.of(hour, minute)
@@ -135,10 +127,6 @@ class TimeOfDayMappingTest {
 
     // ─── Why the parts start where they do ───────────────────────────────────
 
-    private val scheduler = NudgeScheduler(
-        context = ApplicationProvider.getApplicationContext<Application>(),
-        listRepo = FakeListRepository()
-    )
     private val everyDayAtSix = NudgeSchedule(days = DayOfWeek.entries.toSet(), times = listOf(t(18)))
 
     @Test
@@ -146,12 +134,12 @@ class TimeOfDayMappingTest {
         // Mornings start at 7 so that this slot is 7am, not 5am.
         assertEquals(
             listOf(t(18), t(7)),
-            scheduler.effectiveSchedule(everyDayAtSix, DayPart.Mornings.start, DayPart.Mornings.end).times
+            NudgeScheduler.effectiveSchedule(everyDayAtSix, DayPart.Mornings.start, DayPart.Mornings.end).times
         )
         // Across midnight too: a 6pm time is outside Nights, so 9pm is added.
         assertEquals(
             listOf(t(18), t(21)),
-            scheduler.effectiveSchedule(everyDayAtSix, DayPart.Nights.start, DayPart.Nights.end).times
+            NudgeScheduler.effectiveSchedule(everyDayAtSix, DayPart.Nights.start, DayPart.Nights.end).times
         )
     }
 
@@ -159,11 +147,11 @@ class TimeOfDayMappingTest {
     fun a_nudge_time_inside_the_part_is_left_alone() {
         assertEquals(
             everyDayAtSix,
-            scheduler.effectiveSchedule(everyDayAtSix, DayPart.Evenings.start, DayPart.Evenings.end)
+            NudgeScheduler.effectiveSchedule(everyDayAtSix, DayPart.Evenings.start, DayPart.Evenings.end)
         )
         assertEquals(
             everyDayAtSix,
-            scheduler.effectiveSchedule(everyDayAtSix, DayPart.AnyTime.start, DayPart.AnyTime.end)
+            NudgeScheduler.effectiveSchedule(everyDayAtSix, DayPart.AnyTime.start, DayPart.AnyTime.end)
         )
     }
 }

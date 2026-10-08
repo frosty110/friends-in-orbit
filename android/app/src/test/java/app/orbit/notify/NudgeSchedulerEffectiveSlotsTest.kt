@@ -1,7 +1,5 @@
 package app.orbit.notify
 
-import android.app.Application
-import androidx.test.core.app.ApplicationProvider
 import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.ZoneId
@@ -11,32 +9,22 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * Pure assertions for [NudgeScheduler.effectiveSchedule]: the D-09 slot at the
  * window start is added only when every chosen time falls outside the active-hours
  * window, and never adds days or revives an emptied schedule.
  *
- * Uses Robolectric Application only to satisfy [NudgeScheduler]'s @ApplicationContext
- * constructor — [effectiveSchedule] itself never calls Android framework methods.
- * No WorkManager, no Hilt, no DB connection required.
+ * Plain JVM: the function is on the scheduler's companion since 2026-10-08
+ * (List settings' summary reads it too, LIST-25), so no scheduler, Context or
+ * WorkManager is built. Until then it was an instance member and this test
+ * ran under Robolectric to satisfy the constructor.
  *
  * Test analogues: mirrors [NudgeScheduleNextSlotTest]'s fixed-clock style,
  * but adds the scheduling-layer concern: the effective schedule merges the implicit
  * `activeHoursStart` slot before [NudgeSchedule.nextSlot] is computed.
  */
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33], application = Application::class)
 class NudgeSchedulerEffectiveSlotsTest {
-
-    /** Minimal scheduler constructed without WorkManager (methods under test don't call it). */
-    private val scheduler = NudgeScheduler(
-        context = ApplicationProvider.getApplicationContext<Application>(),
-        listRepo = StubListRepository
-    )
 
     private val weekdays = setOf(
         DayOfWeek.MONDAY,
@@ -48,7 +36,7 @@ class NudgeSchedulerEffectiveSlotsTest {
     private val nineToFive = LocalTime.of(9, 0) to LocalTime.of(17, 0)
 
     private fun effective(explicit: NudgeSchedule, window: Pair<LocalTime, LocalTime>?) =
-        scheduler.effectiveSchedule(explicit, window?.first, window?.second)
+        NudgeScheduler.effectiveSchedule(explicit, window?.first, window?.second)
 
     // ─── No window: the fire-time gate never applies ─────────────────────────
 
@@ -62,7 +50,7 @@ class NudgeSchedulerEffectiveSlotsTest {
     fun effectiveSchedule_withOnlyOneWindowEnd_returnsExplicitUnchanged() {
         // The worker gates only when both ends are set, so half a window gates nothing.
         val explicit = NudgeSchedule.DEFAULT
-        assertEquals(explicit, scheduler.effectiveSchedule(explicit, LocalTime.of(21, 0), null))
+        assertEquals(explicit, NudgeScheduler.effectiveSchedule(explicit, LocalTime.of(21, 0), null))
     }
 
     // ─── The user's choices survive a window ─────────────────────────────────
@@ -149,69 +137,3 @@ class NudgeSchedulerEffectiveSlotsTest {
         assertFalse(isInActiveWindow(LocalTime.of(12, 0), LocalTime.of(22, 0), LocalTime.of(2, 0)))
     }
 }
-
-// ─── Stubs ────────────────────────────────────────────────────────────────────
-
-/** A no-op ListRepository stub used only to satisfy the constructor. */
-private val StubListRepository: app.orbit.data.repository.ListRepository =
-    object : app.orbit.data.repository.ListRepository {
-        override fun observeAll() = throw UnsupportedOperationException()
-        override fun observeActive() = throw UnsupportedOperationException()
-        override suspend fun getById(id: Long) = null
-        override fun observeMembersOfList(listId: Long) = throw UnsupportedOperationException()
-        override fun observeMembershipsForContact(contactId: Long) =
-            throw UnsupportedOperationException()
-        override suspend fun incrementSkipCount(
-            contactId: Long,
-            listId: Long,
-            newNextDueAt: java.time.Instant
-        ) = throw UnsupportedOperationException()
-        override suspend fun updateNextDueAt(
-            contactId: Long,
-            listId: Long,
-            nextDueAt: java.time.Instant
-        ) = throw UnsupportedOperationException()
-        override suspend fun restoreMembershipSchedule(
-            contactId: Long,
-            listId: Long,
-            nextDueAt: java.time.Instant?,
-            skipCount: Int
-        ) = throw UnsupportedOperationException()
-        override suspend fun create(list: app.orbit.data.entity.ListEntity) =
-            throw UnsupportedOperationException()
-        override suspend fun update(list: app.orbit.data.entity.ListEntity) =
-            throw UnsupportedOperationException()
-        override suspend fun setArchived(listId: Long, archived: Boolean) =
-            throw UnsupportedOperationException()
-        override suspend fun reorder(fromIndex: Int, toIndex: Int) =
-            throw UnsupportedOperationException()
-        override suspend fun setSmartRuleJson(listId: Long, json: String?) =
-            throw UnsupportedOperationException()
-        override suspend fun setRuleParamsOverrideJson(listId: Long, json: String?) =
-            throw UnsupportedOperationException()
-        override suspend fun convertSmartToStatic(listId: Long) =
-            throw UnsupportedOperationException()
-        override suspend fun delete(listId: Long) = throw UnsupportedOperationException()
-        override suspend fun updateRuleTemplate(listId: Long, templateId: Long) =
-            throw UnsupportedOperationException()
-        override suspend fun updateActiveHours(
-            listId: Long,
-            start: java.time.LocalTime?,
-            end: java.time.LocalTime?
-        ) = throw UnsupportedOperationException()
-        override suspend fun updateNotificationsEnabled(listId: Long, enabled: Boolean) =
-            throw UnsupportedOperationException()
-        override suspend fun updateName(listId: Long, name: String) =
-            throw UnsupportedOperationException()
-        override suspend fun addMember(listId: Long, contactId: Long, addedAt: java.time.Instant) =
-            throw UnsupportedOperationException()
-        override fun observeById(id: Long) = throw UnsupportedOperationException()
-        override fun observeMemberCountsByListId() = throw UnsupportedOperationException()
-        override suspend fun setNudgeScheduleJson(listId: Long, json: String?) =
-            throw UnsupportedOperationException()
-        override suspend fun dueCountForList(listId: Long) = 0
-        override suspend fun recomputeDueCountForList(listId: Long, now: java.time.Instant) =
-            throw UnsupportedOperationException()
-        override suspend fun recomputeDueCountForActive(now: java.time.Instant) =
-            throw UnsupportedOperationException()
-    }
