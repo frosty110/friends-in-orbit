@@ -3,11 +3,8 @@ package app.orbit.ui.screens.browse
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
@@ -43,7 +40,6 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.orbit.R
-import app.orbit.data.ChipTone
 import app.orbit.data.Contact
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.mappers.toUiContact
@@ -54,7 +50,6 @@ import app.orbit.data.repository.ListRepository
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.search.ContactSearch
 import app.orbit.ui.components.BrowseRow
-import app.orbit.ui.components.ListContextChip
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitIconButton
@@ -63,6 +58,7 @@ import app.orbit.ui.components.OrbitListSkeleton
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSearchField
+import app.orbit.ui.components.onListsLine
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.dialPhoneNumber
@@ -106,11 +102,14 @@ import kotlinx.coroutines.flow.update
  * Membership context ("is Maya in my orbit?"): each hit carries the
  * names of the active (non-archived) lists the contact belongs to, derived
  * by combining `ListRepository.observeMembersOfList` across
- * `observeActive()`. Rows render one quiet chip per list, or "Not on any
- * list", plus an "Add to lists" affordance (the glossary's one name for the
- * list picker; it said "Add to list" until 2026-10-06) that routes to the
- * existing list picker (Routes.PickLists). Picker commits surface on the
- * app-level snackbar host, so navigation alone completes the loop.
+ * `observeActive()`. Rows say them in one line of words, the Add people
+ * picker's ("On Inner orbit, Late night", [onListsLine]), or "Not on any
+ * list"; until 2026-10-08 they were a row of Stone chips, which rules.md
+ * Design 9 retires. Beside the line, an "Add to lists" affordance (the
+ * glossary's one name for the list picker; it said "Add to list" until
+ * 2026-10-06) that routes to the existing list picker (Routes.PickLists).
+ * Picker commits surface on the app-level snackbar host, so navigation alone
+ * completes the loop.
  *
  * Call log access (browse-6): the screen pushes the READ_CALL_LOG state on
  * every ON_RESUME (ARCH-04, the Browse and Card view pattern) and `Ready`
@@ -119,7 +118,8 @@ import kotlinx.coroutines.flow.update
  * called", the false claim Browse already avoided.
  *
  * Curtain (PRIV-03): names read `LocalPrivacyCurtain.current` transitively
- * via [BrowseRow]; list names are masked by [ListContextChip], as everywhere.
+ * via [BrowseRow]; the lists line says only how many ("On 2 lists"), so no
+ * list name shows, as everywhere (components_curtain_list).
  */
 
 /**
@@ -211,8 +211,8 @@ class GlobalSearchViewModel @Inject constructor(
                             .map { members -> list.name to members.map { it.contactId } }
                     },
                 ) { perList ->
-                    // observeActive() is sortOrder ASC, so chip order follows
-                    // the user's own list ordering.
+                    // observeActive() is sortOrder ASC, so the lists line
+                    // names them in the user's own list ordering.
                     buildMap<Long, List<String>> {
                         perList.forEach { (listName, contactIds) ->
                             contactIds.forEach { contactId ->
@@ -364,13 +364,16 @@ fun GlobalSearchScreen(
  * `@PreviewFontScale` (D-06) can render without `hiltViewModel()` /
  * `collectAsStateWithLifecycle()` at preview time.
  *
- * Curtain (PRIV-03): names and photos are masked by [BrowseRow]; list names by
- * [ListContextChip] (they read "List"), like every other list-name surface.
- * Before 2026-10-05 the chips here showed real list names under the curtain.
+ * Curtain (PRIV-03): names and photos are masked by [BrowseRow]; the lists
+ * line by [onListsLine], which says only the count ("On 2 lists"). Before
+ * 2026-10-05 the chips here showed real list names under the curtain.
+ *
+ * `internal` so GlobalSearchContentTest renders a state with no ViewModel
+ * (THEME-04), the ContactDetailScreenTest precedent.
  */
 @OptIn(FlowPreview::class)
 @Composable
-private fun GlobalSearchContent(
+internal fun GlobalSearchContent(
     state: SearchUiState,
     initialQuery: String,
     onSearchChanged: (String) -> Unit,
@@ -496,12 +499,16 @@ private fun GlobalSearchContent(
 
 /**
  * One result: the shared [BrowseRow], then where this person sits in your
- * orbit (#20, UI-SPEC §BROWSE-03): one quiet chip per active list, or "Not on
- * any list", and an "Add to lists" control. Stone chips and an ink label keep
- * the accent off this screen (rules.md §Design 5); the chips wrap rather than
- * run off a narrow screen.
+ * orbit (#20, UI-SPEC §BROWSE-03): one meta line in `fgMuted` naming the
+ * active lists in words ("On Inner orbit, Late night", the Add people
+ * picker's line, [onListsLine]), or "Not on any list", and an "Add to lists"
+ * control. The line wraps by word rather than run off a narrow screen, and
+ * an ink label keeps the accent off this screen (rules.md §Design 5).
+ *
+ * Until 2026-10-08 the lists were a wrapping row of Stone chips, one per
+ * list: a read-only chip is a badge, and rules.md Design 9 says the fact in
+ * words on a line the row already has instead.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SearchHitRow(
     hit: SearchHit,
@@ -527,23 +534,13 @@ private fun SearchHitRow(
                     bottom = OrbitTheme.spacing.x2,
                 ),
         ) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
-                verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1),
+            Text(
+                // Null only with no lists; under the curtain, the count.
+                text = onListsLine(hit.lists) ?: stringResource(R.string.browse_search_not_on_a_list),
+                style = OrbitTheme.type.meta,
+                color = OrbitTheme.colors.fgMuted,
                 modifier = Modifier.weight(1f),
-            ) {
-                if (hit.lists.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.browse_search_not_on_a_list),
-                        style = OrbitTheme.type.meta,
-                        color = OrbitTheme.colors.fgMuted,
-                    )
-                } else {
-                    hit.lists.forEach { listName ->
-                        ListContextChip(listName = listName, tone = ChipTone.Stone)
-                    }
-                }
-            }
+            )
             // 48dp tap target (rules.md §Design 3); quiet text
             // affordance: no terracotta.
             Box(

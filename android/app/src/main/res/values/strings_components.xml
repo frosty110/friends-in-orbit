@@ -106,6 +106,20 @@
     <string name="components_curtain_list">List</string>
     <string name="components_curtain_someone">Someone</string>
 
+    <!-- The lists a person is on, in words, under their name in the Add people picker and
+         in Search's results. %1$s: up to three list names, joined by commas. -->
+    <string name="components_on_lists">On %1$s</string>
+    <!-- Past three lists. %1$s: the first three list names, %2$d: how many more. -->
+    <plurals name="components_on_lists_more">
+        <item quantity="one">On %1$s and %2$d more</item>
+        <item quantity="other">On %1$s and %2$d more</item>
+    </plurals>
+    <!-- Under the privacy curtain, which hides list names. %1$d: how many lists. -->
+    <plurals name="components_on_lists_count">
+        <item quantity="one">On %1$d list</item>
+        <item quantity="other">On %1$d lists</item>
+    </plurals>
+
     <!-- Home's calls waiting for a note: a call of a minute or more in the last day with
          someone on a list, with nothing written about them since. One shows as a card; two
          or more stack like a pile of cards that opens into one row per call.
