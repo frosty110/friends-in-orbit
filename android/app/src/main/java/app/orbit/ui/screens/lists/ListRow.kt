@@ -20,17 +20,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import app.orbit.R
-import app.orbit.data.ChipTone
 import app.orbit.data.entity.ListType
 import app.orbit.ui.components.CountBadge
 import app.orbit.ui.components.LocalPrivacyCurtain
-import app.orbit.ui.components.OrbitChip
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
@@ -43,14 +40,19 @@ import app.orbit.ui.util.asString
  * Reorderable list-row composable for Lists Manager.
  *
  * Layout:
- *   ⠿  name + ruleSummary?     [Smart list]   [N]   ...
- *   |                                                |
- *   |                                                +-- overflow ([listRowMenuActions])
+ *   ⠿  name + ruleSummary?     [N]   +   ...
+ *   |                                    |
+ *   |                                    +-- overflow ([listRowMenuActions])
  *   +-- drag handle (own touch region)
  *
  * The second line is the list's rhythm as its interval ("Every 14 days",
  * "Every 3 days" for a Late night list, "Every day"; LIST-30) or, for a smart
- * list, its rule; the ViewModel decides which. [onConfigure] is the menu's
+ * list, its rule ("Recently added · 30 days"); the ViewModel decides which.
+ * That line is what tells a smart list apart, to the eye and to TalkBack
+ * alike (LIST-07): the row is one merged node, so TalkBack reads the rule
+ * with the name. The "Smart list" chip that also said so went on 2026-10-08
+ * (the owner: "We don't need this badge"), and with it the large-text branch
+ * that stacked the chip under the name. [onConfigure] is the menu's
  * "List settings" and opens List settings, while [onClick] on the row opens
  * the list's deck (LIST-23): two destinations, so the screen wires them to
  * two callbacks.
@@ -109,13 +111,6 @@ fun ListRow(
             )
         }
         Spacer(Modifier.width(OrbitTheme.spacing.x2))
-        // At large font scales the "Smart list" chip stacks under the name
-        // instead of sitting beside it: side by side, the chip and the
-        // trailing controls left the name a column so narrow it broke
-        // mid-word at 200% (rubric gate G3; Home and Card view stack at the
-        // same threshold).
-        val largeText = LocalDensity.current.fontScale > 1.3f
-        val stackChip = largeText && tile.type == ListType.SMART
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = shownName,
@@ -128,17 +123,6 @@ fun ListRow(
                     modifier = Modifier.padding(top = OrbitTheme.spacing.x1 / 2),
                 )
             }
-            if (stackChip) {
-                OrbitChip(
-                    label = stringResource(R.string.lists_row_smart_chip),
-                    tone = ChipTone.Terracotta,
-                    modifier = Modifier.padding(top = OrbitTheme.spacing.x2),
-                )
-            }
-        }
-        if (tile.type == ListType.SMART && !stackChip) {
-            Spacer(Modifier.width(OrbitTheme.spacing.x2))
-            OrbitChip(label = stringResource(R.string.lists_row_smart_chip), tone = ChipTone.Terracotta)
         }
         if (tile.memberCount > 0) {
             Spacer(Modifier.width(OrbitTheme.spacing.x2))

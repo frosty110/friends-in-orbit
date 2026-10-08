@@ -7,7 +7,6 @@ import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.rule.baseIntervalHours
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeSchedule
-import java.time.LocalTime
 
 /**
  * List Configuration state contract.
@@ -36,12 +35,15 @@ sealed interface ListConfigUiState {
      * override no longer decodes; How often then says the list has no rhythm
      * yet and lets the slider set one.
      *
-     * Two values are derived once, at construction (ARCH-02), so the body and
+     * One value is derived once, at construction (ARCH-02), so the body and
      * the tests read the same answer: [intervalHours], the base interval How
      * often shows for every rule type (LIST-30: 72h for Late night, 24h for
-     * Energize), and [timeOfDay], the stored window read back as a part of the
-     * day or a custom window (LIST-25). Both are body properties, so they stay
-     * out of the constructor and out of `equals`: they follow from the fields.
+     * Energize). It is a body property, so it stays out of the constructor and
+     * out of `equals`: it follows from the fields.
+     *
+     * No active-hours window: since 2026-10-08 a list's nudge timing is
+     * [nudgeSchedule] alone (LIST-25), and the Time of day it was read back as
+     * is gone.
      */
     @Immutable
     data class Ready(
@@ -51,14 +53,11 @@ sealed interface ListConfigUiState {
         val ruleKind: RuleKind?,
         val ruleParams: RuleParams?,
         val smartRule: SmartListRule?,
-        val activeHoursStart: LocalTime?,
-        val activeHoursEnd: LocalTime?,
         val notificationsEnabled: Boolean,
         val nudgeSchedule: NudgeSchedule?,
         val members: List<ListConfigContactSnapshot>,
     ) : ListConfigUiState {
         val intervalHours: Int? = ruleParams?.baseIntervalHours
-        val timeOfDay: TimeOfDay = timeOfDayFor(activeHoursStart, activeHoursEnd)
     }
 
     @Immutable data object NotFound : ListConfigUiState

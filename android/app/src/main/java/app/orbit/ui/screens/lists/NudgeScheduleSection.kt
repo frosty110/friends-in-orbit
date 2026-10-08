@@ -49,7 +49,11 @@ import java.util.Locale
  * Renders (top to bottom):
  *  - 1a: Row of seven day-of-week chips (S M T W T F S).
  *  - 1b: Column of removable time chips plus an "Add time" affordance.
- *  - 1c: Schedule summary line (D-06 format rules, [scheduleSummary]).
+ *  - 1c: Schedule summary line (D-06 format rules, [scheduleSummary]): the
+ *    days and times above as one sentence. They are the whole answer to when
+ *    the nudge comes (LIST-25): the list's time of day, a window that could
+ *    hold a chosen time back, was retired on 2026-10-08 and folded into these
+ *    times, so there is nothing left for the line to explain.
  *  - 1d: "Nudges paused" badge when notificationsEnabled = false (D-04).
  *
  * Copy lives in strings_lists.xml (`lists_nudge_*`); it used to be constants
@@ -59,7 +63,7 @@ import java.util.Locale
  * button. Mirrors every other ListConfigBody control.
  *
  * Token-clean: no raw colour literals, no raw font-size literals.
- * Reuses [TimePickerDialogOrbit] and [formatHour12] from TimeOfDayPicker.kt.
+ * Reuses [TimePickerDialogOrbit] and [formatHour12] from TimePickerDialogOrbit.kt.
  */
 @Composable
 internal fun NudgeScheduleSection(
@@ -334,15 +338,22 @@ private fun ScheduleSummaryLine(schedule: NudgeSchedule) {
             )
         }
         else -> {
-            val dayLabel = dayGroupLabel(schedule.days)
-            val timeStrings = schedule.times.sorted().map { formatHour12(it) }
             Text(
-                text = scheduleSummary(dayLabel, timeStrings),
+                text = summaryOf(schedule),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fg),
             )
         }
     }
 }
+
+/**
+ * The schedule as one line, its times in order and each once ("Every day at
+ * 10am"). The scheduler and the worker run exactly these days and times, so
+ * this is when the nudge comes.
+ */
+@Composable
+private fun summaryOf(schedule: NudgeSchedule): String =
+    scheduleSummary(dayGroupLabel(schedule.days), schedule.times.distinct().sorted().map { formatHour12(it) })
 
 /**
  * Read-only nudge summary for the onboarding first-list step. Onboarding hides the
@@ -369,10 +380,7 @@ internal fun OnboardingNudgeSummary(schedule: NudgeSchedule?) {
         verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1),
     ) {
         Text(
-            text = scheduleSummary(
-                dayGroupLabel(effective.days),
-                effective.times.sorted().map { formatHour12(it) },
-            ),
+            text = summaryOf(effective),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fg),
         )
         Text(
@@ -437,17 +445,22 @@ private val SUNDAY_FIRST: List<DayOfWeek> = listOf(
  * this file; the words are strings_lists.xml's.
  */
 @Composable
-private fun scheduleSummary(dayGroupLabel: String, timeStrings: List<String>): String {
-    val timePart = when (timeStrings.size) {
-        1 -> timeStrings[0]
-        2 -> stringResource(R.string.lists_nudge_times_two, timeStrings[0], timeStrings[1])
-        else -> stringResource(
-            R.string.lists_nudge_times_many,
-            timeStrings.dropLast(1).joinToString(", "),
-            timeStrings.last(),
-        )
-    }
-    return stringResource(R.string.lists_nudge_summary, dayGroupLabel, timePart)
+private fun scheduleSummary(dayGroupLabel: String, timeStrings: List<String>): String =
+    stringResource(R.string.lists_nudge_summary, dayGroupLabel, joinTimes(timeStrings))
+
+/**
+ * "10am", "10am and 6pm", "9am, 1pm, and 6pm": the summary line's times.
+ * [timeStrings] is non-empty.
+ */
+@Composable
+private fun joinTimes(timeStrings: List<String>): String = when (timeStrings.size) {
+    1 -> timeStrings[0]
+    2 -> stringResource(R.string.lists_nudge_times_two, timeStrings[0], timeStrings[1])
+    else -> stringResource(
+        R.string.lists_nudge_times_many,
+        timeStrings.dropLast(1).joinToString(", "),
+        timeStrings.last(),
+    )
 }
 
 /** The locale's full day name, for accessibility content descriptions. */

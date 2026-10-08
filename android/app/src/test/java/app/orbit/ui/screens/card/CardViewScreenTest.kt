@@ -26,7 +26,8 @@ import org.robolectric.annotation.Config
 /**
  * What the rendered Card view owes the user, checked on the JVM against the
  * semantics tree (the ContactDetailCurtainTest / PreviewGalleryTest
- * convention): the face opens details and never dials (CARD-01), in
+ * convention): the face opens details and never dials (CARD-01), it shows
+ * no eyebrow over the name and no answer chip (CARD-04), in
  * landscape on a phone the Call button is on screen without scrolling
  * (CARD-06), the Error deck offers Try again only when a retry can re-read
  * something (CARD-07), and every Error deck has a pane title for TalkBack to
@@ -125,6 +126,46 @@ class CardViewScreenTest {
         compose.onNodeWithText("Call Avery").performClick()
 
         compose.runOnIdle { assertEquals(listOf(1L), dialed) }
+    }
+
+    // CARD-04 (owner, 2026-10-08): nothing over the name and no chip under
+    // the pattern panel. Until then the face said "Up now" (or "Coming up"
+    // for someone not yet up) over the name, and graded the current hour
+    // under the strip: "Good time to call", "Sometimes answers now" or
+    // "Rarely answers now". Each case below showed one of each.
+    private val withPattern = avery.copy(
+        bestWindowLabel = UiText.res(R.string.time_daypart_evenings),
+        heat = FloatArray(24) { h -> if (h in 18..21) 1f else 0.1f },
+    )
+
+    private val removedWords = listOf(
+        "Up now",
+        "Coming up",
+        "Good time to call",
+        "Sometimes answers now",
+        "Rarely answers now",
+    )
+
+    private fun assertNoEyebrowAndNoChip() {
+        removedWords.forEach { compose.onAllNodesWithText(it, substring = true).assertCountEquals(0) }
+        // The rest of the context block stays: its heading and when they
+        // usually answer, over the strip.
+        compose.onNodeWithText("Usually answers", substring = true).assertExists()
+        compose.onNodeWithText("Evenings", substring = true).assertExists()
+    }
+
+    @Test
+    fun `CARD-04 - someone up now has no eyebrow over the name and no answer chip`() {
+        // 19:00 is in the strip's evening peak: the old chip said "Good time to call".
+        setState(ready.copy(contact = withPattern, nowHour = 19, isAheadOfToday = false))
+        assertNoEyebrowAndNoChip()
+    }
+
+    @Test
+    fun `CARD-04 - someone not yet up has no eyebrow over the name and no answer chip`() {
+        // 9:00 is outside the peak: the old chip said "Rarely answers now".
+        setState(ready.copy(contact = withPattern, nowHour = 9, isAheadOfToday = true))
+        assertNoEyebrowAndNoChip()
     }
 
     @Test

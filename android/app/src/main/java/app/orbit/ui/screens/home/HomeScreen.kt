@@ -7,7 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -30,6 +29,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -57,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -86,10 +88,10 @@ import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.lists.DeleteListDialog
 import app.orbit.ui.theme.LocalReducedMotion
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.theme.OrbitTones
 import app.orbit.ui.theme.orbitCardShadow
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.asString
-import app.orbit.ui.util.dialPhoneNumber
 import app.orbit.ui.util.formatDayHeader
 import app.orbit.ui.util.formatDuration
 import app.orbit.ui.util.formatAgo
@@ -108,12 +110,13 @@ import java.util.Locale
  * **Redesign (HOME-3/5/6/7/9):**
  *   - HOME-6: no "due / N ready / caught up" framing. The header is a calm date,
  *     never a count or a completion state.
- *   - HOME-5: full-width, single-column tonal cards — a tinted header band over a
- *     lighter graph wash, both shades of the list's own [OrbitTones] colour.
+ *   - HOME-5: full-width, single-column tonal cards in three zones: a compact
+ *     name row on the band, then Next up and the strip on the lighter wash,
+ *     both shades of the list's own [OrbitTones] colour.
  *   - HOME-3: each card shows "Next up" — the head of that list's queue (reused
  *     from `SurfaceNextUseCase` via `HomeFeed.enrichment`) — with a warm recency
- *     line. The card taps through to Card View; the row's one other target is
- *     HOME-9's quiet, labelled call button ("Call Kai"), which opens the dialer.
+ *     line. The row has no target of its own: a tap anywhere on the card opens
+ *     Card View, where Call is (HOME-9, amended 2026-10-08: its call button went).
  *   - HOME-7: a 7-day rhythm strip per card, bars scaled relative to the list's
  *     own busiest day (125% headroom), coloured per person.
  *   - PRIV-03: list and contact names mask under the privacy curtain.
@@ -223,7 +226,6 @@ fun HomeScreen(
         today = today,
         onRetry = vm::onRetry,
         snackbarHostState = snackbarHostState,
-        onCallNextUp = { phone -> context.dialPhoneNumber(phone) },
         onOpenList = onOpenList,
         onOpenSearch = onOpenSearch,
         onOpenSettings = onOpenSettings,
@@ -265,7 +267,6 @@ internal fun HomeContent(
     onOpenLists: () -> Unit,
     onCreateList: () -> Unit,
     onRetry: () -> Unit = {},
-    onCallNextUp: (phone: String) -> Unit = {},
     // Long-press quick-actions — Long listId so the renderer can bind per tile.
     onAddPeople: (Long) -> Unit = {},
     onToggleMute: (listId: Long, currentlyEnabled: Boolean) -> Unit = { _, _ -> },
@@ -453,7 +454,6 @@ internal fun HomeContent(
                             onArchive = { onArchive(tile.id) },
                             onDelete = { pendingDeleteId = tile.id },
                             onOpenContact = onOpenContact,
-                            onCallNextUp = onCallNextUp,
                             onOpenWeek = { onOpenWeek(tile.id) },
                         )
                         }
@@ -500,7 +500,6 @@ private fun ListTile(
     onArchive: () -> Unit = {},
     onDelete: () -> Unit = {},
     onOpenContact: (contactId: Long) -> Unit = {},
-    onCallNextUp: (phone: String) -> Unit = {},
     onOpenWeek: () -> Unit = {},
 ) {
     val curtain = LocalPrivacyCurtain.current
@@ -522,10 +521,11 @@ private fun ListTile(
             .orbitCardShadow(shape = OrbitTheme.shapes.lg, isDark = isDark)
             .clip(OrbitTheme.shapes.lg)
             .background(tone.wash)
-            // Tap routes to Card View; long-press opens the manage-this-list
-            // quick-actions menu. The card carries two smaller targets of its
-            // own, HOME-9's call button and HOME-8's day columns, each with
-            // its own label.
+            // Tap routes to Card View, where Call is; long-press opens the
+            // manage-this-list quick-actions menu. The card carries two
+            // smaller targets of its own, HOME-13's "See your week" and
+            // HOME-8's day columns, each with its own label. Next up has none
+            // since 2026-10-08 (HOME-9): its call button went.
             .combinedClickable(
                 onClick = onClick,
                 onClickLabel = stringResource(R.string.home_tile_open_list),
@@ -558,85 +558,31 @@ private fun ListTile(
         )
 
         Column(Modifier.fillMaxWidth()) {
-            // Zone 1: tinted header band, list name beside Next up. At large
-            // font scales the two stack instead: side by side, the name sat in
-            // a fixed 118dp column and clipped at 200% (rubric gate G3).
-            val largeText = LocalDensity.current.fontScale > 1.3f
-            val nameBlock: @Composable (Modifier) -> Unit = { blockModifier ->
-                Column(blockModifier) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = displayName,
-                            style = OrbitTheme.type.listTile.copy(color = tone.nameFg),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        // LIST-07 — smart-list type cue. Type isn't a name, so it
-                        // stays visible under the privacy curtain. PhIcon is
-                        // decorative by design, so the meaning is said here:
-                        // Lists Manager exposes the same fact as a "Smart list"
-                        // chip, and TalkBack had no way to tell the two list
-                        // kinds apart on Home (WCAG 1.1.1).
-                        if (tile.type == ListType.SMART) {
-                            val smartLabel = stringResource(R.string.lists_row_smart_chip)
-                            Spacer(Modifier.width(OrbitTheme.spacing.x1))
-                            PhIcon(
-                                name = "shuffle-angular",
-                                size = 13.dp,
-                                tint = tone.nameFg,
-                                modifier = Modifier.semantics { contentDescription = smartLabel },
-                            )
-                        }
-                    }
-                    // Full strength, not faded: a 72% alpha member count fell
-                    // under 4.5:1 on the tinted band.
-                    Text(
-                        text = memberLabel(tile.memberCount),
-                        style = OrbitTheme.type.meta.copy(color = tone.nameFg),
-                        modifier = Modifier.padding(top = OrbitTheme.spacing.x1),
-                    )
-                }
-            }
-            val nextUpRow: @Composable (Modifier) -> Unit = { rowModifier ->
-                NextUpRow(
-                    nextUp = tile.nextUp,
-                    curtain = curtain,
-                    onCall = onCallNextUp,
-                    modifier = rowModifier,
-                )
-            }
-            // Also stacked on a narrow card: on a 360dp phone, side by side
-            // left "Next up" about 54dp for its text, so "3 weeks since you
-            // last spoke" truncated to "3 week..." (found rendering at w360dp).
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val stacked = largeText || maxWidth < NARROW_CARD
-                if (stacked) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(tone.band)
-                            .padding(OrbitTheme.spacing.x4),
-                        verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
-                    ) {
-                        nameBlock(Modifier.fillMaxWidth())
-                        nextUpRow(Modifier.fillMaxWidth())
-                    }
-                } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(tone.band)
-                            .padding(OrbitTheme.spacing.x4),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        nameBlock(Modifier.width(NAME_COLUMN_WIDTH))
-                        Spacer(Modifier.width(OrbitTheme.spacing.x3))
-                        nextUpRow(Modifier.weight(1f))
-                    }
-                }
-            }
-            // Zone 2 — lighter wash under the 7-day rhythm.
+            // HOME-5, three zones (2026-10-08). Zone 1: the name row, the
+            // list's name and size on one compact line on the band. Until
+            // then the band held the name block beside Next up, in a fixed
+            // 118dp column that had to stack at large text or on a narrow
+            // card; the owner asked for the name as its own compact row.
+            ListNameRow(
+                name = displayName,
+                memberLabel = memberLabel(tile.memberCount),
+                isSmart = tile.type == ListType.SMART,
+                tone = tone,
+            )
+            // Zone 2: Next up, a row of its own on the lighter wash, full
+            // width at every text size, so the why line keeps its words.
+            NextUpRow(
+                nextUp = tile.nextUp,
+                curtain = curtain,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = OrbitTheme.spacing.x4,
+                        end = OrbitTheme.spacing.x4,
+                        top = OrbitTheme.spacing.x3,
+                    ),
+            )
+            // Zone 3: the 7-day rhythm, on the same wash.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -761,12 +707,88 @@ internal fun homeTileMenuActions(
     )
 }
 
-/** HOME-3 — the recommendation half of the header band. */
+/**
+ * HOME-5: the card's first zone, the list's name and its size on one compact
+ * line across the top of the card, on the band in the band's name colour, so
+ * each card keeps its own colours (the owner, 2026-10-08: "The name can be its
+ * own row with its own background ... And compact").
+ *
+ * The name comes first and gives way: it ellipsizes, and the count never
+ * does. A Row measures its unweighted children first, so the count and the
+ * glyph take what they need and the name gets the rest. At large text the
+ * name may take a second line rather than shrink to a few letters (rules.md
+ * Design 2). The count is the band's name colour at full strength, not faded:
+ * a 72% alpha count fell under 4.5:1 on the band, and ThemeContrastTest holds
+ * nameFg to 4.5:1 on every card's band. Not a target of its own: a tap here is
+ * the card's tap.
+ */
+@Composable
+private fun ListNameRow(
+    name: String,
+    memberLabel: String,
+    isSmart: Boolean,
+    tone: OrbitTones.ListTone,
+) {
+    val largeText = LocalDensity.current.fontScale > 1.3f
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tone.band)
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x2),
+    ) {
+        // The name and the glyph share the room the count leaves, so the
+        // glyph stays beside the name however short it is.
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            Text(
+                text = name,
+                style = OrbitTheme.type.listTile.copy(color = tone.nameFg),
+                maxLines = if (largeText) 2 else 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            // LIST-07: the smart-list cue. Type isn't a name, so it stays
+            // visible under the privacy curtain. PhIcon is decorative by
+            // design, so the meaning is said here: without it TalkBack had no
+            // way to tell the two list kinds apart on Home (WCAG 1.1.1).
+            // Home's own label since the Lists screen dropped its "Smart
+            // list" chip (2026-10-08).
+            if (isSmart) {
+                val smartLabel = stringResource(R.string.home_tile_smart_list)
+                Spacer(Modifier.width(OrbitTheme.spacing.x1))
+                PhIcon(
+                    name = "shuffle-angular",
+                    size = 13.dp,
+                    tint = tone.nameFg,
+                    modifier = Modifier.semantics { contentDescription = smartLabel },
+                )
+            }
+        }
+        // Quiet while the count is still hydrating (null reads as ""), rather
+        // than a wrong "No one yet".
+        if (memberLabel.isNotEmpty()) {
+            Spacer(Modifier.width(OrbitTheme.spacing.x3))
+            Text(
+                text = memberLabel,
+                style = OrbitTheme.type.meta.copy(color = tone.nameFg),
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+    }
+}
+
+/**
+ * HOME-3: the recommendation, the card's second zone. No control of its own
+ * (HOME-9, amended 2026-10-08): the call button that ended the row went at the
+ * owner's word ("No need for this icon"), and with it the chevron shown for a
+ * person with no number, so every row ends the same way. A tap on the row is
+ * the card's tap, which opens the deck, where Call is.
+ */
 @Composable
 private fun NextUpRow(
     nextUp: NextUp?,
     curtain: Boolean,
-    onCall: (phone: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
@@ -805,22 +827,6 @@ private fun NextUpRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-        Spacer(Modifier.width(OrbitTheme.spacing.x2))
-        // HOME-9: one deliberate tap from Home to a call. A labelled, muted
-        // phone button (rules.md §Design 6 allows a quiet dial per person row);
-        // the rest of the card still opens the list's deck. It replaces the
-        // chevron, which only repeated "this card is tappable".
-        val phone = nextUp.phone
-        if (phone != null) {
-            OrbitIconButton(
-                icon = "phone-call",
-                onClick = { onCall(phone) },
-                tint = OrbitTheme.colors.fgMuted,
-                contentDescription = stringResource(R.string.home_next_up_call, firstName),
-            )
-        } else {
-            PhIcon(name = "caret-right", size = 20.dp, tint = OrbitTheme.colors.fgSubtle)
         }
     }
 }
@@ -870,8 +876,11 @@ private fun RhythmStrip(
     val spokenLabels = (0..6).map { offset ->
         rhythmDayLabel(index = offset, size = 7, today = today)
     }
-    val totals = rhythm.map { day -> day.calls.sumOf { it.durationSeconds } }
-    val scaleMax = ((totals.maxOrNull() ?: 0).coerceAtLeast(1)) * RHYTHM_HEADROOM
+    // Every bar's height and mark, laid out for the whole strip at once so the
+    // busiest day sets the scale and each day is fitted to its column.
+    val bars = remember(rhythm) {
+        rhythmBars(rhythm.map { day -> day.calls.map { it.durationSeconds } })
+    }
 
     Column(Modifier.fillMaxWidth()) {
         // A flow, not a row: at large text the legend moves under the button
@@ -908,7 +917,7 @@ private fun RhythmStrip(
                     glyph = glyphs.getOrElse(idx) { "" },
                     spokenLabel = spokenLabels.getOrElse(idx) { "" },
                     isToday = idx == rhythm.lastIndex,
-                    scaleMax = scaleMax,
+                    bars = bars[idx],
                     onClick = { onDayClick(idx) },
                     modifier = Modifier.weight(1f),
                 )
@@ -964,7 +973,7 @@ private fun DayColumn(
     glyph: String,
     spokenLabel: String,
     isToday: Boolean,
-    scaleMax: Float,
+    bars: List<RhythmBar>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1019,34 +1028,42 @@ private fun DayColumn(
                         .background(OrbitTheme.colors.line),
                 )
             } else {
-                // Per-bar floor. The mark wants 14dp: 3dp of rim and 1.5dp of
-                // ring top and bottom leave 5dp of person colour, about the
-                // least that still reads as a hue. But a busy day has to stay
-                // inside the 48dp strip, so the floor yields to an even split
-                // of whatever height the gaps leave over, and below the floor
-                // the rim and ring shrink with the bar so the fill never
-                // vanishes (chrome).
-                val n = day.calls.size
-                val budget = RHYTHM_BAR_AREA.value - RHYTHM_BAR_GAP.value * (n - 1)
-                val minBar = (budget / n).coerceIn(4f, RHYTHM_BAR_MIN.value)
-                Column(verticalArrangement = Arrangement.spacedBy(RHYTHM_BAR_GAP)) {
-                    day.calls.forEach { call ->
-                        val frac = (call.durationSeconds / scaleMax).coerceIn(0f, 1f)
-                        val h = (frac * RHYTHM_BAR_AREA.value).coerceAtLeast(minBar).dp
-                        val chrome = (h / RHYTHM_BAR_MIN).coerceAtMost(1f)
-                        Box(
-                            Modifier
-                                .height(h)
-                                .width(RHYTHM_BAR_WIDTH)
-                                .directionMark(
-                                    rim = directionColor(call.direction),
-                                    separator = OrbitTheme.colors.directionSeparator,
-                                    corner = RHYTHM_BAR_CORNER,
-                                    rimWidth = DIRECTION_RIM * chrome,
-                                    separatorWidth = DIRECTION_SEPARATOR * chrome,
-                                )
-                                .background(OrbitTheme.tones.rhythmBarForId(call.contactId)),
-                        )
+                // The heights and marks come from [rhythmBars], already fitted
+                // to this column; each bar is placed at its own edges. Not a
+                // Column of bars: a Column measures each child against what
+                // the ones above it left, so a short call under a long one was
+                // squeezed to its rim and ring, or to nothing, while the mark
+                // was still drawn for the height it asked for.
+                Layout(
+                    content = {
+                        day.calls.forEachIndexed { i, call ->
+                            Box(
+                                Modifier
+                                    .directionMark(
+                                        rim = directionColor(call.direction),
+                                        separator = OrbitTheme.colors.directionSeparator,
+                                        corner = RHYTHM_BAR_CORNER,
+                                        rimWidth = bars[i].rim.dp,
+                                        separatorWidth = bars[i].ring.dp,
+                                    )
+                                    .background(OrbitTheme.tones.rhythmBarForId(call.contactId)),
+                            )
+                        }
+                    },
+                    modifier = Modifier.size(width = RHYTHM_BAR_WIDTH, height = RHYTHM_BAR_AREA),
+                ) { measurables, constraints ->
+                    // Each edge is rounded to a pixel once, so the bars and
+                    // gaps add up to the column exactly; rounding each height
+                    // instead could overrun it by a pixel or two.
+                    val edges = bars.map { bar ->
+                        bar.top.dp.roundToPx() to (bar.top + bar.height).dp.roundToPx()
+                    }
+                    val placeables = measurables.mapIndexed { i, measurable ->
+                        val (top, bottom) = edges[i]
+                        measurable.measure(Constraints.fixed(constraints.maxWidth, (bottom - top).coerceAtLeast(0)))
+                    }
+                    layout(constraints.maxWidth, constraints.maxHeight) {
+                        placeables.forEachIndexed { i, placeable -> placeable.place(0, edges[i].first) }
                     }
                 }
             }
@@ -1129,15 +1146,83 @@ private fun CreateListTile(label: String, onClick: () -> Unit) {
     }
 }
 
+/**
+ * One call's bar on the rhythm strip, in dp: how far down its day's 48dp
+ * column it starts ([top]), how tall it is, and the [rim] and [ring] its
+ * [directionMark] draws.
+ */
+@Immutable
+internal data class RhythmBar(val top: Float, val height: Float, val rim: Float, val ring: Float)
+
+/**
+ * HOME-7: the strip's bars, one list per day and one bar per call in the
+ * day's order, from each call's length in seconds ([days]).
+ *
+ * The scale is the list's busiest day with 25% headroom ([RHYTHM_HEADROOM]),
+ * so its calls would stack to 38.4dp. Each bar is at least the floor
+ * ([RHYTHM_BAR_MIN], 14dp: the 3dp rim and 1.5dp ring top and bottom leave
+ * 5dp of the person's colour), or an even split of the column on a day of
+ * four or more calls, where the floors would not fit. A day whose bars fit
+ * is drawn as they are.
+ *
+ * A day whose bars would not fit is fitted here, not left to the layout.
+ * Until 2026-10-08 the floor was added on top of a long bar's own height and
+ * a Column stacked the bars, giving each only what the ones above it left: on
+ * the busiest day a 5-minute call after a 40-minute one got 10.9dp, 1.9dp of
+ * it colour, and with 30, 3 and 3 minutes the third bar got nothing. Now each
+ * bar keeps a least height (the floor, or on a day of three or more calls the
+ * column split one more way than it has calls, so there is always height left
+ * to tell a long call from a short one), and what is left is shared in
+ * proportion to how much more each bar wanted. The column is exactly full, no
+ * call loses its bar, and a longer call is never drawn shorter than a shorter
+ * one on the same day.
+ *
+ * The mark is scaled from the height drawn, not the height wanted: the full
+ * rim and ring down to [RHYTHM_MARK_LEAST] (11dp, which still leaves 2dp of
+ * colour), then in proportion, so the fill never vanishes. With the headroom,
+ * a day of up to three calls keeps the full mark on every bar; only a busier
+ * day thins it. The gaps take at most half the column, so however many calls
+ * a day has, each keeps some height.
+ */
+internal fun rhythmBars(days: List<List<Int>>): List<List<RhythmBar>> {
+    val busiest = days.maxOfOrNull { day -> day.sumOf { it.toLong() } } ?: 0L
+    val scaleMax = busiest.coerceAtLeast(1L) * RHYTHM_HEADROOM
+    return days.map { day -> rhythmDayBars(day, scaleMax) }
+}
+
+private fun rhythmDayBars(seconds: List<Int>, scaleMax: Float): List<RhythmBar> {
+    val n = seconds.size
+    if (n == 0) return emptyList()
+    val area = RHYTHM_BAR_AREA.value
+    val gap = if (n == 1) 0f else minOf(RHYTHM_BAR_GAP.value, area / 2f / (n - 1))
+    val budget = area - gap * (n - 1)
+    val floor = minOf(RHYTHM_BAR_MIN.value, budget / n)
+    val wanted = seconds.map { s -> maxOf(floor, (s / scaleMax).coerceIn(0f, 1f) * area) }
+    val heights = if (wanted.sum() <= budget) {
+        wanted
+    } else {
+        val least = minOf(floor, budget / (n + 1))
+        val room = budget - least * n
+        val excess = wanted.sum() - least * n
+        wanted.map { w -> least + (w - least) * room / excess }
+    }
+    var top = (area - heights.sum() - gap * (n - 1)).coerceAtLeast(0f)
+    return heights.map { h ->
+        val mark = (h / RHYTHM_MARK_LEAST.value).coerceAtMost(1f)
+        val bar = RhythmBar(
+            top = top,
+            height = h,
+            rim = DIRECTION_RIM.value * mark,
+            ring = DIRECTION_SEPARATOR.value * mark,
+        )
+        top += h + gap
+        bar
+    }
+}
+
 private val RHYTHM_BAR_AREA: Dp = 48.dp
 private val RHYTHM_BAR_WIDTH: Dp = 26.dp
 private const val RHYTHM_HEADROOM: Float = 1.25f
-
-// The name block's column when it sits beside Next up: the prototype's
-// `flex: 0 0 118px` (vision/00-home/prototype). Wide enough for a two-line
-// list name at 100%, and the layout stacks instead above 130% text or on a
-// card narrower than NARROW_CARD, so it never has to grow.
-private val NAME_COLUMN_WIDTH: Dp = 118.dp
 
 // HOME-8: the bar's outer corner, shared with the legend swatch so the key and
 // the mark are literally the same object. The rim and ring widths live with
@@ -1145,6 +1230,11 @@ private val NAME_COLUMN_WIDTH: Dp = 118.dp
 private val RHYTHM_BAR_CORNER: Dp = 6.dp
 private val RHYTHM_BAR_GAP: Dp = 3.dp
 private val RHYTHM_BAR_MIN: Dp = 14.dp
+
+// The least bar that still holds the whole mark: the rim and ring top and
+// bottom (9dp) and 2dp of the person's colour. A shorter bar, which only a day
+// of four or more calls draws, scales the rim and ring down with it.
+private val RHYTHM_MARK_LEAST: Dp = (DIRECTION_RIM + DIRECTION_SEPARATOR) * 2 + 2.dp
 
 // ---- Previews ----
 
@@ -1190,13 +1280,13 @@ private val previewState: HomeUiState = HomeUiState.Ready(
             id = 1L, name = "Inner orbit", dueCount = 3, type = ListType.STATIC, memberCount = 12,
             nextUp = NextUp(
                 1L, "Kai", null,
-                UiText.res(R.string.home_why_ago, formatAgo(21)), phone = "+1 555 0100",
+                UiText.res(R.string.home_why_ago, formatAgo(21)),
             ),
             rhythm = previewRhythm(0),
         ),
         ListTileState(
             id = 2L, name = "Late night", dueCount = 0, type = ListType.SMART, memberCount = 5,
-            nextUp = NextUp(2L, "Mara", null, UiText.res(R.string.home_why_never), phone = "+1 555 0101"),
+            nextUp = NextUp(2L, "Mara", null, UiText.res(R.string.home_why_never)),
             rhythm = previewRhythm(8),
         ),
     ),
@@ -1231,9 +1321,68 @@ private fun HomeContentLongNamesPreview() {
                         id = 1L, name = "Old friends from the climbing gym crew", dueCount = 12, type = ListType.STATIC, memberCount = 48,
                         nextUp = NextUp(
                             1L, "Bartholomew Montgomery-Featherstonehaugh", null,
-                            UiText.res(R.string.home_why_ago, formatAgo(21)), phone = "+1 555 0100",
+                            UiText.res(R.string.home_why_ago, formatAgo(21)),
                         ),
                         rhythm = previewRhythm(0),
+                    ),
+                ),
+            ),
+            onOpenList = {},
+            onOpenSearch = {},
+            onOpenSettings = {},
+            onOpenLists = {},
+            onCreateList = {},
+        )
+    }
+}
+
+// HOME-7: the days that once squeezed a bar. The busiest day is a 40-minute
+// call then a 5-minute one; another day is 30, 3 and 3 minutes; another has
+// five calls. Every call keeps a bar with colour in it, and the long ones
+// stand taller.
+private fun previewBusyRhythm(): List<RhythmDay> = listOf(
+    RhythmDay(
+        listOf(
+            previewCall(21L, 1L, 40, CallDirection.OUTGOING),
+            previewCall(22L, 2L, 5, CallDirection.INCOMING),
+        ),
+    ),
+    RhythmDay(emptyList()),
+    RhythmDay(
+        listOf(
+            previewCall(23L, 3L, 30, CallDirection.INCOMING),
+            previewCall(24L, 1L, 3, CallDirection.OUTGOING),
+            previewCall(25L, 2L, 3, CallDirection.INCOMING),
+        ),
+    ),
+    RhythmDay(listOf(previewCall(26L, 4L, 9, CallDirection.OUTGOING))),
+    RhythmDay(
+        listOf(
+            previewCall(27L, 1L, 4, CallDirection.OUTGOING),
+            previewCall(28L, 2L, 12, CallDirection.INCOMING),
+            previewCall(29L, 3L, 3, CallDirection.OUTGOING),
+            previewCall(30L, 4L, 6, CallDirection.INCOMING),
+            previewCall(31L, 5L, 5, CallDirection.OUTGOING),
+        ),
+    ),
+    RhythmDay(emptyList()),
+    RhythmDay(listOf(previewCall(32L, 5L, 14, CallDirection.INCOMING))),
+)
+
+@PreviewLightDark
+@Composable
+private fun HomeContentBusyDaysPreview() {
+    OrbitTheme {
+        HomeContent(
+            state = HomeUiState.Ready(
+                lists = listOf(
+                    ListTileState(
+                        id = 1L, name = "Family", dueCount = 1, type = ListType.STATIC, memberCount = 5,
+                        nextUp = NextUp(
+                            1L, "Kai", null,
+                            UiText.res(R.string.home_why_ago, formatAgo(3)),
+                        ),
+                        rhythm = previewBusyRhythm(),
                     ),
                 ),
             ),
@@ -1328,6 +1477,3 @@ private fun HomeContentErrorPreview() {
 
 /** HOME-14: the stack's key in Home's list; tile keys are list ids (Longs), so it cannot collide. */
 private const val NOTES_WAITING_KEY = "notes-waiting"
-
-/** Below this card width the list header stacks name over Next up. */
-private val NARROW_CARD = 360.dp

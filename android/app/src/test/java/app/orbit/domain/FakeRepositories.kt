@@ -223,7 +223,6 @@ class FakeListRepository(
     val setRuleParamsOverrideJsonCalls: MutableList<Pair<Long, String?>> = mutableListOf()
     val convertSmartToStaticCalls: MutableList<Long> = mutableListOf()
     val updateRuleTemplateCalls: MutableList<Pair<Long, Long>> = mutableListOf()
-    val updateActiveHoursCalls: MutableList<Triple<Long, LocalTime?, LocalTime?>> = mutableListOf()
     val updateNotificationsEnabledCalls: MutableList<Pair<Long, Boolean>> = mutableListOf()
 
     // Set to make the schedule writes (incrementSkipCount, updateNextDueAt)
@@ -390,15 +389,6 @@ class FakeListRepository(
         updateRuleTemplateCalls += listId to templateId
         lists.update { rows ->
             rows.map { if (it.id == listId) it.copy(ruleTemplateId = templateId) else it }
-        }
-    }
-
-    override suspend fun updateActiveHours(listId: Long, start: LocalTime?, end: LocalTime?) {
-        updateActiveHoursCalls += Triple(listId, start, end)
-        lists.update { rows ->
-            rows.map {
-                if (it.id == listId) it.copy(activeHoursStart = start, activeHoursEnd = end) else it
-            }
         }
     }
 

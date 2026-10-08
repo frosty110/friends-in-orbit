@@ -92,9 +92,6 @@ interface ListDao {
     @Query("UPDATE lists SET ruleTemplateId = :templateId WHERE id = :id")
     suspend fun updateRuleTemplate(id: Long, templateId: Long)
 
-    @Query("UPDATE lists SET activeHoursStart = :start, activeHoursEnd = :end WHERE id = :id")
-    suspend fun updateActiveHours(id: Long, start: java.time.LocalTime?, end: java.time.LocalTime?)
-
     @Query("UPDATE lists SET notificationsEnabled = :enabled WHERE id = :id")
     suspend fun updateNotificationsEnabled(id: Long, enabled: Boolean)
 

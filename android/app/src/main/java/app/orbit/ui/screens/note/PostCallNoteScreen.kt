@@ -80,8 +80,11 @@ import kotlinx.coroutines.delay
  *
  * Reached from Home's calls waiting for a note (HOME-14), from the
  * notification after a call (NOTIF-16) and from Card view's "Called Kai"
- * snackbar; Card view will also open it by itself (CARD-11), through
- * `Routes.postCallNote`. [onLeave] returns to wherever it was opened from.
+ * snackbar, and Card view opens it by itself after a connected call of a
+ * minute or more placed from the card (CARD-11); all through
+ * `Routes.postCallNote`, and the nav host opens one page per call however
+ * many of those ask at once (`PostCallNotePages`). [onLeave] returns to
+ * wherever it was opened from.
  *
  * This wrapper resolves the ViewModel, ticks the timer and turns the saved
  * state into leaving; everything on screen is [PostCallNoteContent].

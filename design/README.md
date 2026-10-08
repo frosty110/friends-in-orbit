@@ -15,7 +15,7 @@ The design is warm, quiet, and unhurried. It should feel like a well-worn notebo
 **Platform:** Android-first (uses CALL_LOG permission, Jetpack Compose). iOS and web surfaces may follow.
 
 **Core screens**
-- **Home**: ~~grid of list tiles with due-count badges; "Surprise me" at top.~~ Ships as one full-width card per list naming who is next up, with a Call button and a 7-day rhythm strip (HOME-5 to HOME-9 in `../features/home/README.md`). "Surprise me" was cut (ADR 0007 superseded; `../vision/00-home/00-home.md` HOME-1) and counts and "due" language were retired (HOME-6).
+- **Home**: ~~grid of list tiles with due-count badges; "Surprise me" at top.~~ Ships as one full-width card per list: its name on a compact row, who is next up, and a 7-day rhythm strip (the Next up row's call button went on 2026-10-08) (HOME-5 to HOME-9 in `../features/home/README.md`). "Surprise me" was cut (ADR 0007 superseded; `../vision/00-home/00-home.md` HOME-1) and counts and "due" language were retired (HOME-6).
 - **Card View (Surfacing)**: one contact at a time. Photo, name, context. ~~Tap to call;~~ only the labelled Call button dials, and a tap on the card opens details (CARD-01); swipe left or Later to defer, swipe right or Sooner to surface sooner. Card tilts as you drag.
 - **Browse List**: sortable/filterable full list view.
 - **Contact Detail**: all data for one person: photo, number, all lists they're on, full call history, notes, stats.

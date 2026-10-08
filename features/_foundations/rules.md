@@ -1,7 +1,7 @@
 # Rules
 
 **Status:** active
-**Last reviewed:** 2026-10-05
+**Last reviewed:** 2026-10-08 (Design 8 has no exception again: the card's idle swipe hints, CARD-09, were removed at the owner's request)
 **Canonical for:** the numbered engineering rules cited from source comments
 
 ---
@@ -69,8 +69,9 @@ second accent element, one of them isn't the primary action.
 
 **Design 6 — One accent call action per screen.** A screen has at most one
 call control in the accent (Card view's Call button, Contact detail's Call). A
-screen that lists people (Browse, Search, and Home's "Next up" row on each list
-card) may also carry a quiet, muted, labelled dial button on each person,
+screen that lists people (Browse, Search) may also carry a quiet, muted,
+labelled dial button on each person (Home's "Next up" row had one until
+2026-10-08, when the owner asked for it to go, HOME-9),
 because dialing from a list is the shortest path to the app's job; no other
 surface repeats the phone icon. Iconography is Phosphor Regular, 1.5px
 stroke, drawn via `PhIcon` from the VectorDrawables in `res/drawable/ph_*.xml`
@@ -82,9 +83,7 @@ Decorative images pass `null` deliberately.
 
 **Design 8 — Motion stays calm.** 250–350ms (`motion.durBase` / `motion.durSlow`),
 `easeOut` for entrances, `easeInOut` for layout shifts. No spring overshoot above
-5%, no infinite animation, no motion on idle surfaces (CORE-09; one exception, the card's
-swipe hints, CARD-09: the owner asked for them on 2026-10-07, and they are bounded so they
-stay calm: only two labels change opacity, a few times, until the swipe is learnt). Screen changes
+5%, no infinite animation, no motion on idle surfaces (CORE-09). Screen changes
 use the graph-wide `OrbitNavMotion` (a short directional slide and fade), never
 Navigation's 700ms default. When the user has turned animations off
 (`LocalReducedMotion`, read from the system's animator duration scale), every

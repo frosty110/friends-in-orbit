@@ -36,7 +36,7 @@ screens with stable review IDs. Routes are the constants in `nav/Routes.kt`.
 | `search` | `browse/GlobalSearchScreen.kt` | Everyone, by name or number |
 | `contact/{contactId}` | `contact/ContactDetailScreen.kt` | Hero, stats, lists, notes, history, Pause, Log a connection |
 | `lists` | `lists/ListsManagerScreen.kt` | Reorder, rename, archive; one New list control |
-| `lists/{listId}/config` | `lists/ListConfigScreen.kt` | Name, Rhythm, How often, Active hours, Nudges, members |
+| `lists/{listId}/config` | `lists/ListConfigScreen.kt` | Rename from the title, How often, Nudges, When to nudge, Smart rule, People |
 | `pick/contacts` | `picker/ContactPickerScreen.kt` | Add, Move, Copy or Re-link people |
 | `pick/lists` | `picker/ListPickerScreen.kt` | Add one person to lists |
 | `settings` | `settings/SettingsScreen.kt` | Appearance, Permissions, Contacts, Call history, Data, About |

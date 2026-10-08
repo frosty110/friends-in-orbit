@@ -183,9 +183,8 @@ class CardViewViewModelTest {
             // membership schedule through ListRepository and stages the inverse
             // on the depth-1 UndoStack.
             listRepo = listRepo,
-            // CARD-11 reads the confirmed call; CARD-09 counts moves.
+            // CARD-11 reads the confirmed call.
             callEventRepo = callEventRepo,
-            appPrefs = app.orbit.testutil.inMemoryPrefs(),
             undoStack = UndoStack(),
             // CORE-04 — return-from-dial resync seam; state-contract tests don't
             // exercise the dial path, so a no-op SAM suffices.
@@ -579,8 +578,9 @@ class CardViewViewModelTest {
     }
 
     // ============================================================================
-    // Test 15: the forward-looking phrase behind the snackbars and the up-next
-    // hint: "later today" / "tomorrow" / "on {weekday}" / "in {span}".
+    // Test 15: the forward-looking phrase behind Log a connection's snackbar
+    // and the up-next hint: "later today" / "tomorrow" / "on {weekday}" /
+    // "in {span}". Later and Sooner say no "when" since 2026-10-08 (CARD-02).
     // ============================================================================
 
     @Test

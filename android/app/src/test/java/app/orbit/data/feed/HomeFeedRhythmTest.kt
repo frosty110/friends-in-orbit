@@ -247,12 +247,12 @@ class HomeFeedRhythmTest {
         assertTrue(rhythm.all { it.calls.isEmpty() })
     }
 
-    // HOME-3 / HOME-9: the card's person is the list's head of queue (the same
-    // SurfaceNextUseCase answer Card view shows first), with the number the
-    // call button dials and the latest call, from which the VM words the why
-    // line.
+    // HOME-3: the card's person is the list's head of queue (the same
+    // SurfaceNextUseCase answer Card view shows first), with the latest call,
+    // from which the VM words the why line. No number since 2026-10-08: the
+    // row's call button went (HOME-9).
     @Test
-    fun `next up is the list's head of queue with their number and latest call`() = runTest {
+    fun `next up is the list's head of queue with their latest call`() = runTest {
         val kai = contactFixture(id = 7L, displayName = "Kai Mensah", phoneNumber = "+1 555 0100")
         val latest = callEvent(2L, 7L, daysAgo = 1, seconds = 10 * 60, CallDirection.INCOMING)
         val feed = feed(
@@ -271,7 +271,6 @@ class HomeFeedRhythmTest {
         val nextUp = assertNotNull(feed.enrichment.first { it.containsKey(1L) }.getValue(1L).nextUp)
         assertEquals(7L, nextUp.contactId)
         assertEquals("Kai Mensah", nextUp.name)
-        assertEquals("+1 555 0100", nextUp.phone)
         assertEquals(latest.occurredAt, nextUp.lastCalledAt)
         assertNull(nextUp.photoUri)
     }

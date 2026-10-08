@@ -89,6 +89,9 @@ fun OrbitButton(
 }
 
 // 48x48 touch target — ghost icon button for app bar leading/trailing slots.
+// [enabled] false dims the icon as OrbitButton dims its label and makes the
+// button inert, and TalkBack hears it as disabled (New list's close control
+// while Create's write is in flight, LIST-28).
 @Composable
 fun OrbitIconButton(
     icon: String,
@@ -96,20 +99,21 @@ fun OrbitIconButton(
     modifier: Modifier = Modifier,
     tint: Color = OrbitTheme.colors.fg,
     contentDescription: String? = null,
+    enabled: Boolean = true,
 ) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
             .clip(OrbitTheme.shapes.md)
-            .clickable(role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .then(
                 if (contentDescription != null)
                     Modifier.semantics { this.contentDescription = contentDescription }
                 else Modifier
             ),
     ) {
-        PhIcon(name = icon, size = 22.dp, tint = tint)
+        PhIcon(name = icon, size = 22.dp, tint = if (enabled) tint else tint.copy(alpha = 0.4f))
     }
 }
 

@@ -131,7 +131,7 @@ class RelativeTimeTest {
     // ── formatAgo: the same words for a day count the caller already took ──
 
     // Card view and Home count whole days between instants and then need the
-    // one "ago" wording as the argument of "You spoke {ago}". One gap per
+    // one "ago" wording as the argument of "Spoke {ago}". One gap per
     // bucket, plus the two day words and the negative clamp.
     @Test
     fun `formatAgo says today, yesterday, then the ago plural of each bucket`() {

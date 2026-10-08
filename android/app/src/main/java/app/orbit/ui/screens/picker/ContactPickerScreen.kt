@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +43,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -401,10 +404,10 @@ private fun ReadyContent(
                 onSetSort = onSetSort
             )
             Spacer(modifier = Modifier.weight(1f))
-            // Quiet, reversible entry for the wired showIgnored toggle. Only
-            // meaningful once something is actually ignored.
+            // PICK-08: quiet, reversible entry for the wired showIgnored
+            // toggle. Only meaningful once something is actually ignored.
             if (state.ignoredCount > 0 || state.showIgnored) {
-                ShowIgnoredControl(
+                ShowIgnoredToggle(
                     showIgnored = state.showIgnored,
                     onToggle = onShowIgnoredToggle
                 )
@@ -684,38 +687,42 @@ private fun SortControl(
 }
 
 /**
- * Quiet pill toggling [ContactPickerUiState.showIgnored]. Same visual weight as
- * [SortControl] (icon + meta text, no accent): revealing ignored contacts is a
- * maintenance task, not a primary action.
+ * PICK-08: the eye toggle beside Sort that shows or hides the people you
+ * ignore, toggling [ContactPickerUiState.showIgnored]. The icon alone (the
+ * owner, 2026-10-08: "We don't require accompanying text"; it was a "Show
+ * ignored" / "Hide ignored" pill until then): the eye with a line through it
+ * while they are hidden, the open eye while they show.
+ *
+ * A switch to TalkBack, named "Show ignored people", so the state is heard
+ * as well as seen ("on" or "off"); a button whose words flipped told
+ * TalkBack the action and never the state. Ink when on and muted when off,
+ * the way [app.orbit.ui.components.OrbitSwitch] marks on, and never the
+ * accent: the commit button is the screen's one (rules.md Design 5).
+ * Revealing ignored people is a maintenance task. 48dp (Design 3), the size
+ * and press shape of [OrbitIconButton]. The empty state's "Show ignored"
+ * keeps its words: there it is the screen's one way forward. Internal so
+ * `ShowIgnoredToggleTest` can render it alone.
  */
 @Composable
-private fun ShowIgnoredControl(
+internal fun ShowIgnoredToggle(
     showIgnored: Boolean,
     onToggle: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    // Resolved here: the semantics block below is not composable.
+    val label = stringResource(R.string.picker_show_ignored_toggle)
+    Box(
+        contentAlignment = Alignment.Center,
         modifier = modifier
-            // rules.md Design 3 — 48dp tap floor, even for quiet controls.
-            .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin)
-            .clip(OrbitTheme.shapes.full)
-            .clickable(role = Role.Button) { onToggle(!showIgnored) }
-            .padding(
-                horizontal = OrbitTheme.spacing.x3,
-                vertical = OrbitTheme.spacing.x2
-            )
+            .defaultMinSize(minWidth = OrbitTheme.spacing.tapMin, minHeight = OrbitTheme.spacing.tapMin)
+            .clip(OrbitTheme.shapes.md)
+            .toggleable(value = showIgnored, role = Role.Switch, onValueChange = onToggle)
+            .semantics { contentDescription = label }
     ) {
         PhIcon(
             name = if (showIgnored) "eye" else "eye-slash",
-            size = 16.dp,
-            tint = OrbitTheme.colors.fgMuted
-        )
-        Spacer(Modifier.width(OrbitTheme.spacing.x2))
-        Text(
-            text = stringResource(if (showIgnored) R.string.picker_hide_ignored else R.string.picker_show_ignored),
-            style = OrbitTheme.type.meta,
-            color = OrbitTheme.colors.fg
+            size = 22.dp,
+            tint = if (showIgnored) OrbitTheme.colors.fg else OrbitTheme.colors.fgMuted
         )
     }
 }
@@ -1126,6 +1133,21 @@ private fun ContactPickerEveryoneIgnoredPreview() {
     val ready = previewReadyState()
     ContactPickerPreviewHost(
         ready.copy(allContacts = ready.allContacts.map { it.copy(isIgnored = true) }, selectedIds = emptySet())
+    )
+}
+
+// PICK-08: the eye toggle on, so the ignored person is listed, muted and
+// tagged. The gallery's audits see the toggle in both states (off above).
+@PreviewLightDark
+@Preview(name = "200%", fontScale = 2f)
+@Composable
+private fun ContactPickerShowingIgnoredPreview() {
+    val ready = previewReadyState()
+    ContactPickerPreviewHost(
+        ready.copy(
+            allContacts = ready.allContacts.map { if (it.contactId == 3L) it.copy(isIgnored = true) else it },
+            showIgnored = true
+        )
     )
 }
 

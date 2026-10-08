@@ -51,6 +51,9 @@ class SurfaceSoonerUseCase @Inject constructor(
      * H7 fix — returns [MutationResult] so missing-row races are structurally
      * surfaced rather than silently swallowed. Aggregation logic mirrors
      * [SkipContactUseCase].
+     *
+     * One clock read, as in [SkipContactUseCase.invoke] (whose KDoc says why
+     * the card no longer hands in an instant).
      */
     suspend operator fun invoke(contactId: Long, listId: Long? = null): MutationResult {
         val contact = contactRepo.observeById(contactId).first()
@@ -109,21 +112,6 @@ class SurfaceSoonerUseCase @Inject constructor(
             widgetRefreshTrigger.scheduleRefresh()
         }
         return aggregate
-    }
-
-    /**
-     * CARD-09: the `nextDueAt` a Sooner would write for [contactId] on
-     * [listId] right now, without writing it, for the card's idle hint
-     * ("Sooner · Tomorrow"). Computed by the function [invoke] writes with,
-     * so the hint and the Sooner's snackbar cannot disagree
-     * ([SkipContactUseCase.preview] is Later's twin). Null when the move
-     * could not be made; the hint then says "Sooner" alone.
-     */
-    suspend fun preview(contactId: Long, listId: Long): Instant? {
-        val contact = contactRepo.observeById(contactId).first() ?: return null
-        val membership = listRepo.observeMembershipsForContact(contactId).first()
-            .firstOrNull { it.listId == listId } ?: return null
-        return nextDueAfterSooner(contact, membership, clock.now())
     }
 
     /** The one computation of a Sooner's new `nextDueAt`; null when its list or template is gone. */

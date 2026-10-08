@@ -136,6 +136,15 @@ fun NewListScreen(
  *
  * Whether "Discard this list?" is showing is this composable's own state
  * (rules.md Code 7); what is entered is the ViewModel's, through [state].
+ *
+ * While Create's write is in flight ([NewListUiState.creating]) nothing on the
+ * screen is pressable: the footer, the close control (and so "Discard" behind
+ * it), the People step's "Add people" and remove controls, and the How often
+ * wheel. The write has already read the people and the interval, so a change
+ * made then would show on the screen and not in the list that is made, and a
+ * Discard would leave the flow while the list was still being written. Back
+ * steps nowhere then either (the ViewModel refuses it). Until 2026-10-08 only
+ * the footer waited.
  */
 @Composable
 internal fun NewListContent(
@@ -154,7 +163,13 @@ internal fun NewListContent(
     askingDiscardAtStart: Boolean = false,
 ) {
     var askingDiscard by rememberSaveable { mutableStateOf(askingDiscardAtStart) }
-    val requestLeave: () -> Unit = { if (state.hasEntries) askingDiscard = true else onLeave() }
+    val requestLeave: () -> Unit = {
+        when {
+            state.creating -> Unit
+            state.hasEntries -> askingDiscard = true
+            else -> onLeave()
+        }
+    }
     val back: () -> Unit = { if (state.stepNumber > 1) onPreviousStep() else requestLeave() }
     // On the first step with nothing entered there is nothing to ask about
     // or step back to, so Back is the system's: the flow simply closes.
@@ -190,6 +205,7 @@ internal fun NewListContent(
                             icon = "x",
                             onClick = requestLeave,
                             contentDescription = stringResource(R.string.lists_new_close),
+                            enabled = !state.creating,
                         )
                     }
                 }
@@ -219,11 +235,13 @@ internal fun NewListContent(
                     NewListStep.HowOften -> HowOftenStep(
                         intervalHours = state.intervalHours,
                         onIntervalCommit = onIntervalCommit,
+                        enabled = !state.creating,
                     )
                     NewListStep.People -> PeopleStep(
                         people = state.people,
                         onAddPeople = onAddPeople,
                         onRemovePerson = onRemovePerson,
+                        enabled = !state.creating,
                     )
                 }
             }
@@ -325,7 +343,7 @@ private fun NameStep(
  * the list that fills itself), on a card as it sits in List settings.
  */
 @Composable
-private fun HowOftenStep(intervalHours: Int, onIntervalCommit: (Int) -> Unit) {
+private fun HowOftenStep(intervalHours: Int, onIntervalCommit: (Int) -> Unit, enabled: Boolean) {
     Text(
         text = stringResource(R.string.lists_new_how_often_hint),
         style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
@@ -333,7 +351,11 @@ private fun HowOftenStep(intervalHours: Int, onIntervalCommit: (Int) -> Unit) {
     )
     StepCard {
         // Whole days from the wheel; the ViewModel keeps hours.
-        IntervalDaysPicker(currentHours = intervalHours, onCommit = { days -> onIntervalCommit(days * 24) })
+        IntervalDaysPicker(
+            currentHours = intervalHours,
+            onCommit = { days -> onIntervalCommit(days * 24) },
+            enabled = enabled,
+        )
     }
 }
 
@@ -350,6 +372,7 @@ private fun PeopleStep(
     people: List<ListConfigContactSnapshot>,
     onAddPeople: () -> Unit,
     onRemovePerson: (Long) -> Unit,
+    enabled: Boolean,
 ) {
     if (people.isEmpty()) {
         Text(
@@ -363,6 +386,7 @@ private fun PeopleStep(
                 isSmart = false,
                 onRemoveMember = { id, _ -> onRemovePerson(id) },
                 onAddContacts = onAddPeople,
+                enabled = enabled,
             )
         }
     }
@@ -383,8 +407,9 @@ private fun StepCard(content: @Composable () -> Unit) {
 /**
  * The step's buttons. Primary is the step's one accent: "Next", "Create
  * list" on the last step, or "Add people" on the People step while nobody
- * is chosen, with "Create without people" (Ghost) above it. Nothing is
- * pressable while Create's write is in flight.
+ * is chosen, with "Create without people" (Ghost) above it. None of them is
+ * pressable while Create's write is in flight, nor is anything else on the
+ * screen (see [NewListContent]).
  */
 @Composable
 private fun NewListFooter(
@@ -565,7 +590,10 @@ private fun NewListPeopleCurtainPreview() {
     )
 }
 
-// Create's write in flight: nothing is pressable until it lands or fails.
+// Create's write in flight: nothing that changes the list can be pressed
+// until it lands or fails, the close control and the People section's Add
+// people and remove controls included ("Show all" stays live: it only shows
+// more).
 @PreviewLightDark
 @Composable
 private fun NewListCreatingPreview() {

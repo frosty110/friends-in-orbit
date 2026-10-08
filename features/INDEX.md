@@ -29,7 +29,7 @@ Not features — shared across all work.
 
 | Feature | Status | One line |
 |---|---|---|
-| [home](home/README.md) | in-progress | One card per list with the next person, a 7-day rhythm strip and a quiet call button; long-press quick actions |
+| [home](home/README.md) | in-progress | One card per list: its name on a compact row, the next person, and a 7-day rhythm strip; long-press quick actions |
 | [card-view](card-view/README.md) | in-progress | One contact at a time; Later, Sooner, and a labelled Call |
 | [browse](browse/README.md) | in-progress | One list's people in queue order, with search and filters; multi-select to move, copy, remove, pause or ignore; Search across everyone |
 | [contact-detail](contact-detail/README.md) | in-progress | Profile, stats, history, notes, per-contact overrides |

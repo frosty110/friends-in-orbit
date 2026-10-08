@@ -3,7 +3,7 @@
 **Route:** `onboard/first-list/{listId}` (step 4 of 4)
 **Group:** Onboarding
 **Status:** active
-**Last reviewed:** 2026-10-07
+**Last reviewed:** 2026-10-08
 **Spec:** [onboarding](../onboarding/README.md): the first-list gate, mid-flow resume, ONB-23; [orbit-lists](../orbit-lists/README.md) for the controls (LIST-25, LIST-27, LIST-30); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
@@ -19,14 +19,14 @@
 
 - App bar: "4 of 4", no back arrow (a first list is required to finish)
 - A helper line while Done is not yet available: "Add a name and pick at least 3 people to finish." (or, without contacts access, "You can add people once Orbit can see your contacts. Grant access any time in Settings.", and with no name either, "Give your list a name to finish. You can add people once Orbit can see your contacts.")
-- The same controls as List settings, with two differences: the name is an editable field at the top ("Name"; List settings renames from its title instead), and the nudge days and time show as a read-only summary ("Weekdays at 10am") with "Change the days or time any time in this list's settings." Sections: Name, How often (the one rhythm control; the rhythm choice went with LIST-30), Time of day ("Any time", "Mornings", "Afternoons", "Evenings", "Nights"; LIST-25), Nudges, People (the count with "Add people" on its right; LIST-27)
+- The same controls as List settings, with two differences: the name is an editable field at the top ("Name"; List settings renames from its title instead), and the nudge days and time show as a read-only summary, which is when the nudge comes ("Every day at 10am"), with "Change the days or time any time in this list's settings." Sections: Name, How often (the one rhythm control; the rhythm choice went with LIST-30), Nudges, People (the count with "Add people" on its right; LIST-27). There is no Time of day section since 2026-10-08: a list's nudge timing is its days and times, set in List settings (LIST-25)
 - "Done", the one accent element, and "Add another list"
 
 ## Actions and menus
 
 - Everything saves as you go, as in List settings; the typed name is written to the list
 - "Add people" (in the People header): opens the Add people picker and returns here; "Added 3 people to {list}" with Undo shows on return
-- Move "How often" or pick a time of day: saved at once, as in List settings
+- Move "How often": saved at once, as in List settings
 - Remove a person: "Removed {name}" with Undo, which puts them back
 - "Done": available once the list has a name and at least three people; finishes the counted steps and opens Done
 - "Add another list": keeps this list and opens a new, empty one in its place
@@ -50,6 +50,6 @@
 
 - `OnboardingFirstListGateTest` (Done needs a name and three people; the fallback branch always offers an action)
 - `OnboardingListStarterTest` (resume, not duplicate; add another)
-- `ListConfigViewModelTest` (the shared body), `ListSettingsControlsTest` (Time of day and the People header, shared with List settings)
+- `ListConfigViewModelTest` (the shared body), `ListSettingsControlsTest` (no Time of day section, and the summary says the default "Every day at 10am"; the People header, shared with List settings)
 - `OrbitNavHostTest` (added this round: back lands on the Sync step, never Preview; "Start again" returns to Sync)
-- Gallery previews: `OnboardingFirstListScreenPreview`, `OnboardingFirstListLoadingPreview`, `OnboardingFirstListContactsDeniedPreview`, `OnboardingNudgeSummaryLightPreview`, the Error and Not found previews added this round, with the curtain pass
+- Gallery previews: `OnboardingFirstListScreenPreview`, `OnboardingFirstListLoadingPreview`, `OnboardingFirstListContactsDeniedPreview`, `OnboardingNudgeSummaryLightPreview`, `OnboardingNudgeSummaryDarkPreview`, the Error and Not found previews added this round, with the curtain pass

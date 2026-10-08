@@ -172,9 +172,10 @@ open class ListPromptWorker @AssistedInject constructor(
      * Returns true when [time] falls within the [start]..[end] window, honoring
      * midnight-spanning ranges where [start] > [end] (e.g. 22:00–02:00).
      *
-     * - Normal range (start ≤ end, e.g. 09:00–17:00): inclusive on both ends.
-     * - Midnight-spanning range (start > end, e.g. 22:00–02:00): [time] is inside
-     *   when it is ≥ start OR ≤ end (wraps around midnight).
+     * - Normal range (start ≤ end, e.g. 09:00 to 17:00): the start is in, the
+     *   end is not.
+     * - Midnight-spanning range (start > end, e.g. 22:00 to 02:00): [time] is
+     *   inside when it is ≥ start OR < end (wraps around midnight).
      *
      * Delegates to [isInActiveWindow], the definition the scheduler also uses to
      * decide whether a chosen time can ever post.

@@ -5,6 +5,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.SaverScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -457,6 +458,113 @@ class OrbitNavHostTest {
         assertEquals(Routes.PostCallNote, route)
         assertEquals("41", arg("callEventId"))
         assertEquals(Routes.Home, previousRoute)
+    }
+
+    // NOTE-04 / CARD-11 / NOTIF-16: one page per call. After a call placed
+    // from the card, a tap on the notification brings Orbit back
+    // (onNewIntent, then onResume): the resume makes the card open the page
+    // by itself while the tap's route waits for the next frame, and either
+    // can land first. The two spell the person differently ("c-7" from the
+    // card, "7" from the notification), which is how a route comparison let
+    // both through until 2026-10-08.
+
+    @Test
+    fun theCardAndTheNotification_forOneCall_openOnePage_whenTheCardIsFirst() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+
+        act {
+            screens.cardOnAddNote("c-7", 41L)
+            deepLink = Routes.postCallNote("7", 41L)
+        }
+
+        assertEquals(3, depth, "Home, the deck and one note page")
+        assertEquals(Routes.PostCallNote, route)
+        assertEquals(Routes.Card, previousRoute)
+        assertEquals(1, consumed)
+        assertEquals(0, screens.unknownRoutesReported, "a page already open is not a failure")
+    }
+
+    @Test
+    fun theCardAndTheNotification_forOneCall_openOnePage_whenTheNotificationIsFirst() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+
+        act { deepLink = Routes.postCallNote("7", 41L) }
+        // The card's acknowledgement lands during the page's entrance.
+        act { screens.cardOnAddNote("c-7", 41L) }
+
+        assertEquals(3, depth, "Home, the deck and one note page")
+        assertEquals(Routes.PostCallNote, route)
+        assertEquals("7", arg("contactId"), "the notification's page, not a second one over it")
+        assertEquals(Routes.Card, previousRoute)
+    }
+
+    @Test
+    fun aNoteSavedFromTheNotification_isNotAskedForAgain_byTheCard() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+        act { deepLink = Routes.postCallNote("7", 41L) }
+
+        // The note is saved and the page leaves; the card under it resumes
+        // with its dial still pending and finds the same call worth a note.
+        act { screens.noteOnLeave() }
+        act { screens.cardOnAddNote("c-7", 41L) }
+
+        assertEquals(Routes.Card, route)
+        assertEquals(2, depth)
+    }
+
+    @Test
+    fun aPageTheCardOpened_andTheUserLeft_isNotOpenedByItselfAgain() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+        act { screens.cardOnAddNote("c-7", 41L) }
+        act { screens.noteOnLeave() }
+
+        act { screens.cardOnAddNote("c-7", 41L) }
+
+        assertEquals(Routes.Card, route)
+        assertEquals(2, depth)
+    }
+
+    @Test
+    fun aTap_stillOpensAPageTheUserLeft() {
+        // "Not now" leaves the call waiting, so Home's "Add a note" and the
+        // notification's tap still open its page: the user asked for it.
+        start(Routes.Home)
+        act { screens.homeOnOpenPostCallNote("7", 41L) }
+        act { screens.noteOnLeave() }
+
+        act { screens.homeOnOpenPostCallNote("7", 41L) }
+        assertEquals(Routes.PostCallNote, route)
+        act { screens.noteOnLeave() }
+
+        act { deepLink = Routes.postCallNote("7", 41L) }
+        assertEquals(Routes.PostCallNote, route)
+        assertEquals(2, depth)
+    }
+
+    @Test
+    fun theCallsWhosePageOpened_surviveTheActivitysSavedState() {
+        // What rememberSaveable hands back after a process death: the same
+        // calls, so a card restored with its dial still pending stays quiet.
+        val restored = assertNotNull(PostCallNotePages.Saver.restore(longArrayOf(41L, 42L)))
+        val saved = with(PostCallNotePages.Saver) { SaverScope { true }.save(restored) }
+
+        assertEquals(setOf(41L, 42L), assertNotNull(saved).toSet())
+    }
+
+    @Test
+    fun anotherCall_getsItsOwnPage() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+        act { screens.cardOnAddNote("c-7", 41L) }
+
+        act { deepLink = Routes.postCallNote("8", 42L) }
+
+        assertEquals(4, depth)
+        assertEquals("42", arg("callEventId"))
     }
 
     @Test

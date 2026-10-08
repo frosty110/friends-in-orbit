@@ -99,4 +99,13 @@ class RoutesTest {
         assertEquals("note/7?callEventId=41", Routes.postCallNote("7", 41L))
         assertEquals("note/c-7", Routes.postCallNote("c-7"))
     }
+
+    @Test
+    fun `the call a note route names reads back the same however the person is spelled (NOTE-04)`() {
+        assertEquals(41L, Routes.postCallNoteCallEventId(Routes.postCallNote("7", 41L)))
+        assertEquals(41L, Routes.postCallNoteCallEventId(Routes.postCallNote("c-7", 41L)))
+        assertEquals(null, Routes.postCallNoteCallEventId(Routes.postCallNote("c-7")))
+        assertEquals(null, Routes.postCallNoteCallEventId(Routes.card("41")))
+        assertEquals(null, Routes.postCallNoteCallEventId(Routes.contact("41")))
+    }
 }

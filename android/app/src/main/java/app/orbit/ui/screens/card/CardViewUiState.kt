@@ -30,7 +30,7 @@ import java.time.Instant
  * Card-loop revision (2026-06-09):
  *  - `Ready.queueSize` now carries the list's real due-now count (was the
  *    dead constant 1).
- *  - `Ready.whyNowLine`: VM-built "You spoke 3 weeks ago." framing line
+ *  - `Ready.whyNowLine`: VM-built "Spoke 3 weeks ago." framing line
  *    derived from the last connected call; null when there is no history.
  *  - `EmptyNothingEligible` is a data class carrying the optional
  *    soonest-upcoming-member hint so the empty state can say
@@ -39,8 +39,10 @@ import java.time.Instant
  * Tide marker (2026-05-08) — the terminal `AllCaughtUp` variant is gone.
  * The surface no longer drops future-due candidates, so the queue is
  * continuous; the only legitimate empty cases are `EmptyNoMembers` and
- * `EmptyNothingEligible`. `Ready.isAheadOfToday` shifts the eyebrow label
- * from "Up now" to "Coming up" past the waterline.
+ * `EmptyNothingEligible`. `Ready.isAheadOfToday` says whether the surfaced
+ * person is past the waterline. It shifted an eyebrow over the name from "Up
+ * now" to "Coming up" until 2026-10-08, when the owner removed the eyebrow;
+ * see the field for why it stays.
  *
  * Earlier history:
  *  - This sealed contract was introduced as ARCH-02. Each variant is
@@ -67,8 +69,14 @@ sealed interface CardViewUiState {
         val nowHour: Int = 0,
         // Tide marker (2026-05-08) — true when the surfaced contact's
         // engine-computed nextDueAt is in the future at the moment of emission.
+        // Nothing draws it since the eyebrow went (2026-10-08, CARD-04), and it
+        // stays on purpose: Contact's equality is its id, so after a Later on
+        // someone up now on a one-member list this is the only field that
+        // changes, and that change is the new emission CardSwipeFrame
+        // re-centers the held card on (`emissionKey`). Without it the card
+        // would wait off-screen for the frame's stuck-card guard.
         val isAheadOfToday: Boolean = false,
-        // 2026-06-09: why-now framing line ("You spoke 3 weeks ago."), built
+        // 2026-06-09: why-now framing line ("Spoke 3 weeks ago."), built
         // by the VM from the most recent connected call as UiText (resolved by
         // the screen). Null when no history; the screen hides the line then.
         val whyNowLine: UiText? = null,
@@ -157,8 +165,13 @@ val CardViewUiState.listType: ListType?
  */
 sealed interface CardMessage {
 
-    /** A Later or Sooner the user can take back with "Undo". */
-    data class Undoable(val text: UiText, val token: Long) : CardMessage
+    /**
+     * A Later or Sooner the user can take back with "Undo": "Kai moved to
+     * later." / "Kai moved sooner." (CARD-02). [curtainText] is the same
+     * sentence with "They" for the name, shown instead of [text] while the
+     * privacy curtain is down (PRIV-03), as [Logged]'s is.
+     */
+    data class Undoable(val text: UiText, val curtainText: UiText, val token: Long) : CardMessage
 
     /**
      * The call log confirmed a call placed from this card; offers "Add a
@@ -184,11 +197,3 @@ sealed interface CardMessage {
     /** A write failed; says so (rules.md Code 3, no silent fallbacks). */
     data class Failed(val text: UiText) : CardMessage
 }
-
-/**
- * CARD-09: what the idle hints say, each already worded with its direction:
- * "Later · Thursday" and "Sooner · Tomorrow", or "Later" and "Sooner" alone
- * when the move's "when" could not be worked out.
- */
-@Immutable
-data class CardMoveHints(val later: UiText, val sooner: UiText)

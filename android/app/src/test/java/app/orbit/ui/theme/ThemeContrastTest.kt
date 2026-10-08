@@ -80,9 +80,9 @@ class ThemeContrastTest {
 
     /**
      * The Home list card's two surfaces (OrbitTones.ListTone): the accent
-     * tinted band that carries the list name, the eyebrow, the why line and
-     * the member count, and the wash under the rhythm strip's legend and the
-     * today letter. The band of card A is the theme's accentTint, which the
+     * tinted band that carries the list's name row (name and member count),
+     * and the wash that carries Next up (its eyebrow and why line, since
+     * 2026-10-08) and the rhythm strip's legend and the today letter. The band of card A is the theme's accentTint, which the
      * Wallpaper theme and the accent dial generate from any hue, so these are
      * checked on the resolved theme for every hue, not on the authored
      * palettes alone. Card B's band and wash are neutral surfaces and pass

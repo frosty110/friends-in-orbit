@@ -147,8 +147,9 @@ internal fun deriveOrbitTones(
 }
 
 /**
- * Home card A: the accent-tinted band that carries the list name, the eyebrow,
- * the why line and the member count, and the wash under the rhythm strip's
+ * Home card A: the accent-tinted band that carries the list's name row (the
+ * name and the member count), and the wash under it that carries Next up (its
+ * eyebrow and why line, since 2026-10-08, HOME-5) and the rhythm strip's
  * legend. Apart from the name, the text on it is the theme's ordinary fg,
  * fgMuted and fgSubtle, which the card reads from OrbitTheme.colors, so the
  * band has to be a surface those tokens are legible on (rules.md §Design 4),

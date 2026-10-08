@@ -20,7 +20,7 @@ implements them.
 | 7 | Browse, title | It is the sequenced list; let me sort it, knowing it is not permanent | Drag to reorder the sequence | BROWSE-08 |
 | 8 | List settings, Name | Edit the name at the title instead of a separate field? | Rename from the title | LIST-26 |
 | 9 | List settings, "Cadence" | Redundant with the slider below | One "How often" control | LIST-30 |
-| 10 | List settings, "Always active" | Confusing; say which part of the day instead | Time-of-day choice | LIST-25 |
+| 10 | List settings, "Always active" | Confusing; say which part of the day instead | Time-of-day choice; retired on 2026-10-08 for one nudge-timing section (see the follow-up below) | LIST-25 |
 | 11 | List settings, "11 people" | Expected an Add people button there | Add people at the People header | LIST-27 |
 | 12 | Home, post-call banner | A notification if possible; several unnoted calls stacked, each closable; cleaner | Notes waiting stack, and a post-call notification | NOTE-05, NOTIF-16, HOME-14 |
 | 13 | New list, "Choose a template" | Fewer templates, Start from blank on top, colour-coded, sorted by frequency | A shorter, ordered set | LIST-29 |
@@ -124,6 +124,8 @@ list the same way ("Every 3 days"). The same goes for Make your first list.
 
 ### 10. Time of day (LIST-25)
 
+Superseded on 2026-10-08: Time of day was retired for one nudge-timing section; see the follow-up at the end.
+
 "Always active" with a start and end time is replaced by one choice: "Any time",
 "Mornings" (7am to noon), "Afternoons" (noon to 5pm), "Evenings" (5pm to 9pm)
 or "Nights" (9pm to 7am). It means what active hours meant: a nudge for this
@@ -191,3 +193,52 @@ name reaching text, fields or TalkBack); and every prototype screen, state
 and journey in Chromium (152 states, 13 journeys). Not verified: anything on a phone. In particular the
 post-call notification waking Orbit after a real call, the feel of the swipe
 hints' timing, and TalkBack itself.
+
+## A follow-up comment, 2026-10-08: two nudge timing sections
+
+On the republished prototype the owner commented on List settings' "Nudges can
+come at any time of day.": "We have 2 nudge timing sections. Either you or users
+should pick one. Right now it's confusing."
+
+**Decision: When to nudge stays, Time of day goes (LIST-25, amended).** Decision
+10 above turned the active-hours switch into Time of day, but it was still a
+window the nudge times had to fall in, beside a section that sets those times.
+Either one alone answers "when does this list nudge me?", so having both means
+two answers that can disagree. The pair had already produced three bugs between
+them: B4, the summary that said 10am while an Evenings list nudged at 5pm, and a
+time on the window's end that never posted. Of the two, the times are the one
+to keep: they say exactly when, they allow more than one a day, and a window
+only ever narrowed them (a time inside it was left alone, a time outside it was
+replaced by the window's start). Letting each user pick between two modes would
+keep both answers in the product, so we chose for them.
+
+Nobody's nudge moves. The database migration to v14 folds each list's window
+into its times (the times inside it, or its start when none was): an Evenings
+list on the default 10am now shows, and nudges at, 5pm, as it did. An older
+backup with a window is folded the same way on import. Make your first list
+loses the section too; its summary says the default "Every day at 10am".
+
+What goes with it: the "Time of day" strings and chips, the "10am is outside
+this list's time of day" note, and the widgets' soft preference for a list
+inside its window (ADR 0008, amended), which read the same window. If picking
+"evenings" rather than a clock time is missed, it can come back as a shortcut
+inside When to nudge's time picker, which sets a time and nothing else.
+
+## A third pass, 2026-10-08: trims
+
+The owner went over the republished prototype again and left nine short
+comments, most of them "we don't need this". Each was built in the app first,
+except how far Later and Sooner move someone, which waits on the owner.
+
+| Where | Comment | Decision | IDs |
+|---|---|---|---|
+| Card view, "Up now" over the name | "Don't need this, up now, text" | Gone, and "Coming up" with it: nothing over the name | CARD-04 |
+| Card view, the "Sooner" badge at the card's top corner | "We don't need this badge" | Both badges in that corner are gone: the idle hints ("Sooner · Today") and the chip that faded in during a drag ("Sooner"). The labelled buttons, which play the swipe, already teach it | CARD-09 retired, CARD-08 |
+| Card view, "Good time to call" | "We don't require this badge" | Gone, with "Sometimes answers now" and its third state; the hours strip stays | CARD-04 |
+| Card view, the Sooner button | Later and Sooner should be generic, likely 1 or 3 days by list size; "we don't surface how much"; "tonight and tomorrow" are very short | Split. The snackbar now says only "Kai moved to later." / "Kai moved sooner.", never when. How far they move is waiting on the owner: proposed, 1 day each way on lists of up to 10 people and 3 days on bigger ones, Sooner never earlier than now | CARD-02 |
+| Home, the call icon on Next up | "No need for this icon" | Gone; the card's tap opens the deck, where Call is | HOME-9 |
+| Home, the list name | "The name can be its own row with its own background and [its own] coloring. And compact." | The name and size on one compact row across the top, on the band in the band's name colour; Next up its own row on the wash below | HOME-5 |
+| Home, "You spoke 3 weeks ago" | "Reduce the wordage by removing the 'you'" | "Spoke 3 weeks ago", on Home and the card alike; "No calls yet" for none | HOME-3, CARD-04 |
+| Lists, "Smart list" chip | "We don't need this badge" | Gone; the row's second line names the rule | LIST-07 |
+| Add people, "Show ignored" | "Just have a toggle icon for ignored vs not. We don't require accompanying text." | An eye toggle, icon only, "Show ignored people" to TalkBack, on or off | PICK-08 |
+

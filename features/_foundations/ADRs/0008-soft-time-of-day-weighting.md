@@ -1,6 +1,6 @@
 # ADR 0008 — Rule engine: soft time-of-day weighting, no hard active-hours gate
 
-**Status:** accepted
+**Status:** accepted; amended 2026-10-08 (no list has a window, LIST-25)
 **Date:** 2026-06-11
 **Accepted:** 2026-06-12 — implemented in quick task `260612-9si`. The active-hours
 exclusion was removed from `SurfaceNextUseCase` and `SurfaceQueueUseCase`; the
@@ -188,3 +188,25 @@ Tests added/updated: a contact outside active hours still surfaces (no longer
 `NothingEligible`); cross-list, the widget's primary flips with the clock when two lists
 have different windows; an overdue out-of-window contact still beats a within-window
 not-yet-due peer; pause still hard-excludes.
+
+## Amendment (2026-10-08): no list has a window any more
+
+The window this ADR weighs by is gone from the product. The owner's review of List
+settings found "Time of day" (the window, by then chosen as Mornings, Afternoons,
+Evenings or Nights) and "When to nudge" (the nudge days and times) to be two sections
+deciding one thing, so Time of day was retired (LIST-25 in
+`features/orbit-lists/README.md`). `MIGRATION_13_14` folded every stored window into its
+list's nudge times, so each list still nudges exactly when it did, and cleared
+`activeHoursStart` / `activeHoursEnd` on every row; a window in an older backup is folded
+the same way on import, and nothing writes the columns now.
+
+What that means here:
+
+- `timeOfDayPenalty` returns zero for every list (no window), so the widget orders
+  across lists by due-ness alone. The weighting is inert, not removed: the function and
+  its tests stay until the columns are dropped.
+- Point 2 of the Implementation amendment (active hours still bounding notifications)
+  no longer applies in practice: the nudge's timing is its own days and times, and the
+  worker's active-hours gate lets every slot through.
+- If a time-of-day preference for surfacing is wanted again, it should be read from
+  something the user sets for that purpose, not revived as a second nudge setting.

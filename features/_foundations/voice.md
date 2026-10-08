@@ -1,7 +1,7 @@
 # Voice and content rules
 
 **Status:** active
-**Last reviewed:** 2026-10-07
+**Last reviewed:** 2026-10-08
 **Canonical for:** voice, tone, never-say list, empty-state framing
 **Ground truth:** enforced at notification-formatter level (`features/notifications/README.md`); elsewhere enforced by review
 
@@ -20,7 +20,7 @@ When this doc disagrees with `README.md` §Content fundamentals, this doc wins.
 - **Sentence case.** Everywhere. No title case except brand name "Orbit."
 - **No exclamation marks.** Ever.
 - **No emoji in product copy.** (Okay in chat conversations with the builder; never in the app.)
-- **Active voice. Present tense.** "You spoke yesterday" not "A call was made yesterday."
+- **Active voice. Present tense.** "Spoke yesterday" not "A call was made yesterday."
 - **16sp minimum body size.** Used in emotionally loaded moments — don't make people squint.
 
 ## Never say
@@ -31,7 +31,7 @@ When this doc disagrees with `README.md` §Content fundamentals, this doc wins.
 - "Great job," "awesome," "keep it going!" — coach framing
 - Emoji, unicode glyphs, ASCII art in product copy
 - "The contact," "the user," "the entity" — clinical framing
-- "Due" as a deadline ("due today", "not due yet", "3 people due"): deadline framing. Orbit suggests; it never sets a deadline. Over a name say "Up now" or "Coming up"; for a quiet moment say who comes up next and when. (Added 2026-10-05. HOME-6 retired the word on Home in June; this makes the rule explicit for every screen, and the string audit `VoiceAuditTest` holds the resources to it.)
+- "Due" as a deadline ("due today", "not due yet", "3 people due"): deadline framing. Orbit suggests; it never sets a deadline. Where a row needs to say whose turn it is, say "Up now" (Browse's rows); for a quiet moment say who comes up next and when. Card view puts nothing over the name since 2026-10-08 (CARD-04). (Added 2026-10-05. HOME-6 retired the word on Home in June; this makes the rule explicit for every screen, and the string audit `VoiceAuditTest` holds the resources to it.)
 
 ## Always say
 
@@ -60,7 +60,7 @@ Added 2026-10-05 ([UX rubric](../../vision/ux-rubric.md) D7). The same idea had 
 | **List** | A group of people the user keeps in touch with, with its own rhythm. | Orbit (as a noun for a list), group, circle |
 | **Rhythm** | How often the user means to talk to people on a list ("every 2 weeks"), and the 7-day strip on Home. A list's rhythm is said as its interval ("Every 3 days", "Every day"), never by an engine's name ("Late night rhythm"); List settings' control for it is "How often" (LIST-30). | Cadence, frequency, interval, threshold |
 | **This week** | The seven days ending today: what the rhythm strip on Home shows, and the first week of the Week screen (HOME-13). Weeks there are rolling sevens ending on today's weekday, never Monday to Sunday, so "This week" always means the strip's days. An earlier week is named by its dates ("28 Sep to 4 Oct"). The ways in are "See your week" (the strip) and "See the whole week" (a day's sheet). Added 2026-10-07. | Last 7 days (the strip's old heading), calendar week, "Week of 28 Sep" |
-| **Time of day** | The part of the day a list's nudges may come in: "Any time", "Mornings", "Afternoons", "Evenings", "Nights", or "Custom: 9am to 5pm" for an older window that is none of them (LIST-25). Said in one line under the choice: "Nudges for this list come only in the evening, from 5pm to 9pm." (Added 2026-10-07.) | Active hours, always active, window, quiet hours |
+| **When to nudge** | Where a list's nudge days and times are set, and the only thing that decides when its nudge comes (LIST-25). Said as one line: "Weekdays at 10am". "Time of day" (Mornings, Evenings and so on) was a second section for the same thing from 2026-10-07 and went on 2026-10-08; don't bring it back as a word for a nudge setting. | Time of day, active hours, always active, window, quiet hours |
 | **Call** | A phone call, which Orbit sees in the call log. | Interaction, touchpoint |
 | **Connection** | A conversation Orbit couldn't see (WhatsApp, a visit), added by hand with "Log a connection". Only for those. | Using it for a phone call |
 | **Note** | Something the user wrote about a person. | Memo, comment |
@@ -79,7 +79,7 @@ Added 2026-10-05 ([UX rubric](../../vision/ux-rubric.md) D7). The same idea had 
 
 **Stat labels** read the same on every screen: "Last call", "Total calls", "Average length", "Longest gap". No abbreviations ("Avg"), and "Last called" only inside a sentence ("Last called 3 weeks ago").
 
-**Time since a call** is always worded by one formatter (`ui/util/RelativeTime.kt`), the same way everywhere: "today", "yesterday", "3 days ago", "2 weeks ago", "3 months ago". Never "27 days ago" on one screen and "3 weeks" on another. Minutes matter in two places, and both use `formatRelativeFine` from the same file ("just now" under a minute, lowercase because it follows a label: "Last synced just now"; then minutes and hours as plurals, then the day-grained words above): a sync status row in Settings ("Last synced 5 minutes ago"), so it never says "today" about a sync that finished a moment ago, and Home's calls waiting for a note ("14 min · 2 hours ago", HOME-14, added 2026-10-07), which are all from the last day, so "today" would tell them apart from nothing. Times of day follow the phone's 12 or 24 hour setting, and so do the tick labels under a 24-hour strip ("12a 6a 12p 6p" or "00 06 12 18"), the Week screen's hour labels, which are clock times like any other ("3am", "12pm" or "03:00", "15:00", HOME-13), and the time picker's dial; the am/pm marker is the language's own.
+**Time since a call** is always worded by one formatter (`ui/util/RelativeTime.kt`), the same way everywhere: "today", "yesterday", "3 days ago", "2 weeks ago", "3 months ago". Never "27 days ago" on one screen and "3 weeks" on another. **When you last spoke**, the line under a person on Home's cards and on Card view, says it short, without "You": "Spoke today", "Spoke yesterday", "Spoke 3 weeks ago"; on Home, "No calls yet" for someone never called (Card view shows no line until there is a call, and its stats say "Never called"). Card view's line is a sentence, so it ends in a full stop ("Spoke 3 weeks ago."). (Changed 2026-10-08 at the owner's word, "Let's reduce the wordage by removing the 'you'"; until then "You spoke 3 weeks ago" and "You haven't spoken yet".) Minutes matter in two places, and both use `formatRelativeFine` from the same file ("just now" under a minute, lowercase because it follows a label: "Last synced just now"; then minutes and hours as plurals, then the day-grained words above): a sync status row in Settings ("Last synced 5 minutes ago"), so it never says "today" about a sync that finished a moment ago, and Home's calls waiting for a note ("14 min · 2 hours ago", HOME-14, added 2026-10-07), which are all from the last day, so "today" would tell them apart from nothing. Times of day follow the phone's 12 or 24 hour setting, and so do the tick labels under a 24-hour strip ("12a 6a 12p 6p" or "00 06 12 18"), the Week screen's hour labels, which are clock times like any other ("3am", "12pm" or "03:00", "15:00", HOME-13), and the time picker's dial; the am/pm marker is the language's own.
 
 **People, not contacts.** The people in Orbit are "people" ("Add people", "Ignored 3 people", "Move 1 person"). "Contacts" means only the phone's own address book ("Contacts access is off", "Open in Contacts", "Re-link to a phone contact").
 

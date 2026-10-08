@@ -69,7 +69,8 @@ data class NewListUiState(
     /**
      * Whether the step's Next may go on: a template chosen on Start with, a
      * name that is not blank on Name. How often always has a value. Nothing
-     * moves while Create's write is in flight.
+     * moves while Create's write is in flight: the footer reads this, and the
+     * screen holds every other control still on [creating] itself.
      */
     val canGoOn: Boolean = !creating && when (step) {
         NewListStep.StartWith -> template != null

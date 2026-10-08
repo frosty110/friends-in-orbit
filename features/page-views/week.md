@@ -3,7 +3,7 @@
 **Route:** `week/{listId}`. `listId` is the list whose calls it shows; it always opens on this week
 **Group:** Core loop
 **Status:** active
-**Last reviewed:** 2026-10-07
+**Last reviewed:** 2026-10-08
 **Spec:** [home](../home/README.md): HOME-13 (added 2026-10-07), HOME-7, HOME-8, HOME-12; PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
@@ -20,7 +20,7 @@
 - The key to the outlines, "You" and "Them", the strip's own swatches; and "This week" beside it when an earlier week is showing
 - Seven day columns, each headed by its weekday letter and date ("W" over "7"); today in ink and heavier type, the others muted, never in the accent
 - A time axis running down the page from midnight at the top to midnight at the bottom: a line every hour, the first below the top edge at 1am, and labels every three hours in the phone's clock style, "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm" (or "03:00" to "21:00" on a 24-hour phone), sitting on their lines at the start edge. About 40dp an hour; the chart scrolls up and down, and opens a little above the week's earliest call, or at 8am when the week has none. The day heads stay in view while it scrolls
-- Each call of three minutes or more (the strip's calls, never others): a block in its day's column at the time it started, as tall as it lasted (a short call still a small block), filled with the person's colour and outlined pink for a call you made, teal for one they made, with the strip's dark ring between. Calls close together sit side by side. A block with room shows the person's first name on a small light chip. A call that ran past midnight stops at the bottom of its day
+- Each call of three minutes or more (the strip's calls, never others): a block in its day's column at the time it started, as tall as it lasted, with a floor of 21 minutes so a short call is still a small block: every call from 3 to about 21 minutes draws the same height, and the day's sheet gives each one's length. Filled with the person's colour and outlined pink for a call you made, teal for one they made, with the strip's dark ring between. Calls close together sit side by side. A block shows the person's first name on a small light chip only when the whole chip fits inside it: a call of about 43 minutes or more at the default text size (longer at large text), and on a 360dp phone a first name of about four letters ("Sam", "Alex"). Every other block shows no name, and the fill colours repeat across people, so a tap on the block or its day says who. A call that ran past midnight stops at the bottom of its day
 - The screen spends no accent (rules.md Design 5)
 - TalkBack hears each day as one item, its head: "Wednesday 30 September, 2 calls: Alex Kim called you at 1:15pm for 9 min. You called Sarah Chen at 6:40pm for 14 min.", or "Friday 2 October, No calls". The heading is announced when an arrow changes the week. The blocks and the hour labels are not read on their own; the day says every call
 

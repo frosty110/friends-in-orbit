@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import app.orbit.data.db.OrbitDatabase
 import app.orbit.data.db.RoomTransactionRunner
+import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListType
 import app.orbit.data.entity.RuleKind
 import app.orbit.domain.FakeContactRepository
@@ -28,6 +29,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -99,10 +101,13 @@ class NewListViewModelTest {
         db.close()
     }
 
-    private fun newViewModel(handle: SavedStateHandle) = NewListViewModel(
+    private fun newViewModel(
+        handle: SavedStateHandle,
+        txRunner: TransactionRunner = RoomTransactionRunner(db),
+    ) = NewListViewModel(
         savedStateHandle = handle,
         createList = CreateListUseCase(
-            txRunner = RoomTransactionRunner(db),
+            txRunner = txRunner,
             listDao = db.listDao(),
             listMembershipDao = db.listMembershipDao(),
             ruleTemplateRepo = FakeRuleTemplateRepository(
@@ -460,6 +465,34 @@ class NewListViewModelTest {
     }
 
     @Test
+    fun `while Create is in flight the people and How often hold still`() = runTest {
+        // The write is held at its transaction, after it has read who is
+        // chosen and the interval. Until 2026-10-08 Remove still took the
+        // person off the screen here, and they were made a member anyway.
+        val writeMayStart = CompletableDeferred<Unit>()
+        vm = newViewModel(savedState, txRunner = HeldTransactionRunner(RoomTransactionRunner(db), writeMayStart))
+        watch()
+        goToPeople()
+        vm.onPeopleChosen(listOf(1L, 2L))
+
+        vm.create()
+        assertTrue(state.creating)
+        vm.removePerson(2L)
+        vm.onIntervalCommit(3 * 24)
+
+        assertEquals(listOf(1L, 2L), state.people.map { it.id }, "what the screen shows")
+        assertEquals(10 * 24, state.intervalHours)
+
+        writeMayStart.complete(Unit)
+        val id = checkNotNull(created().createdListId)
+        assertEquals(
+            setOf(1L, 2L),
+            db.listMembershipDao().getMembersOfList(id).map { it.contactId }.toSet(),
+            "is what is made",
+        )
+    }
+
+    @Test
     fun `Create only runs from the last step`() = runTest {
         watch()
         select(innerOrbit)
@@ -470,5 +503,16 @@ class NewListViewModelTest {
         assertNull(state.createdListId)
         assertFalse(state.creating)
         assertTrue(db.listDao().observeAll().first().isEmpty())
+    }
+}
+
+/** Holds the write at its transaction until [mayStart] completes, so a test can act while Create is in flight. */
+private class HeldTransactionRunner(
+    private val inner: TransactionRunner,
+    private val mayStart: CompletableDeferred<Unit>,
+) : TransactionRunner {
+    override suspend fun <T> withTransaction(block: suspend () -> T): T {
+        mayStart.await()
+        return inner.withTransaction(block)
     }
 }

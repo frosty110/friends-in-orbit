@@ -210,10 +210,7 @@ class ListConfigViewModel @Inject constructor(
     ): ListConfigUiState {
         val ruleParams: RuleParams? = resolveRuleParams(entity, ruleTemplate)
         val smartRule: SmartListRule? = entity.smartRuleJson?.let { decodeSmartRule(it) }
-        val nudgeSchedule = entity.nudgeScheduleJson
-            ?.takeIf { it.isNotBlank() }
-            ?.let { runCatching { json.decodeFromString(NudgeSchedule.serializer(), it) }.getOrNull() }
-            ?: NudgeSchedule.DEFAULT
+        val nudgeSchedule = NudgeSchedule.fromStoredJson(entity.nudgeScheduleJson)
         return ListConfigUiState.Ready(
             id = entity.id,
             name = entity.name,
@@ -221,8 +218,6 @@ class ListConfigViewModel @Inject constructor(
             ruleKind = ruleTemplate?.kind,
             ruleParams = ruleParams,
             smartRule = smartRule,
-            activeHoursStart = entity.activeHoursStart,
-            activeHoursEnd = entity.activeHoursEnd,
             notificationsEnabled = entity.notificationsEnabled,
             nudgeSchedule = nudgeSchedule,
             members = members
@@ -368,28 +363,6 @@ class ListConfigViewModel @Inject constructor(
         }
     }
 
-    /**
-     * LIST-25 + LIST-05 + H3 fix: the list's time of day, as the atomic
-     * single-column write of (activeHoursStart, activeHoursEnd) the
-     * active-hours editor used. [DayPart.AnyTime] writes both null; every
-     * other part writes its window. Only a chosen part is ever written: a
-     * custom window from the old editor is read back as Custom and left as it
-     * is until the user picks a part.
-     */
-    fun setTimeOfDay(part: DayPart) {
-        val id = listId ?: return
-        viewModelScope.launch {
-            runMutation {
-                listRepo.updateActiveHours(id, part.start, part.end)
-                // The effective nudge schedule depends on the window (D-09: a slot at
-                // the window start only when no chosen time lands inside it), so a
-                // window edit re-anchors the chain instead of leaving the old slot
-                // queued until the next fire or cold start.
-                listRepo.getById(id)?.let { nudgeScheduler.scheduleFromEntity(it) }
-            }
-        }
-    }
-
     /** LIST-05 + H3 fix — atomic single-column flip of `notificationsEnabled`. */
     fun setNotificationsEnabled(enabled: Boolean) {
         val id = listId ?: return
@@ -402,8 +375,11 @@ class ListConfigViewModel @Inject constructor(
      * NOTIF-10/11 — save-on-change setter for the per-list nudge schedule.
      *
      * Encodes [schedule] to JSON, persists via [ListRepository.setNudgeScheduleJson],
-     * then calls [NudgeScheduler.schedule] with the list's current active-hours
-     * window forwarded so the D-09 slot is decided against the saved window.
+     * then calls [NudgeScheduler.schedule] with the list's stored active-hours
+     * window forwarded, as the chain's other callers do. That window is null for
+     * every list since LIST-25's fold (2026-10-08), so the chain runs [schedule]
+     * exactly; it is passed rather than dropped so this call and
+     * [NudgeScheduler.scheduleFromEntity] cannot disagree.
      */
     fun onNudgeScheduleChange(schedule: NudgeSchedule) {
         val id = listId ?: return
@@ -476,7 +452,7 @@ class ListConfigViewModel @Inject constructor(
 
     /**
      * ONB-11 / ONB-24 / LIST-26: atomic single-column write of the list name.
-     * Mirrors the H3-fix setter family ([setRuleTemplate], [setTimeOfDay],
+     * Mirrors the H3-fix setter family ([setRuleTemplate],
      * [setNotificationsEnabled]). Two callers: the onboarding first-list
      * wrapper's name TextField, so the onboarding flow can satisfy ONB-11 (no
      * empty/unnamed lists can leave onboarding) without a getById → copy →

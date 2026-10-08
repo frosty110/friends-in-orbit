@@ -87,7 +87,7 @@ Strategy-per-template — three sealed implementations (`KeepInTouchEngine`, `La
 
 ### Data model
 
-**Consumes.** `ContactSnapshot` (id, `isIgnored`, `pausedUntil`), `RuleContext` (last call's timestamp/duration/direction/source, `skipCount`, decoded `RuleParams`, optional active hours), `Clock`. Null `lastCallAt` = cold start, surface immediately.
+**Consumes.** `ContactSnapshot` (id, `isIgnored`, `pausedUntil`), `RuleContext` (last call's timestamp/duration/direction/source, `skipCount`, decoded `RuleParams`, optional active hours, null for every list since LIST-25 folded them into nudge times), `Clock`. Null `lastCallAt` = cold start, surface immediately.
 
 **Produces.** `Instant?` — the moment the contact should next surface; `null` = never due in this context (e.g. ignored contacts short-circuit before cooldown math). Persisted to `ListMembership.nextDueAt`; "due" everywhere in the app means `nextDueAt IS NULL OR nextDueAt <= now`.
 

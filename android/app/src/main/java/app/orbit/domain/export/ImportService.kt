@@ -16,6 +16,8 @@ import app.orbit.data.entity.NoteEntity
 import app.orbit.data.entity.RuleKind
 import app.orbit.data.entity.RuleTemplateEntity
 import app.orbit.domain.JsonProvider
+import app.orbit.notify.NudgeSchedule
+import app.orbit.notify.foldActiveWindow
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.Instant
 import java.time.LocalTime
@@ -233,20 +235,45 @@ internal fun ExportEnvelope.toPayload(now: Instant): ImportPayload {
     )
 }
 
-private fun ListExport.toEntity(dueCount: Int): ListEntity = ListEntity(
-    id = id,
-    name = name,
-    sortOrder = sortOrder,
-    isArchived = isArchived,
-    type = ListType.valueOf(type),
-    smartRuleJson = smartRuleJson,
-    ruleTemplateId = ruleTemplateId,
-    activeHoursStart = activeHoursStartSecondOfDay?.let { LocalTime.ofSecondOfDay(it.toLong()) },
-    activeHoursEnd = activeHoursEndSecondOfDay?.let { LocalTime.ofSecondOfDay(it.toLong()) },
-    notificationsEnabled = notificationsEnabled,
-    ruleParamsOverrideJson = ruleParamsOverrideJson,
-    dueCount = dueCount,
-)
+/**
+ * A backup's list as a row, its nudge schedule included (envelope v3). A v1 or
+ * v2 backup carries none, so such a list nudges on [NudgeSchedule.DEFAULT].
+ *
+ * LIST-25: a backup made before 2026-10-08 can carry an active-hours window
+ * (Time of day). Nothing shows or edits one any more, so it is folded into
+ * the list's times exactly as [app.orbit.data.db.MIGRATION_13_14] folds a
+ * stored one: the backup's schedule read as the chain reads it, then
+ * [foldActiveWindow] (an Evenings list on the default nudges at 5pm and says
+ * so), and the row keeps no window. Without a window the schedule is kept
+ * exactly as exported, null included.
+ */
+private fun ListExport.toEntity(dueCount: Int): ListEntity {
+    val start = activeHoursStartSecondOfDay?.let { LocalTime.ofSecondOfDay(it.toLong()) }
+    val end = activeHoursEndSecondOfDay?.let { LocalTime.ofSecondOfDay(it.toLong()) }
+    val foldedSchedule = if (start != null && end != null) {
+        JsonProvider.json.encodeToString(
+            NudgeSchedule.serializer(),
+            NudgeSchedule.fromStoredJson(nudgeScheduleJson).foldActiveWindow(start, end),
+        )
+    } else {
+        nudgeScheduleJson
+    }
+    return ListEntity(
+        id = id,
+        name = name,
+        sortOrder = sortOrder,
+        isArchived = isArchived,
+        type = ListType.valueOf(type),
+        smartRuleJson = smartRuleJson,
+        ruleTemplateId = ruleTemplateId,
+        activeHoursStart = null,
+        activeHoursEnd = null,
+        notificationsEnabled = notificationsEnabled,
+        ruleParamsOverrideJson = ruleParamsOverrideJson,
+        dueCount = dueCount,
+        nudgeScheduleJson = foldedSchedule,
+    )
+}
 
 private fun ContactExport.toEntity(firstSeenAt: Instant): ContactEntity = ContactEntity(
     id = id,

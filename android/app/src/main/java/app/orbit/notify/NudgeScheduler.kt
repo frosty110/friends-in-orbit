@@ -7,7 +7,6 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.repository.ListRepository
-import app.orbit.domain.JsonProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.LocalTime
 import java.time.ZoneId
@@ -36,7 +35,8 @@ import timber.log.Timber
  * never adds days and never revives a schedule the user emptied: the earlier
  * version merged in all seven days and injected the slot unconditionally, which
  * turned "Weekdays at 10am" into two nudges every day and kept "No days
- * selected - nudges off" nudging.
+ * selected - nudges off" nudging. No list has a window since LIST-25's fold
+ * (2026-10-08); see [effectiveSchedule].
  *
  * ### Cold-start re-anchor (D-08)
  * [reAnchorAll] reads every non-archived list, decodes its schedule, and calls
@@ -61,6 +61,48 @@ open class NudgeScheduler @Inject constructor(
 
         /** Minimum enqueue delay — prevents zero-delay loops during tests. */
         private const val MIN_DELAY_MS = 1_000L
+
+        /**
+         * Resolves D-09 at the scheduling level: the schedule the chain actually runs.
+         *
+         * Returns [explicit] unchanged unless every chosen time falls outside the
+         * list's active-hours window, in which case the fire-time gate would suppress
+         * them all forever. Then, and only then, the window start is added as a slot
+         * on the list's own days, so the list can post at least once on each of them.
+         *
+         * Deliberately unchanged:
+         * - **No window** (either end null): the gate only applies when both ends are
+         *   set, so every chosen time can already post.
+         * - **Nudges off** (no days or no times): the user emptied the schedule. A
+         *   slot injected here is what kept "No days selected - nudges off" nudging.
+         * - **A chosen time inside the window**: it can post, and an extra slot would
+         *   be a second nudge per day the user never asked for (onboarding promises
+         *   one).
+         *
+         * Since 2026-10-08 no list has a window (LIST-25): Time of day was
+         * retired, [app.orbit.data.db.MIGRATION_13_14] folded every stored window
+         * into the list's own times ([foldActiveWindow], which gives exactly the
+         * times this plus the gate let through), the importer folds one from an
+         * older backup, and nothing writes the columns. So this returns
+         * [explicit] for every list, and the screens say the stored times. It
+         * stays, with the worker's gate, because removing the columns and both
+         * checks is a cleanup of its own.
+         *
+         * Pure: no Context and no WorkManager, so [NudgeSchedulerEffectiveSlotsTest]
+         * calls it on the JVM directly.
+         */
+        fun effectiveSchedule(
+            explicit: NudgeSchedule,
+            activeHoursStart: LocalTime?,
+            activeHoursEnd: LocalTime?
+        ): NudgeSchedule {
+            if (activeHoursStart == null || activeHoursEnd == null) return explicit
+            if (explicit.days.isEmpty() || explicit.times.isEmpty()) return explicit
+            if (explicit.times.any { isInActiveWindow(it, activeHoursStart, activeHoursEnd) }) {
+                return explicit
+            }
+            return explicit.copy(times = (explicit.times + activeHoursStart).distinct())
+        }
     }
 
     // ─── Public scheduling surface ────────────────────────────────────────────
@@ -149,57 +191,7 @@ open class NudgeScheduler @Inject constructor(
      * don't duplicate it.
      */
     open suspend fun scheduleFromEntity(list: ListEntity) {
-        val nudgeSchedule = list.nudgeScheduleJson
-            ?.takeIf { it.isNotBlank() }
-            ?.let { json ->
-                runCatching {
-                    JsonProvider.json.decodeFromString(NudgeSchedule.serializer(), json)
-                }.getOrNull()
-            }
-            ?: NudgeSchedule.DEFAULT
-
+        val nudgeSchedule = NudgeSchedule.fromStoredJson(list.nudgeScheduleJson)
         schedule(list.id, nudgeSchedule, list.activeHoursStart, list.activeHoursEnd)
-    }
-
-    // ─── effectiveSchedule (internal — exercised by NudgeSchedulerEffectiveSlotsTest) ──
-
-    /**
-     * Resolves D-09 at the scheduling level: the schedule the chain actually runs.
-     *
-     * Returns [explicit] unchanged unless every chosen time falls outside the
-     * list's active-hours window, in which case the fire-time gate would suppress
-     * them all forever. Then, and only then, the window start is added as a slot
-     * on the list's own days, so the list can post at least once on each of them.
-     *
-     * Deliberately unchanged:
-     * - **No window** (either end null): the gate only applies when both ends are
-     *   set, so every chosen time can already post.
-     * - **Nudges off** (no days or no times): the user emptied the schedule. A
-     *   slot injected here is what kept "No days selected - nudges off" nudging.
-     * - **A chosen time inside the window**: it can post, and an extra slot would
-     *   be a second nudge per day the user never asked for (onboarding promises
-     *   one).
-     *
-     * Declared `internal` (not `private`) so [NudgeSchedulerEffectiveSlotsTest] in
-     * the JVM test source set can exercise it directly without reflection.
-     */
-    internal fun effectiveSchedule(
-        explicit: NudgeSchedule,
-        activeHoursStart: LocalTime?,
-        activeHoursEnd: LocalTime?
-    ): NudgeSchedule {
-        if (activeHoursStart == null || activeHoursEnd == null) return explicit
-        if (explicit.days.isEmpty() || explicit.times.isEmpty()) return explicit
-        if (explicit.times.any {
-                isInActiveWindow(
-                    it,
-                    activeHoursStart,
-                    activeHoursEnd
-                )
-            }
-        ) {
-            return explicit
-        }
-        return explicit.copy(times = (explicit.times + activeHoursStart).distinct())
     }
 }

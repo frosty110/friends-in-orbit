@@ -82,6 +82,18 @@ class LogConnectionUseCaseTest {
     }
 
     @Test
+    fun `Today is the instant the caller passes, when it passes one`() = runTest {
+        // CARD-10: the card words "comes up again on Saturday" from that same
+        // instant, so a second clock read cannot shift the day it names.
+        val s = setup()
+        val given = t0.minus(Duration.ofSeconds(1))
+
+        s.useCase(1L, LogConnectionWhen.Today, note = "", isAttempt = false, now = given)
+
+        assertEquals(given, s.callEvents.markCalledAtomicCalls.single().event.occurredAt)
+    }
+
+    @Test
     fun `an attempt yesterday is an ATTEMPT a day back, with the note back-dated to it`() = runTest {
         val s = setup()
 

@@ -120,8 +120,8 @@ private class ConfigThrowingListRepository(
  * save-on-change setters plus the override-JSON round-trip:
  *  1. setRuleTemplate resolves RuleKind → seeded row id
  *  2. setIntervalHours: How often for every rule type (LIST-30)
- *  3. setTimeOfDay: each part writes its window, a custom one is left alone
- *     (LIST-25)
+ *  3. the nudge schedule reads back as stored, the default when it is
+ *     missing or unreadable (LIST-25: it is the list's whole nudge timing)
  *  4. [setNotificationsEnabled_flips_boolean]
  *  5. [setSmartRuleJson_round_trips_through_polymorphic_json]
  *  6. [vm_resolves_override_in_uiState] — override beats template default
@@ -534,68 +534,26 @@ class ListConfigViewModelTest {
     }
 
     // ────────────────────────────────────────────────────────────────────────
-    // Test 3, LIST-25 + LIST-05: time of day. Each part writes its window
-    // through the atomic active-hours write, Any time writes nulls, and a
-    // custom window from the old editor reads back as Custom and is never
-    // written unless the user picks a part.
+    // Test 3, LIST-25: a list's nudge timing is its schedule alone. The VM
+    // hands the screen the stored schedule (the default when there is none or
+    // it does not decode, as the nudge chain reads it) and nothing else: the
+    // time of day it used to read back from the window is gone, and so is its
+    // setter.
     // ────────────────────────────────────────────────────────────────────────
 
     @Test
-    fun `each time of day writes its window and Any time writes nulls`() = runTest {
-        val (vm, listRepo, _, _) = fixture()
-        val expected = mapOf(
-            DayPart.Mornings to (LocalTime.of(7, 0) to LocalTime.of(12, 0)),
-            DayPart.Afternoons to (LocalTime.of(12, 0) to LocalTime.of(17, 0)),
-            DayPart.Evenings to (LocalTime.of(17, 0) to LocalTime.of(21, 0)),
-            DayPart.Nights to (LocalTime.of(21, 0) to LocalTime.of(7, 0)),
-            DayPart.AnyTime to (null to null)
+    fun `the nudge schedule reads back as stored and the default when there is none`() = runTest {
+        val weekdaysAtSix = NudgeSchedule(
+            days = setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY),
+            times = listOf(LocalTime.of(18, 0)),
         )
-        expected.forEach { (part, window) ->
-            vm.setTimeOfDay(part)
-            val written = listRepo.updateActiveHoursCalls.last()
-            assertEquals(1L, written.first, "listId should be the seeded list")
-            assertEquals(window.first, written.second, "$part start")
-            assertEquals(window.second, written.third, "$part end")
-        }
-        assertEquals(expected.size, listRepo.updateActiveHoursCalls.size, "one write per choice")
-    }
+        val stored = listFixture(id = 1L, name = "Inner orbit", ruleTemplateId = 1L)
+            .copy(nudgeScheduleJson = JsonProvider.json.encodeToString(NudgeSchedule.serializer(), weekdaysAtSix))
+        assertEquals(weekdaysAtSix, fixture(list = stored).vm.firstReady().nudgeSchedule)
 
-    @Test
-    fun `a stored window reads back as its part`() = runTest {
-        val evenings = listFixture(
-            id = 1L,
-            name = "Inner orbit",
-            type = ListType.STATIC,
-            ruleTemplateId = 1L,
-            activeHoursStart = LocalTime.of(17, 0),
-            activeHoursEnd = LocalTime.of(21, 0)
-        )
-        val s = fixture(list = evenings)
-        assertEquals(TimeOfDay.Part(DayPart.Evenings), s.vm.firstReady().timeOfDay)
-
-        val anyTime = fixture()
-        assertEquals(TimeOfDay.Part(DayPart.AnyTime), anyTime.vm.firstReady().timeOfDay)
-    }
-
-    @Test
-    fun `a custom window reads back as Custom and is left alone until a part is picked`() = runTest {
-        val nineToFive = listFixture(
-            id = 1L,
-            name = "Inner orbit",
-            type = ListType.STATIC,
-            ruleTemplateId = 1L,
-            activeHoursStart = LocalTime.of(9, 0),
-            activeHoursEnd = LocalTime.of(17, 0)
-        )
-        val s = fixture(list = nineToFive)
-        assertEquals(TimeOfDay.Custom(LocalTime.of(9, 0), LocalTime.of(17, 0)), s.vm.firstReady().timeOfDay)
-        assertTrue(s.listRepo.updateActiveHoursCalls.isEmpty(), "reading a custom window never rewrites it")
-        assertTrue(s.nudgeScheduler.scheduleCalls.isEmpty(), "nor reschedules its nudges")
-
-        s.vm.setTimeOfDay(DayPart.Afternoons)
-
-        assertEquals(Triple(1L, LocalTime.of(12, 0), LocalTime.of(17, 0)), s.listRepo.updateActiveHoursCalls.single())
-        s.vm.firstReady { it.timeOfDay == TimeOfDay.Part(DayPart.Afternoons) }
+        assertEquals(NudgeSchedule.DEFAULT, fixture().vm.firstReady().nudgeSchedule)
+        val unreadable = stored.copy(nudgeScheduleJson = "{not json")
+        assertEquals(NudgeSchedule.DEFAULT, fixture(list = unreadable).vm.firstReady().nudgeSchedule)
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -1116,19 +1074,6 @@ class ListConfigViewModelTest {
             sched.activeHoursEnd,
             "activeHoursEnd must be forwarded: D-09 decides against the whole window"
         )
-    }
-
-    @Test
-    fun `setTimeOfDay re-anchors the nudge chain against the new window`() = runTest {
-        // Regression: the effective schedule depends on the window, but a window
-        // edit used to leave the previously queued slot in place.
-        val s = fixture()
-        s.vm.setTimeOfDay(DayPart.Nights)
-        val sched = s.nudgeScheduler.scheduleCalls.lastOrNull()
-        assertNotNull(sched, "a window edit must reschedule the list's nudges")
-        assertEquals(1L, sched.listId)
-        assertEquals(LocalTime.of(21, 0), sched.activeHoursStart)
-        assertEquals(LocalTime.of(7, 0), sched.activeHoursEnd)
     }
 
     @Test

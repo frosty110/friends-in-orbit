@@ -4,7 +4,6 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.orbit.R
-import app.orbit.data.AppPrefs
 import app.orbit.data.NoteRow
 import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.CallSource
@@ -107,11 +106,9 @@ import javax.inject.Inject
  *     motion alone (see [acknowledgeCallWhenConfirmed]).
  *
  * Owner review (2026-10-07):
- *   - **CARD-09, idle hints.** [moveHints] says what the hints over the
- *     card's edges say, worked out by the Later and Sooner use cases' own
- *     `preview` so the "when" is the one the move's snackbar then says, and
- *     null once the user has made [SWIPE_HINT_MOVES_TO_LEARN] moves
- *     (counted in [AppPrefs] on every Later and Sooner).
+ *   - **CARD-09, idle hints.** Retired 2026-10-08 at the owner's request:
+ *     the hints' query (`moveHints`), the move count that stopped them and
+ *     the use cases' `preview` are gone with them.
  *   - **CARD-10, Log a connection.** [onLogConnection] writes through
  *     [LogConnectionUseCase], the one Contact detail calls, and the deck
  *     moves on through the feed like after a call.
@@ -133,8 +130,6 @@ class CardViewViewModel @Inject constructor(
     // CARD-11: reads the call the log confirmed, to tell a call worth a note
     // from a short or unanswered one.
     private val callEventRepo: CallEventRepository,
-    // CARD-09: how many moves the user has made, so the idle hints stop.
-    private val appPrefs: AppPrefs,
     private val undoStack: UndoStack,
     private val callLogResync: CallLogResyncTrigger,
     private val clock: Clock,
@@ -241,7 +236,6 @@ class CardViewViewModel @Inject constructor(
     /** CORE-04: Later (left swipe or the Later button) defers this contact on the current list. */
     fun onSwipeLeft(contactId: Long) = viewModelScope.launch {
         callAckJob?.cancel()
-        recordMove()
         val name = firstNameOf(contactId)
         runMutation(
             if (name != null) {
@@ -252,15 +246,13 @@ class CardViewViewModel @Inject constructor(
         ) {
             val prior = captureSchedule(contactId)
             skipContact(contactId = contactId, listId = listId)
-            val newDue = focusedDueAfterMutation(contactId)
-            stageUndo(prior, label = laterMessage(name, newDue))
+            stageUndo(prior, laterMessage(name))
         }
     }
 
     /** CORE-03: Sooner (right swipe or the Sooner button) brings this contact forward on the current list. */
     fun onSwipeRight(contactId: Long) = viewModelScope.launch {
         callAckJob?.cancel()
-        recordMove()
         val name = firstNameOf(contactId)
         runMutation(
             if (name != null) {
@@ -271,67 +263,7 @@ class CardViewViewModel @Inject constructor(
         ) {
             val prior = captureSchedule(contactId)
             surfaceSooner(contactId = contactId, listId = listId)
-            val newDue = focusedDueAfterMutation(contactId)
-            stageUndo(prior, label = soonerMessage(name, newDue))
-        }
-    }
-
-    /**
-     * CARD-09: counts a Later or Sooner toward [SWIPE_HINT_MOVES_TO_LEARN],
-     * after which the idle hints never show again. Its own coroutine, so the
-     * move's write never waits on the preferences file.
-     *
-     * A failure here is swallowed, on purpose and only here: the count is not
-     * the user's data and not a change they asked for, so "Couldn't save your
-     * change" would be about nothing they did (rules.md Code 3 is about the
-     * user's writes). What it costs is a few more hints.
-     */
-    private fun recordMove() {
-        viewModelScope.launch {
-            try {
-                appPrefs.recordCardMove(cap = SWIPE_HINT_MOVES_TO_LEARN)
-            } catch (t: Throwable) {
-                if (t is CancellationException) throw t
-            }
-        }
-    }
-
-    /**
-     * CARD-09: what the idle hints over the card's edges say for [contactId],
-     * asked by the screen just before each appearance; null when they should
-     * not show at all, because the user has made [SWIPE_HINT_MOVES_TO_LEARN]
-     * moves, or nothing could be read.
-     *
-     * The "when" is what the move would do right now, from
-     * [SkipContactUseCase.preview] and [SurfaceSoonerUseCase.preview], the
-     * functions the moves themselves write with, and worded from the same
-     * [comesUp] bucket as the move's snackbar ([futureDueLabel]), so the hint
-     * and the snackbar that follows it say the same day. Where a move's time
-     * cannot be worked out (a list without a rule template) the hint is the
-     * bare "Later" or "Sooner". Asked fresh each time rather than carried on
-     * [uiState]: a "when" fixed at emission goes stale while the card sits,
-     * and a state change while a swiped card is held off-screen would bring
-     * the old card back ([CardSwipeFrame]'s re-center).
-     *
-     * A failure is null, no hints this time: they are decoration, and a read
-     * that failed here must not take the deck down with it.
-     */
-    suspend fun moveHints(contactId: Long): CardMoveHints? {
-        val list = listId ?: return null
-        return try {
-            if (appPrefs.cardMovesMade.first() >= SWIPE_HINT_MOVES_TO_LEARN) return null
-            val laterAt = skipContact.preview(contactId, list)
-            val soonerAt = surfaceSooner.preview(contactId, list)
-            val now = clock.now()
-            CardMoveHints(
-                later = laterAt?.let { UiText.res(R.string.card_hint_later_when, hintWhenLabel(it, now)) }
-                    ?: UiText.res(R.string.card_later),
-                sooner = soonerAt?.let { UiText.res(R.string.card_hint_sooner_when, hintWhenLabel(it, now)) }
-                    ?: UiText.res(R.string.card_sooner),
-            )
-        } catch (t: Throwable) {
-            if (t is CancellationException) throw t
-            null
+            stageUndo(prior, soonerMessage(name))
         }
     }
 
@@ -344,6 +276,12 @@ class CardViewViewModel @Inject constructor(
      * with a nameless twin for the privacy curtain; a failure says "Couldn't
      * save your change" (rules.md Code 3).
      *
+     * The "when" is counted from the instant the log is written with (CARD-10),
+     * so on a list that comes up every 2 days, a connection logged now names
+     * the day after tomorrow. It was counted from a second clock read after
+     * the writes, in whole 24-hour spans, which made every whole-day rhythm a
+     * day short ("tomorrow" on that list) until 2026-10-08.
+     *
      * Cancels a pending "Called {name}": a deck that moved because of this
      * log is not evidence of a call (CARD-03).
      */
@@ -352,8 +290,8 @@ class CardViewViewModel @Inject constructor(
             callAckJob?.cancel()
             val name = firstNameOf(contactId)
             runMutation(UiText.res(R.string.components_snackbar_save_failed)) {
-                logConnection(contactId, whenChoice, note, isAttempt)
                 val now = clock.now()
+                logConnection(contactId, whenChoice, note, isAttempt, now = now)
                 // A connection logged for a day long past can leave the person
                 // still up now; "comes up again later today" would be wrong
                 // about someone who is up already, so only a future time is said.
@@ -445,7 +383,9 @@ class CardViewViewModel @Inject constructor(
             if (confirmed == null) return@launch
             // CARD-11: a call worth a note opens the page for it, in place of
             // the snackbar. This job runs once per dial (the dial is consumed
-            // in onReturnedFromDial), so the page opens at most once a call.
+            // in onReturnedFromDial), so the card asks at most once a dial;
+            // the nav host makes it once a call across every way in, the
+            // notification's tap included (PostCallNotePages).
             val worthANote = callWorthANote(contactId, dialedAt)
             if (worthANote != null) {
                 _messages.tryEmit(CardMessage.OpenNote(contactId = contactId, callEventId = worthANote.id))
@@ -527,10 +467,10 @@ class CardViewViewModel @Inject constructor(
      * membership) on the depth-1 [UndoStack] and emit the snackbar. The
      * recompute keeps `lists.dueCount` consistent after the restore.
      *
-     * [label] is the snackbar's text and travels as [UiText] in [CardMessage]
-     * (`UndoStack.PendingUndo` carries only the inverse).
+     * [message] is the snackbar's sentence and its nameless twin, as [UiText]
+     * in [CardMessage] (`UndoStack.PendingUndo` carries only the inverse).
      */
-    private fun stageUndo(prior: List<ListMembershipEntity>, label: UiText) {
+    private fun stageUndo(prior: List<ListMembershipEntity>, message: MoveMessage) {
         val inverse: suspend () -> Unit = {
             prior.forEach { membership ->
                 listRepo.restoreMembershipSchedule(
@@ -544,7 +484,9 @@ class CardViewViewModel @Inject constructor(
         }
         undoStack.put(UndoStack.PendingUndo(inverse))
         val token = ++undoToken
-        _messages.tryEmit(CardMessage.Undoable(text = label, token = token))
+        _messages.tryEmit(
+            CardMessage.Undoable(text = message.text, curtainText = message.curtainText, token = token),
+        )
     }
 
     /** The first name of the person on the card, read before a mutation moves it on. */
@@ -553,28 +495,27 @@ class CardViewViewModel @Inject constructor(
             ?.takeIf { it.contactId == contactId }
             ?.contact?.name?.trim()?.substringBefore(' ')?.ifBlank { null }
 
-    // CARD-02: the snackbar names the person and says when they come back, in
-    // the app's two verbs for this, Later and Sooner (voice.md glossary). A
-    // separate sentence for an unknown name, so no language has to fit "They"
-    // into a slot meant for a name.
-    private fun laterMessage(name: String?, newDue: Instant?): UiText {
-        val `when` = newDue?.let { futureDueLabel(it, clock.now()) }
-        return when {
-            name != null && `when` != null -> UiText.res(R.string.card_later_named_when, name, `when`)
-            name != null -> UiText.res(R.string.card_later_named, name)
-            `when` != null -> UiText.res(R.string.card_later_unnamed_when, `when`)
-            else -> UiText.res(R.string.card_later_unnamed)
-        }
+    /** A Later's or Sooner's snackbar: the sentence, and the one shown under the curtain. */
+    private data class MoveMessage(val text: UiText, val curtainText: UiText)
+
+    // CARD-02: the snackbar names the person and says only that they moved,
+    // in the app's two verbs for this, Later and Sooner (voice.md glossary):
+    // "Kai moved to later." It never says when they come back: the owner
+    // asked on 2026-10-08 that the card not surface how far a move goes
+    // (until then it read "Kai will come up again tomorrow." and "Kai comes
+    // up later today."). A separate sentence for an unknown name, so no
+    // language has to fit "They" into a slot meant for a name; that sentence
+    // is the curtain's too (PRIV-03), as Log a connection's is (CARD-10).
+    private fun laterMessage(name: String?): MoveMessage {
+        val unnamed = UiText.res(R.string.card_later_unnamed)
+        val named = name?.let { UiText.res(R.string.card_later_named, it) }
+        return MoveMessage(text = named ?: unnamed, curtainText = unnamed)
     }
 
-    private fun soonerMessage(name: String?, newDue: Instant?): UiText {
-        val `when` = newDue?.let { futureDueLabel(it, clock.now()) }
-        return when {
-            name != null && `when` != null -> UiText.res(R.string.card_sooner_named_when, name, `when`)
-            name != null -> UiText.res(R.string.card_sooner_named, name)
-            `when` != null -> UiText.res(R.string.card_sooner_unnamed_when, `when`)
-            else -> UiText.res(R.string.card_sooner_unnamed)
-        }
+    private fun soonerMessage(name: String?): MoveMessage {
+        val unnamed = UiText.res(R.string.card_sooner_unnamed)
+        val named = name?.let { UiText.res(R.string.card_sooner_named, it) }
+        return MoveMessage(text = named ?: unnamed, curtainText = unnamed)
     }
 
     /**
@@ -624,7 +565,7 @@ class CardViewViewModel @Inject constructor(
                 // Connections only for "when you last spoke" and for CARD-03's
                 // evidence: an ATTEMPT is a reach-out that did not connect
                 // (Enums.kt), the same filter withCallStats applies to "Last
-                // call", so the face never says "You spoke today" over a
+                // call", so the face never says "Spoke today" over a
                 // voicemail.
                 val connections = recentCalls.filter { it.source != CallSource.ATTEMPT }
                 CardViewUiState.Ready(
@@ -647,7 +588,7 @@ class CardViewViewModel @Inject constructor(
 
     /**
      * Honest one-line framing from the most recent connected call (manual
-     * marks count, the user told us they talked): "You spoke 3 weeks ago."
+     * marks count, the user told us they talked): "Spoke 3 weeks ago."
      * ([cardWhySince]; Home's words for the same gap, so one idea has one
      * wording). Null when there is no history at all; the face then shows
      * only the neutral "Not enough calls yet to see a pattern" panel.
@@ -686,11 +627,15 @@ class CardViewViewModel @Inject constructor(
     }
 
     /**
-     * Forward-looking phrase for snackbars and the up-next hint:
-     * "later today" / "tomorrow" / "on Tuesday" / "in 12 days" / "in 3 weeks"
-     * / "in 2 months". Lowercase fragment so it slots mid-sentence (a nested
-     * [UiText] argument of the snackbar and up-next sentences). The buckets
-     * are [comesUp]'s, shared with Browse's rows (BROWSE-07).
+     * Forward-looking phrase for Log a connection's snackbar (CARD-10) and
+     * the All quiet line's up-next hint (CARD-05): "later today" / "tomorrow"
+     * / "on Tuesday" / "in 12 days" / "in 3 weeks" / "in 2 months". Lowercase
+     * fragment so it slots mid-sentence (a nested [UiText] argument of those
+     * sentences). The buckets are [comesUp]'s, calendar days in [zoneId],
+     * shared with Browse's rows (BROWSE-07). [now] is the instant [due] was
+     * worked out from wherever there is one (a log; CARD-10), else the
+     * emission's own read. Later and Sooner say no "when" since 2026-10-08
+     * (CARD-02).
      */
     internal fun futureDueLabel(due: Instant, now: Instant): UiText =
         when (val bucket = comesUp(due, now, zoneId)) {
@@ -701,24 +646,6 @@ class CardViewViewModel @Inject constructor(
                 bucket.day.getDisplayName(TextStyle.FULL, Locale.getDefault()),
             )
             is ComesUp.InDays -> UiText.res(R.string.card_due_in_span, formatSpan(bucket.days))
-        }
-
-    /**
-     * CARD-09: the same [comesUp] bucket as [futureDueLabel], worded to stand
-     * alone after the hint's dot ("Later · Thursday", "Sooner · In 2 weeks").
-     * Its own strings because a phrase that slots mid-sentence and a label
-     * that stands alone are separate strings for translators (the Browse
-     * precedent, ComesUp.kt).
-     */
-    internal fun hintWhenLabel(due: Instant, now: Instant): UiText =
-        when (val bucket = comesUp(due, now, zoneId)) {
-            ComesUp.LaterToday -> UiText.res(R.string.card_hint_today)
-            ComesUp.Tomorrow -> UiText.res(R.string.card_hint_tomorrow)
-            is ComesUp.OnDay -> UiText.res(
-                R.string.card_hint_on_day,
-                bucket.day.getDisplayName(TextStyle.FULL, Locale.getDefault()),
-            )
-            is ComesUp.InDays -> UiText.res(R.string.card_hint_in_span, formatSpan(bucket.days))
         }
 
     /**
@@ -744,21 +671,16 @@ private const val CALL_ACK_WAIT_MS = 15_000L
  */
 private const val CALLS_SCANNED_FOR_NOTE = 10
 
-/**
- * CARD-09: Later and Sooner moves after which the idle hints never show
- * again ("a handful", owner review decision 4). Internal for the tests.
- */
-internal const val SWIPE_HINT_MOVES_TO_LEARN = 5
-
 // SavedStateHandle keys for the pending dial (not copy, voice.md).
 private const val KEY_DIAL_CONTACT_ID = "card_dial_contact_id"
 private const val KEY_DIAL_AT_MS = "card_dial_at_ms"
 
 /**
- * The card's "when you last spoke" line for a gap of [days] whole days: "You
- * spoke today.", "You spoke yesterday.", then "You spoke 3 days ago." / "You
- * spoke 3 weeks ago." with [formatAgo]'s one wording as the argument. Active
- * voice, the form voice.md gives ("You spoke yesterday"). Until 2026-10-06 the
+ * The card's "when you last spoke" line for a gap of [days] whole days:
+ * "Spoke today.", "Spoke yesterday.", then "Spoke 3 days ago." / "Spoke 3
+ * weeks ago." with [formatAgo]'s one wording as the argument; "You" was
+ * dropped on 2026-10-08 at the owner's request, as on Home, and voice.md
+ * gives this form ("Spoke yesterday"). Until 2026-10-06 the
  * span filled "%1$s since you last spoke.", which for the most common gaps
  * read "3 days since you last spoke.", the shame framing voice.md never says
  * and `VoiceRules` forbids ("days since"); the string audit reads resource

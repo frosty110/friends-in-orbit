@@ -57,8 +57,6 @@
 
     <!-- A row in the Lists manager. -->
     <string name="lists_row_reorder">Reorder list</string>
-    <!-- Chip on a list that fills itself from a rule. -->
-    <string name="lists_row_smart_chip">Smart list</string>
     <!-- %1$s: the list's name. -->
     <string name="lists_row_add_people">Add people to %1$s</string>
     <string name="lists_row_more_actions">More actions for %1$s</string>
@@ -103,8 +101,8 @@
 
     <!-- Step 1, Start with: one choice among the tiles below. -->
     <string name="lists_new_start_heading">How do you want to start?</string>
-    <!-- The small label over the one template whose people come from a rule: the name the
-         Lists screen's chip gives such a list (lists_row_smart_chip). -->
+    <!-- The small label over the one template whose people come from a rule: the name
+         TalkBack gives such a list on Home (home_tile_smart_list). -->
     <string name="lists_new_smart_label">Smart list</string>
 
     <!-- Step 2, the list's name. -->
@@ -158,8 +156,6 @@
     <!-- Placeholder in Make your first list's empty name field. -->
     <string name="lists_create_name_placeholder">e.g. Inner orbit</string>
     <string name="lists_section_how_often">How often</string>
-    <!-- The part of the day a list's nudges may come in (LIST-25). -->
-    <string name="lists_section_time_of_day">Time of day</string>
     <string name="lists_section_nudges">Nudges</string>
     <string name="lists_section_when_to_nudge">When to nudge</string>
     <string name="lists_section_smart_rule">Smart rule</string>
@@ -298,26 +294,6 @@
     <string name="lists_nudge_summary_no_time">No time set: tap “Add time”</string>
     <!-- Shown while this list's nudges are paused. -->
     <string name="lists_nudge_paused_badge">Nudges paused</string>
-
-    <!-- Time of day (LIST-25): one choice of the part of the day this list's nudges may
-         come in. A nudge is held to that part; the times are fixed (7am to noon, noon to
-         5pm, 5pm to 9pm, 9pm to 7am). -->
-    <string name="lists_time_any">Any time</string>
-    <string name="lists_time_mornings">Mornings</string>
-    <string name="lists_time_afternoons">Afternoons</string>
-    <string name="lists_time_evenings">Evenings</string>
-    <string name="lists_time_nights">Nights</string>
-    <!-- A window set earlier that is none of the parts. %1$s and %2$s: its start and end
-         in the phone's clock style ("Custom: 9am to 5pm"). -->
-    <string name="lists_time_custom">Custom: %1$s to %2$s</string>
-    <!-- The line under the choice, saying what it does. %1$s and %2$s: the start and end
-         in the phone's clock style ("7am", "12pm", or "07:00", "12:00"). -->
-    <string name="lists_time_note_any">Nudges can come at any time of day.</string>
-    <string name="lists_time_note_mornings">Nudges for this list come only in the morning, from %1$s to %2$s.</string>
-    <string name="lists_time_note_afternoons">Nudges for this list come only in the afternoon, from %1$s to %2$s.</string>
-    <string name="lists_time_note_evenings">Nudges for this list come only in the evening, from %1$s to %2$s.</string>
-    <string name="lists_time_note_nights">Nudges for this list come only at night, from %1$s to %2$s.</string>
-    <string name="lists_time_note_custom">Nudges for this list come only from %1$s to %2$s.</string>
 
     <!-- Confirms the time picker (a nudge time). -->
     <string name="lists_hours_ok">OK</string>

@@ -67,8 +67,11 @@
     <string name="picker_sort_most_called">Most called</string>
     <string name="picker_sort_recently_called">Recently called</string>
     <string name="picker_sort_recently_added">Recently added</string>
+    <!-- The action of the message shown when everyone left is ignored. -->
     <string name="picker_show_ignored">Show ignored</string>
-    <string name="picker_hide_ignored">Hide ignored</string>
+    <!-- Screen-reader name of the eye icon beside Sort, a switch that shows the people you
+         ignore when on and hides them when off. TalkBack adds "on" or "off". -->
+    <string name="picker_show_ignored_toggle">Show ignored people</string>
 
     <!-- The list or person the picker was opened for is not there: the id was malformed,
          or the row is gone. The list wording is the one List settings owns

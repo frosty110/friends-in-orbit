@@ -12,7 +12,6 @@ import app.orbit.domain.smart.SmartListEngine
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.domain.usecase.MutationResult
 import java.time.Instant
-import java.time.LocalTime
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 
@@ -180,10 +179,6 @@ internal class ListRepositoryImpl @Inject constructor(
 
     override suspend fun updateRuleTemplate(listId: Long, templateId: Long) {
         listDao.updateRuleTemplate(listId, templateId)
-    }
-
-    override suspend fun updateActiveHours(listId: Long, start: LocalTime?, end: LocalTime?) {
-        listDao.updateActiveHours(listId, start, end)
     }
 
     override suspend fun updateNotificationsEnabled(listId: Long, enabled: Boolean) {

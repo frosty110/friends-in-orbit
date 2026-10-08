@@ -3,7 +3,7 @@
 **Route:** `lists/new`. The older `lists?openCreate=true` still lands here: it opens New list over Lists, once
 **Group:** Lists
 **Status:** active
-**Last reviewed:** 2026-10-07
+**Last reviewed:** 2026-10-08
 **Spec:** [orbit-lists](../orbit-lists/README.md): LIST-28 (the step-by-step flow), LIST-29 (the templates), LIST-30 (How often), LIST-27 (the People section); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
@@ -38,8 +38,8 @@ One decision per step, under one app bar.
 - "Close" (steps 2 to 4), and Back on step 1: with something entered (a template picked counts) asks "Discard this list?" with "Keep going" and "Discard"; with nothing entered it just leaves
 - "Add people" (step 4, the footer or the People header): opens the Add people picker to choose people for the list, with whoever is already chosen ticked; its button reads "Add" (TalkBack hears "Add 3 people"), and it brings them back here. Back from the picker changes nothing
 - "Remove {name} from list": takes them off before the list is made
-- "Create list" / "Create without people": makes the list, its rhythm and its people in one go, then returns to the screen New list was opened from with "Created {name}." and the new list in place, last in the order. Nudges start as the create sheet's did: on, any time of day, the default schedule
-- A Create that fails says "Couldn't save your change", leaves nothing half-made, and keeps you on the step with everything entered; nothing is pressable while it is in flight
+- "Create list" / "Create without people": makes the list, its rhythm and its people in one go, then returns to the screen New list was opened from with "Created {name}." and the new list in place, last in the order; Lists scrolls it into view. Nudges start as the create sheet's did: on, with the default schedule (every day at 10am)
+- A Create that fails says "Couldn't save your change", leaves nothing half-made, and keeps you on the step with everything entered; nothing that changes the list can be pressed while it is in flight: the footer, "Close" (so no "Discard"), the People section's "Add people" and remove controls, and the How often wheel (a wheel still coasting stops and goes back to the interval being written); "Show all" stays live, since it only shows more
 
 ## States
 
@@ -56,8 +56,8 @@ One decision per step, under one app bar.
 
 ## Tests that pin it
 
-- `NewListViewModelTest` (added 2026-10-07: the steps in order for a regular and a smart template, Next refusing a missing template and a blank name, Back keeping every entry, the entries surviving a process death, a template filling in only what was not typed or set, Create writing the list, its rhythm and its people with "Created {name}.", the smart list made from How often with no people, a person who has left dropping out, a failed Create leaving nothing behind and keeping the step, Create only from the last step)
-- `NewListContentTest` (added 2026-10-07: Back and Close and "Discard this list?", each step's button and progress, the People step's two ways on, nothing pressable while creating)
+- `NewListViewModelTest` (added 2026-10-07: the steps in order for a regular and a smart template, Next refusing a missing template and a blank name, Back keeping every entry, the entries surviving a process death, a template filling in only what was not typed or set, Create writing the list, its rhythm and its people with "Created {name}.", the smart list made from How often with no people, a person who has left dropping out, a failed Create leaving nothing behind and keeping the step, Create only from the last step, and, added 2026-10-08, no remove or new interval while Create is in flight)
+- `NewListContentTest` (added 2026-10-07: Back and Close and "Discard this list?", each step's button and progress, the People step's two ways on, nothing pressable while creating: the footer, Close, Add people, Remove and the How often wheel)
 - `CreateListUseCaseTest` (added 2026-10-07: one transaction for list, rhythm and people; last in the order; a failure part way leaves nothing; the smart list's rule and no people; blank names and a missing template refused)
 - `CreateListTemplateCatalogTest` (the order, the three intervals, the smart rule, no Mentors), `TemplateSelectionSemanticsTest` (the tiles are one radio group and hand over their names)
 - `ThemeContrastTest` (the tiles' text on each tint, every theme, mode and hue)
