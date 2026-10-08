@@ -1,7 +1,7 @@
 # Rules
 
 **Status:** active
-**Last reviewed:** 2026-10-08 (Design 8 has no exception again: the card's idle swipe hints, CARD-09, were removed at the owner's request)
+**Last reviewed:** 2026-10-08 (Design 9 added: no badges, at the owner's word "We should just omit badges in general")
 **Canonical for:** the numbered engineering rules cited from source comments
 
 ---
@@ -89,6 +89,21 @@ Navigation's 700ms default. When the user has turned animations off
 (`LocalReducedMotion`, read from the system's animator duration scale), every
 transition and decorative animation becomes an instant change (WCAG 2.3.3).
 Press feedback is the theme's quiet overlay (`OrbitPressIndication`), not ripple.
+
+**Design 9: No badges.** Nothing tags a row, card, title, avatar or icon with a
+small marker of status, category, count or recommendation: no read-only chip or
+pill, no count bubble, no status dot, no corner tag, and no glyph whose only job
+is to name a category. If the user needs the fact, say it in words on a line
+the screen already has ("Ignored · Never called", "Every 14 days · 12 people").
+If the screen already says it (the app bar, a heading, a control's state),
+leave it out. A chip shape is for a control only (`OrbitFilterChip`).
+Controls, selection marks, sentences and text lines, headings, avatars and the
+rhythm strip's own marks are not badges. There is no badge component to reuse,
+and `scripts/check-conventions.py` check G fails a build that brings one back.
+Added 2026-10-08 at the owner's word, "We should just omit badges in general",
+after Home's due counts (HOME-2), the card's idle hints (CARD-09), its drag
+chips (CARD-08), its answer chip (CARD-04) and the Lists "Smart list" chip
+(LIST-07) had been removed one at a time.
 
 ---
 

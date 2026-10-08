@@ -54,7 +54,9 @@ CITE_NEAR_RULES = re.compile(
 )
 CITE_SECTION = re.compile(r"§\s*(Design|Code)\s+(\d+)", re.IGNORECASE)
 
-RULE_DEF = re.compile(r"^\*\*(Design|Code)\s+(\d+)\s+—", re.MULTILINE)
+# A rule heading is `**Design 9: No badges.**`; older ones put a dash after the
+# number, and both forms define the rule.
+RULE_DEF = re.compile(r"^\*\*(Design|Code)\s+(\d+)(?:\s+\u2014|:)", re.MULTILINE)
 ARCH_DEF = re.compile(r"^\*\*(ARCH-\d+)\s+—", re.MULTILINE)
 
 REQUIREMENT_ID = re.compile(r"\b([A-Z][A-Z0-9]{2,9})-(\d{2})\b")
