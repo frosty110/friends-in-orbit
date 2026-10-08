@@ -73,7 +73,7 @@ import app.orbit.ui.util.asString
  * the onboarding wrapper inherits Save-on-change behavior, the convert
  * dialog (irrelevant for new STATIC lists but harmless), and the
  * snackbar-event collector. The setter callbacks bind to the actual VM
- * method names (`setName`, `setIntervalHours`, `setTimeOfDay`,
+ * method names (`setName`, `setIntervalHours`,
  * `setNotificationsEnabled`, `setSmartRuleJson`, `confirmConvert`), and the
  * first read seeds the template with `setRuleTemplate`.
  */
@@ -207,10 +207,11 @@ fun OnboardingFirstListScreen(
             isOnboarding = true,
             snackbarHostState = snackbarHostState,
             onNameChange = vm::setName,
-            // LIST-30 / LIST-25: the same How often and Time of day as List
-            // settings; the rhythm choice went from both screens at once.
+            // LIST-30: the same How often as List settings; the rhythm
+            // choice went from both screens at once. Time of day went from
+            // both too (LIST-25): the step says the nudge's days and time
+            // under Nudges, and they change in the list's settings.
             onIntervalChange = vm::setIntervalHours,
-            onTimeOfDayChange = vm::setTimeOfDay,
             onNotificationsToggle = vm::setNotificationsEnabled,
             // isOnboarding=true means NudgeScheduleSection is absent from the tree;
             // the callback is still required by the signature.
@@ -333,7 +334,6 @@ private fun FirstListLoadingSkeleton() {
     listOf(
         R.string.lists_section_name,
         R.string.lists_section_how_often,
-        R.string.lists_section_time_of_day,
         R.string.lists_section_nudges,
         R.string.lists_section_members,
     ).forEach { title ->
@@ -403,7 +403,6 @@ private fun OnboardingFirstListScreenPreviewBody(
             snackbarHostState = snackbarHostState,
             onNameChange = {},
             onIntervalChange = {},
-            onTimeOfDayChange = {},
             onNotificationsToggle = {},
             onNudgeScheduleChange = {},
             onSmartRuleChange = {},
@@ -449,8 +448,6 @@ private fun OnboardingFirstListScreenPreview() {
                 ruleKind = RuleKind.KEEP_IN_TOUCH,
                 ruleParams = RuleParams.KeepInTouch(cooldownMinHours = 168),
                 smartRule = null,
-                activeHoursStart = null,
-                activeHoursEnd = null,
                 notificationsEnabled = true,
                 nudgeSchedule = null,
                 members = listOf(
@@ -477,8 +474,6 @@ private fun OnboardingFirstListContactsDeniedPreview() {
                 ruleKind = RuleKind.KEEP_IN_TOUCH,
                 ruleParams = RuleParams.KeepInTouch(cooldownMinHours = 168),
                 smartRule = null,
-                activeHoursStart = null,
-                activeHoursEnd = null,
                 notificationsEnabled = true,
                 nudgeSchedule = null,
                 members = emptyList()

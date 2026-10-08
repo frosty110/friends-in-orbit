@@ -97,6 +97,9 @@ fun create(context: Context, keyProvider: DatabaseKeyProvider): OrbitDatabase {
             //              NULL) mirroring ContactsContract
             //              CONTACT_LAST_UPDATED_TIMESTAMP; ingest COALESCE-backfills
             //              existing rows. Powers the "Recently added" picker sort.
+            // v=13 → v=14: no schema change: each list's active-hours window
+            //              (Time of day) folded into its nudge times, then both
+            //              columns cleared (LIST-25).
             .addMigrations(
                 MIGRATION_1_2,
                 MIGRATION_2_3,
@@ -110,6 +113,7 @@ fun create(context: Context, keyProvider: DatabaseKeyProvider): OrbitDatabase {
                 MIGRATION_10_11,
                 MIGRATION_11_12,
                 MIGRATION_12_13,
+                MIGRATION_13_14,
             )
             .build()
     } finally {

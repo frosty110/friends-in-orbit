@@ -19,14 +19,14 @@
 
 - App bar: "4 of 4", no back arrow (a first list is required to finish)
 - A helper line while Done is not yet available: "Add a name and pick at least 3 people to finish." (or, without contacts access, "You can add people once Orbit can see your contacts. Grant access any time in Settings.", and with no name either, "Give your list a name to finish. You can add people once Orbit can see your contacts.")
-- The same controls as List settings, with two differences: the name is an editable field at the top ("Name"; List settings renames from its title instead), and the nudge days and time show as a read-only summary of when the nudge really comes ("Every day at 10am"; "Every day at 5pm" once Evenings is picked, LIST-25) with "Change the days or time any time in this list's settings." Sections: Name, How often (the one rhythm control; the rhythm choice went with LIST-30), Time of day ("Any time", "Mornings", "Afternoons", "Evenings", "Nights"; LIST-25), Nudges, People (the count with "Add people" on its right; LIST-27)
+- The same controls as List settings, with two differences: the name is an editable field at the top ("Name"; List settings renames from its title instead), and the nudge days and time show as a read-only summary, which is when the nudge comes ("Every day at 10am"), with "Change the days or time any time in this list's settings." Sections: Name, How often (the one rhythm control; the rhythm choice went with LIST-30), Nudges, People (the count with "Add people" on its right; LIST-27). There is no Time of day section since 2026-10-08: a list's nudge timing is its days and times, set in List settings (LIST-25)
 - "Done", the one accent element, and "Add another list"
 
 ## Actions and menus
 
 - Everything saves as you go, as in List settings; the typed name is written to the list
 - "Add people" (in the People header): opens the Add people picker and returns here; "Added 3 people to {list}" with Undo shows on return
-- Move "How often" or pick a time of day: saved at once, as in List settings; a time of day the default 10am is outside moves the summary to its start ("Every day at 12pm" for Afternoons, "5pm" for Evenings, "9pm" for Nights)
+- Move "How often": saved at once, as in List settings
 - Remove a person: "Removed {name}" with Undo, which puts them back
 - "Done": available once the list has a name and at least three people; finishes the counted steps and opens Done
 - "Add another list": keeps this list and opens a new, empty one in its place
@@ -50,6 +50,6 @@
 
 - `OnboardingFirstListGateTest` (Done needs a name and three people; the fallback branch always offers an action)
 - `OnboardingListStarterTest` (resume, not duplicate; add another)
-- `ListConfigViewModelTest` (the shared body), `ListSettingsControlsTest` (Time of day and the People header, shared with List settings; the summary under Evenings), `NudgePlanTest` (what the summary says for each part of the day)
+- `ListConfigViewModelTest` (the shared body), `ListSettingsControlsTest` (no Time of day section, and the summary says the default "Every day at 10am"; the People header, shared with List settings)
 - `OrbitNavHostTest` (added this round: back lands on the Sync step, never Preview; "Start again" returns to Sync)
-- Gallery previews: `OnboardingFirstListScreenPreview`, `OnboardingFirstListLoadingPreview`, `OnboardingFirstListContactsDeniedPreview`, `OnboardingNudgeSummaryLightPreview`, `OnboardingNudgeSummaryEveningsPreview`, the Error and Not found previews added this round, with the curtain pass
+- Gallery previews: `OnboardingFirstListScreenPreview`, `OnboardingFirstListLoadingPreview`, `OnboardingFirstListContactsDeniedPreview`, `OnboardingNudgeSummaryLightPreview`, `OnboardingNudgeSummaryDarkPreview`, the Error and Not found previews added this round, with the curtain pass

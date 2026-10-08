@@ -2,7 +2,6 @@ package app.orbit.data.dao
 
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListType
-import java.time.LocalTime
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
@@ -50,7 +49,6 @@ open class TestListDaoStub(
         smartRuleJson: String?,
     ) {}
     override suspend fun updateRuleTemplate(id: Long, templateId: Long) {}
-    override suspend fun updateActiveHours(id: Long, start: LocalTime?, end: LocalTime?) {}
     override suspend fun updateNotificationsEnabled(id: Long, enabled: Boolean) {}
     override suspend fun updateName(id: Long, name: String) {}
 

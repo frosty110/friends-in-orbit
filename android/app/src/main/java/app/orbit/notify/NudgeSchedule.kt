@@ -1,7 +1,6 @@
 package app.orbit.notify
 
 import app.orbit.domain.JsonProvider
-import app.orbit.ui.screens.lists.spansMidnight
 import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.ZonedDateTime
@@ -109,6 +108,20 @@ data class NudgeSchedule(
          */
         const val DEFAULT_JSON =
             """{"days":["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"],"times":["10:00"]}"""
+
+        /**
+         * The schedule a list nudges on, from its stored
+         * [app.orbit.data.entity.ListEntity.nudgeScheduleJson]: [DEFAULT] when
+         * the column is null, blank or unreadable, as the nudge chain has always
+         * treated it. One reading for the chain
+         * ([NudgeScheduler.scheduleFromEntity]) and for
+         * [app.orbit.data.db.MIGRATION_13_14], which must fold a window into
+         * the schedule the chain was really running.
+         */
+        fun fromStoredJson(json: String?): NudgeSchedule =
+            json?.takeIf { it.isNotBlank() }
+                ?.let { runCatching { JsonProvider.json.decodeFromString(serializer(), it) }.getOrNull() }
+                ?: DEFAULT
     }
 }
 
@@ -156,6 +169,9 @@ fun NudgeSchedule.nextSlot(now: ZonedDateTime): ZonedDateTime? {
 
 // ─── Active-hours window ─────────────────────────────────────────────────────
 
+/** True when the window [start]..[end] crosses midnight (22:00 to 02:00, or the old Nights part). */
+internal fun spansMidnight(start: LocalTime, end: LocalTime): Boolean = end < start
+
 /**
  * True when [time] falls inside the active-hours window that runs from
  * [start] up to [end]: the start is in, the end is not, wrapping past midnight
@@ -183,3 +199,32 @@ fun isInActiveWindow(time: LocalTime, start: LocalTime, end: LocalTime): Boolean
         // Normal range: inside if start <= time < end
         time >= start && time < end
     }
+
+/**
+ * LIST-25: this schedule with a list's active-hours window folded into its
+ * times, so that the times alone say when the nudge comes.
+ *
+ * Until 2026-10-08 a list had two answers to "when": its nudge times (When to
+ * nudge) and a window they had to fall in (Time of day, before that "Active
+ * hours"). The window only ever narrowed the times, so the owner's review
+ * found two sections deciding one thing, and three bugs had come from how the
+ * two combined (B4, a summary naming 10am for a 5pm nudge, and a time on the
+ * window's end never posting). Time of day went; this keeps every list
+ * nudging exactly when it did:
+ *
+ * - The times inside the window are the ones that posted (the fire-time gate
+ *   held the rest), so they are kept and the rest dropped.
+ * - With none inside, the scheduler added the window's start (D-09) and that
+ *   was the one nudge, so the start becomes the only time.
+ * - No window (either end null), or no times (nudges off): unchanged.
+ *
+ * Days are never touched: the window never changed them. Folding a schedule
+ * with no days still folds its times, so the list nudges as before if days
+ * are chosen again. Pure; used by [app.orbit.data.db.MIGRATION_13_14] for
+ * every stored window and by the importer for a window in an older backup.
+ */
+fun NudgeSchedule.foldActiveWindow(start: LocalTime?, end: LocalTime?): NudgeSchedule {
+    if (start == null || end == null || times.isEmpty()) return this
+    val inside = times.filter { isInActiveWindow(it, start, end) }.distinct().sorted()
+    return copy(times = inside.ifEmpty { listOf(start) })
+}

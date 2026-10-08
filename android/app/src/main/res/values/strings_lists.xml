@@ -158,8 +158,6 @@
     <!-- Placeholder in Make your first list's empty name field. -->
     <string name="lists_create_name_placeholder">e.g. Inner orbit</string>
     <string name="lists_section_how_often">How often</string>
-    <!-- The part of the day a list's nudges may come in (LIST-25). -->
-    <string name="lists_section_time_of_day">Time of day</string>
     <string name="lists_section_nudges">Nudges</string>
     <string name="lists_section_when_to_nudge">When to nudge</string>
     <string name="lists_section_smart_rule">Smart rule</string>
@@ -296,41 +294,8 @@
     <string name="lists_nudge_times_many">%1$s, and %2$s</string>
     <string name="lists_nudge_summary_no_days">No days selected: nudges off</string>
     <string name="lists_nudge_summary_no_time">No time set: tap “Add time”</string>
-    <!-- Under the plan line, when some of the list's own nudge times fall outside its time
-         of day (LIST-25) and another still comes. %1$s: those times, joined as the plan
-         joins them ("10am", "10am and 2pm"); the count is how many. -->
-    <plurals name="lists_nudge_outside_skipped">
-        <item quantity="one">%1$s is outside this list\'s time of day, so no nudge comes then.</item>
-        <item quantity="other">%1$s are outside this list\'s time of day, so no nudges come then.</item>
-    </plurals>
-    <!-- As above, when none of them is inside it, so the nudge comes when the time of day
-         starts. %1$s: those times, %2$s: the start ("5pm"). -->
-    <plurals name="lists_nudge_outside_moved">
-        <item quantity="one">%1$s is outside this list\'s time of day, so the nudge comes at %2$s instead.</item>
-        <item quantity="other">%1$s are outside this list\'s time of day, so the nudge comes at %2$s instead.</item>
-    </plurals>
     <!-- Shown while this list's nudges are paused. -->
     <string name="lists_nudge_paused_badge">Nudges paused</string>
-
-    <!-- Time of day (LIST-25): one choice of the part of the day this list's nudges may
-         come in. A nudge is held to that part; the times are fixed (7am to noon, noon to
-         5pm, 5pm to 9pm, 9pm to 7am). -->
-    <string name="lists_time_any">Any time</string>
-    <string name="lists_time_mornings">Mornings</string>
-    <string name="lists_time_afternoons">Afternoons</string>
-    <string name="lists_time_evenings">Evenings</string>
-    <string name="lists_time_nights">Nights</string>
-    <!-- A window set earlier that is none of the parts. %1$s and %2$s: its start and end
-         in the phone's clock style ("Custom: 9am to 5pm"). -->
-    <string name="lists_time_custom">Custom: %1$s to %2$s</string>
-    <!-- The line under the choice, saying what it does. %1$s and %2$s: the start and end
-         in the phone's clock style ("7am", "12pm", or "07:00", "12:00"). -->
-    <string name="lists_time_note_any">Nudges can come at any time of day.</string>
-    <string name="lists_time_note_mornings">Nudges for this list come only in the morning, from %1$s to %2$s.</string>
-    <string name="lists_time_note_afternoons">Nudges for this list come only in the afternoon, from %1$s to %2$s.</string>
-    <string name="lists_time_note_evenings">Nudges for this list come only in the evening, from %1$s to %2$s.</string>
-    <string name="lists_time_note_nights">Nudges for this list come only at night, from %1$s to %2$s.</string>
-    <string name="lists_time_note_custom">Nudges for this list come only from %1$s to %2$s.</string>
 
     <!-- Confirms the time picker (a nudge time). -->
     <string name="lists_hours_ok">OK</string>

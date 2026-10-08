@@ -92,7 +92,7 @@ Give each task on a card, one at a time, in this order. Tasks 1 to 5 are the cor
 | 4 | "You don't want to call Sam this week. Tell Orbit to bring him up later." | Sam is moved later, and the participant can say when he'll come back. | Whether Later is found without hints; whether they notice and trust Undo. |
 | 5 | "You've changed your mind; you'd like Sam to come up sooner after all. Put it back." | Undoes the Later, or uses Sooner, and Sam is back. | Recovery without fear; whether the snackbar named the right person. |
 | 6 | "Make a new list for your college friends and put three people in it." | List exists with three people. | Finding the create control; picker clarity; the words in list settings. |
-| 7 | "You'd like Orbit to remind you about this list only in the evenings." | Active hours set to evening for that list. | Whether "nudges", "active hours", and the time picker make sense. |
+| 7 | "You'd like Orbit to remind you about this list only in the evenings." | That list's nudge time changed to an evening time under "When to nudge" (the one place nudge timing is set since 2026-10-08, LIST-25). | Whether "nudges", "When to nudge", and the time picker make sense, and whether anyone looks for a separate time-of-day setting. |
 | 8 | "Find out how often you've talked to Priya this year." | Opens Priya's call history (filtered to her). | Whether "View all calls" shows only her. |
 
 **Optional, if time allows:** switch the app to dark mode; turn on a different colour theme; add the widget to the home screen.

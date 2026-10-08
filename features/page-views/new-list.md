@@ -38,7 +38,7 @@ One decision per step, under one app bar.
 - "Close" (steps 2 to 4), and Back on step 1: with something entered (a template picked counts) asks "Discard this list?" with "Keep going" and "Discard"; with nothing entered it just leaves
 - "Add people" (step 4, the footer or the People header): opens the Add people picker to choose people for the list, with whoever is already chosen ticked; its button reads "Add" (TalkBack hears "Add 3 people"), and it brings them back here. Back from the picker changes nothing
 - "Remove {name} from list": takes them off before the list is made
-- "Create list" / "Create without people": makes the list, its rhythm and its people in one go, then returns to the screen New list was opened from with "Created {name}." and the new list in place, last in the order; Lists scrolls it into view. Nudges start as the create sheet's did: on, any time of day, the default schedule
+- "Create list" / "Create without people": makes the list, its rhythm and its people in one go, then returns to the screen New list was opened from with "Created {name}." and the new list in place, last in the order; Lists scrolls it into view. Nudges start as the create sheet's did: on, with the default schedule (every day at 10am)
 - A Create that fails says "Couldn't save your change", leaves nothing half-made, and keeps you on the step with everything entered; nothing that changes the list can be pressed while it is in flight: the footer, "Close" (so no "Discard"), the People section's "Add people" and remove controls, and the How often wheel (a wheel still coasting stops and goes back to the interval being written); "Show all" stays live, since it only shows more
 
 ## States

@@ -135,8 +135,6 @@ class OnboardingFirstListGateTest {
                     ruleKind = RuleKind.KEEP_IN_TOUCH,
                     ruleParams = RuleParams.KeepInTouch(cooldownMinHours = 168),
                     smartRule = null,
-                    activeHoursStart = null,
-                    activeHoursEnd = null,
                     notificationsEnabled = true,
                     nudgeSchedule = null,
                     members = emptyList()

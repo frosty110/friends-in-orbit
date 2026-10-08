@@ -38,4 +38,31 @@ class NudgeScheduleTest {
             "Migration DEFAULT_JSON must match JsonProvider.json.encodeToString(NudgeSchedule.DEFAULT)",
         )
     }
+
+    @Test
+    fun fromStoredJson_readsAScheduleAndFallsBackToTheDefaultTheChainUses() {
+        // One reading for the nudge chain and for MIGRATION_13_14 (LIST-25):
+        // the migration must fold a window into the schedule that really ran.
+        val weekdaysAtSix = NudgeSchedule(
+            days = setOf(
+                DayOfWeek.MONDAY,
+                DayOfWeek.TUESDAY,
+                DayOfWeek.WEDNESDAY,
+                DayOfWeek.THURSDAY,
+                DayOfWeek.FRIDAY
+            ),
+            times = listOf(LocalTime.of(18, 0))
+        )
+        assertEquals(
+            weekdaysAtSix,
+            NudgeSchedule.fromStoredJson(JsonProvider.json.encodeToString(weekdaysAtSix))
+        )
+        listOf(null, "", "   ", "{not json").forEach { stored ->
+            assertEquals(
+                NudgeSchedule.DEFAULT,
+                NudgeSchedule.fromStoredJson(stored),
+                "stored=$stored"
+            )
+        }
+    }
 }

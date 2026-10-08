@@ -83,7 +83,6 @@ internal fun ListConfigBody(
     // LIST-30: hours, from How often. The ViewModel decides what a move does
     // to the list (setIntervalHours); the body only reports the number.
     onIntervalChange: (Int) -> Unit,
-    onTimeOfDayChange: (DayPart) -> Unit,
     onNotificationsToggle: (Boolean) -> Unit,
     onNudgeScheduleChange: (NudgeSchedule) -> Unit,
     onSmartRuleChange: (SmartListRule) -> Unit,
@@ -115,7 +114,6 @@ internal fun ListConfigBody(
                 onDone = null,
                 onNameChange = onNameChange,
                 onIntervalChange = onIntervalChange,
-                onTimeOfDayChange = onTimeOfDayChange,
                 onNotificationsToggle = onNotificationsToggle,
                 onNudgeScheduleChange = onNudgeScheduleChange,
                 onSmartRuleChange = onSmartRuleChange,
@@ -139,7 +137,6 @@ internal fun ListConfigBody(
                     onDone = onDone,
                     onNameChange = onNameChange,
                     onIntervalChange = onIntervalChange,
-                    onTimeOfDayChange = onTimeOfDayChange,
                     onNotificationsToggle = onNotificationsToggle,
                     onNudgeScheduleChange = onNudgeScheduleChange,
                     onSmartRuleChange = onSmartRuleChange,
@@ -185,7 +182,6 @@ private fun ColumnScope.ListConfigBodySections(
     onDone: (() -> Unit)?,
     onNameChange: (String) -> Unit,
     onIntervalChange: (Int) -> Unit,
-    onTimeOfDayChange: (DayPart) -> Unit,
     onNotificationsToggle: (Boolean) -> Unit,
     onNudgeScheduleChange: (NudgeSchedule) -> Unit,
     onSmartRuleChange: (SmartListRule) -> Unit,
@@ -260,15 +256,6 @@ private fun ColumnScope.ListConfigBodySections(
         )
     }
 
-    // LIST-25: which part of the day this list's nudges may come in, in place
-    // of the active-hours editor ("Always active" with two time pickers).
-    SettingGroup(title = stringResource(R.string.lists_section_time_of_day)) {
-        TimeOfDayPicker(
-            selection = state.timeOfDay,
-            onSelect = onTimeOfDayChange,
-        )
-    }
-
     // One word for these notifications: "nudges" (voice.md glossary).
     SettingGroup(title = stringResource(R.string.lists_section_nudges)) {
         ToggleRow(
@@ -283,25 +270,23 @@ private fun ColumnScope.ListConfigBodySections(
         // at creation: the toggle above turns it off; retiming lives in settings.
         // ADR 0009 — user-owned reminders, default-on, never a surprise.
         if (isOnboarding && state.notificationsEnabled) {
-            // LIST-25: with the time of day, so the line says when the nudge
-            // really comes (the scheduler's answer), not the stored 10am.
-            OnboardingNudgeSummary(
-                schedule = state.nudgeSchedule,
-                activeHoursStart = state.activeHoursStart,
-                activeHoursEnd = state.activeHoursEnd,
-            )
+            OnboardingNudgeSummary(schedule = state.nudgeSchedule)
         }
     }
 
     // D-05 / NOTIF-10: Nudges section is fully absent during onboarding — not
     // disabled, not alpha-hidden — so it is unreachable via keyboard or a11y
     // before setup completes (Pitfall 8).
+    //
+    // LIST-25: the one place a list's nudge timing is set. A "Time of day"
+    // group (Mornings, Evenings and so on) sat above Nudges until 2026-10-08,
+    // a window the times here had to fall in; the owner's review found two
+    // sections deciding one thing, so it went and every window was folded
+    // into these times (MIGRATION_13_14).
     if (!isOnboarding) {
         SettingGroup(title = stringResource(R.string.lists_section_when_to_nudge)) {
             NudgeScheduleSection(
                 schedule = state.nudgeSchedule,
-                activeHoursStart = state.activeHoursStart,
-                activeHoursEnd = state.activeHoursEnd,
                 notificationsEnabled = state.notificationsEnabled,
                 onScheduleChange = onNudgeScheduleChange
             )

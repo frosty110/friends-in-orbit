@@ -4,7 +4,6 @@ import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.domain.usecase.MutationResult
 import java.time.Instant
-import java.time.LocalTime
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -118,22 +117,20 @@ interface ListRepository {
     // The earlier setters used `getById → copy → update`, which is a read-modify-write
     // round trip. Two overlapping setter taps clobber each other (e.g. quickly toggling
     // notifications while changing the rule template can lose one of the writes). The
-    // three methods below let the VM hand the DAO exactly the column(s) it intends to
+    // methods below let the VM hand the DAO exactly the column(s) it intends to
     // change; concurrent setters on different columns no longer collide.
 
     /** LIST-06 — atomic write of `ruleTemplateId`. */
     suspend fun updateRuleTemplate(listId: Long, templateId: Long)
-
-    /** LIST-05 — atomic write of `activeHoursStart` + `activeHoursEnd` (both nulls = always active). */
-    suspend fun updateActiveHours(listId: Long, start: LocalTime?, end: LocalTime?)
 
     /** LIST-05 — atomic flip of `notificationsEnabled`. */
     suspend fun updateNotificationsEnabled(listId: Long, enabled: Boolean)
 
     /**
      * ONB-11 / ONB-24 — atomic single-column write of `name`. Mirrors the
-     * H3-fix family ([updateRuleTemplate], [updateActiveHours],
-     * [updateNotificationsEnabled]). Used by [ListConfigViewModel.setName] so the
+     * H3-fix family ([updateRuleTemplate], [updateNotificationsEnabled]).
+     * (`updateActiveHours` was one of them until LIST-25 retired the window on
+     * 2026-10-08; nothing writes the columns now.) Used by [ListConfigViewModel.setName] so the
      * onboarding first-list flow can write the user's typed name without a
      * read-modify-write round trip.
      */

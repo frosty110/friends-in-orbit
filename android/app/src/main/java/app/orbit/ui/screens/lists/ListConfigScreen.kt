@@ -73,7 +73,6 @@ import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
 import app.orbit.ui.util.asString
-import java.time.LocalTime
 
 /**
  * List Configuration screen.
@@ -82,7 +81,7 @@ import java.time.LocalTime
  * (`lifecycle-runtime-compose` 2.8.7 is in the catalog); inner
  * ([ListConfigContent]) is stateless apart from the title's rename state, and
  * composes the app bar and [ListConfigBody] ([app.orbit.ui.components.IntervalDaysPicker],
- * [TimeOfDayPicker], [SmartRuleEditor], [MembersPreview]).
+ * [NudgeScheduleSection], [SmartRuleEditor], [MembersPreview]).
  *
  * Save-on-change semantics — every control commits via a VM setter. There is
  * no app-bar commit chip and no archive or delete here: both live on the list's
@@ -163,7 +162,6 @@ fun ListConfigScreen(
         onDone = onSave,
         onRename = vm::setName,
         onIntervalChange = vm::setIntervalHours,
-        onTimeOfDayChange = vm::setTimeOfDay,
         onNotificationsToggle = vm::setNotificationsEnabled,
         onNudgeScheduleChange = vm::onNudgeScheduleChange,
         onSmartRuleChange = { rule ->
@@ -214,7 +212,6 @@ internal fun ListConfigContent(
     onDone: () -> Unit,
     onRename: (String) -> Unit,
     onIntervalChange: (Int) -> Unit,
-    onTimeOfDayChange: (DayPart) -> Unit,
     onNotificationsToggle: (Boolean) -> Unit,
     onNudgeScheduleChange: (NudgeSchedule) -> Unit,
     onSmartRuleChange: (SmartListRule) -> Unit,
@@ -360,7 +357,6 @@ internal fun ListConfigContent(
             // with an outcome that depends on which button was in reach.
             onDone = if (editing) null else onDone,
             onIntervalChange = onIntervalChange,
-            onTimeOfDayChange = onTimeOfDayChange,
             onNotificationsToggle = onNotificationsToggle,
             onNudgeScheduleChange = onNudgeScheduleChange,
             onSmartRuleChange = onSmartRuleChange,
@@ -541,7 +537,6 @@ private fun ListConfigPreviewHost(state: ListConfigUiState, startRenaming: Boole
                 onDone = {},
                 onRename = {},
                 onIntervalChange = {},
-                onTimeOfDayChange = {},
                 onNotificationsToggle = {},
                 onNudgeScheduleChange = {},
                 onSmartRuleChange = {},
@@ -560,8 +555,6 @@ private fun previewReady(
     ruleKind: RuleKind? = RuleKind.KEEP_IN_TOUCH,
     ruleParams: RuleParams? = RuleParams.KeepInTouch(),
     smartRule: SmartListRule? = null,
-    activeHoursStart: LocalTime? = null,
-    activeHoursEnd: LocalTime? = null,
     notificationsEnabled: Boolean = true,
     members: List<ListConfigContactSnapshot> = listOf(
         ListConfigContactSnapshot(1L, "Alex Rivera", null),
@@ -574,8 +567,6 @@ private fun previewReady(
     ruleKind = ruleKind,
     ruleParams = ruleParams,
     smartRule = smartRule,
-    activeHoursStart = activeHoursStart,
-    activeHoursEnd = activeHoursEnd,
     notificationsEnabled = notificationsEnabled,
     nudgeSchedule = null,
     members = members,
@@ -588,8 +579,7 @@ private fun ListConfigScreenStaticReadyLightPreview() {
 }
 
 // LIST-30: a Late night list now shows How often at its real base, "Aim for
-// every 3 days", where it used to say it had nothing to set; and Mornings
-// selected under Time of day.
+// every 3 days", where it used to say it had nothing to set.
 @PreviewLightDark
 @Composable
 private fun ListConfigScreenStaticLateNightPreview() {
@@ -598,8 +588,6 @@ private fun ListConfigScreenStaticLateNightPreview() {
             name = "Late night",
             ruleKind = RuleKind.LATE_NIGHT,
             ruleParams = RuleParams.LateNight(),
-            activeHoursStart = DayPart.Mornings.start,
-            activeHoursEnd = DayPart.Mornings.end,
             members = listOf(ListConfigContactSnapshot(1L, "Alex Rivera", null)),
         ),
     )
@@ -638,17 +626,15 @@ private fun ListConfigContentPreview() {
     ListConfigPreviewHost(previewReady())
 }
 
-// LIST-25: a window from the old start and end pickers that is none of the
-// parts reads back as "Custom: 9pm to 2am", selected, and is left alone.
+// Send nudges off: When to nudge keeps its days and times and says
+// "Nudges paused" under them.
 @PreviewLightDark
 @Composable
-private fun ListConfigCustomWindowPreview() {
+private fun ListConfigNudgesPausedPreview() {
     ListConfigPreviewHost(
         previewReady(
             name = "People who ground me",
             ruleParams = RuleParams.KeepInTouch().withIntervalHours(14 * 24),
-            activeHoursStart = LocalTime.of(21, 0),
-            activeHoursEnd = LocalTime.of(2, 0),
             notificationsEnabled = false,
             members = listOf(ListConfigContactSnapshot(3L, "Jordan Lee", null)),
         ),

@@ -15,7 +15,6 @@ import app.orbit.domain.clock.Clock
 import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.MutationResult
 import java.time.Instant
-import java.time.LocalTime
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -280,9 +279,6 @@ internal object ThrowingListRepository : ListRepository {
         throw NotImplementedError()
 
     override suspend fun updateRuleTemplate(listId: Long, templateId: Long): Unit =
-        throw NotImplementedError()
-
-    override suspend fun updateActiveHours(listId: Long, start: LocalTime?, end: LocalTime?): Unit =
         throw NotImplementedError()
 
     override suspend fun updateNotificationsEnabled(listId: Long, enabled: Boolean): Unit =

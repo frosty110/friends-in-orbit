@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,7 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -37,8 +35,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.orbit.R
 import app.orbit.notify.NudgeSchedule
-import app.orbit.notify.NudgeScheduler
-import app.orbit.notify.isInActiveWindow
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 import java.time.DayOfWeek
@@ -54,9 +50,10 @@ import java.util.Locale
  *  - 1a: Row of seven day-of-week chips (S M T W T F S).
  *  - 1b: Column of removable time chips plus an "Add time" affordance.
  *  - 1c: Schedule summary line (D-06 format rules, [scheduleSummary]): the
- *    nudge the list will really get, read through [nudgePlan] with the list's
- *    time of day ([activeHoursStart]..[activeHoursEnd], LIST-25), and under it
- *    a note naming any chosen time the time of day holds back.
+ *    days and times above as one sentence. They are the whole answer to when
+ *    the nudge comes (LIST-25): the list's time of day, a window that could
+ *    hold a chosen time back, was retired on 2026-10-08 and folded into these
+ *    times, so there is nothing left for the line to explain.
  *  - 1d: "Nudges paused" badge when notificationsEnabled = false (D-04).
  *
  * Copy lives in strings_lists.xml (`lists_nudge_*`); it used to be constants
@@ -66,20 +63,15 @@ import java.util.Locale
  * button. Mirrors every other ListConfigBody control.
  *
  * Token-clean: no raw colour literals, no raw font-size literals.
- * Reuses [TimePickerDialogOrbit] and [formatHour12] from TimeOfDayPicker.kt.
+ * Reuses [TimePickerDialogOrbit] and [formatHour12] from TimePickerDialogOrbit.kt.
  */
 @Composable
 internal fun NudgeScheduleSection(
     schedule: NudgeSchedule?,
-    activeHoursStart: LocalTime?,
-    activeHoursEnd: LocalTime?,
     notificationsEnabled: Boolean,
     onScheduleChange: (NudgeSchedule) -> Unit,
 ) {
     val effective = schedule ?: NudgeSchedule.DEFAULT
-    val plan = remember(effective, activeHoursStart, activeHoursEnd) {
-        nudgePlan(effective, activeHoursStart, activeHoursEnd)
-    }
 
     // Tracks which time chip is being edited (null = none; -1 = adding a new time)
     var editingTimeIndex by remember { mutableStateOf<Int?>(null) }
@@ -147,9 +139,7 @@ internal fun NudgeScheduleSection(
         }
 
         // ── 1c. Schedule summary ─────────────────────────────────────────────
-        // The chips above are the times the user chose; the line says when the
-        // nudge really comes, which the time of day can change (LIST-25).
-        ScheduleSummaryLine(schedule = effective, plan = plan)
+        ScheduleSummaryLine(schedule = effective)
 
         // ── 1d. Muted badge ───────────────────────────────────────────────────
         if (!notificationsEnabled) {
@@ -333,7 +323,7 @@ private fun TimeChipRow(
 }
 
 @Composable
-private fun ScheduleSummaryLine(schedule: NudgeSchedule, plan: NudgePlan) {
+private fun ScheduleSummaryLine(schedule: NudgeSchedule) {
     when {
         schedule.days.isEmpty() -> {
             Text(
@@ -349,44 +339,21 @@ private fun ScheduleSummaryLine(schedule: NudgeSchedule, plan: NudgePlan) {
         }
         else -> {
             Text(
-                text = planSummary(plan),
+                text = summaryOf(schedule),
                 style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fg),
             )
-            if (plan.outside.isNotEmpty()) {
-                Text(
-                    text = outsideNote(plan),
-                    style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                )
-            }
         }
     }
 }
 
 /**
- * The plan as one line: the days and the times a nudge can post at, which is
- * what [nudgePlan] says will happen, not the times as stored.
+ * The schedule as one line, its times in order and each once ("Every day at
+ * 10am"). The scheduler and the worker run exactly these days and times, so
+ * this is when the nudge comes.
  */
 @Composable
-private fun planSummary(plan: NudgePlan): String =
-    scheduleSummary(dayGroupLabel(plan.posts.days), plan.posts.times.map { formatHour12(it) })
-
-/**
- * Why a chosen time is not in the plan: "10am is outside this list's time of
- * day, so the nudge comes at 5pm instead." when the time of day's start stands
- * in for every chosen time, or "... so no nudge comes then." when another
- * chosen time still posts. The times are joined as the plan's are.
- */
-@Composable
-private fun outsideNote(plan: NudgePlan): String {
-    val times = joinTimes(plan.outside.map { formatHour12(it) })
-    val count = plan.outside.size
-    val instead = plan.startInstead
-    return if (instead != null) {
-        pluralStringResource(R.plurals.lists_nudge_outside_moved, count, times, formatHour12(instead))
-    } else {
-        pluralStringResource(R.plurals.lists_nudge_outside_skipped, count, times)
-    }
-}
+private fun summaryOf(schedule: NudgeSchedule): String =
+    scheduleSummary(dayGroupLabel(schedule.days), schedule.times.distinct().sorted().map { formatHour12(it) })
 
 /**
  * Read-only nudge summary for the onboarding first-list step. Onboarding hides the
@@ -400,23 +367,12 @@ private fun outsideNote(plan: NudgePlan): String {
  * disclosed only on the permission screen, not at the moment the list is built.
  */
 @Composable
-internal fun OnboardingNudgeSummary(
-    schedule: NudgeSchedule?,
-    activeHoursStart: LocalTime?,
-    activeHoursEnd: LocalTime?,
-) {
+internal fun OnboardingNudgeSummary(schedule: NudgeSchedule?) {
     // Mirror the scheduler's own fallback (NudgeScheduler.kt): a list with no
     // stored schedule nudges on NudgeSchedule.DEFAULT — every day at 10:00.
     val effective = (schedule ?: NudgeSchedule.DEFAULT)
         .takeIf { it.days.isNotEmpty() && it.times.isNotEmpty() }
         ?: NudgeSchedule.DEFAULT
-    // LIST-25: Time of day sits above this on the same step, so the line says
-    // when the nudge really comes ("Every day at 5pm" for Evenings), the
-    // scheduler's answer. Onboarding shows no nudge times, so there is no
-    // chosen time to explain and no note under it.
-    val plan = remember(effective, activeHoursStart, activeHoursEnd) {
-        nudgePlan(effective, activeHoursStart, activeHoursEnd)
-    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -424,7 +380,7 @@ internal fun OnboardingNudgeSummary(
         verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1),
     ) {
         Text(
-            text = planSummary(plan),
+            text = summaryOf(effective),
             style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fg),
         )
         Text(
@@ -473,60 +429,6 @@ private val SUNDAY_FIRST: List<DayOfWeek> = listOf(
 )
 
 /**
- * What a list's nudge will really do, for the summary line (LIST-25).
- *
- * [posts] is the schedule the nudge chain runs ([NudgeScheduler.effectiveSchedule])
- * less the times the fire-time gate will hold back: the days, and the times a
- * nudge can post at, in order. [outside] is the chosen times the list's time
- * of day holds back, in order; empty with no time of day. [startInstead] is
- * the time of day's start when the scheduler added it because none of the
- * chosen times fits (D-09), else null.
- */
-@Immutable
-internal data class NudgePlan(
-    val posts: NudgeSchedule,
-    val outside: List<LocalTime>,
-    val startInstead: LocalTime?,
-)
-
-/**
- * The one reading of a list's schedule and time of day that the screens say
- * out loud, built from the two definitions the nudge itself goes through:
- * [NudgeScheduler.effectiveSchedule], which decides the slots the chain wakes
- * at, and [isInActiveWindow], the question the worker's active-hours gate asks
- * at each slot. Neither is copied here, so the summary cannot drift from the
- * nudge (until 2026-10-08 the line read the stored schedule alone, and an
- * Evenings list said "Every day at 10am" while its nudge came at 5pm).
- *
- * The scheduler keeps a held-back time as a slot (the worker wakes, the gate
- * holds it, the chain moves on), so the gate's question is what takes it out
- * of [NudgePlan.posts]. An emptied schedule (no days or no times) is not a
- * plan: the line says "nudges off" or "No time set" for it, from the stored
- * schedule.
- */
-internal fun nudgePlan(
-    schedule: NudgeSchedule,
-    activeHoursStart: LocalTime?,
-    activeHoursEnd: LocalTime?,
-): NudgePlan {
-    val effective = NudgeScheduler.effectiveSchedule(schedule, activeHoursStart, activeHoursEnd)
-    if (activeHoursStart == null || activeHoursEnd == null) {
-        return NudgePlan(
-            posts = effective.copy(times = effective.times.distinct().sorted()),
-            outside = emptyList(),
-            startInstead = null,
-        )
-    }
-    val canPost = { time: LocalTime -> isInActiveWindow(time, activeHoursStart, activeHoursEnd) }
-    return NudgePlan(
-        posts = effective.copy(times = effective.times.filter(canPost).distinct().sorted()),
-        outside = schedule.times.filterNot(canPost).distinct().sorted(),
-        // A time the scheduler added is one the user never chose: the start.
-        startInstead = (effective.times - schedule.times.toSet()).firstOrNull(),
-    )
-}
-
-/**
  * The schedule as a sentence (D-06), from pre-formatted parts:
  *
  * | Schedule state | Result |
@@ -547,8 +449,8 @@ private fun scheduleSummary(dayGroupLabel: String, timeStrings: List<String>): S
     stringResource(R.string.lists_nudge_summary, dayGroupLabel, joinTimes(timeStrings))
 
 /**
- * "10am", "10am and 6pm", "9am, 1pm, and 6pm": times joined as the plan line
- * joins them, for the line and for the note under it. [timeStrings] is non-empty.
+ * "10am", "10am and 6pm", "9am, 1pm, and 6pm": the summary line's times.
+ * [timeStrings] is non-empty.
  */
 @Composable
 private fun joinTimes(timeStrings: List<String>): String = when (timeStrings.size) {
@@ -596,8 +498,6 @@ private fun NudgeScheduleSectionLightPreview() {
     OrbitTheme(darkTheme = false) {
         NudgeScheduleSection(
             schedule = NudgeSchedule.DEFAULT,
-            activeHoursStart = null,
-            activeHoursEnd = null,
             notificationsEnabled = true,
             onScheduleChange = {},
         )
@@ -613,8 +513,6 @@ private fun NudgeScheduleSectionDarkMutedPreview() {
                 days = setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY),
                 times = listOf(LocalTime.of(9, 0), LocalTime.of(18, 30)),
             ),
-            activeHoursStart = null,
-            activeHoursEnd = null,
             notificationsEnabled = false,
             onScheduleChange = {},
         )
@@ -627,25 +525,6 @@ private fun NudgeScheduleSectionEmptyPreview() {
     OrbitTheme(darkTheme = false) {
         NudgeScheduleSection(
             schedule = NudgeSchedule(days = emptySet(), times = emptyList()),
-            activeHoursStart = null,
-            activeHoursEnd = null,
-            notificationsEnabled = true,
-            onScheduleChange = {},
-        )
-    }
-}
-
-// LIST-25: the default 10am under Evenings. The line says when the nudge
-// really comes ("Every day at 5pm"), and the note why 10am is not in it.
-@Preview(name = "NudgeScheduleSection, light, evenings, 10am outside", showBackground = true)
-@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "NudgeScheduleSection, dark, evenings, 10am outside", showBackground = true)
-@Composable
-private fun NudgeScheduleSectionOutsideTimeOfDayPreview() {
-    OrbitTheme {
-        NudgeScheduleSection(
-            schedule = NudgeSchedule.DEFAULT,
-            activeHoursStart = DayPart.Evenings.start,
-            activeHoursEnd = DayPart.Evenings.end,
             notificationsEnabled = true,
             onScheduleChange = {},
         )
@@ -656,7 +535,7 @@ private fun NudgeScheduleSectionOutsideTimeOfDayPreview() {
 @Composable
 private fun OnboardingNudgeSummaryLightPreview() {
     OrbitTheme(darkTheme = false) {
-        OnboardingNudgeSummary(schedule = null, activeHoursStart = null, activeHoursEnd = null)
+        OnboardingNudgeSummary(schedule = null)
     }
 }
 
@@ -669,21 +548,6 @@ private fun OnboardingNudgeSummaryDarkPreview() {
                 days = setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY),
                 times = listOf(LocalTime.of(9, 0)),
             ),
-            activeHoursStart = null,
-            activeHoursEnd = null,
-        )
-    }
-}
-
-// LIST-25: Evenings picked on the step, so the default nudge comes at 5pm.
-@Preview(name = "OnboardingNudgeSummary, light, evenings", showBackground = true)
-@Composable
-private fun OnboardingNudgeSummaryEveningsPreview() {
-    OrbitTheme(darkTheme = false) {
-        OnboardingNudgeSummary(
-            schedule = null,
-            activeHoursStart = DayPart.Evenings.start,
-            activeHoursEnd = DayPart.Evenings.end,
         )
     }
 }

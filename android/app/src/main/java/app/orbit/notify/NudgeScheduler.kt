@@ -7,7 +7,6 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.repository.ListRepository
-import app.orbit.domain.JsonProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.LocalTime
 import java.time.ZoneId
@@ -36,7 +35,8 @@ import timber.log.Timber
  * never adds days and never revives a schedule the user emptied: the earlier
  * version merged in all seven days and injected the slot unconditionally, which
  * turned "Weekdays at 10am" into two nudges every day and kept "No days
- * selected - nudges off" nudging.
+ * selected - nudges off" nudging. No list has a window since LIST-25's fold
+ * (2026-10-08); see [effectiveSchedule].
  *
  * ### Cold-start re-anchor (D-08)
  * [reAnchorAll] reads every non-archived list, decodes its schedule, and calls
@@ -79,12 +79,15 @@ open class NudgeScheduler @Inject constructor(
          *   be a second nudge per day the user never asked for (onboarding promises
          *   one).
          *
-         * On the companion and public, not an instance member, because what the
-         * screens say about a list's nudge is read from it too (LIST-25): List
-         * settings' "When to nudge" line and Make your first list's summary
-         * (`nudgePlan` in NudgeScheduleSection.kt). Until 2026-10-08 it was an
-         * internal instance member and the screens printed the stored schedule, so
-         * an Evenings list read "Every day at 10am" while its nudge came at 5pm.
+         * Since 2026-10-08 no list has a window (LIST-25): Time of day was
+         * retired, [app.orbit.data.db.MIGRATION_13_14] folded every stored window
+         * into the list's own times ([foldActiveWindow], which gives exactly the
+         * times this plus the gate let through), the importer folds one from an
+         * older backup, and nothing writes the columns. So this returns
+         * [explicit] for every list, and the screens say the stored times. It
+         * stays, with the worker's gate, because removing the columns and both
+         * checks is a cleanup of its own.
+         *
          * Pure: no Context and no WorkManager, so [NudgeSchedulerEffectiveSlotsTest]
          * calls it on the JVM directly.
          */
@@ -188,15 +191,7 @@ open class NudgeScheduler @Inject constructor(
      * don't duplicate it.
      */
     open suspend fun scheduleFromEntity(list: ListEntity) {
-        val nudgeSchedule = list.nudgeScheduleJson
-            ?.takeIf { it.isNotBlank() }
-            ?.let { json ->
-                runCatching {
-                    JsonProvider.json.decodeFromString(NudgeSchedule.serializer(), json)
-                }.getOrNull()
-            }
-            ?: NudgeSchedule.DEFAULT
-
+        val nudgeSchedule = NudgeSchedule.fromStoredJson(list.nudgeScheduleJson)
         schedule(list.id, nudgeSchedule, list.activeHoursStart, list.activeHoursEnd)
     }
 }

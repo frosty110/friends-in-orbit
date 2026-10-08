@@ -12,14 +12,11 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
-import androidx.compose.ui.test.assertIsNotSelected
-import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -44,12 +41,9 @@ import org.robolectric.annotation.Config
  * What TalkBack hears from List settings' new controls, read from the
  * semantics tree on the JVM (the gallery's audit checks labels and 48dp, not
  * roles or placement):
- *  - LIST-25: Time of day is one radio group with one selection, a custom
- *    window as one more selected chip, and taps that write only a change.
- *  - LIST-25: "When to nudge" says when the nudge really comes under the
- *    list's time of day ("Every day at 5pm" for Evenings on the default
- *    10am, with a note on 10am), in List settings and in Make your first
- *    list's summary.
+ *  - LIST-25: a list's nudge timing is set in "When to nudge" alone (no Time
+ *    of day group, in List settings or Make your first list), and the line
+ *    under it says the days and times as they are.
  *  - LIST-26: the title is a "Rename list, {name}" button that becomes a
  *    field with labelled 48dp "Save list name" and "Cancel"; Save and the
  *    keyboard's Done save, a blank name keeps the old one, Cancel and Back
@@ -64,64 +58,8 @@ class ListSettingsControlsTest {
 
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    private val radio = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
     private val button = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)
-    private val group = SemanticsMatcher.keyIsDefined(SemanticsProperties.SelectableGroup)
     private val heading = SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)
-
-    // ─── LIST-25: Time of day ────────────────────────────────────────────────
-
-    @Test
-    fun time_of_day_is_one_radio_group_with_the_current_part_selected() {
-        val picked = mutableListOf<DayPart>()
-        compose.setContent {
-            OrbitTheme { TimeOfDayPicker(selection = TimeOfDay.Part(DayPart.Mornings), onSelect = { picked += it }) }
-        }
-
-        compose.onNode(group).assertExists()
-        compose.onAllNodes(isSelectable()).assertCountEquals(5)
-        compose.onAllNodes(isSelectable() and radio).assertCountEquals(5)
-        compose.onNode(isSelectable() and hasText("Mornings")).assertIsSelected()
-        listOf("Any time", "Afternoons", "Evenings", "Nights").forEach {
-            compose.onNode(isSelectable() and hasText(it)).assertIsNotSelected()
-        }
-        compose.onNodeWithText("Nudges for this list come only in the morning, from 7am to 12pm.").assertExists()
-
-        compose.onNode(isSelectable() and hasText("Evenings")).performClick()
-        compose.onNode(isSelectable() and hasText("Mornings")).performClick()
-        assertEquals(listOf(DayPart.Evenings), picked, "the selected part writes nothing when tapped again")
-    }
-
-    @Test
-    fun a_custom_window_is_one_more_selected_chip_and_tapping_it_writes_nothing() {
-        val picked = mutableListOf<DayPart>()
-        compose.setContent {
-            OrbitTheme {
-                TimeOfDayPicker(
-                    selection = TimeOfDay.Custom(LocalTime.of(9, 0), LocalTime.of(17, 0)),
-                    onSelect = { picked += it },
-                )
-            }
-        }
-
-        compose.onAllNodes(isSelectable() and radio).assertCountEquals(6)
-        compose.onNode(isSelectable() and hasText("Custom: 9am to 5pm")).assertIsSelected()
-        compose.onAllNodes(isSelectable() and SemanticsMatcher.expectValue(SemanticsProperties.Selected, true))
-            .assertCountEquals(1)
-        compose.onNodeWithText("Nudges for this list come only from 9am to 5pm.").assertExists()
-
-        compose.onNode(isSelectable() and hasText("Custom: 9am to 5pm")).performClick()
-        assertTrue(picked.isEmpty(), "the custom window is never rewritten by a tap on itself")
-    }
-
-    @Test
-    fun any_time_says_nudges_can_come_at_any_time() {
-        compose.setContent {
-            OrbitTheme { TimeOfDayPicker(selection = TimeOfDay.Part(DayPart.AnyTime), onSelect = {}) }
-        }
-        compose.onNode(isSelectable() and hasText("Any time")).assertIsSelected()
-        compose.onNodeWithText("Nudges can come at any time of day.").assertExists()
-    }
 
     // ─── LIST-26: rename from the title ──────────────────────────────────────
 
@@ -132,8 +70,6 @@ class ListSettingsControlsTest {
         ruleKind = RuleKind.KEEP_IN_TOUCH,
         ruleParams = RuleParams.KeepInTouch(),
         smartRule = null,
-        activeHoursStart = null,
-        activeHoursEnd = null,
         notificationsEnabled = true,
         nudgeSchedule = null,
         members = listOf(
@@ -158,7 +94,6 @@ class ListSettingsControlsTest {
                         onDone = { done += "done" },
                         onRename = { renamed += it },
                         onIntervalChange = {},
-                        onTimeOfDayChange = {},
                         onNotificationsToggle = {},
                         onNudgeScheduleChange = {},
                         onSmartRuleChange = {},
@@ -290,65 +225,52 @@ class ListSettingsControlsTest {
         compose.onNode(hasSetTextAction()).assert(editableTextIs("List"))
     }
 
-    // ─── LIST-25: When to nudge says when the nudge really comes ────────────
-
-    private val evenings = ready().copy(activeHoursStart = LocalTime.of(17, 0), activeHoursEnd = LocalTime.of(21, 0))
+    // ─── LIST-25: one place for a list's nudge timing ───────────────────────
 
     @Test
-    fun under_evenings_the_plan_says_five_pm_and_why_ten_am_is_not_in_it() {
-        // The default schedule (every day at 10am) with Evenings: the
-        // scheduler adds 5pm and the gate holds 10am, so the nudge comes at
-        // 5pm. Until 2026-10-08 the line read the stored "Every day at 10am".
-        setScreen(state = evenings)
+    fun list_settings_sets_nudge_timing_in_when_to_nudge_alone() {
+        // The owner's review (2026-10-08): "Time of day" above Nudges and
+        // "When to nudge" below it were two sections deciding one thing.
+        setScreen()
 
-        compose.onNodeWithText("Every day at 5pm").assertExists()
-        compose.onNodeWithText("10am is outside this list's time of day, so the nudge comes at 5pm instead.")
-            .assertExists()
-        compose.onAllNodes(hasText("Every day at 10am")).assertCountEquals(0)
-        // The chosen time is still the one to change.
-        compose.onNodeWithText("10am").assertExists()
+        compose.onAllNodes(hasText("Time of day")).assertCountEquals(0)
+        listOf("Any time", "Mornings", "Afternoons", "Evenings", "Nights").forEach {
+            compose.onAllNodes(hasText(it)).assertCountEquals(0)
+        }
+        compose.onAllNodes(hasText("When to nudge")).assertCountEquals(1)
+        compose.onNodeWithText("Every day at 10am").assertExists()
     }
 
     @Test
-    fun a_time_outside_is_named_while_one_inside_still_comes() {
+    fun when_to_nudge_says_the_days_and_times_as_they_are() {
+        // Nothing narrows the times any more, so the line is the times.
         compose.setContent {
             OrbitTheme {
                 NudgeScheduleSection(
                     schedule = app.orbit.notify.NudgeSchedule(
                         days = java.time.DayOfWeek.entries.toSet(),
-                        times = listOf(LocalTime.of(10, 0), LocalTime.of(18, 0)),
+                        times = listOf(LocalTime.of(18, 0), LocalTime.of(10, 0)),
                     ),
-                    activeHoursStart = DayPart.Evenings.start,
-                    activeHoursEnd = DayPart.Evenings.end,
                     notificationsEnabled = true,
                     onScheduleChange = {},
                 )
             }
         }
 
-        compose.onNodeWithText("Every day at 6pm").assertExists()
-        compose.onNodeWithText("10am is outside this list's time of day, so no nudge comes then.").assertExists()
+        compose.onNodeWithText("Every day at 10am and 6pm").assertExists()
+        compose.onAllNodes(hasText("outside this list", substring = true)).assertCountEquals(0)
     }
 
     @Test
-    fun any_time_says_the_schedule_as_it_is_with_no_note() {
-        setScreen()
-
-        compose.onNodeWithText("Every day at 10am").assertExists()
-        compose.onAllNodes(hasText("outside this list's time of day", substring = true)).assertCountEquals(0)
-    }
-
-    @Test
-    fun make_your_first_lists_summary_says_five_pm_under_evenings_too() {
+    fun make_your_first_list_has_no_time_of_day_and_says_the_nudge() {
         compose.setContent {
             OrbitTheme {
                 Column {
                     ListConfigBody(
-                        state = evenings,
+                        state = ready(),
                         isOnboarding = true,
                         snackbarHostState = SnackbarHostState(),
                         onIntervalChange = {},
-                        onTimeOfDayChange = {},
                         onNotificationsToggle = {},
                         onNudgeScheduleChange = {},
                         onSmartRuleChange = {},
@@ -358,10 +280,8 @@ class ListSettingsControlsTest {
             }
         }
 
-        compose.onNodeWithText("Every day at 5pm").assertExists()
-        compose.onAllNodes(hasText("Every day at 10am")).assertCountEquals(0)
-        // Onboarding shows no nudge times, so there is no 10am to explain.
-        compose.onAllNodes(hasText("outside this list's time of day", substring = true)).assertCountEquals(0)
+        compose.onAllNodes(hasText("Time of day")).assertCountEquals(0)
+        compose.onNodeWithText("Every day at 10am").assertExists()
     }
 
     // ─── LIST-27: Add people in the People header ────────────────────────────

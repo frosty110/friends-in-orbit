@@ -31,10 +31,10 @@ Powerful and well built, and far calmer than in June (one accent, plain words). 
 ## Where it's going
 
 ### `CONFIG-1` · One plain-language rhythm summary · **Now**
-Add a single sentence at the top (or pinned) that translates every control into one readable line: *"You'll see each person about every 2 days, on weekdays 9am to 5pm, with a nudge at 10am."* It turns six controls into one comprehensible outcome and lets someone confirm "yes, that's the vibe I wanted" without parsing each widget. The nudge schedule already has its one-line summary ("Every day at 10am"); this extends the idea to the whole screen. Highest-value change here.
+Add a single sentence at the top (or pinned) that translates every control into one readable line: *"You'll see each person about every 2 days, with a nudge on weekdays at 10am."* It turns six controls into one comprehensible outcome and lets someone confirm "yes, that's the vibe I wanted" without parsing each widget. The nudge schedule already has its one-line summary ("Every day at 10am"); this extends the idea to the whole screen. Highest-value change here.
 
 ### `CONFIG-2` · Tuck the advanced controls away · **Next**
-For a first-time list, the full stack (nudge days, multiple nudge times, exact active hours) is intimidating. Lead with the essentials (name, rhythm, how often) and collapse **Active hours** and **Nudges** under an "Advanced" reveal. The depth stays for power users; the first run feels like picking a vibe, not filling a form.
+For a first-time list, the full stack (nudge days, multiple nudge times) is intimidating. Lead with the essentials (name, how often) and collapse **When to nudge** under an "Advanced" reveal. (Active hours, later Time of day, is gone since 2026-10-08: a list's nudge timing is its days and times alone, LIST-25.) The depth stays for power users; the first run feels like picking a vibe, not filling a form.
 
 ### `CONFIG-3` · Lighten the seven-circle nudge block · **Retired 2026-10-05**
 The premise was seven *filled terracotta* day circles dominating the section. The chips are now tinted and selected in ink, not the accent (LIST-21), and a one-line summary names the common case ("Every day at 10am", "Weekdays at 10am"), so the block no longer shouts. The "Every day / Weekdays / Custom" control proposed here was not built; if the block still reads as busy once `CONFIG-2` lands, revisit it there.

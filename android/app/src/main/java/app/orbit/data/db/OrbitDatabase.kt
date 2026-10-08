@@ -19,10 +19,13 @@ import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.entity.NoteEntity
 import app.orbit.data.entity.RuleKind
 import app.orbit.data.entity.RuleTemplateEntity
+import app.orbit.domain.JsonProvider
 import app.orbit.notify.NudgeSchedule
+import app.orbit.notify.foldActiveWindow
+import java.time.LocalTime
 
 /**
- * Room database for Orbit. Schema v=12 (nudge schedule).
+ * Room database for Orbit. Schema v=14 (time of day folded into nudge times).
  *
  * Schema JSON exports to `android/app/schemas/app.orbit.data.db.OrbitDatabase/{1..11}.json`.
  * v1→v2: ruleParamsOverrideJson column.
@@ -63,6 +66,9 @@ import app.orbit.notify.NudgeSchedule
  *        default nudge schedule (all 7 days at 10:00) per D-03 (default-ON).
  *        The migration literal is sourced from [app.orbit.notify.NudgeSchedule.DEFAULT_JSON]
  *        to enforce byte-exact parity with the serializer output.
+ * v12→v13: additive `contacts.deviceUpdatedAt` (see [MIGRATION_12_13]).
+ * v13→v14: no schema change. Every list's active-hours window is folded into
+ *        its nudge times and cleared (LIST-25, [MIGRATION_13_14]).
  *
  * The `MigrationTestHelper` baseline test asserts the runtime schema matches
  * the v=1 JSON; [Migration1To2Test] asserts the v=1 → v=2 transition;
@@ -87,7 +93,7 @@ import app.orbit.notify.NudgeSchedule
         NoteEntity::class,
         RuleTemplateEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 @TypeConverters(OrbitTypeConverters::class)
@@ -590,5 +596,51 @@ val MIGRATION_12_13: Migration = object : Migration(12, 13) {
         db.execSQL(
             "ALTER TABLE `contacts` ADD COLUMN `deviceUpdatedAt` INTEGER DEFAULT NULL",
         )
+    }
+}
+
+/**
+ * LIST-25 (2026-10-08): a list's nudge timing is its days and times alone.
+ * No schema change; this rewrites data so that nobody's nudge moves.
+ *
+ * Time of day (Mornings, Evenings and so on, before that "Active hours") was a
+ * window the nudge times had to fall in. The owner's review found it a second
+ * section deciding the same thing as When to nudge, so it was retired. A list
+ * that had one keeps nudging exactly when it did: each window is folded into
+ * the list's times by [foldActiveWindow] (the times inside it, or its start
+ * when none was), written back as the list's schedule, and both window
+ * columns are then cleared for every row.
+ *
+ * The schedule is read the way the nudge chain reads it
+ * ([NudgeSchedule.fromStoredJson]: null, blank or unreadable is the default
+ * every day at 10am), because that is the schedule the window was narrowing.
+ * A list with no window keeps its stored JSON as it is, null included.
+ *
+ * The columns stay: dropping them would rebuild the table, and the importer
+ * still reads them from older backups (and folds them the same way).
+ * Values are bound parameters, never interpolated (the house style since
+ * [MIGRATION_3_4]). Reads every folded row before writing, so the cursor is
+ * closed before the updates run.
+ */
+val MIGRATION_13_14: Migration = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        val folded = mutableListOf<Pair<Long, String>>()
+        db.query(
+            "SELECT `id`, `nudgeScheduleJson`, `activeHoursStart`, `activeHoursEnd` FROM `lists` " +
+                "WHERE `activeHoursStart` IS NOT NULL AND `activeHoursEnd` IS NOT NULL",
+        ).use { row ->
+            while (row.moveToNext()) {
+                val stored = if (row.isNull(1)) null else row.getString(1)
+                // Seconds of the day, as OrbitTypeConverters stores a LocalTime (M9).
+                val start = LocalTime.ofSecondOfDay(row.getLong(2))
+                val end = LocalTime.ofSecondOfDay(row.getLong(3))
+                val schedule = NudgeSchedule.fromStoredJson(stored).foldActiveWindow(start, end)
+                folded += row.getLong(0) to JsonProvider.json.encodeToString(NudgeSchedule.serializer(), schedule)
+            }
+        }
+        folded.forEach { (id, json) ->
+            db.execSQL("UPDATE `lists` SET `nudgeScheduleJson` = ? WHERE `id` = ?", arrayOf<Any>(json, id))
+        }
+        db.execSQL("UPDATE `lists` SET `activeHoursStart` = NULL, `activeHoursEnd` = NULL")
     }
 }

@@ -21,7 +21,9 @@ import app.orbit.domain.FakeListRepository
 import app.orbit.domain.FakeNoteRepository
 import app.orbit.domain.FakeRuleTemplateRepository
 import app.orbit.domain.JsonProvider
+import app.orbit.notify.NudgeSchedule
 import java.io.File
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalTime
 import kotlin.test.assertEquals
@@ -228,13 +230,16 @@ class ImportServiceTest {
         assertEquals(true, riley.isIgnored)
         assertEquals(Instant.ofEpochMilli(50_000L), riley.ignoredAt)
 
-        // Lists — active hours survive the seconds-of-day round trip;
-        // dueCount recomputed (both memberships due: one past, one null).
+        // Lists: dueCount recomputed (both memberships due: one past, one
+        // null). The 9am to 9:30pm window is folded into the nudge times
+        // (LIST-25): the default 10am is inside it, so the list keeps nudging at
+        // 10am, now with no window behind it.
         val list = db.listDao().get(1L)
         assertEquals("Inner orbit", list?.name)
         assertEquals(1L, list?.ruleTemplateId)
-        assertEquals(LocalTime.of(9, 0), list?.activeHoursStart)
-        assertEquals(LocalTime.of(21, 30), list?.activeHoursEnd)
+        assertEquals(null, list?.activeHoursStart)
+        assertEquals(null, list?.activeHoursEnd)
+        assertEquals(NudgeSchedule.DEFAULT, NudgeSchedule.fromStoredJson(list?.nudgeScheduleJson))
         assertEquals(2, list?.dueCount)
 
         // Memberships — skipCount + nextDueAt preserved.
@@ -256,6 +261,45 @@ class ImportServiceTest {
         assertEquals(2, phones.size)
         assertEquals("+15551234567", phones[0].normalizedPhone)
         assertTrue(phones.all { it.isPrimary })
+    }
+
+    @Test
+    fun `a time of day in an older backup comes back as the nudge time it gave`() {
+        // LIST-25: nothing shows or edits a window since 2026-10-08, so one in
+        // a backup is folded into the list's times as MIGRATION_13_14 folds a
+        // stored one. Evenings over the default 10am nudged at 5pm, so the
+        // imported list says 5pm and has no window; a list without one keeps
+        // the schedule column empty, as before.
+        val evenings = ListExport(
+            id = 2L,
+            name = "Evenings",
+            sortOrder = 1,
+            isArchived = false,
+            type = "STATIC",
+            activeHoursStartSecondOfDay = 17 * 3600,
+            activeHoursEndSecondOfDay = 21 * 3600,
+            notificationsEnabled = true
+        )
+        val anyTime = evenings.copy(
+            id = 3L,
+            name = "Any time",
+            sortOrder = 2,
+            activeHoursStartSecondOfDay = null,
+            activeHoursEndSecondOfDay = null
+        )
+        val payload = envelopeFixture().copy(
+            lists = listOf(evenings, anyTime)
+        ).toPayload(Instant.ofEpochMilli(0L))
+
+        val (folded, untouched) = payload.lists
+        assertEquals(null, folded.activeHoursStart)
+        assertEquals(null, folded.activeHoursEnd)
+        assertEquals(
+            NudgeSchedule(DayOfWeek.entries.toSet(), listOf(LocalTime.of(17, 0))),
+            NudgeSchedule.fromStoredJson(folded.nudgeScheduleJson)
+        )
+        assertEquals(null, untouched.activeHoursStart)
+        assertEquals(null, untouched.nudgeScheduleJson)
     }
 
     // ─── Refusals ─────────────────────────────────────────────────────────
