@@ -989,7 +989,6 @@ function freshData() {
     listsSeen: null,
     weekBack: 0, weekDay: null, weekScrolled: null,
     intervals: Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.interval])),
-    timeOfDay: 'any',
     noteStart: Date.now(), noteDraft: '',
     sel: new Set(),
     bq: '', sq: '', pq: '',
@@ -1002,7 +1001,7 @@ function freshData() {
     flName: 'In touch',
     flMembers: ['priya', 'sarah', 'nia', 'jamie', 'owen', 'alex', 'theo'],
     syncRange: '90 days',
-    flInterval: 2, flTime: 'any',
+    flInterval: 2,
     reminders: true,
     days: new Set([0, 1, 2, 3, 4, 5, 6]),
     archivedOpen: false,
@@ -1655,20 +1654,6 @@ function intervalBlock(days, actArg = '', { enabled = true } = {}) {
   // Ink, not accent: List settings spends its one accent on Done (LIST-21).
   return `<div style="padding:16px"><div class="body" data-wheel-say="${key}">${aimLine(days)}</div>${wheelHtml({ key, value: Math.max(1, Math.min(60, days)), min: 1, max: 60, label: 'How often to aim for', valueText: everyLine, say: aimLine, caption: dayLandmark, enabled, commit: (d) => setIntervalFor(actArg, d) })}</div>`;
 }
-// LIST-25: Time of day (TimeOfDayPicker). One radio group of chips; a window set with the old
-// pickers that matches no part shows as one more chip, selected, until another part is picked.
-const DAY_PARTS = [['any', 'Any time'], ['mornings', 'Mornings', 'in the morning', '7am', '12pm'], ['afternoons', 'Afternoons', 'in the afternoon', '12pm', '5pm'], ['evenings', 'Evenings', 'in the evening', '5pm', '9pm'], ['nights', 'Nights', 'at night', '9pm', '7am']];
-function timeOfDayBlock(sel, actArg = '') {
-  const chip = (label, on, attrs) => `<button class="chip${on ? ' on' : ''}" role="radio" aria-checked="${on}" ${attrs}>${on ? ic('check') : ''}${label}</button>`;
-  // Tapping the chip that is already selected writes nothing, as in the app.
-  const chips = DAY_PARTS.map(([k, label]) => chip(label, sel === k, sel === k ? A.act('noop') : A.act('timeOfDay', actArg + ':' + k))).join('')
-    + (sel === 'custom' ? chip('Custom: 9am to 5pm', true, A.act('noop')) : '');
-  const part = DAY_PARTS.find(([k]) => k === sel);
-  const note = sel === 'custom' ? 'Nudges for this list come only from 9am to 5pm.'
-    : !part || part[0] === 'any' ? 'Nudges can come at any time of day.'
-      : `Nudges for this list come only ${part[2]}, from ${part[3]} to ${part[4]}.`;
-  return `<div style="padding:12px 16px 14px"><div class="chips" role="radiogroup" aria-label="Time of day">${chips}</div><div class="meta" style="margin-top:8px">${note}</div></div>`;
-}
 // LIST-27: People, with "Add people" on the right of the header row (regular lists only).
 // The row that sat under the last person is gone, so there is one way to do it. A smart list
 // says under the count why there is no remove control, and what keeps someone off it (MembersPreview,
@@ -1683,33 +1668,22 @@ function peopleBlock(ids, { smart = false, addAttrs = '', removeAttrs = null, en
   const hint = smart ? '<div class="meta" style="padding:0 16px 8px;margin-top:-4px">Orbit fills this list from its rule. To keep someone off it, ignore them.</div>' : '';
   return `<div style="padding:4px 0 8px"><div class="row" style="padding:0 6px 0 16px;min-height:48px"><div class="eyebrow grow">${plural(ids.length, 'person', 'people')}</div>${add}</div>${hint}${rows}</div>`;
 }
-/* nudgePlan (NudgeScheduleSection.kt, 2026-10-08): when the nudge really comes. A chosen time
-   outside the list's time of day is held back by the worker's gate (isInActiveWindow), and when
-   no chosen time is inside it the time of day's start stands in (NudgeScheduler.effectiveSchedule),
-   so the default 10am under Evenings comes at 5pm. Until 2026-10-08 "When to nudge" said the
-   stored 10am whatever the time of day. The demo's list has the one time, 10am. */
+/* The nudge schedule as one line (NudgeScheduleSection.kt): the days and times as they are, which
+   is when the nudge comes. Until 2026-10-08 a "Time of day" section above Nudges could hold a time
+   back and put its own start in, and the line had to say so; it was retired for one nudge-timing
+   section (LIST-25), each list's old window folded into its times. The demo's list has the one
+   time, 10am. */
 const NUDGE_TIMES = [10];
-const DAY_WINDOWS = { mornings: [7, 12], afternoons: [12, 17], evenings: [17, 21], nights: [21, 7], custom: [9, 17] };
 const hourLabel = (h) => `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`;
 const joinTimes = (ts) => (ts.length < 2 ? ts.join('') : ts.length === 2 ? `${ts[0]} and ${ts[1]}` : `${ts.slice(0, -1).join(', ')}, and ${ts[ts.length - 1]}`);
-function nudgePlan(part, days) {
-  const win = DAY_WINDOWS[part];
-  const inside = (h) => !win || (win[0] < win[1] ? h >= win[0] && h < win[1] : h >= win[0] || h < win[1]);
-  const posts = NUDGE_TIMES.filter(inside);
-  const outside = NUDGE_TIMES.filter((h) => !inside(h));
-  const instead = !posts.length && outside.length ? win[0] : null;
-  const times = (posts.length ? posts : instead != null ? [instead] : []).map(hourLabel);
+function nudgeLine(days) {
+  const times = NUDGE_TIMES.map(hourLabel);
   const dayWord = days.size === 7 ? 'Every day'
     : days.size === 5 && ![0, 6].some((x) => days.has(x)) ? 'Weekdays'
       : days.size === 2 && days.has(0) && days.has(6) ? 'Weekends'
         : [...days].sort().map((i) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i]).join(', ');
   const line = !days.size ? 'No days selected: nudges off' : !times.length ? 'No time set: tap “Add time”' : `${dayWord} at ${joinTimes(times)}`;
-  const held = joinTimes(outside.map(hourLabel));
-  const many = outside.length > 1;
-  const note = !days.size || !outside.length ? ''
-    : instead != null ? `${held} ${many ? 'are' : 'is'} outside this list's time of day, so the nudge comes at ${hourLabel(instead)} instead.`
-      : `${held} ${many ? 'are' : 'is'} outside this list's time of day, so ${many ? 'no nudges come' : 'no nudge comes'} then.`;
-  return { line, note, off: !days.size };
+  return { line, off: !days.size };
 }
 const nudgesToggle = () => `<div class="gi"><div class="grow"><div class="gt">Send nudges</div><div class="gs">A gentle nudge when someone here is worth a call.</div></div><button class="switch${D.reminders ? ' on' : ''}" ${A.act('toggleReminders')} aria-label="Send nudges"></button></div>`;
 
@@ -1717,12 +1691,11 @@ screen({
   id: 'S07', group: 'onboarding', name: 'Make your first list', route: 'onboard/first-list/{listId}',
   spec: ['features/page-views/onboarding-first-list.md', 'features/_foundations/ADRs/0011-number-wheel-for-day-and-count-settings.md', 'features/_foundations/ADRs/0012-text-fields-stay-in-place-above-the-keyboard.md'], code: ['ui/screens/onboarding/OnboardingFirstListScreen.kt', 'ui/screens/lists/ListConfigBody.kt', 'ui/components/IntervalDaysPicker.kt', 'ui/components/OrbitTextField.kt', 'ui/screens/lists/NudgeScheduleSection.kt'],
   purpose: 'Leave onboarding with one real list: a name and at least 3 people.',
-  owes: ['Name the list and pick at least 3 people; the name is the shared outlined field under "Name", "e.g. Inner orbit" while empty (ADR 0012)', 'The same controls as List settings: How often on the day wheel (LIST-30, ADR 0011), Time of day (LIST-25), Nudges, and People with "Add people" in its header (LIST-27); only the name is its own field here', 'The nudge as a read-only line saying when it really comes: "Every day at 10am", "Every day at 5pm" once Evenings is picked (LIST-25)', 'Finish, or add another list', 'Clear gating until name and 3 people are in'],
+  owes: ['Name the list and pick at least 3 people; the name is the shared outlined field under "Name", "e.g. Inner orbit" while empty (ADR 0012)', 'The same controls as List settings: How often on the day wheel (LIST-30, ADR 0011), Nudges, and People with "Add people" in its header (LIST-27); only the name is its own field here, and there is no Time of day (LIST-25: a list\'s nudge timing is its days and times, set in List settings)', 'The nudge as a read-only line, which is when it comes: "Every day at 10am"', 'Finish, or add another list', 'Clear gating until name and 3 people are in'],
   drift: 'There is no back arrow; system back returns to the sync screen, whose Continue now comes straight back to this same list (fixed 2026-10-05, B6). "Removed {name}" with Undo now shows (B8).',
-  states: [['default', 'From the suggestions'], ['evenings', 'Time of day: Evenings'], ['blank', 'Started blank (gated)']],
+  states: [['default', 'From the suggestions'], ['blank', 'Started blank (gated)']],
   to: [['S32', 'Add people (People header)'], ['S08', 'Done'], ['S07', 'Add another list']],
   enter(e) { if (e.st === 'blank') ACT.startBlank(); else ACT.acceptPreview(); },
-  prep(st) { D.flTime = st === 'evenings' ? 'evenings' : 'any'; },
   render(st) {
     const ok = D.flName.trim() && D.flMembers.length >= 3;
     const helper = ok ? '' : '<div class="meta" style="padding:4px 20px 0">Add a name and pick at least 3 people to finish.</div>';
@@ -1732,8 +1705,7 @@ screen({
         <div class="sec-label">Name</div>
         <div class="group"><div style="padding:8px 16px">${otf({ input: `<input id="fl-name" data-bind="flName" value="${esc(D.flName)}" placeholder="e.g. Inner orbit" aria-label="Name" autocomplete="off">` })}</div></div>
         <div class="sec-label">How often</div><div class="group">${intervalBlock(D.flInterval, 'fl')}</div>
-        <div class="sec-label">Time of day</div><div class="group">${timeOfDayBlock(D.flTime, 'fl')}</div>
-        <div class="sec-label">Nudges</div><div class="group">${nudgesToggle()}${D.reminders ? `<div style="padding:0 16px 14px"><div class="meta" style="color:var(--fg)">${nudgePlan(D.flTime, new Set([0, 1, 2, 3, 4, 5, 6])).line}</div><div class="micro">Change the days or time any time in this list's settings.</div></div>` : ''}</div>
+        <div class="sec-label">Nudges</div><div class="group">${nudgesToggle()}${D.reminders ? `<div style="padding:0 16px 14px"><div class="meta" style="color:var(--fg)">${nudgeLine(new Set([0, 1, 2, 3, 4, 5, 6])).line}</div><div class="micro">Change the days or time any time in this list's settings.</div></div>` : ''}</div>
         <div class="sec-label">People</div><div class="group">${peopleBlock(D.flMembers, { addAttrs: A.go('S32', null, 'fl'), removeAttrs: (id) => A.act('removeMember', id) })}</div>
         <div style="height:16px"></div>`,
       foot: `<div class="bottom-cta"><button class="btn text block${ok ? '' : ' disabled'}" ${ok ? `${A.act('addAnother')}` : ''}>Add another list</button><button class="btn primary block${ok ? '' : ' disabled'}" ${ok ? A.go('S08') : ''}>Done</button></div>`,
@@ -1747,7 +1719,6 @@ function setIntervalFor(key, d) {
   else if (key === 'person') D.personInterval = d;
   else if (L[key]) D.intervals[key] = d;
 }
-ACT.timeOfDay = (arg) => { const [key, part] = String(arg).split(':'); if (key === 'fl') D.flTime = part; else D.timeOfDay = part; };
 ACT.toggleReminders = () => { D.reminders = !D.reminders; };
 ACT.removeMember = (id) => { D.flMembers = D.flMembers.filter((x) => x !== id); };
 ACT.addAnother = () => { ACT.startBlank(); setSt('blank'); snack('First list saved. This is a new, empty one.'); return false; };
@@ -2945,16 +2916,16 @@ screen({
 function nudgesBlock() {
   // Day chips are tinted and outlined in ink when selected, never the accent (LIST-21).
   const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => `<button style="flex:1;min-height:48px;border:0;border-radius:999px;cursor:pointer;font:inherit;font-weight:500;background:${D.days.has(i) ? 'var(--accent-tint)' : 'var(--bg-subtle)'};color:var(--fg);${D.days.has(i) ? 'box-shadow:inset 0 0 0 1.5px var(--fg)' : ''}" ${A.act('day', i)} aria-label="${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][i]}, ${D.days.has(i) ? 'selected' : 'unselected'}">${d}</button>`).join('');
-  // The plan line says when the nudge really comes under Time of day, and the line under it why a
-  // chosen time is not in it (LIST-25, 2026-10-08).
-  const plan = nudgePlan(D.timeOfDay, D.days);
-  const summary = `<div class="nudge-plan ${plan.off ? 'micro' : 'meta'}"${plan.off ? '' : ' style="color:var(--fg)"'}>${plan.line}</div>${plan.note ? `<div class="meta">${plan.note}</div>` : ''}`;
+  // The line is the days and times as they are: When to nudge is the one place a list's nudge
+  // timing is set (LIST-25, 2026-10-08).
+  const plan = nudgeLine(D.days);
+  const summary = `<div class="nudge-plan ${plan.off ? 'micro' : 'meta'}"${plan.off ? '' : ' style="color:var(--fg)"'}>${plan.line}</div>`;
   return `<div style="padding:14px 16px" class="gap8"><div class="row" style="gap:4px">${days}</div>
     <div class="row" style="background:var(--bg-subtle);border-radius:12px;min-height:48px;padding:0 4px 0 14px">${ic('clock').replace('class="i"', 'class="i" style="width:18px;height:18px;color:var(--fg-muted)"')}<span class="grow body" ${A.st('time')} style="cursor:pointer">10am</span>${iconBtn('x', A.snack('Removed 10am'), 'Remove 10am', 'muted')}</div>
     <div class="row" style="background:var(--bg-subtle);border-radius:12px;min-height:48px;padding:0 14px;cursor:pointer" ${A.st('time')}>${ic('plus').replace('class="i"', 'class="i" style="width:18px;height:18px"')}<span class="body">Add time</span></div>
     ${summary}${D.reminders ? '' : `<span class="chip ctx" style="align-self:flex-start;font-size:13px;min-height:28px">${ic('bell-slash')}Nudges paused</span>`}</div>`;
 }
-/* TimePickerDialogOrbit (TimeOfDayPicker.kt): "Choose a time" over Material's dial, or its typed
+/* TimePickerDialogOrbit (TimePickerDialogOrbit.kt): "Choose a time" over Material's dial, or its typed
    hours and minutes; the keyboard button swaps them ("Type the time", then "Use the clock"),
    then Cancel and OK. In the phone's 12 or 24 hour style (12 here). */
 function timePickerDialog(typing) {
@@ -2973,14 +2944,13 @@ function timePickerDialog(typing) {
 }
 screen({
   id: 'S31', group: 'lists', name: 'List settings', route: 'lists/{listId}/config',
-  spec: ['features/page-views/list-config.md', 'features/_foundations/ADRs/0011-number-wheel-for-day-and-count-settings.md', 'features/_foundations/ADRs/0012-text-fields-stay-in-place-above-the-keyboard.md'], code: ['ui/screens/lists/ListConfigScreen.kt', 'ui/screens/lists/ListConfigBody.kt', 'ui/components/IntervalDaysPicker.kt', 'ui/components/OrbitWheelPicker.kt', 'ui/screens/lists/SmartRuleEditor.kt', 'ui/screens/lists/TimeOfDayPicker.kt', 'ui/screens/lists/NudgeScheduleSection.kt', 'ui/screens/lists/MembersPreview.kt'],
-  purpose: 'Define a list\'s rhythm, its time of day and its people in plain terms; changes save as you go.',
-  owes: ['The name is the title: tap it or the pencil to rename, in the shared outlined field ("List name" for TalkBack, and its placeholder when emptied) with Cancel and "Save list name"; a blank name keeps the old one; no Done anywhere while the edit is open, the foot\'s included (LIST-26)', '"How often" for every list, smart lists too: "Aim for every 14 days" over a day wheel from 1 to 60, "1 week" to "2 months" under those days; flick or tap, and it saves once it comes to rest; a Late night list shows its real 3 days, and turning it makes it an ordinary list (LIST-30, ADR 0011)', '"Time of day": Any time, Mornings, Afternoons, Evenings or Nights, or "Custom: 9am to 5pm" for a window set before, with one line on what it does (LIST-25)', 'Nudges on or off, with the days and times they come; the time picker says "Choose a time" and can be typed ("Type the time", then "Use the clock")', '"When to nudge" says when the nudge really comes: the default 10am under Evenings reads "Every day at 5pm", with "10am is outside this list\'s time of day, so the nudge comes at 5pm instead." (LIST-25)', 'People: the count with "Add people" beside it (LIST-27); remove with undo. A smart list says "Orbit fills this list from its rule. To keep someone off it, ignore them." and has no remove', 'Smart lists: the rule\'s setting on a number wheel under its sentence ("Added in the last 30 days"), no keyboard; or make it a regular list (ADR 0011)', 'Changes save as you go; Done is the only accent on the screen (LIST-21)'],
+  spec: ['features/page-views/list-config.md', 'features/_foundations/ADRs/0011-number-wheel-for-day-and-count-settings.md', 'features/_foundations/ADRs/0012-text-fields-stay-in-place-above-the-keyboard.md'], code: ['ui/screens/lists/ListConfigScreen.kt', 'ui/screens/lists/ListConfigBody.kt', 'ui/components/IntervalDaysPicker.kt', 'ui/components/OrbitWheelPicker.kt', 'ui/screens/lists/SmartRuleEditor.kt', 'ui/screens/lists/NudgeScheduleSection.kt', 'ui/screens/lists/TimePickerDialogOrbit.kt', 'ui/screens/lists/MembersPreview.kt'],
+  purpose: 'Define a list\'s rhythm, when it nudges and its people in plain terms; changes save as you go.',
+  owes: ['The name is the title: tap it or the pencil to rename, in the shared outlined field ("List name" for TalkBack, and its placeholder when emptied) with Cancel and "Save list name"; a blank name keeps the old one; no Done anywhere while the edit is open, the foot\'s included (LIST-26)', '"How often" for every list, smart lists too: "Aim for every 14 days" over a day wheel from 1 to 60, "1 week" to "2 months" under those days; flick or tap, and it saves once it comes to rest; a Late night list shows its real 3 days, and turning it makes it an ordinary list (LIST-30, ADR 0011)', 'Nudges on or off, with the days and times they come; the time picker says "Choose a time" and can be typed ("Type the time", then "Use the clock")', '"When to nudge" is the one place the nudge\'s timing is set, and its line is the days and times as they are ("Every day at 10am"). There is no Time of day: it went on 2026-10-08, each list\'s old window folded into its times (LIST-25)', 'People: the count with "Add people" beside it (LIST-27); remove with undo. A smart list says "Orbit fills this list from its rule. To keep someone off it, ignore them." and has no remove', 'Smart lists: the rule\'s setting on a number wheel under its sentence ("Added in the last 30 days"), no keyboard; or make it a regular list (ADR 0011)', 'Changes save as you go; Done is the only accent on the screen (LIST-21)'],
   drift: null,
-  states: [['default', 'Regular list'], ['rename', 'Renaming from the title'], ['latenight', 'A Late night list (every 3 days)'], ['evenings', 'Time of day: Evenings'], ['custom', 'Time of day: Custom (set before)'], ['time', 'Time picker', 'overlay'], ['timetype', 'Time picker, typing', 'overlay'], ['smart', 'Smart list'], ['convert', 'Make this a regular list?', 'overlay']],
+  states: [['default', 'Regular list'], ['rename', 'Renaming from the title'], ['latenight', 'A Late night list (every 3 days)'], ['time', 'Time picker', 'overlay'], ['timetype', 'Time picker, typing', 'overlay'], ['smart', 'Smart list'], ['convert', 'Make this a regular list?', 'overlay']],
   to: [['S32', 'Add people (People header)'], ['S30', 'Done, or back']],
   prep(st) {
-    D.timeOfDay = st === 'evenings' ? 'evenings' : st === 'custom' ? 'custom' : 'any';
     D.intervals = Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.interval]));
     D.smartDays = 30; L.recent.rule = 'Recently added · 30 days';
     if (st === 'rename') D.focusId = 'list-name';
@@ -3002,8 +2972,7 @@ screen({
       ? `<div class="ab"><div class="ttl-field">${otf({ input: `<input id="list-name" data-key="${key}" value="${esc(name)}" placeholder="List name" aria-label="List name" autocomplete="off">` })}</div>${iconBtn('x', A.act('cancelRename'), 'Cancel')}${iconBtn('check', A.act('saveListName', key), 'Save list name')}</div>`
       : `<div class="ab">${iconBtn('arrow-left', 'data-back', 'Back')}<button class="ttl" ${A.act('startRename', key)} aria-label="Rename list, ${esc(name)}"><span>${esc(name)}</span>${ic('pencil-simple')}</button><button class="btn text accent-t" data-back>Done</button></div>`;
     let body = `<div class="sec-label">How often</div><div class="group">${intervalBlock(days, key)}</div>`;
-    body += `<div class="sec-label">Time of day</div><div class="group">${timeOfDayBlock(D.timeOfDay)}</div>
-      <div class="sec-label">Nudges</div><div class="group">${nudgesToggle()}</div>
+    body += `<div class="sec-label">Nudges</div><div class="group">${nudgesToggle()}</div>
       <div class="sec-label">When to nudge</div><div class="group">${nudgesBlock()}</div>`;
     // SmartRuleEditor: the rule as a sentence over its day wheel, 7 to 180, named by that sentence
     // for TalkBack; it saves once per gesture and never raises the keyboard (ADR 0011).
@@ -3977,7 +3946,7 @@ const FLOWS = [
       { id: 'S05', say: 'A blocking gate while call history is read, 3 of 4. Continue unlocks only when it finishes.', do: () => { D.syncAuto = true; } },
       { id: 'S05', st: 'done', say: 'Finished, with a count of what was read.', tap: '[data-go="S06"]' },
       { id: 'S06', say: 'Orbit suggests a first list from people you already call. Everyone starts ticked.', tap: '.bottom-cta .btn.primary' },
-      { id: 'S07', say: 'The same controls as List settings (How often on the day wheel, Time of day, People with Add people in its header) under the outlined name field, and a line saying when the nudge comes. Done stays locked until there is a name and 3 people.', tap: '.bottom-cta .btn.primary', from: ['S05'] },
+      { id: 'S07', say: 'The same controls as List settings (How often on the day wheel, People with Add people in its header) under the outlined name field, and a line saying when the nudge comes. Done stays locked until there is a name and 3 people.', tap: '.bottom-cta .btn.primary', from: ['S05'] },
       { id: 'S08', say: 'Setup done. The swipe hint teaches Later and Sooner, and only now does Orbit ask about nudges.', tap: '[data-st="system"]', from: [] },
       { id: 'S08', st: 'nudged', say: 'Nudges allowed; the ask becomes a plain line. Each list can change when they come.', tap: '.bottom-cta .btn.primary', from: [] },
       { id: 'S10', say: 'Home, with the whole onboarding back stack cleared.', from: [] },
