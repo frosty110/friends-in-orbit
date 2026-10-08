@@ -57,41 +57,10 @@ function Avatar({ name, size = 44, photo = null }) {
   );
 }
 
-// Due-count badge pill
-function CountBadge({ count }) {
-  if (!count) return null;
-  return (
-    <div style={{
-      minWidth: 26, height: 26, padding: '0 8px',
-      borderRadius: 999, background: 'var(--accent)',
-      color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'Inter', fontSize: 13, fontWeight: 600,
-    }}>{count}</div>
-  );
-}
-
-// Chip — small colored pill, used for list badges and status
-function Chip({ tone = 'terracotta', children }) {
-  const tones = {
-    terracotta: { bg: '#EDD6CE', fg: '#9B4A32', dot: '#C8654A' },
-    sage:       { bg: '#D8E3D6', fg: '#4E6A4B', dot: '#87A383' },
-    amber:      { bg: '#F2E2BF', fg: '#8B6821', dot: '#D4A144' },
-    brick:      { bg: '#F5E0DC', fg: '#A04838', dot: '#A04838' },
-    stone:      { bg: '#F2ECE2', fg: '#6B6560', dot: '#9A928B' },
-  };
-  const t = tones[tone] || tones.terracotta;
-  return (
-    <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: 8,
-      padding: '4px 10px', borderRadius: 999, background: t.bg,
-      color: t.fg, fontFamily: 'Inter', fontSize: 12, fontWeight: 500,
-      letterSpacing: '0.02em',
-    }}>
-      <span style={{ width: 6, height: 6, borderRadius: 999, background: t.dot }} />
-      {children}
-    </div>
-  );
-}
+// No read-only chip or count badge here: Orbit has no badges (rules.md Design 9,
+// 2026-10-08). `Chip` (a list name or status in a pill) and `CountBadge` (a due count
+// on the accent) were removed; a screen says the fact in its own text instead. The
+// only chip shape left is a control (OnboardingBulkAddScreen's FilterChip).
 
 // Primary/secondary/ghost button
 function Button({ variant = 'primary', icon, children, onClick, style = {} }) {
@@ -165,4 +134,4 @@ function IconBtn({ name, onClick, color = 'var(--fg)', 'aria-label': label }) {
   );
 }
 
-Object.assign(window, { Icon, Avatar, CountBadge, Chip, Button, Screen, AppBar, IconBtn });
+Object.assign(window, { Icon, Avatar, Button, Screen, AppBar, IconBtn });

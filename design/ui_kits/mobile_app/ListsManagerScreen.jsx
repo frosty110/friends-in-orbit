@@ -1,12 +1,15 @@
 // Lists Manager — create / edit / reorder lists
 function ListsManagerScreen({ onBack, onOpenList, onCreate }) {
   const lists = [
-    { id: 'inner',    name: 'Inner orbit',  members: 12, rule: 'Round robin · every 2w',    due: 3, tone: 'terracotta' },
-    { id: 'outer',    name: 'Outer orbit',  members: 34, rule: 'Spaced repetition',          due: 5, tone: 'sage' },
-    { id: 'family',   name: 'Family',       members: 8,  rule: 'Recency · weekly',           due: 1, tone: 'amber' },
-    { id: 'latenight',name: 'Late night',   members: 6,  rule: 'Active window 9–11 pm',      due: 2, tone: 'stone' },
-    { id: 'mentors',  name: 'Mentors',      members: 4,  rule: 'Monthly',                    due: 0, tone: 'terracotta' },
+    { id: 'inner',    name: 'Inner orbit',  members: 12, rule: 'Round robin · every 2w',    tone: 'terracotta' },
+    { id: 'outer',    name: 'Outer orbit',  members: 34, rule: 'Spaced repetition',          tone: 'sage' },
+    { id: 'family',   name: 'Family',       members: 8,  rule: 'Recency · weekly',           tone: 'amber' },
+    { id: 'latenight',name: 'Late night',   members: 6,  rule: 'Active window 9–11 pm',      tone: 'stone' },
+    { id: 'mentors',  name: 'Mentors',      members: 4,  rule: 'Monthly',                    tone: 'terracotta' },
   ];
+  // No due-count badge beside a list's name (rules.md Design 9, 2026-10-08; voice.md never
+  // says "due"). The row's second line already says the list in words, its people and its
+  // rule, as the app's Lists row does ("Every 14 days · 12 people").
 
   return (
     <Screen>
@@ -31,10 +34,7 @@ function ListsManagerScreen({ onBack, onOpenList, onCreate }) {
                 <Icon name="list-bullets" size={18} color="var(--fg-subtle)" />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ fontFamily: 'Inter', fontSize: 17, fontWeight: 500, color: 'var(--fg)' }}>{l.name}</div>
-                  {l.due > 0 && <CountBadge count={l.due} />}
-                </div>
+                <div style={{ fontFamily: 'Inter', fontSize: 17, fontWeight: 500, color: 'var(--fg)' }}>{l.name}</div>
                 <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'var(--fg-muted)', marginTop: 2 }}>
                   {l.members} people · {l.rule}
                 </div>
