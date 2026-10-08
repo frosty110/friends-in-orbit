@@ -223,3 +223,21 @@ this list's time of day" note, and the widgets' soft preference for a list
 inside its window (ADR 0008, amended), which read the same window. If picking
 "evenings" rather than a clock time is missed, it can come back as a shortcut
 inside When to nudge's time picker, which sets a time and nothing else.
+
+## A third pass, 2026-10-08: trims
+
+The owner went over the republished prototype again and left eight short
+comments, seven of them "we don't need this". Each was built in the app first.
+
+| Where | Comment | Decision | IDs |
+|---|---|---|---|
+| Card view, "Up now" over the name | "Don't need this, up now, text" | Gone, and "Coming up" with it: nothing over the name | CARD-04 |
+| Card view, the "Sooner" badge at the card's top corner | "We don't need this badge" | Both badges in that corner are gone: the idle hints ("Sooner · Today") and the chip that faded in during a drag ("Sooner"). The labelled buttons, which play the swipe, already teach it | CARD-09 retired, CARD-08 |
+| Card view, "Good time to call" | "We don't require this badge" | Gone, with "Sometimes answers now" and its third state; the hours strip stays | CARD-04 |
+| Card view, the Sooner button | Later and Sooner should be generic, likely 1 or 3 days by list size; "we don't surface how much"; "tonight and tomorrow" are very short | Split. The snackbar now says only "Kai moved to later." / "Kai moved sooner.", never when. How far they move is waiting on the owner: proposed, 1 day each way on lists of up to 10 people and 3 days on bigger ones, Sooner never earlier than now | CARD-02 |
+| Home, the call icon on Next up | "No need for this icon" | Gone; the card's tap opens the deck, where Call is | HOME-9 |
+| Home, the list name | "The name can be its own row with its own background and [its own] coloring. And compact." | The name and size on one compact row across the top, on the band in the band's name colour; Next up its own row on the wash below | HOME-5 |
+| Home, "You spoke 3 weeks ago" | "Reduce the wordage by removing the 'you'" | "Spoke 3 weeks ago", on Home and the card alike; "No calls yet" for none | HOME-3, CARD-04 |
+| Lists, "Smart list" chip | "We don't need this badge" | Gone; the row's second line names the rule | LIST-07 |
+| Add people, "Show ignored" | "Just have a toggle icon for ignored vs not. We don't require accompanying text." | An eye toggle, icon only, "Show ignored people" to TalkBack, on or off | PICK-08 |
+
