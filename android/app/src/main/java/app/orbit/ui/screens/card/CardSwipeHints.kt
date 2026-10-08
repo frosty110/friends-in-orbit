@@ -170,9 +170,12 @@ internal class SwipeHintsState(timesShown: Int = 0) {
  * buttons get it as before): a press hides the hints at once and holds the
  * clock, and lifting the last finger starts it again from zero.
  *
- * The clock runs only while [active] (the caller passes false while a sheet
- * is over the card) and while the screen is resumed, so hints never spend
- * their three appearances while the dialer is in front.
+ * The clock runs only while [active] (the caller passes false while the Log
+ * a connection sheet or the list menu is over the card: the menu's button
+ * and popup are outside this modifier, so no touch here would hold it) and
+ * while the screen is resumed, so hints never spend their three appearances
+ * while the dialer is in front. Going inactive hides them at once; coming
+ * back starts the idle wait from zero.
  */
 @Composable
 internal fun rememberSwipeHints(

@@ -44,13 +44,20 @@ class SkipContactUseCase @Inject constructor(
      * aggregate: if any single membership write reports missing, the overall
      * result reports missing; otherwise [MutationResult.Success]. Callers that
      * ignore the return value still compile.
+     *
+     * [now] is the instant the new time is counted from. The card passes the
+     * one it then words "will come up again tomorrow" from, so a second clock
+     * read cannot land on the next date and name a day early (CARD-02).
      */
-    suspend operator fun invoke(contactId: Long, listId: Long? = null): MutationResult {
+    suspend operator fun invoke(
+        contactId: Long,
+        listId: Long? = null,
+        now: Instant = clock.now(),
+    ): MutationResult {
         val contact = contactRepo.observeById(contactId).first()
             ?: return MutationResult.MembershipMissing
         val memberships = listRepo.observeMembershipsForContact(contactId).first()
         val targets = if (listId == null) memberships else memberships.filter { it.listId == listId }
-        val now = clock.now()
 
         var aggregate: MutationResult = MutationResult.Success
         // ListRepository.incrementSkipCount takes non-nullable listId —
@@ -88,12 +95,15 @@ class SkipContactUseCase @Inject constructor(
      * function [invoke] writes with, never by a copy of the arithmetic. Null
      * when the move could not be made (the person, the membership, the list
      * or its template is gone); the hint then says "Later" alone.
+     *
+     * [now] as in [invoke]: the card gives both previews the instant it words
+     * both hints from.
      */
-    suspend fun preview(contactId: Long, listId: Long): Instant? {
+    suspend fun preview(contactId: Long, listId: Long, now: Instant = clock.now()): Instant? {
         val contact = contactRepo.observeById(contactId).first() ?: return null
         val membership = listRepo.observeMembershipsForContact(contactId).first()
             .firstOrNull { it.listId == listId } ?: return null
-        return nextDueAfterLater(contact, membership, clock.now())
+        return nextDueAfterLater(contact, membership, now)
     }
 
     /** The one computation of a Later's new `nextDueAt`; null when its list or template is gone. */

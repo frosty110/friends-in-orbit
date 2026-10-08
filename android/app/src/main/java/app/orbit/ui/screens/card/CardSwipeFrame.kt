@@ -72,7 +72,7 @@ import kotlin.math.abs
  * CARD-08 (2026-10-07): Later and Sooner play the swipe. The owner asked for
  * the buttons to fly the card off the way a swipe does, so people see they
  * can swipe; they already did, through the programmatic path above, and
- * `CardSwipeFrameTest` now pins it. With Android's animations turned off
+ * `CardViewMovesTest` now pins it. With Android's animations turned off
  * ([LocalReducedMotion]) every settle here is a snap: a button, a TalkBack
  * action or a released drag moves the card to its anchor in one frame, with
  * the same haptic and the same single commit, and nothing flies (rules.md

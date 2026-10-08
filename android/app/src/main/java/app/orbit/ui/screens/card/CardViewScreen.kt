@@ -196,20 +196,24 @@ fun CardViewScreen(
  * Named for the list it acts on, "More actions for Inner orbit", like every
  * overflow button (voice.md glossary; it said "List options", a third name
  * for the same control). [listName] is already masked under the curtain.
+ *
+ * Whether it is open is [CardViewContent]'s ([expanded], [onExpandedChange]),
+ * so the idle hints can wait while it is (CARD-09).
  */
 @Composable
 private fun ListActionsMenu(
     listName: String,
     listType: ListType?,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     onBrowse: () -> Unit,
     onEditList: () -> Unit,
     onAddContacts: () -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
     Box {
         OrbitIconButton(
             icon = "dots-three-vertical",
-            onClick = { expanded = true },
+            onClick = { onExpandedChange(true) },
             contentDescription = if (listName.isBlank()) {
                 stringResource(R.string.card_list_options_unnamed)
             } else {
@@ -218,7 +222,7 @@ private fun ListActionsMenu(
         )
         OrbitDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
+            onDismissRequest = { onExpandedChange(false) },
             actions = cardListMenuActions(
                 LocalContext.current.resources,
                 listType = listType,
@@ -305,6 +309,14 @@ internal fun CardViewContent(
     // the sheet was opened over: a deck that moves while it is open (a call
     // log sync) still logs that person, never whoever replaced them.
     var logSheetFor by rememberSaveable { mutableStateOf<Long?>(null) }
+    // CARD-09: whether the list menu is open, so the hints wait while it is,
+    // as the prototype's do while a menu covers the card. Owned here, not in
+    // ListActionsMenu (rules.md Code 7: the menu only asks to change it):
+    // its button sits in the app bar, outside the card's touch watcher, and
+    // its popup takes the touches after that, so a touch cannot pause them
+    // and only this flag can. Until 2026-10-08 the hints kept their clock
+    // and showed over an open menu.
+    var listMenuOpen by remember { mutableStateOf(false) }
     // The list's name titles every state that knows it (an empty or failed
     // deck used to leave the bar untitled, so TalkBack announced no pane and
     // "this list" was never named on screen). PRIV-03: it masks as "List"
@@ -395,6 +407,8 @@ internal fun CardViewContent(
                 ListActionsMenu(
                     listName = appBarTitle,
                     listType = state.listType,
+                    expanded = listMenuOpen,
+                    onExpandedChange = { listMenuOpen = it },
                     // BROWSE-09: "Browse people" opens on the person this card
                     // shows, marked and scrolled to; no one when it shows nobody.
                     onBrowse = { onBrowse(listId, (state as? CardViewUiState.Ready)?.contactId) },
@@ -449,8 +463,9 @@ internal fun CardViewContent(
                     onSwipeRight = onSwipeRight,
                     onOpenContact = onOpenContact,
                     onOpenLogConnection = { contactId -> logSheetFor = contactId },
-                    // CARD-09: no hints while the sheet covers the card.
-                    hintsActive = logSheetFor == null,
+                    // CARD-09: no hints while the sheet or the list menu
+                    // covers the card; closing either starts the 4 seconds again.
+                    hintsActive = logSheetFor == null && !listMenuOpen,
                     moveHints = moveHints,
                     pinnedHints = pinnedHints
                 )

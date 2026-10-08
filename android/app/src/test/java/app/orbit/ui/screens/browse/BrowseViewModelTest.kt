@@ -1262,7 +1262,10 @@ class BrowseViewModelTest {
             listOf(
                 membershipFixture(contactId = 1L, listId = 1L, nextDueAt = seqNow.minus(Duration.ofDays(2))),
                 membershipFixture(contactId = 2L, listId = 1L, nextDueAt = null), // never scheduled: now
-                membershipFixture(contactId = 3L, listId = 1L, nextDueAt = seqNow.plus(Duration.ofHours(2))),
+                // Ten minutes: later the same local day in every zone (the
+                // words are calendar days since 2026-10-08, and seqNow's
+                // local hour is never later than 23:45).
+                membershipFixture(contactId = 3L, listId = 1L, nextDueAt = seqNow.plus(Duration.ofMinutes(10))),
                 membershipFixture(contactId = 4L, listId = 1L, nextDueAt = seqNow.plus(Duration.ofDays(1))),
                 membershipFixture(contactId = 5L, listId = 1L, nextDueAt = inThreeDays),
                 membershipFixture(contactId = 6L, listId = 1L, nextDueAt = seqNow.plus(Duration.ofDays(14))),
@@ -1309,6 +1312,49 @@ class BrowseViewModelTest {
             assertEquals(BrowseRowStatus.Paused, ready.rowStatus["c-8"])
             assertEquals(BrowseRowStatus.Ignored, ready.rowStatus["c-10"])
             assertNull(ready.onYourCardId, "not opened from the card")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the when words count calendar days, so an earlier hour does not move them a day closer`() = runTest {
+        // browse-2: times keep the hour of the call or the move that set
+        // them, so most are at an earlier hour than the moment Browse is
+        // looked at. Counted in 24-hour spans, tomorrow read "Later today",
+        // the day after "Tomorrow", and next week today's own weekday. Built
+        // in the zone the screen words them in (the phone's), half an hour
+        // before now's hour, so each lands on the date it names in any zone.
+        val s = sequenceVm()
+        val zone = ZoneId.systemDefault()
+        val local = seqNow.atZone(zone)
+        val earlierHour = local.toLocalTime().minusMinutes(30)
+        fun daysOut(n: Long): Instant = local.toLocalDate().plusDays(n).atTime(earlierHour).atZone(zone).toInstant()
+        s.contactRepo.seed(
+            listOf(
+                contactFixture(id = 1L, displayName = "Ada"),
+                contactFixture(id = 2L, displayName = "Ben"),
+                contactFixture(id = 3L, displayName = "Cy")
+            )
+        )
+        s.listRepo.seedMemberships(
+            listOf(
+                membershipFixture(contactId = 1L, listId = 1L, nextDueAt = daysOut(1)),
+                membershipFixture(contactId = 2L, listId = 1L, nextDueAt = daysOut(2)),
+                membershipFixture(contactId = 3L, listId = 1L, nextDueAt = daysOut(7))
+            )
+        )
+
+        s.vm.uiState.test(timeout = 2.seconds) {
+            val ready = awaitReadyWhere(this) { it.whenLabels.size == 3 }
+            assertEquals(UiText.res(R.string.browse_when_tomorrow), ready.whenLabels["c-1"])
+            assertEquals(
+                UiText.res(
+                    R.string.browse_when_on_day,
+                    daysOut(2).atZone(zone).dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+                ),
+                ready.whenLabels["c-2"]
+            )
+            assertEquals(UiText.res(R.string.browse_when_in_span, formatSpan(7)), ready.whenLabels["c-3"])
             cancelAndIgnoreRemainingEvents()
         }
     }

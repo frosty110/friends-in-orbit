@@ -3,7 +3,7 @@
 **Route:** `browse/{listId}?focus={focus}` (`focus`, optional: the id of the person on the card when Card view's menu opened Browse)
 **Group:** Core loop
 **Status:** active
-**Last reviewed:** 2026-10-07
+**Last reviewed:** 2026-10-08
 **Spec:** [browse](../browse/README.md): BROWSE-01, BROWSE-02, BROWSE-04 to BROWSE-09, MOVE-01 to MOVE-07; BULK-05 in [orbit-lists](../orbit-lists/README.md); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
@@ -18,7 +18,7 @@
 - App bar: Back, the list's name ("Your people" before it loads, "List" under the curtain), a Select button ("Select people"), and "+" ("Add people"; not on smart lists)
 - A search field, "Search your people", with its own clear control; two filter chips, "Recently called" (a call in the last 30 days) and "Not called yet" (BROWSE-02)
 - When call log access is off, a notice: "Orbit can't see your calls, so call times are hidden." with "Open settings"
-- "Next up": everyone in the order the card will bring them up, numbered, the first in ink (BROWSE-07). Each row says when on its second line: "Up now", "Later today", "Tomorrow", a weekday ("Thursday") or "In 2 weeks", then "Last call: 3 days ago" or "Never called" ("Up now · Last call: 3 days ago"; the call part is left out when call log access is off)
+- "Next up": everyone in the order the card will bring them up, numbered, the first in ink (BROWSE-07). Each row says when on its second line: "Up now", "Later today", "Tomorrow", a weekday ("Thursday") or "In 2 weeks", by the day on the phone's calendar (tomorrow at any hour is "Tomorrow"), then "Last call: 3 days ago" or "Never called" ("Up now · Last call: 3 days ago"; the call part is left out when call log access is off)
 - Under the order, one quiet line while rows can be dragged: "Drag to change who comes up next. A call, Later or Sooner moves people again."
 - Then "Everyone else" (people the list's rule cannot place: an archived person, or everyone on a list with no rule; "On this list" when nobody is in the order), by name; "Paused", soonest back first, each with "Paused" beside the name and "Until 12 Oct" or "Until you unpause" on its second line; and "Ignored", by name, with "Ignored" beside the name
 - Each row: a drag handle with the number (rows in the order only), face, name, the second line above, a small dot on someone worth a call now (TalkBack: "Worth a call now"; on a row in the order exactly when it says "Up now"), and a quiet, muted, labelled dial button ("Call Kai", BROWSE-05)
@@ -69,9 +69,10 @@
 
 ## Tests that pin it
 
-- `BrowseViewModelTest` (states, filters and search, every bulk action with its snackbar and undo, smart-list targets refused, select all after a search, a second dispatch ignored, a write that throws reported with no Undo, a malformed id unchanged by Retry; added 2026-10-07: the sequence with its when words and groups, a filter and a search that keep the order and the numbers, the card's person marked where they are and the mark following the head, a drop's snackbar both ways and its Undo, a failed drop put back with no Undo, a drop for someone who left the order)
+- `BrowseViewModelTest` (states, filters and search, every bulk action with its snackbar and undo, smart-list targets refused, select all after a search, a second dispatch ignored, a write that throws reported with no Undo, a malformed id unchanged by Retry; added 2026-10-07: the sequence with its when words and groups, a filter and a search that keep the order and the numbers, the card's person marked where they are and the mark following the head, a drop's snackbar both ways and its Undo, a failed drop put back with no Undo, a drop for someone who left the order; added 2026-10-08: the when words by calendar day at an hour earlier than now's)
 - `BrowseSequenceContentTest` (added 2026-10-07, Robolectric: the second lines and the group headings, "Reorder {name}" on rows in the order only, "Move up" and "Move down" after "Call {name}" and what each asks for, nothing moves while selecting, "Reorder" under the curtain, the card's person marked and scrolled into view)
 - `SurfaceOrderTest` (added 2026-10-07: Browse's order is the card's for a mixed list; a stored time beats the rule's; never-scheduled people tie on one clock reading) and `ReorderSequenceUseCaseTest` (top, middle, end, equal times up now and in the future, people never scheduled as time passes, Undo exact, nothing written when nothing moves, a missing person or row, a failed write)
+- `ComesUpTest` (added 2026-10-08: the when buckets are calendar days in the phone's zone, at off hours and across daylight-saving changes; shared with Card view)
 - `BrowseErrorShellTest` (a failed feed offers Try again; a malformed id offers Go back and no Try again)
 - `BrowseRowMenuTest` (quick-action order); `MultiSelectOverflowMenuTest` (Select all, Pause all, Ignore all)
 - `MoveContactsUseCaseTest`, `CopyContactsUseCaseTest`, `BulkPauseUseCaseTest`, `BulkIgnoreUseCaseTest`

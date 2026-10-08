@@ -880,7 +880,11 @@ class BrowseViewModel @Inject constructor(
      * BROWSE-07: when someone in the sequence comes up, in the words the rest
      * of the app uses: "Up now" once their time has come (the card's own
      * eyebrow), then [comesUp]'s buckets, the same ones the card's Later and
-     * Sooner snackbars word, as labels that stand alone.
+     * Sooner snackbars word, as labels that stand alone. They are days on the
+     * phone's calendar ([zone]), counted from the one [now] the whole
+     * emission is labelled from: a stored time keeps the hour of the call or
+     * the move that set it, and counted in 24-hour spans (until 2026-10-08)
+     * tomorrow at an earlier hour than now read "Later today".
      */
     private fun whenLabel(time: Instant, now: Instant): UiText {
         if (!time.isAfter(now)) return UiText.res(R.string.browse_when_up_now)
