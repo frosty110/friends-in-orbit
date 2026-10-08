@@ -215,6 +215,8 @@
         <item quantity="other">%1$d people</item>
     </plurals>
     <string name="lists_members_empty_smart">No one matches this rule right now.</string>
+    <!-- Under a smart list's people: why none can be removed here, and the one way to keep someone off. -->
+    <string name="lists_members_smart_hint">Orbit fills this list from its rule. To keep someone off it, ignore them.</string>
     <string name="lists_members_empty_static">No one in this list yet.</string>
     <!-- Long lists show their first 20. %1$d: how many are shown, %2$d: the total, which
          is the plural's quantity. -->

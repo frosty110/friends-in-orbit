@@ -38,6 +38,7 @@ import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
+import app.orbit.ui.screens.contact.sections.showsCustomSchedule
 import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatAbsolute
@@ -367,7 +368,7 @@ class ContactDetailViewModel @Inject constructor(
         // inputs. Corrupted-JSON recovery is the try/catch
         // around decodeFromString; failed decode flips currentParams and
         // currentTemplateName to null (the section shows the editor).
-        val customScheduleVisible = listsOn.size >= 2
+        val customScheduleVisible = showsCustomSchedule(listsOn.size, entity.ruleOverrideJson != null)
         // The editor branch renders when an override is
         // PERSISTED or the user peeked the editor open this session.
         // Opening alone persists nothing (see onOpenOverride).

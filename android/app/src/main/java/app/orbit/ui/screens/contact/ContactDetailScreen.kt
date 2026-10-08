@@ -992,7 +992,7 @@ private fun ContactBodyLazyColumn(
 
                 // CONTACT-03: RuleOverrideSection. Visibility
                 // is double-gated: the screen-side `customScheduleVisible` (VM-derived
-                // from listsOn.size >= 2) decides whether to add the LazyColumn item
+                // from showsCustomSchedule) decides whether to add the LazyColumn item
                 // at all, and the section's own AnimatedVisibility wraps the body
                 // for the in/out animation. Pitfall 6 corrupted-JSON recovery flows
                 // a fresh KeepInTouch default down so the editor still renders when

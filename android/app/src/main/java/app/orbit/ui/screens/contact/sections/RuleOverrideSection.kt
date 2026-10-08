@@ -80,6 +80,18 @@ import app.orbit.ui.util.asString
  * Token-clean — zero hardcoded color/shape/fontSize. Sentence case copy with
  * zero exclamation marks (voice contract).
  */
+/**
+ * CONTACT-03: when Contact detail shows the custom schedule. For two or more
+ * lists, where one person can need a rhythm of their own; and whenever a
+ * schedule is saved, whatever the lists. A saved schedule keeps running on a
+ * single list, so until 2026-10-08 someone left on one list (removed from
+ * another, or another archived) had a rhythm the page neither showed nor let
+ * them reset. Once reset, it has nothing left to show for one list and goes.
+ * The ViewModel and this section's own animation read this one rule.
+ */
+internal fun showsCustomSchedule(listsOnSize: Int, hasSavedSchedule: Boolean): Boolean =
+    listsOnSize >= 2 || hasSavedSchedule
+
 @Composable
 fun RuleOverrideSection(
     listsOnSize: Int,
@@ -93,10 +105,8 @@ fun RuleOverrideSection(
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
-        // Visibility gate: listsOn.size >= 2 — contacts on a single list
-        // surface only their list's template, so the override editor would
-        // have nothing to override.
-        visible = listsOnSize >= 2,
+        // The same rule the ViewModel uses to add this item at all.
+        visible = showsCustomSchedule(listsOnSize, hasOverride),
         enter = fadeIn() + expandVertically(),
         exit = fadeOut() + shrinkVertically(),
         modifier = modifier

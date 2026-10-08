@@ -3,7 +3,7 @@
 **Route:** `lists/{listId}/config`
 **Group:** Lists
 **Status:** active
-**Last reviewed:** 2026-10-07
+**Last reviewed:** 2026-10-08
 **Spec:** [orbit-lists](../orbit-lists/README.md): LIST-21, LIST-22, BULK-05; [rule-engine](../rule-engine/README.md); ADR [0010](../_foundations/ADRs/0010-interval-slider-floor-and-scale.md); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
@@ -26,7 +26,7 @@
   - "Nudges": "Send nudges" ("A gentle nudge when someone here is worth a call."), and "Nudges paused" while they are off
   - "When to nudge": seven 48dp day toggles that wrap on a narrow phone rather than shrink; one or more times with "Add time", "Change time" and a remove control; the plan as one line ("Weekdays at 10am", "Every day at 9am and 6pm", "No days selected: nudges off", "No time set: tap “Add time”")
   - "Smart rule" (smart lists): the rule as a sentence with its setting ("Added in the last 30 days", "No call in the last 90 days", "The top 20% of the people you call"), or "Nothing to set. This list shows everyone you have never called."; each setting is a number wheel under its sentence, named by that sentence for TalkBack, and saves once per gesture; no setting raises the keyboard (ADR 0011)
-  - "People": who is on the list, "Showing 20 of 48" with "Show all" on long lists, a remove control per person ("Remove {name} from list"), and "Add people" (regular lists only)
+  - "People": who is on the list (a smart list says under the count "Orbit fills this list from its rule. To keep someone off it, ignore them." and has no remove control), "Showing 20 of 48" with "Show all" on long lists, a remove control per person ("Remove {name} from list"), and "Add people" (regular lists only)
   - "Make this a regular list" with the note "The people here now stay, and the list stops adding people by itself. This can't be undone." (smart lists)
   - A second "Done" at the foot
 - Nothing but Done is in the accent: selected rhythms, day toggles, switches and wheels use ink or the soft tint (LIST-21)

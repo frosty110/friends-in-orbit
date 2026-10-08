@@ -443,6 +443,38 @@ class ContactDetailViewModelTest {
     }
 
     @Test
+    fun `a saved schedule shows on one list so it can be seen and reset (CONTACT-03)`() = runTest {
+        // Left on one list (removed from the other, or it was archived), the
+        // saved rhythm still runs; it was hidden with no way to reset it.
+        val saved = app.orbit.domain.JsonProvider.json.encodeToString(
+            app.orbit.domain.rule.RuleParams.serializer(),
+            app.orbit.domain.rule.RuleParams.KeepInTouch().withIntervalHours(10 * 24),
+        )
+        val setup = fixture(contactIdArg = "c-5")
+        setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah", ruleOverrideJson = saved)))
+        setup.listRepo.seed(listOf(ListEntity(id = 1L, name = "Inner orbit", sortOrder = 0)))
+        setup.listRepo.seedMemberships(listOf(ListMembershipEntity(contactId = 5L, listId = 1L, addedAt = T0)))
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            var ready: ContactDetailUiState.Ready? = null
+            while (ready?.listsOn.isNullOrEmpty()) {
+                val next = awaitItem()
+                if (next is ContactDetailUiState.Ready) ready = next
+            }
+            assertEquals(1, ready!!.listsOn.size)
+            assertTrue(ready.customScheduleVisible)
+            assertTrue(ready.hasOverride)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `one list and no saved schedule shows none`() {
+        assertTrue(!app.orbit.ui.screens.contact.sections.showsCustomSchedule(1, hasSavedSchedule = false))
+        assertTrue(app.orbit.ui.screens.contact.sections.showsCustomSchedule(1, hasSavedSchedule = true))
+        assertTrue(app.orbit.ui.screens.contact.sections.showsCustomSchedule(2, hasSavedSchedule = false))
+    }
+
+    @Test
     fun `customScheduleVisible flips true when contact appears on two lists`() = runTest {
         val setup = fixture(contactIdArg = "c-5")
         setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
