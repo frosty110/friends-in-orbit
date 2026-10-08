@@ -12,10 +12,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -95,6 +98,12 @@ fun OrbitNavHost(
     // announce the same failure again, while the route itself was consumed.
     var unknownRoutes by remember { mutableIntStateOf(0) }
 
+    // NOTE-04: the one owner of opening the note page, shared by the route
+    // below and the graph's own ways in. rememberSaveable, unlike the count
+    // above: what it records must outlive a process death, as the back stack
+    // holding the card's pending dial does (see PostCallNotePages).
+    val notePages = rememberSaveable(saver = PostCallNotePages.Saver) { PostCallNotePages() }
+
     LaunchedEffect(navigateTo) {
         if (!navigateTo.isNullOrBlank()) {
             // A route for the screen already on top is left alone: a nudge for
@@ -105,7 +114,14 @@ fun OrbitNavHost(
             // and not launchSingleTop: the ViewModels read their ids once,
             // from SavedStateHandle, so reusing the entry would keep showing
             // the old list.
-            if (nav.currentBackStackEntry?.shownRoute() != navigateTo) {
+            //
+            // The note page for a call (NOTIF-16's tap) is the exception: it
+            // goes through [PostCallNotePages], keyed on the call, because
+            // the card may have opened that same page a frame earlier under
+            // another spelling ("note/c-7?..." against this "note/7?..."), and
+            // a string comparison saw two pages (CARD-11).
+            val noteCall = Routes.postCallNoteCallEventId(navigateTo)
+            if (noteCall != null || nav.currentBackStackEntry?.shownRoute() != navigateTo) {
                 // MainActivity is exported, so any app can hand it a route, and
                 // Orbit's own widgets, nudges and shortcuts hand it theirs.
                 // Navigation throws IllegalArgumentException for a route outside
@@ -117,7 +133,11 @@ fun OrbitNavHost(
                 // quietly). Only that exception: anything else is a real bug
                 // and must surface.
                 try {
-                    nav.navigate(navigateTo)
+                    if (noteCall != null) {
+                        notePages.open(nav, navigateTo)
+                    } else {
+                        nav.navigate(navigateTo)
+                    }
                 } catch (_: IllegalArgumentException) {
                     unknownRoutes++
                 }
@@ -140,6 +160,7 @@ fun OrbitNavHost(
             appPrefs = appPrefs,
             startDestination = startDestination,
             screens = screens,
+            notePages = notePages,
         )
         screens.CommitSnackbarHost(
             modifier = Modifier
@@ -181,6 +202,84 @@ internal fun NavBackStackEntry.shownRoute(): String? {
 
 private val PLACEHOLDER = Regex("\\{([^}]+)\\}")
 
+/**
+ * NOTE-04, CARD-11, NOTIF-16: the one owner of opening the page for writing
+ * about a call, so the ways in that name a call never ask about it twice.
+ *
+ * Three ways in name the call: Home's "Add a note" (HOME-14), the card by
+ * itself after a call worth a note (CARD-11) and the notification's tap
+ * (NOTIF-16, a NAVIGATE_TO route). The last two can fire for one call in the
+ * same moment. After a call placed from the card, a tap on "How was your
+ * call with Kai?" brings Orbit back with onNewIntent and then onResume; the
+ * resume makes the card take its pending dial and open the page while the
+ * route waits for the next frame. Until 2026-10-08 each navigated on its
+ * own, and the deep-link guard compares route strings, which never matched
+ * ("note/c-7?..." from the card, "note/7?..." from the notification), so two
+ * pages stacked. And a card that resumed only after the user had left the
+ * notification's page (a restored process can order it that way) opened the
+ * page again over a call already written about.
+ *
+ * So the page is keyed on the call event id, never on how the route spells
+ * the person:
+ * - A page for the call already on the back stack is never stacked again,
+ *   whichever way in comes second.
+ * - The card opens a call's page by itself at most once, counting every way
+ *   in: once the page for a call has opened, the card leaves it be, so the
+ *   user who saved their note, or said "Not now", is not asked again. A tap
+ *   (Home's "Add a note", the notification) still opens a page the user has
+ *   left, because they asked for it; nothing they tap is ignored.
+ *
+ * Saved with the activity's state ([Saver], through rememberSaveable) as the
+ * back stack that holds the card's pending dial is, so a process death
+ * between the two ways in changes nothing. One id per page opened; nothing
+ * to trim.
+ */
+internal class PostCallNotePages(alreadyOpened: LongArray = LongArray(0)) {
+
+    /** The calls whose page has opened, by any way in. */
+    private val opened: MutableSet<Long> = alreadyOpened.toMutableSet()
+
+    /**
+     * Opens [route], a [Routes.postCallNote] route, unless the rules above
+     * say it is already asked. [byItself] is the card's own open (CARD-11).
+     * A route that names no call (the card's "Called Kai" snackbar asks for
+     * the person's latest call) has nothing to key on and simply opens.
+     * Throws what [NavController.navigate] throws for a route outside the
+     * graph, before anything is recorded.
+     */
+    fun open(nav: NavController, route: String, byItself: Boolean = false) {
+        val callEventId = Routes.postCallNoteCallEventId(route)
+        if (callEventId != null) {
+            if (nav.hasNotePageFor(callEventId)) return
+            if (byItself && callEventId in opened) return
+        }
+        nav.navigate(route)
+        if (callEventId != null) opened += callEventId
+    }
+
+    companion object {
+        val Saver: Saver<PostCallNotePages, LongArray> = Saver(
+            save = { it.opened.toLongArray() },
+            restore = { PostCallNotePages(it) },
+        )
+    }
+}
+
+/**
+ * Whether a note page for [callEventId] is anywhere on the back stack,
+ * however its route spells the person.
+ */
+private fun NavController.hasNotePageFor(callEventId: Long): Boolean {
+    val id = callEventId.toString()
+    return currentBackStack.value.any { entry ->
+        entry.destination.route == Routes.PostCallNote &&
+            entry.arguments?.getString(ARG_CALL_EVENT_ID) == id
+    }
+}
+
+/** The note route's call argument, as the graph declares it below. Not copy. */
+private const val ARG_CALL_EVENT_ID = "callEventId"
+
 // Bundle.get is deprecated in favour of typed getters, but the type here is
 // whatever the route declared (String, Bool, Long), and all of them print the
 // way Routes writes them.
@@ -205,6 +304,7 @@ private fun OrbitNavGraph(
     appPrefs: AppPrefs,
     startDestination: String,
     screens: OrbitNavScreens,
+    notePages: PostCallNotePages,
 ) {
     val onboardingLists = remember(listRepo, appPrefs) { OnboardingListStarter(listRepo, appPrefs) }
     val reducedMotion = LocalReducedMotion.current
@@ -237,9 +337,10 @@ private fun OrbitNavGraph(
                     nav.navigate(Routes.contactWithFocus(id, focus))
                 },
                 // HOME-14 / NOTE-04: "Add a note" on a call waiting for one
-                // opens the page for writing about that call.
+                // opens the page for writing about that call. A tap, so it
+                // opens even a page the user has left (PostCallNotePages).
                 onOpenPostCallNote = { contactId, callEventId ->
-                    nav.navigate(Routes.postCallNote(contactId, callEventId))
+                    notePages.open(nav, Routes.postCallNote(contactId, callEventId))
                 },
                 // HOME-13: the strip's "See your week" and the day sheet's
                 // "See the whole week".
@@ -273,8 +374,18 @@ private fun OrbitNavGraph(
                 // by itself and names the call. Leaving the page pops back to
                 // the deck, which has moved on to the next person. A plain tap
                 // on the face opens the person at the top.
+                //
+                // The card names a call only when it opens the page by itself
+                // (CardViewScreen's onAddNote contract), so a call id here is
+                // CARD-11's open: PostCallNotePages leaves it be when the
+                // notification's tap has already opened that call's page, or
+                // did so earlier and the user left it.
                 onAddNote = { contactId, callEventId ->
-                    nav.navigate(Routes.postCallNote(contactId, callEventId))
+                    notePages.open(
+                        nav,
+                        Routes.postCallNote(contactId, callEventId),
+                        byItself = callEventId != null,
+                    )
                 },
                 // BROWSE-09: the menu's "Browse people" passes the person on
                 // the card; "Browse this list" on the All quiet deck passes none.
@@ -699,14 +810,16 @@ private fun OrbitNavGraph(
             )
         }
         // NOTE-04: writing about a call, from Home's stack, Card view's
-        // "Called Kai" and the notification after a call (a NAVIGATE_TO
-        // route, so a cold start lands on Home with this page on top and
-        // Back returns to Home).
+        // "Called Kai", the card by itself after a call worth a note
+        // (CARD-11) and the notification after a call (a NAVIGATE_TO route,
+        // so a cold start lands on Home with this page on top and Back
+        // returns to Home). Every way in opens it through PostCallNotePages,
+        // one page per call.
         composable(
             Routes.PostCallNote,
             arguments = listOf(
                 navArgument("contactId") { type = NavType.StringType },
-                navArgument("callEventId") {
+                navArgument(ARG_CALL_EVENT_ID) {
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
@@ -715,7 +828,7 @@ private fun OrbitNavGraph(
         ) { entry ->
             screens.PostCallNote(
                 contactId = entry.requiredString("contactId"),
-                callEventId = entry.arguments?.getString("callEventId"),
+                callEventId = entry.arguments?.getString(ARG_CALL_EVENT_ID),
                 // Leaves once: "Not now" tapped twice, or a save landing as
                 // the user taps it, must not pop the screen under this one
                 // (Home is the root, and popping it empties the graph).

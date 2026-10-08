@@ -127,9 +127,11 @@ import kotlin.math.abs
  *   2026-10-07 the person's page with the note field focused, NOTE-02):
  *   from the "Called {name}" snackbar's "Add a note" (CARD-03) with no call
  *   id, so the page finds the person's latest call, and by itself after a
- *   call worth a note (CARD-11) with that call's id. Defaults to
- *   [onOpenContact] so a host that has not wired it still opens the person;
- *   the NavHost passes `Routes.postCallNote`.
+ *   call worth a note (CARD-11) with that call's id. A call id means only
+ *   that: the NavHost reads it as the card's own open, which it skips for a
+ *   call whose page is open or was already opened (`PostCallNotePages`).
+ *   Defaults to [onOpenContact] so a host that has not wired it still opens
+ *   the person; the NavHost passes `Routes.postCallNote`.
  */
 @Composable
 fun CardViewScreen(
@@ -365,8 +367,14 @@ internal fun CardViewContent(
                     // while Orbit is in the background, which on the
                     // dial-and-return path means only when the user stayed
                     // away 10 seconds or more after hanging up) is withdrawn by
-                    // the page itself as it opens, so the two never ask the
-                    // same question twice.
+                    // the page itself as it opens. A tap on that notification
+                    // can also bring Orbit back, resume this card and open the
+                    // page in the same moment; the nav host opens a call's
+                    // page through one owner keyed on the call
+                    // (PostCallNotePages), so whichever comes second opens
+                    // nothing, and this open never reopens a page the user
+                    // already left. That is why this branch does not check the
+                    // back stack itself.
                     currentOnAddNote(message.contactId, message.callEventId)
                     return@collectLatest
                 }

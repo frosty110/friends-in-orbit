@@ -168,6 +168,19 @@ object Routes {
         if (callEventId == null) "note/$contactId" else "note/$contactId?callEventId=$callEventId"
 
     /**
+     * NOTE-04: the call a [postCallNote] route names, or null for any other
+     * route, the page without a call included. The nav host keys the page on
+     * it (one page per call, `PostCallNotePages`), because the ways in spell
+     * the person two ways ("7" from the notification, "c-7" from the card)
+     * and the call one way. Read here, beside the builder, so the format has
+     * one definition.
+     */
+    fun postCallNoteCallEventId(route: String): Long? =
+        POST_CALL_NOTE_WITH_CALL.matchEntire(route)?.groupValues?.get(1)?.toLongOrNull()
+
+    private val POST_CALL_NOTE_WITH_CALL = Regex("note/[^/?]+\\?callEventId=(\\d+)")
+
+    /**
      * CONTACT-07: the picker in Relink mode for one orphaned contact. Its own
      * builder, not [pickContacts]: that one's first argument is a LIST id, and
      * passing a contact id there is exactly how Re-link used to add people to

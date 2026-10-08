@@ -459,7 +459,9 @@ class CardViewViewModel @Inject constructor(
             if (confirmed == null) return@launch
             // CARD-11: a call worth a note opens the page for it, in place of
             // the snackbar. This job runs once per dial (the dial is consumed
-            // in onReturnedFromDial), so the page opens at most once a call.
+            // in onReturnedFromDial), so the card asks at most once a dial;
+            // the nav host makes it once a call across every way in, the
+            // notification's tap included (PostCallNotePages).
             val worthANote = callWorthANote(contactId, dialedAt)
             if (worthANote != null) {
                 _messages.tryEmit(CardMessage.OpenNote(contactId = contactId, callEventId = worthANote.id))

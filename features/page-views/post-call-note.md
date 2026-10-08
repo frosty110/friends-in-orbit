@@ -3,16 +3,17 @@
 **Route:** `note/{contactId}?callEventId={callEventId}`. `contactId` is the person; the optional `callEventId` is the call the page describes. Without it the page describes the person's latest connected call
 **Group:** People
 **Status:** active
-**Last reviewed:** 2026-10-07
-**Spec:** [contact-detail](../contact-detail/README.md): NOTE-04 (added 2026-10-07), NOTE-05; HOME-14 in [home](../home/README.md); NOTIF-16 in [notifications](../notifications/README.md); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
+**Last reviewed:** 2026-10-08
+**Spec:** [contact-detail](../contact-detail/README.md): NOTE-04 (added 2026-10-07), NOTE-05; HOME-14 in [home](../home/README.md); CARD-03 and CARD-11 in [card-view](../card-view/README.md); NOTIF-16 in [notifications](../notifications/README.md); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
 
 ## Reached from
 
 - Home: "Add a note" on a call waiting for a note, as the single card or a row of the open pile (HOME-14)
-- The notification after a call, "How was your call with Kai?" (NOTIF-16): a tap opens this page over Home, with Orbit open or closed. However the page is reached, opening it withdraws that person's notification
-- Card view: "Add a note" on the "Called {first name}" snackbar after a call placed from the card (CARD-03). Card view will also open it by itself after a call of a minute or more placed from the card (CARD-11, not yet built)
+- The notification after a call, "How was your call with Kai?" (NOTIF-16): a tap opens this page over Home when Orbit was closed, and over the screen that was showing when it was open (often Card view, after a call placed from the card). However the page is reached, opening it withdraws that person's notification
+- Card view: "Add a note" on the "Called {first name}" snackbar after a call placed from the card (CARD-03). Card view also opens it by itself after a connected call of a minute or more placed from the card, in place of that snackbar (CARD-11)
+- One page per call, however many ways in ask at once: after a call placed from the card, a tap on the notification can bring Orbit back to the card as the card opens the page itself, and the page opens once, whichever comes first. Once the page for a call has opened, Card view never opens it by itself again, so a note saved (or "Not now") from the notification's page is not asked for a second time; a tap on Home's "Add a note" or on the notification still opens it (NOTE-04)
 
 ## What the user sees
 
@@ -40,13 +41,14 @@
 
 ## Leads to
 
-- Back to the screen that opened it: Home, Card view, or Home when it was opened by the notification (the page opens over Home, so Back lands there), after "Save note", "Not now", "Discard" or Back
+- Back to the screen that opened it: Home, Card view, or, when it was opened by the notification, Home after a cold start (the page opens over Home, so Back lands there) and otherwise the screen it opened over, after "Save note", "Not now", "Discard" or Back
 - "Go back" on the not-found message, the same way
 
 ## Tests that pin it
 
 - `PostCallNoteViewModelTest` (added 2026-10-07: the timer's start survives recreation; the named call, or else the latest connected call, never a logged connection; NotFound for a missing person or a malformed id; Error and Try again; the draft survives recreation and Discard forgets it; Save writes one note, says "Note saved" and leaves; Save twice writes once; a failed save says so and keeps the words)
 - `PostCallNoteContentTest` (added 2026-10-07: the title and the call line; the timer in m:ss and h:mm:ss, spoken by the minute with no live region; Save waits for words; "Not now" with nothing written leaves, with words asks; Keep writing and Discard; Back with words asks; the curtain; the not-found message)
-- `OrbitNavHostTest` (added 2026-10-07: Home's and Card view's "Add a note" open this page; the notification's route opens it over Home; leaving pops once, even when asked twice)
-- `RoutesTest` (the route with and without a call)
+- `OrbitNavHostTest` (added 2026-10-07: Home's and Card view's "Add a note" open this page; the notification's route opens it over Home; leaving pops once, even when asked twice; after a call worth a note Card view opens it for that call and leaving returns to the deck, `cardAfterACallWorthANote_opensTheNotePage_forThatCall_andLeavingReturnsToTheDeck`, CARD-11. Added 2026-10-08: the card and the notification for one call open one page, whichever is first; a note saved from the notification's page, or a page the card opened and the user left, is not opened by the card again; a tap still opens a page the user left; another call gets its own page; the calls whose page opened survive the saved state)
+- `CardViewViewModelInteractionTest` (CARD-11: a connected call of a minute or more opens this page once, also after a process death; a shorter call, an attempt or a call before the dial keeps the snackbar)
+- `RoutesTest` (the route with and without a call; added 2026-10-08: the call it names reads back the same whether the person is "7" or "c-7")
 - Gallery previews: `PostCallNoteContentEmptyPreview`, `PostCallNoteContentWritingPreview`, `PostCallNoteContentIncomingPreview`, `PostCallNoteContentCurtainPreview`, `PostCallNoteContentDiscardPreview`, `PostCallNoteContentLoadingPreview`, `PostCallNoteContentNotFoundPreview`, `PostCallNoteContentErrorPreview`, with the curtain pass
