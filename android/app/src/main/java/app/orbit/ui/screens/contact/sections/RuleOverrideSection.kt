@@ -8,10 +8,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,20 +17,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import app.orbit.R
 import app.orbit.data.entity.RuleKind
 import app.orbit.domain.rule.RuleParams
+import app.orbit.ui.components.IntervalDaysPicker
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
-import app.orbit.ui.components.OrbitSlider
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.screens.lists.RuleTemplatePicker
 import app.orbit.ui.theme.OrbitTheme
@@ -64,16 +58,14 @@ import app.orbit.ui.util.asString
  * ListConfigBody's slider. Committing only `cooldownMinHours` let the default
  * 336h cap silently turn "aim for every 30 days" into every 14 (see the
  * withIntervalHours KDoc). Late night and Energize carry no user-facing
- * tunables — like List Configuration, a quiet rhythm note replaces the slider
- * for those kinds.
+ * tunables; like List Configuration, a quiet rhythm note replaces the day
+ * wheel for those kinds.
  *
  * **Reuse, not duplication.** The kind picker is the same composable List
- * Configuration uses. The interval slider is the shared [OrbitSlider]
- * (DESIGN.md: one slider, ink track, a value TalkBack reads in words) and
- * mirrors the `IntervalSliderLocal` pattern in ListConfigBody: same
- * `onValueChangeFinished` save-on-commit semantics — but operates on
- * `RuleParams` rather than the list-level state because the per-contact
- * override path writes `Contact.ruleOverrideJson`. Until 2026-10-06 this
+ * Configuration uses, and so is the interval: the shared [IntervalDaysPicker]
+ * (ADR 0011), which commits once per gesture. Only the commit differs: it
+ * writes `RuleParams` rather than the list-level state, because the
+ * per-contact override path writes `Contact.ruleOverrideJson`. Until 2026-10-06 this
  * was a stock Material slider styled by hand, so the same control looked
  * different here and in List settings.
  *
@@ -88,6 +80,18 @@ import app.orbit.ui.util.asString
  * Token-clean — zero hardcoded color/shape/fontSize. Sentence case copy with
  * zero exclamation marks (voice contract).
  */
+/**
+ * CONTACT-03: when Contact detail shows the custom schedule. For two or more
+ * lists, where one person can need a rhythm of their own; and whenever a
+ * schedule is saved, whatever the lists. A saved schedule keeps running on a
+ * single list, so until 2026-10-08 someone left on one list (removed from
+ * another, or another archived) had a rhythm the page neither showed nor let
+ * them reset. Once reset, it has nothing left to show for one list and goes.
+ * The ViewModel and this section's own animation read this one rule.
+ */
+internal fun showsCustomSchedule(listsOnSize: Int, hasSavedSchedule: Boolean): Boolean =
+    listsOnSize >= 2 || hasSavedSchedule
+
 @Composable
 fun RuleOverrideSection(
     listsOnSize: Int,
@@ -101,10 +105,8 @@ fun RuleOverrideSection(
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
-        // Visibility gate: listsOn.size >= 2 — contacts on a single list
-        // surface only their list's template, so the override editor would
-        // have nothing to override.
-        visible = listsOnSize >= 2,
+        // The same rule the ViewModel uses to add this item at all.
+        visible = showsCustomSchedule(listsOnSize, hasOverride),
         enter = fadeIn() + expandVertically(),
         exit = fadeOut() + shrinkVertically(),
         modifier = modifier
@@ -170,7 +172,8 @@ private fun OverrideEditor(params: RuleParams, onChange: (RuleParams) -> Unit) {
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x3))
         when (params) {
-            is RuleParams.KeepInTouch -> IntervalDaysSlider(
+            // The same day wheel as List settings' "How often" (ADR 0011).
+            is RuleParams.KeepInTouch -> IntervalDaysPicker(
                 currentHours = params.cooldownMinHours,
                 onCommit = { days -> onChange(commitOverrideInterval(params, days)) }
             )
@@ -195,73 +198,14 @@ private fun OverrideEditor(params: RuleParams, onChange: (RuleParams) -> Unit) {
  * `cooldownMinHours` alone let the 336h default cap lie about long
  * intervals). Internal so the unit test can assert both bounds move.
  *
- * Floors at 1 day per ADR 0010, matching `INTERVAL_MIN_DAY` in ListConfigBody —
- * the two sliders must stay in lockstep, so a change here needs the same change
- * there and an ADR to go with it.
+ * Floors at 1 day per ADR 0010. Both screens draw the one [IntervalDaysPicker]
+ * since ADR 0011, so its 1 to 60 day range is shared by construction rather
+ * than kept in lockstep by hand.
  */
 internal fun commitOverrideInterval(
     params: RuleParams.KeepInTouch,
     days: Int
 ): RuleParams.KeepInTouch = params.withIntervalHours(days.coerceAtLeast(1) * 24)
-
-/**
- * Interval slider — mirrors ListConfigBody's `IntervalSliderLocal` ("Aim for
- * every N days", 1..60). `onValueChangeFinished` is the commit point so the
- * VM only writes `Contact.ruleOverrideJson` once per drag, not on every frame.
- */
-@Composable
-private fun IntervalDaysSlider(currentHours: Int, onCommit: (days: Int) -> Unit) {
-    val initialDays = (currentHours / 24f).coerceAtLeast(1f)
-    var days by remember(currentHours) { mutableFloatStateOf(initialDays) }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4)
-    ) {
-        val rounded = days.toInt().coerceAtLeast(1)
-        val everyLabel = pluralStringResource(R.plurals.lists_interval_every_days, rounded, rounded)
-        // One sentence with the value inside it ("Aim for every 14 days"), the
-        // same string and shape as ListConfigBody's IntervalSliderLocal; the
-        // string took its argument on 2026-10-06 and a bare call rendered the
-        // placeholder.
-        val aimLabel = stringResource(
-            R.string.lists_interval_aim,
-            pluralStringResource(R.plurals.lists_interval_days, rounded, rounded),
-        )
-        Text(
-            text = aimLabel,
-            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-            modifier = Modifier.fillMaxWidth()
-        )
-        // The shared slider owns the look (ink, no accent) and the semantics:
-        // TalkBack reads "Every 14 days", not "10 percent" (rubric D8).
-        OrbitSlider(
-            value = days,
-            onValueChange = { days = it },
-            valueRange = 1f..60f,
-            valueDescription = everyLabel,
-            label = aimLabel,
-            // One step per day, so the thumb lands on whole days and TalkBack's
-            // adjust gesture moves a day at a time.
-            steps = 58,
-            onValueChangeFinished = { onCommit(days.toInt().coerceAtLeast(1)) },
-            modifier = Modifier.padding(top = OrbitTheme.spacing.x1)
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = OrbitTheme.spacing.x1),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = pluralStringResource(R.plurals.lists_interval_days, 1, 1),
-                style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle)
-            )
-            Text(
-                text = pluralStringResource(R.plurals.lists_interval_days, 60, 60),
-                style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle)
-            )
-        }
-    }
-}
 
 // ─── RuleParams ↔ RuleKind helpers ──────────────────────────────────────────
 

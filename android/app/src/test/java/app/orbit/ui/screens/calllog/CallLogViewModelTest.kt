@@ -171,6 +171,34 @@ class CallLogViewModelTest {
     // ============================================================================
 
     @Test
+    fun `an archived list is never the list context (LIST-24)`() = runVmTest {
+        val vm = vm(
+            events = listOf(
+                callEventFixture(id = 1L, contactId = 1L, occurredAt = at("2026-06-09", "08:00")),
+                callEventFixture(id = 2L, contactId = 2L, occurredAt = at("2026-06-09", "07:00")),
+            ),
+            contacts = listOf(contactFixture(id = 1L), contactFixture(id = 2L)),
+            lists = listOf(
+                listFixture(id = 10L, name = "Inner orbit"),
+                listFixture(id = 20L, name = "Old friends", isArchived = true),
+            ),
+            // The archived list is the newer membership, so it used to win.
+            // The second person is on the archived list alone: no list.
+            memberships = listOf(
+                ListMembershipEntity(contactId = 1L, listId = 20L, addedAt = at("2026-06-01", "12:00")),
+                ListMembershipEntity(contactId = 1L, listId = 10L, addedAt = at("2026-05-01", "12:00")),
+                ListMembershipEntity(contactId = 2L, listId = 20L, addedAt = at("2026-06-01", "12:00")),
+            ),
+        )
+        vm.uiState.test(timeout = 5.seconds) {
+            val rows = awaitReady().rows()
+            assertEquals("Inner orbit", rows.first { it.callEventId == 1L }.listName)
+            assertEquals("", rows.first { it.callEventId == 2L }.listName)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `list context is the newest membership, and none means no list`() = runVmTest {
         val vm = vm(
             events = listOf(

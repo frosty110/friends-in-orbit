@@ -3,8 +3,8 @@
 **Route:** `contact/{contactId}`. Optional `focusNote=1` puts the cursor in the note field once the page settles (NOTE-02); optional `scrollToCallEventId={id}` scrolls to that call and offers "Add note to this call" under it (LOG-03)
 **Group:** People
 **Status:** active
-**Last reviewed:** 2026-10-06
-**Spec:** [contact-detail](../contact-detail/README.md): CONTACT-01 to CONTACT-08, CONTACT-09 (defined this round), NOTE-01, NOTE-02; LOG-03 and LOG-04 in [call-history](../call-history/README.md); PRIV-03, PRIV-05 and PRIV-07 in [privacy-and-lock](../privacy-and-lock/README.md)
+**Last reviewed:** 2026-10-08
+**Spec:** [contact-detail](../contact-detail/README.md): CONTACT-01 to CONTACT-08, LIST-24 in [orbit-lists](../orbit-lists/README.md), CONTACT-09 (defined this round), NOTE-01, NOTE-02; LOG-03 and LOG-04 in [call-history](../call-history/README.md); PRIV-03, PRIV-05 and PRIV-07 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
 
@@ -22,9 +22,9 @@
 - When a timed pause has run out, a banner at the top: "{Name} is unpaused" / "They'll come up again on their lists.", with a dismiss control (CONTACT-05)
 - The hero: photo or initials, the name, the number (tappable; TalkBack: "Call {number}"), and a status line where one applies: "Paused until 12 Oct", "Paused until you unpause", "Ignored", "Archived"
 - "Call" and "Log a connection"
-- "On these lists": a chip per list, or "Not on any list yet"; "Add to lists"
+- "On these lists": a chip per list that isn't archived (LIST-24), or "Not on any list yet"; "Add to lists"
 - "Stats": "Last call", "Total calls", "Average length", "Longest gap" and "Usually" (the part of the day you talk: "Mornings", "Evenings") with an info tip; a stat without enough history says "Not enough calls yet" (CONTACT-02)
-- "Custom schedule", only for someone on two or more lists: "Follows the keep in touch rhythm from {list}." with "Set a schedule for this person"; once set, the rhythm picker, an "Aim for every 14 days" slider and "Reset to default" (CONTACT-03)
+- "Custom schedule", for someone on two or more lists that aren't archived, or anyone with a schedule saved (so it can always be seen and reset): "Follows the keep in touch rhythm from {list}." with "Set a schedule for this person"; once set, the rhythm picker, "Aim for every 14 days" over the same day wheel as List settings (ADR 0011), and "Reset to default" (CONTACT-03)
 - "Notes": a field ("Add a note") with "Add", then every note, newest first, with when it was written (NOTE-01)
 - "Recent calls": each with an icon for its kind, its length (or "Logged" / "Attempted"), and how long ago; "View all calls" in the overflow for the rest
 - The one accent element: "Call" (rules.md Design 6)
@@ -41,7 +41,7 @@
 - "Add to lists": opens the Add to lists picker
 - Notes: "Add" saves ("Note saved"). Each note's "More actions for this note" offers "Edit" and "Delete" ("Note deleted" with Undo); a long-press edits and a swipe deletes, as shortcuts to the same menu. Tapping a note's time switches between "3 days ago" and the date
 - Arriving from Call history: "Add a note about this call" sits under that call with "Add note to this call", and the note is dated to the call (LOG-03)
-- Custom schedule: "Set a schedule for this person", the rhythm picker and the slider save as you go; "Reset to default" returns to the list's rhythm
+- Custom schedule: "Set a schedule for this person", the rhythm picker and the day wheel save as you go; "Reset to default" returns to the list's rhythm
 - The orphan banner: "Re-link" opens the Add people picker in Re-link mode; it returns here with "Re-linked to {phone contact}" and Undo (Undo splits them again), or "Couldn't save that" with nothing changed (CONTACT-07). "Archive": "Archived {name}" with Undo
 - A write that fails says so: "Couldn't add note", "Couldn't log that", "Couldn't pause {name}", "Couldn't ignore {name}", "Couldn't archive {name}", "Couldn't undo"
 
@@ -69,7 +69,7 @@
 
 ## Tests that pin it
 
-- `ContactDetailViewModelTest` (Ready, Error and recovery, Orphaned with its notes, the ignored and archived flags, pause and unpause, ignore and undo, archive, logging a connection and an attempt, notes, focusNote, scrollToCallEventId, the lapsed-pause banner, failure snackbars)
+- `ContactDetailViewModelTest` (archived lists not named, counted or followed; a saved schedule shows on one list; Ready, Error and recovery, Orphaned with its notes, the ignored and archived flags, pause and unpause, ignore and undo, archive, logging a connection and an attempt, notes, focusNote, scrollToCallEventId, the lapsed-pause banner, failure snackbars)
 - `ContactOverflowMenuTest` (the overflow's order and its Pause/Unpause, Ignore/Unignore and Open in Contacts variants)
 - `ContactDetailCurtainTest` (every name, the number and the pane title under the curtain)
 - `ContactDetailScreenTest` (added this round: arriving scrolled to a call shows that row and "Add note to this call"; the pane title is the name, or the message heading when there is no person)

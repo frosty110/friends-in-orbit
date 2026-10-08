@@ -15,7 +15,7 @@ Not features — shared across all work.
 - [`_foundations/development-cycle.md`](_foundations/development-cycle.md) — how a change gets made and verified; the definition of done
 - [`_foundations/voice.md`](_foundations/voice.md) — content rules, "never say" list, tone
 - [`_foundations/stack.md`](_foundations/stack.md) — technical stack summary (defers to `android/gradle/libs.versions.toml`)
-- [`_foundations/ADRs/`](_foundations/ADRs/): architecture decision records (ADRs 0001-0010; 0007 is superseded)
+- [`_foundations/ADRs/`](_foundations/ADRs/): architecture decision records (ADRs 0001-0012; 0007 is superseded, and 0010's choice of a slider is superseded by 0011)
 
 ---
 

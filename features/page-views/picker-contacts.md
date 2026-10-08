@@ -3,8 +3,8 @@
 **Route:** `pick/contacts?targetListId={listId}` (Add mode, the default); `pick/contacts?mode=relink&relinkContactId={contactId}` (Re-link mode, which takes no list). The route also knows `mode=move` and `mode=copy`, but no screen opens them: moving and copying happen from Browse's selection bar
 **Group:** Lists
 **Status:** active
-**Last reviewed:** 2026-10-06
-**Spec:** [orbit-lists](../orbit-lists/README.md): BULK-05, PICK-01, PICK-02, PICK-03 (defined this round), PICK-04, PICK-05, PICK-06, PICK-08, PICK-09; CONTACT-07 in [contact-detail](../contact-detail/README.md); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
+**Last reviewed:** 2026-10-07
+**Spec:** [orbit-lists](../orbit-lists/README.md): BULK-05, LIST-24, SMART-08, PICK-01, PICK-02, PICK-03 (defined this round), PICK-04, PICK-05, PICK-06, PICK-08, PICK-09; CONTACT-07 in [contact-detail](../contact-detail/README.md); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
 
@@ -24,10 +24,10 @@
 - App bar: Back, and "Add people" or "Re-link contact"
 - A search field, "Search name or number", with one clear control
 - "Sort: Alphabetical", a 48dp control whose menu offers Alphabetical, Most called, Recently called and Recently added, the current order ticked; beside it "Show ignored" (or "Hide ignored")
-- Filter chips: "Starred"; one of "Commonly called", "Rarely called", "Never called"; "Long gap"; "Not on a list"; and "On a list", which opens a menu of your other lists (or says "No lists yet"). Applied filters sit in their own always-visible row, each with its count ("Rarely called · 7") and an x; filters with no matches are greyed and pushed to the end, with "Grayed-out filters have no matches right now." and, before Orbit has your call history, "Filters like “long gap” wake up once Orbit has your call history."
+- Filter chips: "Starred"; "Recently added" (saved within the last 30 days, or the window Settings sets); one of "Commonly called", "Rarely called", "Never called"; "Long gap"; "Not on a list" (an archived list does not count); and "On a list", which opens a menu of your other lists (or says "No lists yet"). Applied filters sit in their own always-visible row, each with its count ("Rarely called · 7") and an x; filters with no matches are greyed and pushed to the end, with "Grayed-out filters have no matches right now." and, before Orbit has your call history, "Filters like “long gap” wake up once Orbit has your call history."
 - "Select all 14 matches" whenever search or a filter narrows the list and at least one match is unselected; over 200 matches it reads "Over 200 matches. Narrow the search to select them all." (PICK-03)
-- The people, under sticky A to Z headers with a fast-scroll rail at the edge: face, name, "Last called 3 days ago · 4 calls" or "Never called", "On Inner orbit, Late night" (PICK-04), a check mark, and a "More actions for {name}" button; ignored people, when shown, are muted and tagged "Ignored"
-- A bar docked under the list once anything is selected: "3 selected", "Clear", and the commit button, "Add 3 people to {list}" or "Re-link {name}" (PICK-06); it never hides the last row
+- The people, under sticky A to Z headers with a fast-scroll rail at the edge: face, name, "Last called 3 days ago · 4 calls" or "Never called", "On Inner orbit, Late night", never naming an archived list (PICK-04, LIST-24), a check mark, and a "More actions for {name}" button; ignored people, when shown, are muted and tagged "Ignored"
+- A bar docked under the list once anything is selected: "3 selected", "Clear", and the commit button, "Add" (TalkBack hears "Add 3 people to {list}") or "Re-link {name}" (PICK-06); it never hides the last row
 - The one accent element: the commit button
 
 ## Actions and menus
@@ -63,6 +63,6 @@
 ## Tests that pin it
 
 - `ContactPickerViewModelTest` (candidates, filters, sort, select all and its cap, commit and undo, the smart-list guard, Re-link, Error with the selection kept and recovery, a grant made here runs the ingest and holds the skeleton until it is done)
-- `ContactPickerUiStateTest` (filters, counts, the empty reasons), `PickerCandidatesTest` (added this round), `PickerModeTitleTest`, `PickerRowMenuTest` (added this round: Open in Contacts, Ignore destructive, Unignore)
+- `ContactPickerUiStateTest` (filters, counts, the empty reasons), `PickerCandidatesTest` (added this round; archived lists left out, an archived target still hiding its members), `BatchCounterTest` (the button says "Add", TalkBack the sentence), `FilterChipsRowTest` (Recently added is offered), `PickerModeTitleTest`, `PickerRowMenuTest` (added this round: Open in Contacts, Ignore destructive, Unignore)
 - `ContactSearchTest`, `RelinkContactUseCaseTest`, `UnignoreContactUseCaseTest`
 - Gallery previews: `ContactPickerReadyPreviewLight`, `ContactPickerReadyPreviewDark`, `ContactPickerContentPreview`, `ContactPickerRationalePreviewLight`, `ContactPickerDeniedPreviewLight`, `EmptyDeviceContactsPreviewLight`, `FilterChipsRowPreview`, `SelectAllMatchingChipPreviewLight`, `PickerContactRowPreviewLight`, `BatchCounterAddPreviewLight`, the Error, not-found, no-matches, committing and Re-link previews added this round, with the curtain pass

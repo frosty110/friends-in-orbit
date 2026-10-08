@@ -26,6 +26,7 @@ import app.orbit.domain.JsonProvider
 import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
 import app.orbit.domain.model.PauseDuration
+import app.orbit.domain.model.onActiveLists
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.AddNoteUseCase
@@ -37,6 +38,7 @@ import app.orbit.domain.usecase.IgnoreContactUseCase
 import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
+import app.orbit.ui.screens.contact.sections.showsCustomSchedule
 import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatAbsolute
@@ -318,7 +320,12 @@ class ContactDetailViewModel @Inject constructor(
         // mapper and the note mapper so derivations share one "now".
         val now = clock.now()
 
-        val listsOn = tuple.memberships
+        // LIST-24: an archived list is out of your orbit, so it is not named
+        // here, not counted toward the custom schedule, and its rhythm is not
+        // the one this person "follows". Every use below reads this, never
+        // tuple.memberships, so the four cannot disagree.
+        val memberships = tuple.memberships.onActiveLists(tuple.allLists)
+        val listsOn = memberships
             .mapNotNull { m -> tuple.allLists.firstOrNull { it.id == m.listId }?.name }
         val recentCalls = tuple.events.map { it.toUiCallEntry(now) }
         // LOG-03: parallel-indexed call-event ids for the screen's
@@ -361,18 +368,18 @@ class ContactDetailViewModel @Inject constructor(
         // inputs. Corrupted-JSON recovery is the try/catch
         // around decodeFromString; failed decode flips currentParams and
         // currentTemplateName to null (the section shows the editor).
-        val customScheduleVisible = listsOn.size >= 2
+        val customScheduleVisible = showsCustomSchedule(listsOn.size, entity.ruleOverrideJson != null)
         // The editor branch renders when an override is
         // PERSISTED or the user peeked the editor open this session.
         // Opening alone persists nothing (see onOpenOverride).
         val hasOverride = entity.ruleOverrideJson != null || six.overrideEditorOpen
         val (currentTemplateName, currentParams) = deriveOverrideDisplay(
             ruleOverrideJson = entity.ruleOverrideJson,
-            memberships = tuple.memberships,
+            memberships = memberships,
             allLists = tuple.allLists,
             templates = templates
         )
-        val primaryListName = tuple.memberships.firstOrNull()?.listId?.let { lid ->
+        val primaryListName = memberships.firstOrNull()?.listId?.let { lid ->
             tuple.allLists.firstOrNull { it.id == lid }?.name
         } ?: ""
 

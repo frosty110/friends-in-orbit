@@ -20,7 +20,8 @@ import org.junit.Test
 /**
  * Behavioral tests for [SmartListEngine] — covers SMART-03 (reactive Flow),
  * SMART-05 (ignore filter applies to every rule type), SMART-07 (zero-call
- * percentile invariant), SMART-08 (firstSeenByAppAt source-of-truth).
+ * percentile invariant), SMART-08 ("added" is the earlier of first sight and
+ * the device's frozen last-updated time).
  *
  * Two interfaces exercised:
  *   - `engine.computeFromEvents(...)` — internal pure dispatcher (same module, so visible)
@@ -44,7 +45,7 @@ class SmartListEngineTest {
     }
 
     // ============================================================================
-    // SMART-08: RecentlyAddedNotCalled — firstSeenByAppAt window + zero-call gate
+    // SMART-08: RecentlyAddedNotCalled: addedAt window + zero-call gate
     // ============================================================================
 
     @Test
@@ -91,6 +92,76 @@ class SmartListEngineTest {
             now = T0,
         )
         assertEquals(emptyList(), result, "contact with calls must NOT appear in RecentlyAddedNotCalled")
+    }
+
+    @Test
+    fun `recentlyAddedNotCalled leaves out the first sync's batch (SMART-08)`() = runTest {
+        // The reported bug: Orbit's first contacts sync stamps everyone already
+        // on the phone with one firstSeenByAppAt, so "Added in the last 7 days"
+        // held the whole address book for a week. Their device timestamps are
+        // old; only the person saved since the sync is recently added.
+        val firstSync = T0.minus(Duration.ofDays(2))
+        fun inFirstSync(id: Long, deviceDaysAgo: Long) = contactFixture(
+            id = id,
+            firstSeenByAppAt = firstSync,
+            deviceUpdatedAt = T0.minus(Duration.ofDays(deviceDaysAgo)),
+        )
+        val (eng, _, _) = engine(
+            contacts = listOf(
+                inFirstSync(id = 1L, deviceDaysAgo = 400),
+                inFirstSync(id = 2L, deviceDaysAgo = 90),
+                inFirstSync(id = 3L, deviceDaysAgo = 8),
+                contactFixture(
+                    id = 4L,
+                    firstSeenByAppAt = T0.minus(Duration.ofDays(1)),
+                    deviceUpdatedAt = T0.minus(Duration.ofDays(1)).minus(Duration.ofMinutes(10)),
+                ),
+            ),
+        )
+        eng.membership(SmartListRule.RecentlyAddedNotCalled(daysWindow = 7)).test(timeout = 2.seconds) {
+            assertEquals(listOf(4L), awaitItem().map { it.id })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a device timestamp never makes a contact newer than first sight (SMART-08)`() {
+        // A row created before deviceUpdatedAt existed is backfilled with the
+        // device's current timestamp, which a recent rename has bumped. The
+        // earlier instant wins, so this long-known contact stays out.
+        val contacts = listOf(
+            contactFixture(
+                id = 1L,
+                firstSeenByAppAt = T0.minus(Duration.ofDays(60)),
+                deviceUpdatedAt = T0.minus(Duration.ofDays(1)),
+            ),
+        )
+        val (eng, _, _) = engine(contacts = contacts)
+        val result = eng.computeFromEvents(
+            rule = SmartListRule.RecentlyAddedNotCalled(daysWindow = 30),
+            contacts = contacts,
+            events = emptyList(),
+            now = T0,
+        )
+        assertEquals(emptyList(), result)
+    }
+
+    @Test
+    fun `with no device timestamp, first sight decides (SMART-08)`() {
+        // Some ROMs report no last-updated time. Then first sight is all there
+        // is, as before the device timestamp was consulted.
+        val contacts = listOf(
+            contactFixture(id = 1L, firstSeenByAppAt = T0.minus(Duration.ofDays(5)), deviceUpdatedAt = null),
+            contactFixture(id = 2L, firstSeenByAppAt = T0.minus(Duration.ofDays(60)), deviceUpdatedAt = null),
+        )
+        val (eng, _, _) = engine(contacts = contacts)
+        val result = eng.computeFromEvents(
+            rule = SmartListRule.RecentlyAddedNotCalled(daysWindow = 30),
+            contacts = contacts,
+            events = emptyList(),
+            now = T0,
+        )
+        assertEquals(listOf(1L), result.map { it.id })
     }
 
     // ============================================================================

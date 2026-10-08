@@ -1,6 +1,6 @@
 # ADR 0010 — The keep-in-touch interval floor is 1 day; the slider scale is linear
 
-**Status:** accepted
+**Status:** accepted; its control (the slider) superseded by [ADR 0011](0011-number-wheel-for-day-and-count-settings.md), 2026-10-07. The range, the default and the floor rule stand.
 **Date:** 2026-08-15
 **Deciders:** the maintainer
 **Supersedes:** none — reverses commit `1c8a0d3` ("fix(lists): floor keep-in-touch
