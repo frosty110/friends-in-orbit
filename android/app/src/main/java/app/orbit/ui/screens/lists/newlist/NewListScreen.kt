@@ -15,8 +15,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,6 +47,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.orbit.R
 import app.orbit.ui.components.CurtainMask
+import app.orbit.ui.components.IntervalDaysPicker
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
@@ -56,7 +55,7 @@ import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitSnackbarHost
-import app.orbit.ui.screens.lists.HowOftenSlider
+import app.orbit.ui.components.OrbitTextField
 import app.orbit.ui.screens.lists.ListConfigContactSnapshot
 import app.orbit.ui.screens.lists.MembersPreview
 import app.orbit.ui.screens.lists.TemplateChoice
@@ -301,16 +300,14 @@ private fun NameStep(
     LaunchedEffect(Unit) {
         if (autoFocus) runCatching { focusRequester.requestFocus() }
     }
-    OutlinedTextField(
+    OrbitTextField(
         value = nameText,
         onValueChange = {
             nameText = it
             onNameChange(it)
         },
-        label = { Text(stringResource(R.string.lists_name_field)) },
+        label = stringResource(R.string.lists_name_field),
         visualTransformation = if (LocalPrivacyCurtain.current) CurtainMask(curtainList) else VisualTransformation.None,
-        singleLine = true,
-        textStyle = LocalTextStyle.current.merge(OrbitTheme.type.body),
         keyboardOptions = KeyboardOptions(
             capitalization = KeyboardCapitalization.Sentences,
             imeAction = ImeAction.Next,
@@ -318,14 +315,12 @@ private fun NameStep(
         // A blank name goes nowhere: the ViewModel's Next refuses it, as the
         // disabled button does.
         keyboardActions = KeyboardActions(onNext = { onNext() }),
-        modifier = Modifier
-            .fillMaxWidth()
-            .focusRequester(focusRequester),
+        modifier = Modifier.focusRequester(focusRequester),
     )
 }
 
 /**
- * How often: the slider List settings uses ([HowOftenSlider], LIST-30),
+ * How often: the day wheel List settings uses ([IntervalDaysPicker], LIST-30),
  * starting at the template's rhythm (every 2 days for "Start from blank" and
  * the list that fills itself), on a card as it sits in List settings.
  */
@@ -337,7 +332,8 @@ private fun HowOftenStep(intervalHours: Int, onIntervalCommit: (Int) -> Unit) {
         modifier = Modifier.padding(bottom = OrbitTheme.spacing.x4),
     )
     StepCard {
-        HowOftenSlider(intervalHours = intervalHours, onCommit = onIntervalCommit)
+        // Whole days from the wheel; the ViewModel keeps hours.
+        IntervalDaysPicker(currentHours = intervalHours, onCommit = { days -> onIntervalCommit(days * 24) })
     }
 }
 

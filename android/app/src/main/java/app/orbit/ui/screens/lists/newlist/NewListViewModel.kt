@@ -49,7 +49,7 @@ import kotlinx.coroutines.launch
  *
  * A template fills in what the user has not: its name replaces the name
  * only while that is blank or still the previous template's name, and its
- * rhythm sets How often only until the slider has been moved. So going back
+ * rhythm sets How often only until the wheel has been turned. So going back
  * to Start with and picking another template moves the defaults along and
  * keeps what was typed or chosen.
  *
@@ -146,7 +146,7 @@ class NewListViewModel @Inject constructor(
      * Start with: [templateId] picked, [defaultName] its name in the user's
      * language (the screen resolves it; empty for "Start from blank"). The
      * name follows the template while it is blank or still the last
-     * template's name; How often follows it until the slider has moved.
+     * template's name; How often follows it until the wheel has been turned.
      */
     fun selectTemplate(templateId: String, defaultName: String) {
         // Only on Start with, which keeps the Name step's field the name's
@@ -165,7 +165,7 @@ class NewListViewModel @Inject constructor(
         savedStateHandle[KEY_NAME] = text
     }
 
-    /** How often's slider let go at [hours]. From here on the template no longer sets it. */
+    /** How often's wheel settled at [hours]. From here on the template no longer sets it. */
     fun onIntervalCommit(hours: Int) {
         savedStateHandle[KEY_INTERVAL] = hours
     }

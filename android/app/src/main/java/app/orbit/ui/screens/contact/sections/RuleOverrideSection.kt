@@ -22,20 +22,32 @@ import app.orbit.R
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.rule.baseIntervalHours
 import app.orbit.domain.rule.toKeepInTouchEvery
+import app.orbit.ui.components.IntervalDaysPicker
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.SectionLabel
-import app.orbit.ui.screens.lists.HowOftenSlider
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.asString
 
 /**
+ * CONTACT-03: when Contact detail shows the custom schedule. For two or more
+ * lists, where one person can need a rhythm of their own; and whenever a
+ * schedule is saved, whatever the lists. A saved schedule keeps running on a
+ * single list, so until 2026-10-08 someone left on one list (removed from
+ * another, or another archived) had a rhythm the page neither showed nor let
+ * them reset. Once reset, it has nothing left to show for one list and goes.
+ * The ViewModel and this section's own animation read this one rule.
+ */
+internal fun showsCustomSchedule(listsOnSize: Int, hasSavedSchedule: Boolean): Boolean =
+    listsOnSize >= 2 || hasSavedSchedule
+
+/**
  * Per-contact rule override editor (CONTACT-03).
  *
- * **Visibility gate:** rendered only when the contact appears on at least two
- * lists — i.e. `listsOn.size >= 2`. The wrapping AnimatedVisibility flips the
- * section in/out as the contact's membership count crosses the threshold.
+ * **Visibility gate:** [showsCustomSchedule]: two or more lists, or a
+ * schedule saved. The wrapping AnimatedVisibility flips the section in and
+ * out as that changes.
  *
  * **No-override branch (`hasOverride == false`):** shows eyebrow "Custom
  * schedule", then how often the person comes up on the list they follow
@@ -46,21 +58,22 @@ import app.orbit.ui.util.asString
  * and engineering vocabulary).
  *
  * **Override branch (`hasOverride == true`):** List settings' own "How
- * often" control ([HowOftenSlider]) and a Ghost "Reset to default" that
- * clears `Contact.ruleOverrideJson`. Since 2026-10-07 (LIST-30) there is no
- * rhythm choice here either: Keep in touch, Late night and Energize are one
- * calculation with different starting numbers, so a person's schedule is one
- * number too. A Late night or Energize override set before then shows its
- * real starting interval; letting go of the slider where it started writes
- * nothing, so it stays what it was until it is moved, and moving it makes it
- * Keep in touch at the chosen interval ([commitOverrideInterval]).
+ * often" control, the shared day wheel ([IntervalDaysPicker], ADR 0011),
+ * and a Ghost "Reset to default" that clears `Contact.ruleOverrideJson`.
+ * Since 2026-10-07 (LIST-30) there is no rhythm choice here either: Keep in
+ * touch, Late night and Energize are one calculation with different starting
+ * numbers, so a person's schedule is one number too. A Late night or
+ * Energize override set before then shows its real starting interval;
+ * letting the wheel settle where it started writes nothing, so it stays what
+ * it was until it is turned, and turning it makes it Keep in touch at the
+ * chosen interval ([commitOverrideInterval]).
  *
  * **Corrupted JSON recovery.** When the VM cannot decode `ruleOverrideJson`
  * (`currentParams == null`), the screen passes a fresh default RuleParams
  * here; an override is stored, so the editor branch shows and the user can
  * tap Reset to default to clear the corrupted column.
  *
- * Copy lives in strings_contact.xml; the slider's words are List settings'
+ * Copy lives in strings_contact.xml; the wheel's words are List settings'
  * (strings_lists.xml), because it is the same control.
  *
  * Token-clean — zero hardcoded color/shape/fontSize. Sentence case copy with
@@ -79,10 +92,8 @@ fun RuleOverrideSection(
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
-        // Visibility gate: listsOn.size >= 2 — contacts on a single list
-        // surface only their list's template, so the override editor would
-        // have nothing to override.
-        visible = listsOnSize >= 2,
+        // The same rule the ViewModel uses to add this item at all.
+        visible = showsCustomSchedule(listsOnSize, hasOverride),
         enter = fadeIn() + expandVertically(),
         exit = fadeOut() + shrinkVertically(),
         modifier = modifier
@@ -118,13 +129,11 @@ fun RuleOverrideSection(
                     variant = OrbitButtonVariant.Secondary
                 )
             } else {
-                HowOftenSlider(
-                    intervalHours = currentParams.baseIntervalHours,
-                    onCommit = { hours ->
-                        if (hours != currentParams.baseIntervalHours) {
-                            onParamsChange(commitOverrideInterval(currentParams, hours / HOURS_PER_DAY))
-                        }
-                    },
+                // The wheel commits only a value that differs from where it
+                // opened, so an override nobody turns stays what it was.
+                IntervalDaysPicker(
+                    currentHours = currentParams.baseIntervalHours,
+                    onCommit = { days -> onParamsChange(commitOverrideInterval(currentParams, days)) },
                 )
                 Spacer(Modifier.height(OrbitTheme.spacing.x3))
                 OrbitButton(
@@ -145,7 +154,9 @@ fun RuleOverrideSection(
  * lie about long intervals). Internal so the unit test can assert both
  * bounds move and that a Late night override becomes Keep in touch.
  *
- * Floors at 1 day per ADR 0010, as List settings' slider does.
+ * Floors at 1 day per ADR 0010. Both screens draw the one [IntervalDaysPicker]
+ * since ADR 0011, so its 1 to 60 day range is shared by construction rather
+ * than kept in lockstep by hand.
  */
 internal fun commitOverrideInterval(
     params: RuleParams,
@@ -190,7 +201,7 @@ private fun PreviewWithOverrideDark() {
                 primaryListName = "Inner orbit",
                 hasOverride = true,
                 // Built via withIntervalHours so the preview carries the same
-                // both-bounds shape the slider commits.
+                // both-bounds shape the wheel commits.
                 currentParams = RuleParams.KeepInTouch().withIntervalHours(14 * 24),
                 onOverride = {},
                 onParamsChange = {},

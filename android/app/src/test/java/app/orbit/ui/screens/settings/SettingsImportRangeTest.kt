@@ -8,6 +8,8 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -37,8 +39,11 @@ class SettingsImportRangeTest {
     @get:Rule val compose = createComposeRule()
 
     private val radio = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
-    private val group = SemanticsMatcher.keyIsDefined(SemanticsProperties.SelectableGroup)
-    private val window = isSelectable() and radio
+    // Settings has two radio groups since 2026-10-07 (Light & dark joined
+    // this one), so both are found by what they hold, not by being alone.
+    private val group = SemanticsMatcher.keyIsDefined(SemanticsProperties.SelectableGroup) and
+        hasAnyDescendant(hasText("6 months"))
+    private val window = isSelectable() and radio and hasAnyAncestor(group)
 
     private fun setSettings(importDays: Int, onImportDaysChanged: (Int) -> Unit = {}) {
         compose.setContent {

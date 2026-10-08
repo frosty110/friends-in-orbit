@@ -54,7 +54,8 @@ import app.orbit.ui.theme.OrbitTheme
  *     looked for it there and did not find it. Until 2026-10-07 it was a row
  *     under the last member, and that row is gone, so there is one way to do
  *     it.
- * SMART lists hide both — membership is rule-derived, not user-curated.
+ * SMART lists hide both (membership is rule-derived, not user-curated) and
+ * say so under the count, with Ignore as the way to keep someone off.
  *
  * Empty-state copy depends on list type:
  *  - SMART → "No one matches this rule right now."
@@ -102,6 +103,16 @@ fun MembersPreview(
                     leadingIcon = "plus",
                 )
             }
+        }
+        // Says why there is no remove control, before a long list, and where
+        // the one exclusion there is lives. Without it a smart list read as
+        // a list that would not let you edit it (2026-10-08).
+        if (isSmart) {
+            Text(
+                text = stringResource(R.string.lists_members_smart_hint),
+                style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.x1),
+            )
         }
         if (members.isEmpty()) {
             Text(

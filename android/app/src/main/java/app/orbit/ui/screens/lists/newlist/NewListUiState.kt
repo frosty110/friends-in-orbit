@@ -15,7 +15,7 @@ enum class NewListStep {
     /** One text field, filled from the template's name. */
     Name,
 
-    /** The How often slider List settings uses, set from the template. */
+    /** The How often day wheel List settings uses, set from the template. */
     HowOften,
 
     /** The people, chosen in the contact picker; never for a list that fills itself. */

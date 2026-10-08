@@ -817,7 +817,8 @@ fun contactFixture(
     photoUri: String? = null,
     phoneContactId: Long? = null,
     isArchived: Boolean = false,
-    isStarred: Boolean = false
+    isStarred: Boolean = false,
+    deviceUpdatedAt: Instant? = null
 ): ContactEntity = ContactEntity(
     id = id,
     phoneContactId = phoneContactId,
@@ -827,6 +828,7 @@ fun contactFixture(
     photoUri = photoUri,
     isStarred = isStarred,
     firstSeenByAppAt = firstSeenByAppAt,
+    deviceUpdatedAt = deviceUpdatedAt,
     isIgnored = isIgnored,
     isOrphaned = isOrphaned,
     pausedUntil = pausedUntil,

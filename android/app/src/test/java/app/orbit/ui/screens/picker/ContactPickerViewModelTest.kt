@@ -41,6 +41,7 @@ import app.orbit.domain.usecase.UnignoreContactUseCase
 import app.orbit.testutil.MainDispatcherRule
 import app.orbit.testutil.newPrefs
 import app.orbit.ui.util.UiText
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
@@ -52,6 +53,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
@@ -211,7 +213,9 @@ class ContactPickerViewModelTest {
         // LIST-28: Collect's route argument, the chosen ids comma-separated.
         selected: String? = null,
         // What a process death left in the handle, merged over the route.
-        restoredState: Map<String, Any?> = emptyMap()
+        restoredState: Map<String, Any?> = emptyMap(),
+        // Lists beyond the target (1, "Inner orbit") and "Late night" (2).
+        extraLists: List<app.orbit.data.entity.ListEntity> = emptyList()
     ): Setup {
         val app = ApplicationProvider.getApplicationContext<Application>()
         if (grantContacts) Shadows.shadowOf(app).grantPermissions(Manifest.permission.READ_CONTACTS)
@@ -222,7 +226,7 @@ class ContactPickerViewModelTest {
         val lists = listOf(
             listFixture(id = 1L, name = "Inner orbit", type = targetType),
             listFixture(id = 2L, name = "Late night")
-        )
+        ) + extraLists
         listRepo.seed(lists)
         val listDao = TestListDaoStub(lists = lists)
         val clock = TestClock()
@@ -934,6 +938,65 @@ class ContactPickerViewModelTest {
             setOf("CommonlyCalled", "RecentlyAdded"),
             s.savedState.get<Array<String>>("activeFilters")?.toSet()
         )
+    }
+
+    // ─── What a row says: LIST-24 and the Recently added chip ─
+
+    @Test
+    fun `rows leave archived lists out, and Recently added reads the device date`() = runTest {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        // TestClock() is 2026-01-01T12:00Z; Recently added is the last 30 days.
+        val now = Instant.parse("2026-01-01T12:00:00Z")
+        val dao = object : RecordingListMembershipDao() {
+            override fun observeAll(): Flow<List<ListMembershipEntity>> = flowOf(
+                listOf(
+                    ListMembershipEntity(contactId = 12L, listId = 2L, addedAt = now),
+                    ListMembershipEntity(contactId = 12L, listId = 3L, addedAt = now),
+                    ListMembershipEntity(contactId = 13L, listId = 3L, addedAt = now)
+                )
+            )
+        }
+        val s = fixture(
+            membershipDao = dao,
+            contactsReader = FlakyContactsReader(app),
+            extraLists = listOf(listFixture(id = 3L, name = "Old friends", isArchived = true))
+        )
+        s.contactRepo.seed(
+            listOf(
+                // In the first sync's batch: one shared first sight, an old device date.
+                contactFixture(
+                    id = 12L,
+                    firstSeenByAppAt = now.minus(Duration.ofDays(2)),
+                    deviceUpdatedAt = now.minus(Duration.ofDays(400))
+                ),
+                // Saved since then.
+                contactFixture(
+                    id = 13L,
+                    firstSeenByAppAt = now.minus(Duration.ofDays(1)),
+                    deviceUpdatedAt = now.minus(Duration.ofDays(1))
+                )
+            )
+        )
+
+        s.vm.uiState.test {
+            var item = awaitItem()
+            while (item.phase != ContactPickerUiState.Phase.Ready || item.allContacts.size < 2) {
+                item = awaitItem()
+            }
+            val byId = item.allContacts.associateBy { it.contactId }
+            assertEquals(
+                "the archived list is not named",
+                listOf("Late night"),
+                byId.getValue(12L).listNames
+            )
+            assertTrue(
+                "on an archived list only is Not on a list",
+                PickerFilter.Unsorted.matches(byId.getValue(13L))
+            )
+            assertFalse("the first sync's batch", byId.getValue(12L).isRecentlyAdded)
+            assertTrue("saved since the sync", byId.getValue(13L).isRecentlyAdded)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     // ─── Smart lists are not user-curated ────────────────────

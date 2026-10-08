@@ -3,8 +3,8 @@
 **Route:** `lists/{listId}/config`
 **Group:** Lists
 **Status:** active
-**Last reviewed:** 2026-10-07
-**Spec:** [orbit-lists](../orbit-lists/README.md): LIST-21, LIST-22, LIST-25, LIST-26, LIST-27, LIST-30, BULK-05; [rule-engine](../rule-engine/README.md); ADR [0010](../_foundations/ADRs/0010-interval-slider-floor-and-scale.md); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
+**Last reviewed:** 2026-10-08
+**Spec:** [orbit-lists](../orbit-lists/README.md): LIST-21, LIST-22, LIST-25, LIST-26, LIST-27, LIST-30, BULK-05; [rule-engine](../rule-engine/README.md); ADRs [0010](../_foundations/ADRs/0010-interval-slider-floor-and-scale.md) and [0011](../_foundations/ADRs/0011-number-wheel-for-day-and-count-settings.md); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
 
@@ -18,25 +18,25 @@
 ## What the user sees
 
 - App bar: Back, the list's name with a pencil beside it as the title ("List" under the curtain, or before it loads; LIST-26), and "Done" (the one accent; LIST-21). TalkBack hears the title as a button, "Rename list, Inner orbit" ("Rename list" under the curtain), and the screen is still announced by the list's name
-- While renaming: the title is a single-line field labelled "List name", with "Cancel" and "Save list name" where Done was, and no back arrow
+- While renaming: the title is a single-line field (`OrbitTextField`) named "List name" for TalkBack, with "List name" as its placeholder when emptied and the cursor after the name, with "Cancel" and "Save list name" where Done was, and no back arrow
 - Sections, top to bottom:
-  - "How often": "Aim for every 14 days", a slider from 1 to 60 days with "1 day", "2 weeks", "1 month" and "2 months" under it, for every list (LIST-30). A Late night list shows "Aim for every 3 days" and an Energize list "Aim for every day", their real base intervals; a smart list has it too. A list whose rhythm cannot be read says "This list has no rhythm yet. Move the slider to set one." over the slider
+  - "How often": "Aim for every 14 days" over a day wheel, 1 to 60 days, with "1 week", "2 weeks", "3 weeks", "1 month" and "2 months" under those days; flick or tap to choose, and it saves once it comes to rest (ADR 0011). For every list (LIST-30): a Late night list shows "Aim for every 3 days" and an Energize list "Aim for every day", their real base intervals; a smart list has it too. A list whose rhythm cannot be read says "This list has no rhythm yet. Choose how often below to set one." over the wheel
   - "Time of day": one choice of "Any time", "Mornings", "Afternoons", "Evenings" or "Nights" (LIST-25), and under it one line: "Nudges can come at any time of day." or "Nudges for this list come only in the morning, from 7am to 12pm." ("in the afternoon, from 12pm to 5pm", "in the evening, from 5pm to 9pm", "at night, from 9pm to 7am"), in the phone's 12 or 24 hour format. A window set before this that is none of the parts shows as one more chip, selected: "Custom: 9am to 5pm", with "Nudges for this list come only from 9am to 5pm."
   - "Nudges": "Send nudges" ("A gentle nudge when someone here is worth a call."), and "Nudges paused" while they are off
   - "When to nudge": seven 48dp day toggles that wrap on a narrow phone rather than shrink; one or more times with "Add time", "Change time" and a remove control; the plan as one line ("Weekdays at 10am", "Every day at 9am and 6pm", "No days selected: nudges off", "No time set: tap “Add time”")
-  - "Smart rule" (smart lists): the rule as a sentence with its setting ("Added in the last 30 days", "No call in the last 90 days", "The top 20% of the people you call"), or "Nothing to set. This list shows everyone you have never called."; the day field under "No call in the last 90 days" announces that sentence to TalkBack as its name, and saves once per Done or focus loss
-  - "People": a header row with the count ("11 people") and, on its right, "Add people" with a plus (regular lists only; LIST-27); then who is on the list, "Showing 20 of 48" with "Show all" on long lists, and a remove control per person ("Remove {name} from list")
+  - "Smart rule" (smart lists): the rule as a sentence with its setting ("Added in the last 30 days", "No call in the last 90 days", "The top 20% of the people you call"), or "Nothing to set. This list shows everyone you have never called."; each setting is a number wheel under its sentence, named by that sentence for TalkBack, and saves once per gesture; no setting raises the keyboard (ADR 0011)
+  - "People": a header row with the count ("11 people") and, on its right, "Add people" with a plus (regular lists only; LIST-27); a smart list says under the count "Orbit fills this list from its rule. To keep someone off it, ignore them." and has no remove control; then who is on the list, "Showing 20 of 48" with "Show all" on long lists, and a remove control per person ("Remove {name} from list")
   - "Make this a regular list" with the note "The people here now stay, and the list stops adding people by itself. This can't be undone." (smart lists)
   - A second "Done" at the foot
-- Nothing but Done is in the accent: the selected time of day, day toggles, switches and sliders use ink or the soft tint (LIST-21)
+- Nothing but Done is in the accent: the selected time of day, day toggles, switches and wheels use ink or the soft tint (LIST-21)
 
 ## Actions and menus
 
 - Everything saves as you change it; "Done" and Back both return to where you came from
 - Rename from the title: tap the name or the pencil, type, then "Save list name" or the keyboard's Done; "Cancel" or Back leaves the name as it was (Back first leaves the edit, then the screen). A blank name keeps the old one
-- Move "How often": a Keep in touch list takes the new interval; a Late night or Energize list becomes an ordinary list at the interval chosen (LIST-30). Letting go where it was changes nothing
+- Turn "How often": a Keep in touch list takes the new interval; a Late night or Energize list becomes an ordinary list at the interval chosen (LIST-30). Settling where it was changes nothing
 - Pick a time of day: the list's nudges are held to that part from then on and its nudge is rescheduled at once. A custom window stays as it is until another part is picked
-- The time picker follows the phone's 12 or 24 hour setting, as do the hours under Time of day
+- The time picker follows the phone's 12 or 24 hour setting, as do the hours under Time of day. It says "Choose a time" and has a keyboard button ("Type the time", then "Use the clock") that swaps the dial for typed hours and minutes
 - Remove a person: "Removed {name}" with Undo, which puts them back
 - "Add people": opens the Add people picker for this list
 - "Make this a regular list": asks "Make this a regular list?" / "The 5 people here now stay, and the list stops adding people by itself. This can't be undone." (or "No one is on this list right now, and it stops adding people by itself. This can't be undone.") with "Make it regular" and "Cancel"; then "This is now a regular list."; a list with no rhythm gets Keep in touch
@@ -60,6 +60,6 @@
 ## Tests that pin it
 
 - `ListConfigViewModelTest` (saves as you go; How often for every rule type, the Late night and Energize conversion and the no-change release; each time of day's window, Any time's nulls and a custom window left alone; rename, blank and a failed rename; remove with undo, convert, the failure path, Error and recovery, Not found)
-- `ListSettingsControlsTest` (Time of day is one radio group, Custom included; the title's rename button, field, Save, Cancel, Back and curtain; Add people in the People header, not at the foot)
-- `TimeOfDayMappingTest`, `RuleIntervalTest`, `IntervalScaleLabelsTest`, `NudgeScheduleTest`, `NudgeScheduleNextSlotTest`, `SmartRuleEditIntegrationTest`, `SmartRuleEditorTest` (the day field commits once per Done or focus loss and is named by its sentence), `RuleParamsResolutionTest`, `ListRepositoryConvertTest`, `RuleOverrideRoundTripTest`
-- Gallery previews: `ListConfigContentPreview`, `ListConfigScreenStaticReadyLightPreview`, `ListConfigScreenStaticLateNightPreview`, `ListConfigScreenSmartReadyDarkPreview`, `ListConfigCustomWindowPreview`, `ListConfigNoRhythmPreview`, `ListConfigRenamingPreview`, `ListConfigErrorPreview`, `ListConfigNotFoundPreview`, `HowOftenSliderEveryDayPreview`, `HowOftenSliderThreeDaysPreview`, `TimeOfDayPickerAnyTimePreview`, `TimeOfDayPickerNightsPreview`, `TimeOfDayPickerCustomPreview`, `NudgeScheduleSectionLightPreview`, `NudgeScheduleSectionEmptyPreview`, `MembersPreviewPopulatedPreview`, `MembersPreviewSmartEmptyLightPreview`, `ConvertToStaticDialogLightPreview`, with the curtain pass
+- `ListSettingsControlsTest` (Time of day is one radio group, Custom included; the title's rename button, field, Save, Cancel, Back and curtain; Add people in the People header, not at the foot), `MembersPreviewTest` (the smart-list line on smart lists only)
+- `TimeOfDayMappingTest`, `RuleIntervalTest`, `IntervalDaysPickerTest`, `OrbitWheelPickerTest`, `NudgeScheduleTest`, `NudgeScheduleNextSlotTest`, `SmartRuleEditIntegrationTest`, `SmartRuleEditorTest` (each wheel commits once per gesture, is named by its sentence, and shows a stored value outside its usual range as it is), `OrbitTextFieldTest` (the name field), `RuleParamsResolutionTest`, `ListRepositoryConvertTest`, `RuleOverrideRoundTripTest`
+- Gallery previews: `ListConfigContentPreview`, `ListConfigScreenStaticReadyLightPreview`, `ListConfigScreenStaticLateNightPreview`, `ListConfigScreenSmartReadyDarkPreview`, `ListConfigCustomWindowPreview`, `ListConfigNoRhythmPreview`, `ListConfigRenamingPreview`, `ListConfigErrorPreview`, `ListConfigNotFoundPreview`, `IntervalDaysPickerDefaultPreview`, `IntervalDaysPickerTwoWeeksPreview`, `TimeOfDayPickerAnyTimePreview`, `TimeOfDayPickerNightsPreview`, `TimeOfDayPickerCustomPreview`, `NudgeScheduleSectionLightPreview`, `NudgeScheduleSectionEmptyPreview`, `MembersPreviewPopulatedPreview`, `MembersPreviewSmartEmptyLightPreview`, `ConvertToStaticDialogLightPreview`, with the curtain pass

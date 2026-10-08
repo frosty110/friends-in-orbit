@@ -25,18 +25,18 @@ One decision per step, under one app bar.
   - under a small "Smart list" label: "Recently added, not called" "Auto-updates as you add people."
   - the chosen tile has an ink outline and a check
 - **Step 2, "Name your list"**: one field, "List name", filled with the template's name ("Start from blank" leaves it empty), focused with the keyboard up; the keyboard's action is Next
-- **Step 3, "How often"**: "You can change this any time in the list's settings." over the How often slider List settings uses ("Aim for every 7 days", "1 day / 2 weeks / 1 month / 2 months"), set from the template; every 2 days for "Start from blank" and the list that fills itself
+- **Step 3, "How often"**: "You can change this any time in the list's settings." over the How often day wheel List settings uses ("Aim for every 7 days", with "1 week", "2 weeks", "3 weeks", "1 month" and "2 months" under those days; ADR 0011), set from the template; every 2 days for "Start from blank" and the list that fills itself
 - **Step 4, "Add people"** (not for the list that fills itself): with nobody chosen, "Choose the people you want to keep in touch with on this list."; once people are chosen, the People section List settings shows: "3 people" with "Add people" on its right, and each person with "Remove {name} from list"
 - The footer: "Next"; "Create list" on the last step (How often, for the list that fills itself); on step 4 with nobody chosen, "Add people", with "Create without people" (quiet) above it
 - The one accent element: the footer's main button ("Next", "Create list" or "Add people")
 
 ## Actions and menus
 
-- Pick a tile: chooses how to start. The name follows the template while it is blank or still the last template's name, and How often follows it until the slider has been moved, so going back and picking another template keeps what you typed or set
+- Pick a tile: chooses how to start. The name follows the template while it is blank or still the last template's name, and How often follows it until the wheel has been turned, so going back and picking another template keeps what you typed or set
 - "Next": goes on once the step is answered: a template on step 1, a name that is not blank on step 2 (until then it is disabled; the keyboard's Next does nothing either)
 - Back (the arrow, or the phone's Back): the previous step, with everything entered kept. On step 1 it leaves New list
 - "Close" (steps 2 to 4), and Back on step 1: with something entered (a template picked counts) asks "Discard this list?" with "Keep going" and "Discard"; with nothing entered it just leaves
-- "Add people" (step 4, the footer or the People header): opens the Add people picker to choose people for the list, with whoever is already chosen ticked; its button reads "Add 3 people", and it brings them back here. Back from the picker changes nothing
+- "Add people" (step 4, the footer or the People header): opens the Add people picker to choose people for the list, with whoever is already chosen ticked; its button reads "Add" (TalkBack hears "Add 3 people"), and it brings them back here. Back from the picker changes nothing
 - "Remove {name} from list": takes them off before the list is made
 - "Create list" / "Create without people": makes the list, its rhythm and its people in one go, then returns to the screen New list was opened from with "Created {name}." and the new list in place, last in the order. Nudges start as the create sheet's did: on, any time of day, the default schedule
 - A Create that fails says "Couldn't save your change", leaves nothing half-made, and keeps you on the step with everything entered; nothing is pressable while it is in flight

@@ -235,7 +235,7 @@ class ListConfigViewModel @Inject constructor(
      * [resolveRuleParams] in RuleParamsResolution.kt). Nothing configured and
      * a blob that does not decode both come back null here: How often has no
      * interval to show for either, so it says the list has no rhythm yet and
-     * lets the slider set one ([setIntervalHours]), and the Lists row is where
+     * lets the wheel set one ([setIntervalHours]), and the Lists row is where
      * the unreadable case is named ("Couldn't read this list's rhythm"). The
      * domain's `OverrideResolver.resolveParamsFor` decodes the same JSON
      * without a catch and throws, so a list whose override is unreadable
@@ -329,7 +329,7 @@ class ListConfigViewModel @Inject constructor(
      * Nothing else about the list changes: its people, each person's next
      * turn, its time of day and its nudges.
      *
-     * Releasing the slider at the interval the list already has writes
+     * Settling the wheel at the interval the list already has writes
      * nothing, so a Late night list stays Late night until the interval moves.
      * A list whose rhythm cannot be read (no template, or an override that no
      * longer decodes) has no interval to compare, so any choice is written:

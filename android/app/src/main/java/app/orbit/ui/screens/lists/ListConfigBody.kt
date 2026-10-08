@@ -7,11 +7,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,10 +27,12 @@ import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeSchedule
 import app.orbit.ui.components.CurtainMask
+import app.orbit.ui.components.IntervalDaysPicker
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitSnackbarHost
+import app.orbit.ui.components.OrbitTextField
 import app.orbit.ui.theme.OrbitTheme
 
 /**
@@ -55,9 +55,9 @@ import app.orbit.ui.theme.OrbitTheme
  *     Nesting a second scroll under an infinite-height parent triggers
  *     `IllegalStateException: "Vertically scrollable component was measured
  *     with an infinity maximum height constraints"` (F-1, 2026-04-30 UAT).
- *     The onboarding branch instead uses `fillMaxWidth().imePadding()` and
- *     lets the OnboardingScaffold scroll container be the only scroll parent.
- *   - An [OutlinedTextField] for the list name renders at the top of the
+ *     The onboarding branch instead uses `fillMaxWidth()` and lets the
+ *     OnboardingScaffold scroll container be the only scroll parent.
+ *   - An [OrbitTextField] for the list name renders at the top of the
  *     body (BLOCKER 1 / ONB-11). Production has no Name section since
  *     LIST-26: the app bar's title is the name and renames in place. Make
  *     your first list keeps its field (that flow was not part of the review).
@@ -97,13 +97,14 @@ internal fun ListConfigBody(
         // verticalScroll + fillMaxSize. OnboardingScaffold wraps `content`
         // in a verticalScroll Column with infinite max height; a second
         // scroll under an infinite-height parent crashes the layout pass.
-        // The onboarding branch lets the scaffold be the only scroll parent
-        // and applies imePadding here so name + member edit fields stay
-        // visible above the soft keyboard (ONB-21).
+        // The onboarding branch lets the scaffold be the only scroll parent.
+        // The keyboard is handled above and below this (ONB-21): OrbitScreen
+        // pads for it, and each OrbitTextField keeps itself above it. An
+        // imePadding() here did nothing, because OrbitScreen had already
+        // consumed the inset.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .imePadding()
                 .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x1)
                 .padding(bottom = OrbitTheme.spacing.x7)
         ) {
@@ -207,17 +208,19 @@ private fun ColumnScope.ListConfigBodySections(
             // PRIV-03: under the curtain the field draws "List" over the
             // user's buffer, which it leaves alone (CurtainMask).
             val curtainList = stringResource(R.string.components_curtain_list)
-            OutlinedTextField(
+            // The group's title says "Name" over it, so the field is named
+            // for TalkBack rather than labelled twice on screen.
+            OrbitTextField(
                 value = nameText,
                 onValueChange = {
                     nameText = it
                     onNameChange(it)
                 },
+                label = null,
+                contentDescription = stringResource(R.string.lists_section_name),
+                placeholder = stringResource(R.string.lists_create_name_placeholder),
                 visualTransformation = if (LocalPrivacyCurtain.current) CurtainMask(curtainList) else VisualTransformation.None,
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x2)
+                modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x2)
             )
         }
     }
@@ -226,7 +229,7 @@ private fun ColumnScope.ListConfigBodySections(
     // (Keep in touch, Late night, Energize) that sat above it is gone: the
     // three are one calculation with different numbers, so a Late night or
     // Energize list shows its real base interval here (every 3 days, every
-    // day) and moving the slider makes it an ordinary list at the interval
+    // day) and turning the wheel makes it an ordinary list at the interval
     // chosen. Smart lists have it too: their members surface on the card like
     // anyone else's. "How often", not "Interval" (voice.md glossary, LIST-21);
     // no accent spent on settings in this body.
@@ -234,7 +237,7 @@ private fun ColumnScope.ListConfigBodySections(
         val intervalHours = state.intervalHours
         if (intervalHours == null) {
             // Nothing configured, or an override that no longer decodes: say
-            // so, and offer the slider at Keep in touch's starting interval.
+            // so, and offer the wheel at Keep in touch's starting interval.
             // Moving it is how such a list gets a rhythm (setIntervalHours
             // writes any choice when there is nothing to compare against).
             Text(
@@ -245,9 +248,14 @@ private fun ColumnScope.ListConfigBodySections(
                     .padding(start = OrbitTheme.spacing.x4, end = OrbitTheme.spacing.x4, top = OrbitTheme.spacing.x4)
             )
         }
-        HowOftenSlider(
-            intervalHours = intervalHours ?: RuleParams.KeepInTouch().cooldownMinHours,
-            onCommit = onIntervalChange,
+        // The day wheel (ADR 0011), the same one New list and Contact
+        // detail's custom schedule draw. It hands back whole days; the
+        // ViewModel takes hours. With no rhythm yet it opens on Keep in
+        // touch's starting interval, and choosing that one saves it too.
+        IntervalDaysPicker(
+            currentHours = intervalHours ?: RuleParams.KeepInTouch().cooldownMinHours,
+            onCommit = { days -> onIntervalChange(days * 24) },
+            valueIsSet = intervalHours != null,
         )
     }
 
@@ -349,4 +357,4 @@ private fun ColumnScope.ListConfigBodySections(
 // `templateIdForKindLocal` (the hardcoded 1L/2L/3L kind → seed id map) is gone:
 // the picker hands the RuleKind straight to the VM, which resolves the row via
 // RuleTemplateRepository.getByKind. The rhythm picker itself left this body
-// with LIST-30, and the interval slider moved to HowOftenSlider.kt.
+// with LIST-30; How often is the shared day wheel, IntervalDaysPicker.

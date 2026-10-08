@@ -94,6 +94,7 @@
 
     <!-- Filter chips. -->
     <string name="picker_filter_starred">Starred</string>
+    <string name="picker_filter_recently_added">Recently added</string>
     <string name="picker_filter_commonly_called">Commonly called</string>
     <string name="picker_filter_rarely_called">Rarely called</string>
     <string name="picker_filter_never_called">Never called</string>
@@ -138,7 +139,13 @@
     <string name="picker_row_unignore">Unignore</string>
 
     <!-- The commit bar. %1$d: how many, %2$s: the list. The noun is said ("1 person",
-         "3 people"), as the snackbars and the title do. -->
+         "3 people"), as the snackbars and the title do. The sentences below are what
+         TalkBack hears on the commit button. The button shows only its verb: "3 selected"
+         sits beside it, the picker is opened from the list it adds to, and the snackbar
+         after it names the list ("Added 3 people to Inner orbit"). -->
+    <string name="picker_commit_add_short">Add</string>
+    <string name="picker_commit_move_short">Move</string>
+    <string name="picker_commit_copy_short">Copy</string>
     <plurals name="picker_selected_count">
         <item quantity="one">%1$d selected</item>
         <item quantity="other">%1$d selected</item>

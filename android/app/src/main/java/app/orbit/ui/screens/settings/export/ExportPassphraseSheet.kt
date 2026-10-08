@@ -9,16 +9,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,18 +25,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.error
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import app.orbit.R
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
+import app.orbit.ui.components.OrbitTextField
 import app.orbit.ui.theme.OrbitTheme
 import kotlinx.coroutines.launch
 
@@ -87,8 +84,10 @@ fun ExportPassphraseSheet(
     }
 }
 
+// Internal, not private, so a test can drive the fields without a sheet host
+// (NewListContent's precedent).
 @Composable
-private fun ExportPassphraseContent(
+internal fun ExportPassphraseContent(
     onSubmit: (CharArray) -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -98,18 +97,14 @@ private fun ExportPassphraseContent(
     val mismatch = confirm.isNotEmpty() && confirm != password
     val canSubmit = password.length >= 8 && confirm == password
 
-    // Resolved here: semantics blocks are not composable.
-    val passwordLabel = stringResource(R.string.settings_password)
-    val confirmLabel = stringResource(R.string.settings_password_confirm)
-    val tooShortMessage = stringResource(R.string.settings_password_too_short)
-    val mismatchMessage = stringResource(R.string.settings_password_mismatch)
+    val focusManager = LocalFocusManager.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            // imePadding alone only shrinks the sheet; the scroll is what lets
-            // the focused field move up into what's left of it.
+            // The sheet pads its content by the keyboard itself (Material's
+            // contentWindowInsets); this scroll lets the focused field move
+            // up into what is left, and the field asks it to (OrbitTextField).
             .verticalScroll(rememberScrollState())
-            .imePadding()
             .padding(
                 horizontal = OrbitTheme.spacing.x6,
                 vertical = OrbitTheme.spacing.x4,
@@ -126,71 +121,34 @@ private fun ExportPassphraseContent(
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
 
-        Text(
-            text = stringResource(R.string.settings_password),
-            style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
-            // Spoken as the field's own label instead (below), so TalkBack
-            // says "Password, edit box" rather than an unlabelled edit box.
-            modifier = Modifier.clearAndSetSemantics {},
-        )
-        Spacer(Modifier.height(OrbitTheme.spacing.x2))
-        TextField(
+        // Each label sits above its field and is the field's TalkBack name,
+        // so "Password, edit box" needs no semantics patching. A password
+        // keyboard: no suggestions, no learning the passphrase.
+        OrbitTextField(
             value = password,
             onValueChange = { password = it },
-            isError = tooShort,
-            singleLine = true,
+            label = stringResource(R.string.settings_password),
+            supportingText = stringResource(R.string.settings_password_hint),
+            errorText = if (tooShort) stringResource(R.string.settings_password_too_short) else null,
             visualTransformation = PasswordVisualTransformation(),
-            colors = transparentFieldColors(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(OrbitTheme.shapes.md)
-                .background(OrbitTheme.colors.bgSubtle)
-                .semantics {
-                    contentDescription = passwordLabel
-                    if (tooShort) error(tooShortMessage)
-                },
-        )
-        Text(
-            text = stringResource(if (tooShort) R.string.settings_password_too_short else R.string.settings_password_hint),
-            style = OrbitTheme.type.meta.copy(
-                color = if (tooShort) OrbitTheme.colors.danger else OrbitTheme.colors.fgMuted,
-            ),
-            modifier = Modifier.padding(top = OrbitTheme.spacing.x1, start = OrbitTheme.spacing.x1),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
         )
 
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
 
-        Text(
-            text = stringResource(R.string.settings_password_confirm),
-            style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
-            // Spoken as the field's own label instead (below), so TalkBack
-            // says "Password, edit box" rather than an unlabelled edit box.
-            modifier = Modifier.clearAndSetSemantics {},
-        )
-        Spacer(Modifier.height(OrbitTheme.spacing.x2))
-        TextField(
+        OrbitTextField(
             value = confirm,
             onValueChange = { confirm = it },
-            isError = mismatch,
-            singleLine = true,
+            label = stringResource(R.string.settings_password_confirm),
+            errorText = if (mismatch) stringResource(R.string.settings_password_mismatch) else null,
             visualTransformation = PasswordVisualTransformation(),
-            colors = transparentFieldColors(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(OrbitTheme.shapes.md)
-                .background(OrbitTheme.colors.bgSubtle)
-                .semantics {
-                    contentDescription = confirmLabel
-                    if (mismatch) error(mismatchMessage)
-                },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+            // Done exports once both agree, like the button; otherwise it
+            // just puts the keyboard away.
+            keyboardActions = KeyboardActions(onDone = {
+                if (canSubmit) onSubmit(password.toCharArray()) else focusManager.clearFocus()
+            }),
         )
-        if (mismatch) {
-            Text(
-                text = stringResource(R.string.settings_password_mismatch),
-                style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.danger),
-                modifier = Modifier.padding(top = OrbitTheme.spacing.x1, start = OrbitTheme.spacing.x1),
-            )
-        }
 
         Spacer(Modifier.height(OrbitTheme.spacing.x6))
 
@@ -215,20 +173,6 @@ private fun ExportPassphraseContent(
         }
     }
 }
-
-@Composable
-private fun transparentFieldColors() = TextFieldDefaults.colors(
-    focusedContainerColor = Color.Transparent,
-    unfocusedContainerColor = Color.Transparent,
-    disabledContainerColor = Color.Transparent,
-    errorContainerColor = Color.Transparent,
-    focusedIndicatorColor = Color.Transparent,
-    unfocusedIndicatorColor = Color.Transparent,
-    disabledIndicatorColor = Color.Transparent,
-    errorIndicatorColor = Color.Transparent,
-    focusedTextColor = OrbitTheme.colors.fg,
-    unfocusedTextColor = OrbitTheme.colors.fg,
-)
 
 @Preview(name = "ExportPassphraseSheet · light", showBackground = true, backgroundColor = 0xFFFFFFFF)
 @Composable

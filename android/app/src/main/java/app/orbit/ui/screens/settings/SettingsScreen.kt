@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -396,10 +398,15 @@ fun SettingsScreen(
             onSelectDarkMode = vm::onSelectDarkMode,
             onAccentHue = vm::onAccentHue,
         )
+        // Outside OrbitScreen, so it pads for the system itself (the
+        // app-level commit snackbar's precedent): 16dp alone sat it on a
+        // three-button navigation bar.
         OrbitSnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .imePadding()
                 .padding(OrbitTheme.spacing.x4),
         )
     }

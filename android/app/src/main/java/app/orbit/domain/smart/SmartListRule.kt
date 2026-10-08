@@ -13,9 +13,14 @@ import kotlinx.serialization.Serializable
  *   - Ignored contacts NEVER appear in any rule's output (SMART-05)
  *   - Zero-call contacts fall into [NeverCalled] only — never into
  *     [CommonlyCalled] or [RarelyCalled] bands (SMART-07)
- *   - [RecentlyAddedNotCalled] uses `ContactEntity.firstSeenByAppAt` as the
- *     "added" timestamp — NEVER Android ContactsContract creation metadata,
- *     which is unreliable across OEMs (SMART-08)
+ *   - [RecentlyAddedNotCalled] dates "added" by [addedAt]: the earlier of
+ *     `firstSeenByAppAt` and the device's frozen last-updated time (SMART-08).
+ *     It was `firstSeenByAppAt` alone, which the first sync sets to one
+ *     instant for everyone already on the phone, so the rule matched every
+ *     never-called contact for the whole window after a fresh install (a
+ *     week at 7 days, a month at the default 30). The device time
+ *     can only make a contact look older, never newer, so an unreliable one
+ *     cannot pull an old contact into the list.
  *
  * Voice rule: membership is read-only (SMART-04) — there is no manual add/remove.
  * To exclude a person, they go through Ignore (IGNORE-04).
@@ -24,7 +29,7 @@ import kotlinx.serialization.Serializable
 sealed class SmartListRule {
 
     /**
-     * Contacts first observed by Orbit within [daysWindow] that have ZERO CallEvents.
+     * Contacts added within [daysWindow] (by [addedAt], SMART-08) that have ZERO CallEvents.
      * The onboarding template "Recently added, not called" uses this with
      * `daysWindow = 30` (SMART-02).
      */

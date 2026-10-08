@@ -12,6 +12,8 @@ import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.rule.baseIntervalHours
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeScheduler
+import app.orbit.ui.components.howOftenEveryLabel
+import app.orbit.ui.components.intervalDaysFor
 import app.orbit.ui.screens.home.HomeSnackbarEvent
 import app.orbit.ui.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -433,7 +435,7 @@ class ListsManagerViewModel @Inject constructor(
             RuleParamsResolution.Unreadable -> return UiText.res(R.string.lists_rhythm_unreadable)
             is RuleParamsResolution.Decoded -> resolved.params
         }
-        // Whole days, as the interval slider shows them (48h reads "Every 2 days").
+        // Whole days, as How often words them (48h reads "Every 2 days").
         return howOftenEveryLabel(intervalDaysFor(params.baseIntervalHours))
     }
 

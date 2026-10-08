@@ -110,7 +110,7 @@
     <!-- Step 2, the list's name. -->
     <string name="lists_new_name_heading">Name your list</string>
 
-    <!-- Step 3, the list's rhythm (the How often slider List settings uses). -->
+    <!-- Step 3, the list's rhythm (the How often day wheel List settings uses). -->
     <string name="lists_new_how_often_heading">How often</string>
     <string name="lists_new_how_often_hint">You can change this any time in the list\'s settings.</string>
 
@@ -155,6 +155,8 @@
     <!-- Section titles. -->
     <!-- Make your first list only: List settings renames from its title (LIST-26). -->
     <string name="lists_section_name">Name</string>
+    <!-- Placeholder in Make your first list's empty name field. -->
+    <string name="lists_create_name_placeholder">e.g. Inner orbit</string>
     <string name="lists_section_how_often">How often</string>
     <!-- The part of the day a list's nudges may come in (LIST-25). -->
     <string name="lists_section_time_of_day">Time of day</string>
@@ -172,7 +174,7 @@
     <string name="lists_convert_note">The people here now stay, and the list stops adding people by itself. This can\'t be undone.</string>
     <string name="lists_converted_snackbar">This is now a regular list.</string>
 
-    <!-- Interval slider, as one sentence over the slider. %1$s: the interval, from
+    <!-- How often, as one sentence over the day wheel. %1$s: the interval, from
          lists_interval_days below ("Aim for every 14 days"). Contact detail's custom
          schedule uses the same sentence. -->
     <string name="lists_interval_aim">Aim for every %1$s</string>
@@ -183,15 +185,15 @@
         <item quantity="one">%1$d day</item>
         <item quantity="other">%1$d days</item>
     </plurals>
-    <!-- Screen-reader name and value of the interval slider. -->
+    <!-- Screen-reader name and value of the How often day wheel. -->
     <string name="lists_interval_label">How often to aim for</string>
     <plurals name="lists_interval_every_days">
         <item quantity="one">Every %1$d day</item>
         <item quantity="other">Every %1$d days</item>
     </plurals>
-    <!-- A rhythm of one day, on the Lists row and as the slider's screen-reader value. -->
+    <!-- A rhythm of one day, on the Lists row and as the day wheel's screen-reader value. -->
     <string name="lists_interval_every_day">Every day</string>
-    <!-- Tick labels under the 1 to 60 day slider. -->
+    <!-- Landmark words under a day wheel's familiar values ("2 weeks" under 14). -->
     <plurals name="lists_interval_tick_weeks">
         <item quantity="one">%1$d week</item>
         <item quantity="other">%1$d weeks</item>
@@ -200,10 +202,14 @@
         <item quantity="one">%1$d month</item>
         <item quantity="other">%1$d months</item>
     </plurals>
+    <plurals name="lists_interval_tick_years">
+        <item quantity="one">%1$d year</item>
+        <item quantity="other">%1$d years</item>
+    </plurals>
 
-    <!-- Over the slider when the list has no rhythm Orbit can read: nothing set yet, or a
-         stored rule that no longer decodes. Moving the slider sets one. -->
-    <string name="lists_rhythm_unset">This list has no rhythm yet. Move the slider to set one.</string>
+    <!-- Over the day wheel when the list has no rhythm Orbit can read: nothing set yet, or
+         a stored rule that no longer decodes. Choosing a number on the wheel sets one. -->
+    <string name="lists_rhythm_unset">This list has no rhythm yet. Choose how often below to set one.</string>
 
     <!-- Rename from the title (LIST-26). The title is a button; screen readers hear
          "Rename list, Inner orbit" (%1$s: the list's name), or lists_name_rename alone
@@ -237,8 +243,6 @@
         <item quantity="one">%1$d day</item>
         <item quantity="other">%1$d days</item>
     </plurals>
-    <!-- %1$d: a percentage. -->
-    <string name="lists_smart_percent">%1$d%%</string>
     <!-- Screen-reader value of the percentage slider; the same slider serves lists_smart_top
          and lists_smart_bottom, so it names neither direction. -->
     <string name="lists_smart_percent_a11y">%1$d percent of the people you call</string>
@@ -250,6 +254,8 @@
         <item quantity="other">%1$d people</item>
     </plurals>
     <string name="lists_members_empty_smart">No one matches this rule right now.</string>
+    <!-- Under a smart list's people: why none can be removed here, and the one way to keep someone off. -->
+    <string name="lists_members_smart_hint">Orbit fills this list from its rule. To keep someone off it, ignore them.</string>
     <string name="lists_members_empty_static">No one in this list yet.</string>
     <!-- Long lists show their first 20. %1$d: how many are shown, %2$d: the total, which
          is the plural's quantity. -->
@@ -315,6 +321,10 @@
 
     <!-- Confirms the time picker (a nudge time). -->
     <string name="lists_hours_ok">OK</string>
+    <!-- The time picker's headline, and its toggle between the dial and typing. -->
+    <string name="lists_hours_dialog_title">Choose a time</string>
+    <string name="lists_hours_type_time">Type the time</string>
+    <string name="lists_hours_use_clock">Use the clock</string>
 
     <!-- Confirmation for "Make this a regular list": a smart list stops filling itself and
          keeps the people on it now. Same words as the button and the note under it.

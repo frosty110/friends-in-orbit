@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SwipeToDismissBox
@@ -40,7 +39,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.pointerInput
@@ -60,6 +58,7 @@ import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
+import app.orbit.ui.components.OrbitTextField
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
@@ -107,7 +106,7 @@ fun NotesSection(
     onEditCommit: (NoteRow, String) -> Unit,
     modifier: Modifier = Modifier,
     // NOTE-02 — optional FocusRequester for the input. When the parent screen
-    // wires this and signals (via focusRequester.requestFocus()) the BasicTextField
+    // wires this and signals (via focusRequester.requestFocus()) the note field
     // claims focus and the IME opens. Defaults to null so non-deep-link consumers
     // pay no behavior cost.
     inputFocusRequester: FocusRequester? = null,
@@ -130,36 +129,19 @@ fun NotesSection(
 
         // Input row + Add button
         if (!readOnly) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                BasicTextField(
+            // Bottom-aligned, so Add stays by the last line as a note grows.
+            Row(verticalAlignment = Alignment.Bottom) {
+                // The placeholder is its name while empty; once typed into,
+                // the same words still tell TalkBack what the field is for.
+                val hint = stringResource(R.string.contact_notes_hint)
+                OrbitTextField(
                     value = draft,
                     onValueChange = onDraftChange,
+                    label = null,
+                    contentDescription = hint,
+                    placeholder = hint,
+                    singleLine = false,
                     maxLines = 4,
-                    textStyle = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                    cursorBrush = androidx.compose.ui.graphics.SolidColor(OrbitTheme.colors.accent),
-                    decorationBox = { inner ->
-                        Box(
-                            Modifier
-                                .clip(OrbitTheme.shapes.md)
-                                .background(OrbitTheme.colors.bgSubtle)
-                                .padding(
-                                    horizontal = OrbitTheme.spacing.x4,
-                                    vertical = OrbitTheme.spacing.x3
-                                )
-                                .defaultMinSize(minHeight = OrbitTheme.spacing.tapMin),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            if (draft.isEmpty()) {
-                                Text(
-                                    text = stringResource(R.string.contact_notes_hint),
-                                    style = OrbitTheme.type.body.copy(
-                                        color = OrbitTheme.colors.fgMuted
-                                    )
-                                )
-                            }
-                            inner()
-                        }
-                    },
                     modifier = Modifier
                         .weight(1f)
                         .padding(end = OrbitTheme.spacing.x2)
@@ -320,18 +302,14 @@ private fun NoteRowItem(
             }
             Column(modifier = Modifier.padding(end = OrbitTheme.spacing.x3)) {
                 if (editing) {
-                    BasicTextField(
+                    // Had no name at all for TalkBack, and an accent cursor on
+                    // a screen whose one accent is Call (rules.md §Design 5, 7).
+                    OrbitTextField(
                         value = draftEdit,
                         onValueChange = { draftEdit = it },
-                        textStyle = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                        cursorBrush = androidx.compose.ui.graphics.SolidColor(
-                            OrbitTheme.colors.accent
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(OrbitTheme.shapes.md)
-                            .background(OrbitTheme.colors.bgSubtle)
-                            .padding(OrbitTheme.spacing.x3)
+                        label = null,
+                        contentDescription = stringResource(R.string.contact_notes_edit_note),
+                        singleLine = false,
                     )
                     Spacer(Modifier.height(OrbitTheme.spacing.x2))
                     Row(

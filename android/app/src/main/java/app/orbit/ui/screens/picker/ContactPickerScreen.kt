@@ -117,7 +117,7 @@ import kotlinx.coroutines.launch
  * by the app-level [PickerCommitSnackbarHost] mounted in `OrbitNavHost`, on
  * whatever screen the pop lands on.
  *
- * [PickerMode.Collect] (LIST-28) commits nothing: its button ("Add 3 people")
+ * [PickerMode.Collect] (LIST-28) commits nothing: its button ("Add"; TalkBack hears "Add 3 people")
  * hands the selection to [onCollect], and New list makes the list and its
  * people together on "Create list".
  */
@@ -1144,7 +1144,7 @@ private fun ContactPickerRelinkPreview() {
 }
 
 // LIST-28: Collect, New list's People step. No list yet, so the bar says
-// "Add 2 people" and names none, and Sarah, already on another list, is
+// "Add" and TalkBack "Add 2 people", naming none, and Sarah, already on another list, is
 // offered like everyone else.
 @PreviewLightDark
 @Preview(name = "200%", fontScale = 2f)

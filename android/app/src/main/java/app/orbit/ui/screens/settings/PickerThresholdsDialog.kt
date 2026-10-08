@@ -23,10 +23,11 @@ import app.orbit.R
 import app.orbit.data.PickerThresholds
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
+import app.orbit.ui.components.dayLandmark
 import app.orbit.ui.theme.OrbitTheme
 
 /**
- * PICK-07 — Material3 AlertDialog wrapping 4 [ThresholdStepperRow] rows
+ * PICK-07: a Material3 AlertDialog wrapping 4 [ThresholdWheelRow] rows
  * for the picker's threshold knobs (`commonlyTopPct`, `rarelyBottomPct`, `recentlyAddedDays`,
  * `longGapDays`). Save commits all four through [SettingsViewModel.onCommitThresholds]; Cancel
  * discards (the local state never round-trips to DataStore until Save runs, a
@@ -41,7 +42,7 @@ import app.orbit.ui.theme.OrbitTheme
  * for Cancel.
  *
  * Each row's label is a whole sentence with the value in it (SET-10,
- * voice.md), rendered by [ThresholdStepperRow] above its stepper.
+ * voice.md), rendered by [ThresholdWheelRow] above its number wheel.
  */
 @Composable
 fun PickerThresholdsDialog(
@@ -78,46 +79,44 @@ fun PickerThresholdsDialog(
         text = {
             // Scrolls when the window is short (landscape): an AlertDialog's
             // text slot does not, so the rows were squeezed and the last
-            // steppers fell under 48dp (gate G3).
+            // controls fell under 48dp (gate G3).
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                ThresholdStepperRow(
+                ThresholdWheelRow(
                     label = stringResource(R.string.settings_thresholds_commonly, commonlyTop),
                     name = stringResource(R.string.settings_thresholds_commonly_name),
                     helper = stringResource(R.string.settings_thresholds_percent_helper),
                     value = commonlyTop,
-                    minValue = 5,
-                    maxValue = 50,
+                    range = 5..50,
                     onChange = { commonlyTop = it },
                 )
                 HorizontalDivider(color = OrbitTheme.colors.lineSoft)
-                ThresholdStepperRow(
+                ThresholdWheelRow(
                     label = stringResource(R.string.settings_thresholds_rarely, rarelyBottom),
                     name = stringResource(R.string.settings_thresholds_rarely_name),
                     helper = stringResource(R.string.settings_thresholds_percent_helper),
                     value = rarelyBottom,
-                    minValue = 10,
-                    maxValue = 90,
+                    range = 10..90,
                     onChange = { rarelyBottom = it },
                 )
                 HorizontalDivider(color = OrbitTheme.colors.lineSoft)
-                ThresholdStepperRow(
+                ThresholdWheelRow(
                     label = pluralStringResource(R.plurals.settings_thresholds_recently_added, recentlyAdded, recentlyAdded),
                     name = stringResource(R.string.settings_thresholds_recently_added_name),
                     helper = stringResource(R.string.settings_thresholds_recently_added_helper),
                     value = recentlyAdded,
-                    minValue = 1,
-                    maxValue = 3650,
+                    range = 1..3650,
                     onChange = { recentlyAdded = it },
+                    caption = { d -> dayLandmark(d) },
                 )
                 HorizontalDivider(color = OrbitTheme.colors.lineSoft)
-                ThresholdStepperRow(
+                ThresholdWheelRow(
                     label = pluralStringResource(R.plurals.settings_thresholds_long_gap, longGap, longGap),
                     name = stringResource(R.string.settings_thresholds_long_gap_name),
                     helper = stringResource(R.string.settings_thresholds_long_gap_helper),
                     value = longGap,
-                    minValue = 1,
-                    maxValue = 3650,
+                    range = 1..3650,
                     onChange = { longGap = it },
+                    caption = { d -> dayLandmark(d) },
                 )
                 if (contradictionLine != null) {
                     Text(

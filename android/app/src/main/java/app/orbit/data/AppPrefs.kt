@@ -195,8 +195,8 @@ open class AppPrefs(private val dataStore: DataStore<Preferences>) {
     //   * `longGapDays`           — N-day silence threshold for "long gap"
     //
     // Defaults (20, 50, 30, 90) and coercion bounds (5..50, 10..90, 1..3650,
-    // 1..3650) match the ThresholdStepperRow spec — out-of-range writes clamp
-    // rather than throw, so a future bug in the stepper UI cannot poison the
+    // 1..3650) match the ThresholdWheelRow ranges; out-of-range writes clamp
+    // rather than throw, so a future bug in the dialog cannot poison the
     // DataStore.
     val commonlyCalledTopPct: Flow<Int> =
         dataStore.data.map { it[KEY_COMMONLY_CALLED_TOP_PCT] ?: 20 }

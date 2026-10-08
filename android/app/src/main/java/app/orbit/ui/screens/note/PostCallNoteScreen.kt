@@ -395,7 +395,11 @@ private fun CallLine(firstName: String, call: NoteCall, curtain: Boolean) {
 /**
  * The writing field. It fills the page and scrolls inside itself, so the
  * cursor stays in view however long the entry gets while the bar, with the
- * timer, stays put. The placeholder sits in its decoration, which makes it
+ * timer, stays put. It is the page itself, not a box on it, so it is the one
+ * field besides search that is not an OrbitTextField (ADR 0012): it keeps
+ * that field's ink cursor and sentence capitalisation, and needs no
+ * keepAboveKeyboard, since OrbitScreen already shrinks the page above the
+ * keyboard and the field scrolls its own cursor into view. The placeholder sits in its decoration, which makes it
  * the field's TalkBack label while it is empty (OrbitSearchField's
  * precedent). Under the curtain the words are drawn as "Note hidden", the
  * way Contact detail hides a note, with [CurtainMask] over the buffer so what
@@ -413,7 +417,9 @@ private fun WritingField(
         value = draft,
         onValueChange = onDraftChange,
         textStyle = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-        cursorBrush = SolidColor(OrbitTheme.colors.accent),
+        // Ink, as every field's cursor is (ADR 0012): "Save note" is the
+        // page's one accent (rules.md Design 5).
+        cursorBrush = SolidColor(OrbitTheme.colors.fg),
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
         visualTransformation = if (curtain && draft.isNotEmpty()) CurtainMask(mask) else VisualTransformation.None,
         modifier = modifier,

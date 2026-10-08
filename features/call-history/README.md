@@ -1,7 +1,7 @@
 # call-history
 
 **Status:** in-progress
-**Last reviewed:** 2026-10-06 (audit round: attempts in the spec, the visible row menu, LOG-03)
+**Last reviewed:** 2026-10-07 (audit round: attempts in the spec, the visible row menu, LOG-03)
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/ui/screens/calllog/` (`CallLogScreen.kt`, `CallLogViewModel.kt`, `CallLogUiState.kt`); route `Routes.CallLogPattern` (`call-log?contactId={contactId}`), reachable from Settings (everyone's calls, `Routes.CallLog`) and from Contact detail's "View all calls" (that person's calls, `Routes.callLogFor(id)`)
 - Tests: `android/app/src/test/java/app/orbit/ui/screens/calllog/CallLogViewModelTest.kt` (the join, the kinds, the filters, paging, the LOG-04 and LOG-05 states), `android/app/src/test/java/app/orbit/ui/screens/calllog/CallLogRowMenuTest.kt` (the row menu's labels and order), `android/app/src/test/java/app/orbit/ui/screens/calllog/CallLogContentTest.kt` (the pane title in every state, the row button's TalkBack name and its curtain mask), `android/app/src/test/java/app/orbit/data/dao/CallEventDaoLogTest.kt`
@@ -86,7 +86,7 @@ Reads: `CallEventEntity` (via `CallEventDao.observeForLog`, which filters `conta
 
 ### Known gotchas
 
-- A contact may be on multiple lists at the time of a call; "list context" chooses one for display. Decided policy: the contact's most-recent `ListMembership` (max `addedAt`); zero memberships → the subtitle fragment collapses away.
+- A contact may be on multiple lists at the time of a call; "list context" chooses one for display. Decided policy: the contact's most-recent `ListMembership` (max `addedAt`) on a list that isn't archived (LIST-24, 2026-10-07; before, an archived list could win); zero memberships → the subtitle fragment collapses away.
 - Orphaned events (contactId no longer resolving during an FK-cascade window) are dropped defensively via `mapNotNull` rather than rendered as ghost rows.
 - `CallLogViewModelTest` runs on the plain JVM, where there is no platform Main dispatcher after `resetMain`. Each test cancels and joins its VMs' scope before returning (`runVmTest`); otherwise the VM's Default-dispatched join finishes after the test and fails the next one.
 

@@ -26,6 +26,8 @@ import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ListRepository
 import app.orbit.di.ApplicationScope
 import app.orbit.domain.clock.Clock
+import app.orbit.domain.model.onActiveLists
+import app.orbit.domain.smart.addedAt
 import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.CopyContactsUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
@@ -846,7 +848,7 @@ class ContactPickerViewModel(
                 relinkContactId?.let { id -> contactRepo.observeById(id).map { it?.displayName } }
                     ?: flowOf<String?>(null)
             // LIST-28: no list yet, so no name, and never NotFound; the bar
-            // says "Add 3 people" without one.
+            // says "Add" and TalkBack "Add 3 people", without one.
             PickerMode.Collect -> flowOf("")
             else ->
                 targetListId?.let { id -> listRepo.observeById(id).map { it?.name } }
@@ -1017,10 +1019,9 @@ class ContactPickerViewModel(
         // missing from the map are zero-call contacts (the GROUP BY only emits
         // a row when at least one event matches); default-coalesce here.
 
-        // Membership cross-ref.
+        // Membership cross-ref, archived lists left out (LIST-24).
         val listsByContactId: Map<Long, List<Long>> =
-            memberships.groupBy { it.contactId }
-                .mapValues { (_, rows) -> rows.map { it.listId } }
+            pickerListIdsByContact(memberships, lists, targetListId, sourceListId)
         val listNameById: Map<Long, String> = lists.associate { it.id to it.name }
 
         // Percentile bucketing — only contacts WITH at least one call.
@@ -1062,7 +1063,10 @@ class ContactPickerViewModel(
 
             val isCommonly = callCount > 0 && commonlyCutoff != null && callCount >= commonlyCutoff
             val isRarely = callCount > 0 && rarelyCutoff != null && callCount <= rarelyCutoff && !isCommonly
-            val isRecentlyAdded = c.firstSeenByAppAt.isAfter(recentlyAddedThreshold)
+            // addedAt, not first sight: the first sync stamps everyone already
+            // on the phone with one instant, which made this chip match the
+            // whole address book (SMART-08, the smart rule's definition).
+            val isRecentlyAdded = !c.addedAt.isBefore(recentlyAddedThreshold)
             val isLongGap = lastCallAt != null && lastCallAt.isBefore(longGapThreshold)
 
             PickerContact(
@@ -1256,6 +1260,25 @@ internal fun pickerCandidates(
     mode == PickerMode.Move && sourceListId != null -> built.filter { sourceListId in it.listIds }
     else -> built
 }
+
+/**
+ * LIST-24: the lists each person counts as being on, which feed the row's
+ * "On Inner orbit, Late night" line, "Not on a list" and "On a list".
+ * Archived lists are left out, as Search across everyone already did: until
+ * 2026-10-07 a person on an archived list read "On Old friends" here and was
+ * missing from "Not on a list". The target and source lists stay whatever
+ * their state, because [pickerCandidates] needs them: Add hides the target's
+ * members, Move keeps the source's.
+ */
+internal fun pickerListIdsByContact(
+    memberships: List<ListMembershipEntity>,
+    lists: List<ListEntity>,
+    targetListId: Long?,
+    sourceListId: Long?
+): Map<Long, List<Long>> =
+    memberships.onActiveLists(lists, alsoKeep = setOfNotNull(targetListId, sourceListId))
+        .groupBy { it.contactId }
+        .mapValues { (_, rows) -> rows.map { it.listId } }
 
 /**
  * PICK-01: the lists the "On a list" filter offers. The target list and, in

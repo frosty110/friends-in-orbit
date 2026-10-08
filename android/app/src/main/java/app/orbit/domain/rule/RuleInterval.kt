@@ -50,7 +50,7 @@ val RuleParams.baseIntervalHours: Int
  * template (a list surfaces nothing without a template, and the engine runs
  * whichever subtype the parameters decode to). Nothing here touches the
  * list's people or each person's next turn (`nextDueAt`, `skipCount`): as with
- * any move of the slider, the new interval applies from that person's next
+ * any turn of the wheel, the new interval applies from that person's next
  * call, Later or Sooner. The engines stay; a list nobody moves keeps running
  * Late night or Energize.
  */

@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -69,6 +67,7 @@ import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSwitch
+import app.orbit.ui.components.OrbitTextField
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
@@ -82,7 +81,7 @@ import java.time.LocalTime
  * Two-layer composable: outer wires Hilt VM + `collectAsStateWithLifecycle()`
  * (`lifecycle-runtime-compose` 2.8.7 is in the catalog); inner
  * ([ListConfigContent]) is stateless apart from the title's rename state, and
- * composes the app bar and [ListConfigBody] ([HowOftenSlider],
+ * composes the app bar and [ListConfigBody] ([app.orbit.ui.components.IntervalDaysPicker],
  * [TimeOfDayPicker], [SmartRuleEditor], [MembersPreview]).
  *
  * Save-on-change semantics — every control commits via a VM setter. There is
@@ -413,7 +412,7 @@ private fun ListTitleButton(name: String, onRename: () -> Unit) {
 }
 
 /**
- * LIST-26: the title while renaming. A single-line field labelled "List
+ * LIST-26: the title while renaming. A single-line field named "List
  * name", focused as it appears so the keyboard comes up; the keyboard's Done
  * saves. Under the curtain it draws "List" over the buffer and leaves the
  * buffer alone, so what is saved is what was typed (CurtainMask, PRIV-03).
@@ -434,24 +433,24 @@ private fun ListNameField(
     LaunchedEffect(Unit) {
         runCatching { focusRequester.requestFocus() }
     }
-    OutlinedTextField(
+    // The shared field (ADR 0012), over a TextFieldValue so the cursor opens
+    // after the old name. No label above it: in the app bar, where the title
+    // was, with Cancel and "Save list name" beside it, it is plainly the
+    // name, and a label would double the bar's height. TalkBack hears "List
+    // name", and an emptied field shows it as its placeholder.
+    OrbitTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(stringResource(R.string.lists_name_field)) },
+        label = null,
+        contentDescription = stringResource(R.string.lists_name_field),
+        placeholder = stringResource(R.string.lists_name_field),
         visualTransformation = if (LocalPrivacyCurtain.current) CurtainMask(curtainList) else VisualTransformation.None,
-        singleLine = true,
-        textStyle = LocalTextStyle.current.merge(OrbitTheme.type.body),
         keyboardOptions = KeyboardOptions(
             capitalization = KeyboardCapitalization.Sentences,
             imeAction = ImeAction.Done,
         ),
         keyboardActions = KeyboardActions(onDone = { onSave() }),
-        modifier = Modifier
-            .fillMaxWidth()
-            // Room above for the label, which floats over the outline's top
-            // edge and otherwise sits flush against the top of the screen.
-            .padding(top = OrbitTheme.spacing.x2, bottom = OrbitTheme.spacing.x2)
-            .focusRequester(focusRequester),
+        modifier = Modifier.focusRequester(focusRequester),
     )
 }
 
