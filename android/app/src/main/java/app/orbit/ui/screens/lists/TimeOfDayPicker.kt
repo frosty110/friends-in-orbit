@@ -48,9 +48,9 @@ import java.time.LocalTime
  * LIST-25: the parts of the day a list's nudges may come in, as windows on the
  * list's existing `activeHoursStart` / `activeHoursEnd` columns. Nothing new
  * is stored: a part is only a name for a window, and the gate that reads the
- * window is unchanged (`isInActiveWindow`, inclusive at both ends, wrapping
- * past midnight when the end is before the start, so [Nights] needs nothing
- * special).
+ * window is `isInActiveWindow` (the start in, the end out since 2026-10-08,
+ * so the parts never overlap; wrapping past midnight when the end is before
+ * the start, so [Nights] needs nothing special).
  *
  * The starts are deliberate. `NudgeScheduler.effectiveSchedule` adds the
  * window's start as a nudge time when none of the list's own times falls

@@ -98,10 +98,11 @@ class TimeOfDayMappingTest {
     @Test
     fun the_nudge_gate_holds_nights_on_both_sides_of_midnight() {
         val (start, end) = DayPart.Nights.start!! to DayPart.Nights.end!!
-        listOf(t(21), t(23, 30), t(0), t(3), t(7)).forEach {
+        listOf(t(21), t(23, 30), t(0), t(3), t(6, 59)).forEach {
             assertTrue(isInActiveWindow(it, start, end), "$it is night")
         }
-        listOf(t(7, 1), t(12), t(20, 59)).forEach {
+        // 7am is Mornings' start, not Nights' end too (the end is out).
+        listOf(t(7), t(7, 1), t(12), t(20, 59)).forEach {
             assertFalse(isInActiveWindow(it, start, end), "$it is not night")
         }
     }
@@ -110,9 +111,10 @@ class TimeOfDayMappingTest {
     fun the_nudge_gate_holds_a_daytime_part_to_its_hours() {
         val (start, end) = DayPart.Mornings.start!! to DayPart.Mornings.end!!
         assertTrue(isInActiveWindow(t(7), start, end))
-        assertTrue(isInActiveWindow(t(12), start, end))
+        assertTrue(isInActiveWindow(t(11, 59), start, end))
+        // Noon is Afternoons' start, not Mornings' end too (the end is out).
+        assertFalse(isInActiveWindow(t(12), start, end))
         assertFalse(isInActiveWindow(t(6, 59), start, end))
-        assertFalse(isInActiveWindow(t(12, 1), start, end))
     }
 
     @Test

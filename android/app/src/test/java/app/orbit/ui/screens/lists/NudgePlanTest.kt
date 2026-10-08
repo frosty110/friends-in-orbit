@@ -46,6 +46,18 @@ class NudgePlanTest {
     }
 
     @Test
+    fun a_time_on_the_parts_end_is_held_and_the_start_comes_instead() {
+        // 9pm under Evenings (5pm to 9pm): the worker asks the gate a moment
+        // after its slot, so 9pm never posted, and until 2026-10-08 the line
+        // still said "Every day at 9pm". The end is out of the window now.
+        val plan = plan(NudgeSchedule(days = everyDay, times = listOf(t(21))), DayPart.Evenings)
+
+        assertEquals(listOf(t(17)), plan.posts.times)
+        assertEquals(listOf(t(21)), plan.outside)
+        assertEquals(t(17), plan.startInstead)
+    }
+
+    @Test
     fun afternoons_and_nights_come_at_their_start_too() {
         assertEquals(listOf(t(12)), plan(NudgeSchedule.DEFAULT, DayPart.Afternoons).posts.times)
         // Across midnight: 10am is outside 9pm to 7am, so the nudge comes at 9pm.

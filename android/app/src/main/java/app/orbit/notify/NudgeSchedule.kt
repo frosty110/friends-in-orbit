@@ -157,9 +157,18 @@ fun NudgeSchedule.nextSlot(now: ZonedDateTime): ZonedDateTime? {
 // ─── Active-hours window ─────────────────────────────────────────────────────
 
 /**
- * True when [time] falls inside the [start]..[end] active-hours window,
- * inclusive on both ends, wrapping past midnight when [end] is before [start]
- * (e.g. 22:00–02:00).
+ * True when [time] falls inside the active-hours window that runs from
+ * [start] up to [end]: the start is in, the end is not, wrapping past midnight
+ * when [end] is before [start] (e.g. 22:00 to 02:00).
+ *
+ * The end is out because the gate asks this at the moment the worker runs,
+ * which is always a little after its slot: a time chosen on the end (9pm
+ * under Evenings, 5pm to 9pm) was "inside" to the scheduler and the plan, so
+ * nothing was added, and outside to the gate a moment later, so that list
+ * went silent every day with nothing said (until 2026-10-08). With the end
+ * out, such a time is held back like any other outside time, the scheduler
+ * adds the start, and "When to nudge" says so. It also stops the parts of
+ * the day overlapping: noon is Afternoons, not Mornings too.
  *
  * The single definition shared by the fire-time gate ([ListPromptWorker]) and
  * the scheduler ([NudgeScheduler.effectiveSchedule]). The scheduler decides
@@ -168,9 +177,9 @@ fun NudgeSchedule.nextSlot(now: ZonedDateTime): ZonedDateTime? {
  */
 fun isInActiveWindow(time: LocalTime, start: LocalTime, end: LocalTime): Boolean =
     if (spansMidnight(start, end)) {
-        // Midnight-spanning: inside if time >= start OR time <= end
-        time >= start || time <= end
+        // Midnight-spanning: inside if time >= start OR time < end
+        time >= start || time < end
     } else {
-        // Normal range: inside if start <= time <= end
-        time >= start && time <= end
+        // Normal range: inside if start <= time < end
+        time >= start && time < end
     }

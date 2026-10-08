@@ -129,11 +129,27 @@ class NudgeSchedulerEffectiveSlotsTest {
     // ─── One definition of "inside the window" ───────────────────────────────
 
     @Test
-    fun isInActiveWindow_isInclusiveAndWrapsMidnight() {
+    fun isInActiveWindow_takesTheStartNotTheEndAndWrapsMidnight() {
         assertTrue(isInActiveWindow(LocalTime.of(9, 0), LocalTime.of(9, 0), LocalTime.of(17, 0)))
-        assertTrue(isInActiveWindow(LocalTime.of(17, 0), LocalTime.of(9, 0), LocalTime.of(17, 0)))
+        assertTrue(isInActiveWindow(LocalTime.of(16, 59), LocalTime.of(9, 0), LocalTime.of(17, 0)))
+        assertFalse(isInActiveWindow(LocalTime.of(17, 0), LocalTime.of(9, 0), LocalTime.of(17, 0)))
         assertFalse(isInActiveWindow(LocalTime.of(8, 59), LocalTime.of(9, 0), LocalTime.of(17, 0)))
         assertTrue(isInActiveWindow(LocalTime.of(1, 0), LocalTime.of(22, 0), LocalTime.of(2, 0)))
+        assertFalse(isInActiveWindow(LocalTime.of(2, 0), LocalTime.of(22, 0), LocalTime.of(2, 0)))
         assertFalse(isInActiveWindow(LocalTime.of(12, 0), LocalTime.of(22, 0), LocalTime.of(2, 0)))
+    }
+
+    @Test
+    fun aTimeOnTheWindowsEndGetsTheStartAdded() {
+        // The worker asks the gate a moment after its slot, so a 9pm slot under
+        // a 5pm to 9pm window would be held every day. With the end out, the
+        // scheduler treats 9pm as outside and adds the start (2026-10-08).
+        val explicit = NudgeSchedule(days = DayOfWeek.entries.toSet(), times = listOf(LocalTime.of(21, 0)))
+        val eff = effective(explicit, LocalTime.of(17, 0) to LocalTime.of(21, 0))
+        assertEquals(listOf(LocalTime.of(21, 0), LocalTime.of(17, 0)), eff.times)
+        // And the gate, asked a little after the 9pm slot, holds it, while the
+        // 5pm slot asked a little after 5pm posts.
+        assertFalse(isInActiveWindow(LocalTime.of(21, 0, 0, 200_000_000), LocalTime.of(17, 0), LocalTime.of(21, 0)))
+        assertTrue(isInActiveWindow(LocalTime.of(17, 0, 0, 200_000_000), LocalTime.of(17, 0), LocalTime.of(21, 0)))
     }
 }
