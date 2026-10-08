@@ -121,8 +121,9 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
  *            TalkBack's "Move up" and "Move down"; a drop is one write with
  *            Undo, and one quiet line under the sequence says it is not
  *            permanent.
- * BROWSE-09: opened from the card, the card's person is marked "On your
- *            card" and scrolled into view.
+ * BROWSE-09: opened from the card, the card's person's second line opens
+ *            with "On your card" (the ViewModel's words, in place of when),
+ *            and the row is scrolled into view.
  * BROWSE-02: 250ms debounced search + 2 filter chips (chip×chip = UNION per
  *            user decision), drawn with the shared [OrbitFilterChip].
  * BROWSE-04: long-press on a row opens quick actions; "Select" enters
@@ -158,10 +159,15 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
  * offer "Open settings" (Orbit's Settings hosts the grant), as Card view and
  * Call history do; until 2026-10-06 Browse named Settings and gave no path.
  *
- * One accent element (rules.md §Design 5): the due dot, which marks who is
- * ready. Active filters use the cluster-tier tint, selected rows the same, the
- * queue head's number is ink, not terracotta, and "On your card" is a Stone
- * chip.
+ * No accent element (rules.md §Design 5 allows none). It was the due dot,
+ * which marked who was ready, until 2026-10-08, when it went with every other
+ * badge (rules.md Design 9): on a row in the order "Up now" says the same, and
+ * the accent is spent on the one thing you most want tapped, which the dot
+ * never was. Active filters use the cluster-tier tint, selected rows the same,
+ * the queue head's number is ink, not terracotta, and nothing sits beside or
+ * over a name: "On your card" is words on the row's second line, and the
+ * "Paused" and "Ignored" headings name those groups (the word beside each
+ * name went the same day).
  */
 @Composable
 fun BrowseListScreen(
@@ -772,7 +778,7 @@ private class SequenceDrag {
 
 /**
  * The Ready list: the sequence and its groups (BROWSE-07), the card's person
- * marked and scrolled to (BROWSE-09), and drag to reorder (BROWSE-08, see
+ * scrolled to (BROWSE-09), and drag to reorder (BROWSE-08, see
  * [SequenceDrag]). Rows move only in the sequence and not while selecting,
  * where a tap selects.
  */
@@ -1037,21 +1043,18 @@ private fun BrowsePersonRow(
             onDial = dial,
             showDial = !isMultiSelect,
             modifier = Modifier.weight(1f),
-            // 2026-06-09 #19: due dot + paused/ignored status
-            // ride Ready (not Contact: id-only equality).
-            due = contact.id in state.dueIds,
-            statusLabel = when (state.rowStatus[contact.id]) {
-                BrowseRowStatus.Paused -> stringResource(R.string.browse_row_paused)
-                BrowseRowStatus.Ignored -> stringResource(R.string.browse_row_ignored)
-                null -> null
-            },
+            // 2026-06-09 #19: a paused or ignored row reads muted. The status
+            // rides Ready (not Contact: id-only equality). Their group's
+            // heading says which; the word beside the name went with
+            // rules.md Design 9 on 2026-10-08, as did the due dot.
+            muted = state.rowStatus[contact.id] != null,
             showCallMeta = !state.callLogPermissionDenied,
             queuePosition = queuePos,
             isHead = queuePos == 1,
-            // BROWSE-07: "Up now", "Thursday"; on a paused row, "Until 12 Oct".
+            // BROWSE-07: "Up now", "Thursday"; on a paused row, "Until 12 Oct";
+            // BROWSE-09: "On your card" on the card's person, which the
+            // ViewModel words in place of when (its one owner).
             whenLabel = (state.whenLabels[contact.id] ?: state.untilLabels[contact.id])?.asString(),
-            // BROWSE-09: the person the card is showing.
-            marker = if (contact.id == state.onYourCardId) stringResource(R.string.browse_row_on_your_card) else null,
             leadingCell = leadingCell,
             dragHandle = reorder?.handle,
             dragHandleLabel = reorder?.handleLabel,
@@ -1182,9 +1185,23 @@ private fun previewContact(id: Long, name: String, lastCalled: UiText?): Contact
     patternNote = ""
 )
 
-// BROWSE-07: the sequence (two up now, one tomorrow, one on a weekday, one in
-// two weeks), then a paused and an ignored person; opened from the card, so
-// its person is marked (BROWSE-09).
+// BROWSE-07: the sequence's when words (two up now, one tomorrow, one on a
+// weekday, one in two weeks).
+private val previewWhen: Map<String, UiText> = mapOf(
+    "c-1" to UiText.res(R.string.browse_when_up_now),
+    "c-2" to UiText.res(R.string.browse_when_up_now),
+    "c-3" to UiText.res(R.string.browse_when_tomorrow),
+    "c-5" to UiText.res(R.string.browse_when_on_day, "Thursday"),
+    "c-6" to UiText.res(R.string.browse_when_in_span, formatSpan(14))
+)
+
+// BROWSE-09: the card's person's row says "On your card" in place of its when
+// word, as the ViewModel words it; nobody's when there is no card person.
+private fun previewOnYourCard(id: String?): Map<String, UiText> =
+    if (id == null) previewWhen else previewWhen + (id to UiText.res(R.string.browse_row_on_your_card))
+
+// The sequence, then a paused and an ignored person; opened from the card, so
+// its person's row says so (BROWSE-09).
 private val previewState: BrowseUiState = BrowseUiState.Ready(
     contacts = listOf(
         previewContact(1, "Avery Quinn", UiText.plural(R.plurals.time_ago_days, 11, 11)),
@@ -1198,16 +1215,9 @@ private val previewState: BrowseUiState = BrowseUiState.Ready(
     searchQuery = "",
     activeFilters = emptySet(),
     callLogPermissionDenied = false,
-    dueIds = setOf("c-1", "c-2"),
     rowStatus = mapOf("c-4" to BrowseRowStatus.Paused, "c-7" to BrowseRowStatus.Ignored),
     queuePositions = mapOf("c-1" to 1, "c-2" to 2, "c-3" to 3, "c-5" to 4, "c-6" to 5),
-    whenLabels = mapOf(
-        "c-1" to UiText.res(R.string.browse_when_up_now),
-        "c-2" to UiText.res(R.string.browse_when_up_now),
-        "c-3" to UiText.res(R.string.browse_when_tomorrow),
-        "c-5" to UiText.res(R.string.browse_when_on_day, "Thursday"),
-        "c-6" to UiText.res(R.string.browse_when_in_span, formatSpan(14))
-    ),
+    whenLabels = previewOnYourCard("c-1"),
     untilLabels = mapOf("c-4" to UiText.res(R.string.browse_row_until, "12 Oct")),
     onYourCardId = "c-1"
 )
@@ -1272,19 +1282,24 @@ private fun BrowseContentPreview() {
 
 /**
  * BROWSE-09: the card's person is not first (the deck moved between the
- * card's read and Browse's), so the mark sits where the order puts them.
+ * card's read and Browse's), so "On your card" opens their second line where
+ * the order puts them, and the first row says "Up now".
  */
 @PreviewLightDark
 @Composable
 private fun BrowseCardPersonMovedPreview() {
-    BrowsePreviewHost((previewState as BrowseUiState.Ready).copy(onYourCardId = "c-3"))
+    BrowsePreviewHost(
+        (previewState as BrowseUiState.Ready).copy(onYourCardId = "c-3", whenLabels = previewOnYourCard("c-3"))
+    )
 }
 
-/** Opened from "Browse this list" (nobody on the card): no row is marked. */
+/** Opened from "Browse this list" (nobody on the card): every row says when. */
 @PreviewLightDark
 @Composable
 private fun BrowseNoCardPersonPreview() {
-    BrowsePreviewHost((previewState as BrowseUiState.Ready).copy(onYourCardId = null))
+    BrowsePreviewHost(
+        (previewState as BrowseUiState.Ready).copy(onYourCardId = null, whenLabels = previewOnYourCard(null))
+    )
 }
 
 @PreviewLightDark
