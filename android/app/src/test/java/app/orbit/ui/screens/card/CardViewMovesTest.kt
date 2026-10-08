@@ -14,6 +14,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -269,6 +270,33 @@ class CardViewMovesTest {
         frames(2)
         compose.mainClock.advanceTimeBy(3 * SwipeHintTiming.EVERY_MS)
         assertEquals(0, asked)
+    }
+
+    @Test
+    fun `CARD-09 - no hints while the list menu is open, and the wait starts again once it closes`() {
+        // The prototype's rule: the hints wait while a menu covers the card.
+        // The menu's button is in the app bar, outside the card's touch
+        // watcher, and its popup takes the touches after it, so only the
+        // menu's own open state can pause them.
+        var asked = 0
+        compose.mainClock.autoAdvance = false
+        setCard(moveHints = { asked++; hints })
+        frames(2)
+        compose.mainClock.advanceTimeBy(SwipeHintTiming.IDLE_MS - 1_000)
+
+        compose.onNodeWithContentDescription("More actions for Inner orbit").performClick()
+        frames(5)
+        compose.onNodeWithText("Browse people").assertExists()
+        compose.mainClock.advanceTimeBy(3 * SwipeHintTiming.EVERY_MS)
+        assertEquals(0, asked, "nothing while the menu is open")
+
+        // Closing it (here by choosing an item) starts the four seconds again.
+        compose.onNodeWithText("List settings").performClick()
+        frames(5)
+        compose.mainClock.advanceTimeBy(SwipeHintTiming.IDLE_MS - 200)
+        assertEquals(0, asked, "a fresh four seconds after the menu")
+        compose.mainClock.advanceTimeBy(400)
+        assertEquals(1, asked)
     }
 
     // CARD-10 ------------------------------------------------------------

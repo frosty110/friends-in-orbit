@@ -251,9 +251,11 @@ class CardViewViewModel @Inject constructor(
             },
         ) {
             val prior = captureSchedule(contactId)
-            skipContact(contactId = contactId, listId = listId)
+            // CARD-02: one clock read for the move and its words ([futureDueLabel]).
+            val now = clock.now()
+            skipContact(contactId = contactId, listId = listId, now = now)
             val newDue = focusedDueAfterMutation(contactId)
-            stageUndo(prior, label = laterMessage(name, newDue))
+            stageUndo(prior, label = laterMessage(name, newDue, now))
         }
     }
 
@@ -270,9 +272,10 @@ class CardViewViewModel @Inject constructor(
             },
         ) {
             val prior = captureSchedule(contactId)
-            surfaceSooner(contactId = contactId, listId = listId)
+            val now = clock.now()
+            surfaceSooner(contactId = contactId, listId = listId, now = now)
             val newDue = focusedDueAfterMutation(contactId)
-            stageUndo(prior, label = soonerMessage(name, newDue))
+            stageUndo(prior, label = soonerMessage(name, newDue, now))
         }
     }
 
@@ -306,7 +309,12 @@ class CardViewViewModel @Inject constructor(
      * [SkipContactUseCase.preview] and [SurfaceSoonerUseCase.preview], the
      * functions the moves themselves write with, and worded from the same
      * [comesUp] bucket as the move's snackbar ([futureDueLabel]), so the hint
-     * and the snackbar that follows it say the same day. Where a move's time
+     * and the snackbar that follows it say the same day. Both previews are
+     * given one clock read and the words are counted from it, as the moves'
+     * snackbars are (CARD-02). Until 2026-10-08 they were counted in whole
+     * 24-hour spans from a later read, taken after Sooner's preview had done
+     * its own reads, so a Later of exactly a day on someone up now said
+     * "Later · Today". Where a move's time
      * cannot be worked out (a list without a rule template) the hint is the
      * bare "Later" or "Sooner". Asked fresh each time rather than carried on
      * [uiState]: a "when" fixed at emission goes stale while the card sits,
@@ -320,9 +328,9 @@ class CardViewViewModel @Inject constructor(
         val list = listId ?: return null
         return try {
             if (appPrefs.cardMovesMade.first() >= SWIPE_HINT_MOVES_TO_LEARN) return null
-            val laterAt = skipContact.preview(contactId, list)
-            val soonerAt = surfaceSooner.preview(contactId, list)
             val now = clock.now()
+            val laterAt = skipContact.preview(contactId, list, now)
+            val soonerAt = surfaceSooner.preview(contactId, list, now)
             CardMoveHints(
                 later = laterAt?.let { UiText.res(R.string.card_hint_later_when, hintWhenLabel(it, now)) }
                     ?: UiText.res(R.string.card_later),
@@ -344,6 +352,12 @@ class CardViewViewModel @Inject constructor(
      * with a nameless twin for the privacy curtain; a failure says "Couldn't
      * save your change" (rules.md Code 3).
      *
+     * The "when" is counted from the instant the log is written with (CARD-02),
+     * so on a list that comes up every 2 days, a connection logged now names
+     * the day after tomorrow. It was counted from a second clock read after
+     * the writes, in whole 24-hour spans, which made every whole-day rhythm a
+     * day short ("tomorrow" on that list) until 2026-10-08.
+     *
      * Cancels a pending "Called {name}": a deck that moved because of this
      * log is not evidence of a call (CARD-03).
      */
@@ -352,8 +366,8 @@ class CardViewViewModel @Inject constructor(
             callAckJob?.cancel()
             val name = firstNameOf(contactId)
             runMutation(UiText.res(R.string.components_snackbar_save_failed)) {
-                logConnection(contactId, whenChoice, note, isAttempt)
                 val now = clock.now()
+                logConnection(contactId, whenChoice, note, isAttempt, now = now)
                 // A connection logged for a day long past can leave the person
                 // still up now; "comes up again later today" would be wrong
                 // about someone who is up already, so only a future time is said.
@@ -556,9 +570,10 @@ class CardViewViewModel @Inject constructor(
     // CARD-02: the snackbar names the person and says when they come back, in
     // the app's two verbs for this, Later and Sooner (voice.md glossary). A
     // separate sentence for an unknown name, so no language has to fit "They"
-    // into a slot meant for a name.
-    private fun laterMessage(name: String?, newDue: Instant?): UiText {
-        val `when` = newDue?.let { futureDueLabel(it, clock.now()) }
+    // into a slot meant for a name. [now] is the instant the move was worked
+    // out from, never a fresh read.
+    private fun laterMessage(name: String?, newDue: Instant?, now: Instant): UiText {
+        val `when` = newDue?.let { futureDueLabel(it, now) }
         return when {
             name != null && `when` != null -> UiText.res(R.string.card_later_named_when, name, `when`)
             name != null -> UiText.res(R.string.card_later_named, name)
@@ -567,8 +582,8 @@ class CardViewViewModel @Inject constructor(
         }
     }
 
-    private fun soonerMessage(name: String?, newDue: Instant?): UiText {
-        val `when` = newDue?.let { futureDueLabel(it, clock.now()) }
+    private fun soonerMessage(name: String?, newDue: Instant?, now: Instant): UiText {
+        val `when` = newDue?.let { futureDueLabel(it, now) }
         return when {
             name != null && `when` != null -> UiText.res(R.string.card_sooner_named_when, name, `when`)
             name != null -> UiText.res(R.string.card_sooner_named, name)
@@ -690,7 +705,9 @@ class CardViewViewModel @Inject constructor(
      * "later today" / "tomorrow" / "on Tuesday" / "in 12 days" / "in 3 weeks"
      * / "in 2 months". Lowercase fragment so it slots mid-sentence (a nested
      * [UiText] argument of the snackbar and up-next sentences). The buckets
-     * are [comesUp]'s, shared with Browse's rows (BROWSE-07).
+     * are [comesUp]'s, calendar days in [zoneId], shared with Browse's rows
+     * (BROWSE-07). [now] is the instant [due] was worked out from wherever
+     * there is one (a move, a log; CARD-02), else the emission's own read.
      */
     internal fun futureDueLabel(due: Instant, now: Instant): UiText =
         when (val bucket = comesUp(due, now, zoneId)) {

@@ -36,8 +36,10 @@ import javax.inject.Inject
  * - A non-blank note is attached through [AddRetroactiveNoteUseCase],
  *   back-dated to the same `occurredAt` (the LOG-03 convention).
  *
- * When ([LogConnectionWhen]) resolves against one read of the injected clock:
- * Today is now, Yesterday is now minus 24 hours, and a picked date (the
+ * When ([LogConnectionWhen]) resolves against one instant, `now`: the
+ * caller's when it passes one (the card, which words "comes up again on
+ * Saturday" from that same instant, CARD-10), else one read of the injected
+ * clock. Today is now, Yesterday is now minus 24 hours, and a picked date (the
  * Material date picker's UTC midnight of the chosen day) is pinned to local
  * noon in the injected zone, so it lands on the chosen day in every time
  * zone, then clamped to now, the authoritative no-future-events guard (the
@@ -64,8 +66,8 @@ class LogConnectionUseCase @Inject constructor(
         whenChoice: LogConnectionWhen,
         note: String,
         isAttempt: Boolean,
+        now: Instant = clock.now(),
     ): MutationResult {
-        val now = clock.now()
         val occurredAt: Instant = when (whenChoice) {
             LogConnectionWhen.Today -> now
             LogConnectionWhen.Yesterday -> now.minus(Duration.ofDays(1))

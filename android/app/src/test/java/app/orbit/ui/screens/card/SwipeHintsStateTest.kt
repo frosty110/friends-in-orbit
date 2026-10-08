@@ -24,8 +24,9 @@ import org.junit.Test
  * caused.
  *
  * Plain JUnit: the state is coroutines and snapshot state, no frame clock.
- * Where it sits on the card, and that a real touch restarts it, is
- * CardViewScreenTest's.
+ * The clock on a real card (a real touch restarting it, the Log a connection
+ * sheet and the list menu holding it) and the hints' absence from what
+ * TalkBack is given are CardViewMovesTest's.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SwipeHintsStateTest {

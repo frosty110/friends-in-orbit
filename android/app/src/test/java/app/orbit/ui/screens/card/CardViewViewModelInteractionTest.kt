@@ -15,6 +15,7 @@ import app.orbit.domain.FakeNoteRepository
 import app.orbit.domain.FakeRuleTemplateRepository
 import app.orbit.domain.JsonProvider
 import app.orbit.domain.callEventFixture
+import app.orbit.domain.clock.Clock
 import app.orbit.domain.clock.TestClock
 import app.orbit.domain.contactFixture
 import app.orbit.domain.listFixture
@@ -41,9 +42,12 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
+import java.time.DayOfWeek
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
+import java.time.format.TextStyle
+import java.util.Locale
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -95,6 +99,20 @@ class CardViewViewModelInteractionTest {
         val logWrites: ReschedulingCallEvents,
     )
 
+    /**
+     * A clock that moves on by [step] at every read once a test sets it: the
+     * moments a phone's clock moves between the reads one move makes (the
+     * write's, the feed's, the words'), widened so a test can see them.
+     * [step] stays zero until the deck is Ready, so a test decides where the
+     * first read after that falls.
+     */
+    private class SteppingClock(start: Instant) : Clock {
+        private var instant = start
+        var step: Duration = Duration.ZERO
+
+        override fun now(): Instant = instant.also { instant = instant.plus(step) }
+    }
+
     /** Records [CallLogResyncTrigger] calls so return-from-dial sync is assertable. */
     private class RecordingResync : CallLogResyncTrigger {
         val calls = mutableListOf<Boolean>()
@@ -103,14 +121,17 @@ class CardViewViewModelInteractionTest {
         }
     }
 
-    private fun fixture(savedStateListId: String? = "1"): Setup {
+    /**
+     * The fakes and real use cases, all on one [clock]: [TestClock] at [T0]
+     * unless a test passes a [SteppingClock] to see what moving time does.
+     */
+    private fun fixture(savedStateListId: String? = "1", clock: Clock = TestClock(T0)): Setup {
         val contactRepo = FakeContactRepository()
         val listRepo = FakeListRepository()
         val callEventRepo = FakeCallEventRepository()
         val templateRepo = FakeRuleTemplateRepository(
             initial = listOf(ruleTemplateFixture(id = 1L)),
         )
-        val clock = TestClock(T0)
         val json = JsonProvider.json
         val surfaceNext = SurfaceNextUseCase(
             contactRepo = contactRepo,
@@ -770,18 +791,25 @@ class CardViewViewModelInteractionTest {
         assertEquals(hintWhen.args, snackbarWhen.args, "$case: the same day or span")
     }
 
-    /** Sarah on list 1 with [nextDueAt]; returns the hints, then the snackbar of [move]. */
+    /**
+     * Sarah on list 1 with [nextDueAt]; returns the hints, then the snackbar
+     * of [move]. [onReady] runs once the deck is Ready, before the hints are
+     * asked for (where a [SteppingClock] starts moving).
+     */
     private suspend fun hintThenMove(
         nextDueAt: Instant?,
+        clock: Clock = TestClock(T0),
+        onReady: () -> Unit = {},
         move: CardViewViewModel.() -> Unit,
     ): Pair<CardMoveHints, UiText> {
-        val setup = fixture()
+        val setup = fixture(clock = clock)
         setup.contactRepo.seed(listOf(contactFixture(id = 1L, displayName = "Sarah Connor")))
         setup.listRepo.seed(listOf(listFixture(id = 1L, ruleTemplateId = 1L)))
         setup.listRepo.seedMemberships(listOf(membershipFixture(contactId = 1L, listId = 1L, nextDueAt = nextDueAt)))
         lateinit var result: Pair<CardMoveHints, UiText>
         setup.vm.uiState.test(timeout = 2.seconds) {
             awaitItem()
+            onReady()
             val hints = assertNotNull(setup.vm.moveHints(contactId = 1L))
             setup.vm.messages.test(timeout = 2.seconds) {
                 setup.vm.move()
@@ -823,6 +851,47 @@ class CardViewViewModelInteractionTest {
             assertSameWhen(hints.sooner, snackbar, case)
         }
     }
+
+    /**
+     * Clocks the "when" must not depend on: one that moves a millisecond at
+     * every read from noon (any phone: every read after the write's is later,
+     * and 24 hours less a millisecond is not a whole day), and one that moves
+     * a second at every read from the last second before midnight (the next
+     * read is on the next date). A test seeds its person from the start.
+     */
+    private val movingClocks = listOf(
+        "a millisecond a read from noon" to (Instant.parse("2026-01-01T12:00:00Z") to Duration.ofMillis(1)),
+        "a second a read from 23:59:59" to (Instant.parse("2026-01-01T23:59:59Z") to Duration.ofSeconds(1)),
+    )
+
+    @Test
+    fun `CARD-09 - Later on someone up now says tomorrow, in the hint and the snackbar, as the clock moves`() =
+        runTest {
+            // The default Keep in touch list's Later is 24 hours, so someone
+            // up now comes up again tomorrow. Both said today ("Later ·
+            // Today", "will come up again later today."): each measured the
+            // 24 hours from a clock read taken after the one the move used,
+            // and counted whole 24-hour spans.
+            movingClocks.forEach { (case, clockAt) ->
+                val (start, step) = clockAt
+                val clock = SteppingClock(start)
+                val (hints, snackbar) = hintThenMove(
+                    nextDueAt = start.minus(Duration.ofHours(1)),
+                    clock = clock,
+                    onReady = { clock.step = step },
+                ) { onSwipeLeft(contactId = 1L) }
+                assertEquals(
+                    UiText.res(R.string.card_hint_later_when, UiText.res(R.string.card_hint_tomorrow)),
+                    hints.later,
+                    case,
+                )
+                assertEquals(
+                    UiText.res(R.string.card_later_named_when, "Sarah", UiText.res(R.string.card_due_tomorrow)),
+                    snackbar,
+                    case,
+                )
+            }
+        }
 
     @Test
     fun `CARD-09 - the hints stop for good after five moves, in a new process too`() = runTest {
@@ -923,6 +992,45 @@ class CardViewViewModelInteractionTest {
         assertEquals("Had dinner yesterday", note.body)
         assertEquals(T0, note.createdAt)
     }
+
+    @Test
+    fun `CARD-10 - a connection logged on a 2-day list names the day after tomorrow, as the clock moves`() =
+        runTest {
+            // The default Keep in touch list comes up every 2 days: logged on
+            // a Thursday, Sarah comes up again on Saturday. The snackbar said
+            // "tomorrow": it measured the 48 hours from a clock read taken
+            // after the write's, and counted whole 24-hour spans.
+            movingClocks.forEach { (case, clockAt) ->
+                val (start, step) = clockAt
+                val clock = SteppingClock(start)
+                val setup = fixture(clock = clock)
+                setup.seedSarahAndKai()
+                setup.vm.uiState.test(timeout = 2.seconds) {
+                    awaitItem()
+                    clock.step = step
+                    setup.vm.messages.test(timeout = 2.seconds) {
+                        setup.vm.onLogConnection(1L, LogConnectionWhen.Today, note = "", isAttempt = false)
+                        val saturday = UiText.res(
+                            R.string.card_due_on_day,
+                            DayOfWeek.SATURDAY.getDisplayName(TextStyle.FULL, Locale.getDefault()),
+                        )
+                        assertEquals(
+                            CardMessage.Logged(
+                                text = UiText.res(R.string.card_logged_named_when, "Sarah", saturday),
+                                curtainText = UiText.res(R.string.card_logged_unnamed_when, saturday),
+                            ),
+                            awaitItem(),
+                            case,
+                        )
+                        cancelAndIgnoreRemainingEvents()
+                    }
+                    cancelAndIgnoreRemainingEvents()
+                }
+                // Logged at the start: the words are measured from the
+                // instant the write used, on the Thursday.
+                assertEquals(start, setup.callEventRepo.markCalledAtomicCalls.single().event.occurredAt, case)
+            }
+        }
 
     @Test
     fun `CARD-10 - an attempt logged from the card says Attempt logged and when`() = runTest {

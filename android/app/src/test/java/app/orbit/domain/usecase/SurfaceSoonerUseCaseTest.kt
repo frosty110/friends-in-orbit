@@ -160,6 +160,24 @@ class SurfaceSoonerUseCaseTest {
     }
 
     @Test
+    fun `a Sooner and its preview count from the instant they are given`() = runTest {
+        // CARD-02, as for Later: four days out less 12 hours is before the
+        // given instant, so both clamp to it; counted from the clock's own
+        // read they would land 6 hours earlier.
+        val prior = T0.plus(Duration.ofDays(4))
+        val given = prior.minus(Duration.ofHours(6))
+        val contactRepo = FakeContactRepository(listOf(contactFixture(id = 1L)))
+        val listRepo = FakeListRepository(listOf(listFixture(id = 10L, ruleTemplateId = 1L)))
+        listRepo.seedMemberships(listOf(membershipFixture(contactId = 1L, listId = 10L, nextDueAt = prior)))
+        val templateRepo = FakeRuleTemplateRepository(listOf(ruleTemplateFixture(id = 1L, params = params)))
+        val sooner = useCase(contactRepo, listRepo, templateRepo)
+
+        assertEquals(given, sooner.preview(contactId = 1L, listId = 10L, now = given))
+        sooner(contactId = 1L, listId = 10L, now = given)
+        assertEquals(given, listRepo.updateNextDueAtCalls.single().newNextDueAt)
+    }
+
+    @Test
     fun `preview is null when the move could not be made`() = runTest {
         val contactRepo = FakeContactRepository(listOf(contactFixture(id = 1L)))
         val listRepo = FakeListRepository(
