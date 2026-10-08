@@ -374,7 +374,7 @@ class ListsManagerViewModel @Inject constructor(
             memberCount = memberCountsByListId[id] ?: 0,
             type = type,
             ruleSummary = when (type) {
-                ListType.SMART -> ruleSummary(smartRuleJson)
+                ListType.SMART -> ruleSummary(smartRuleJson)?.let(ListRowSummary::Readable)
                 ListType.STATIC -> rhythmSummary(this)
             },
             notificationsEnabled = notificationsEnabled
@@ -420,23 +420,24 @@ class ListsManagerViewModel @Inject constructor(
      * `RuleTemplateEntity`, which is why this takes the template lookup and
      * not the override JSON alone. Null when neither exists (a partially
      * configured row). A blob that does not decode says so
-     * (`lists_rhythm_unreadable`) instead of passing for a list with no
-     * rhythm: both are Orbit's own writes, so a failed decode is a bug the
-     * user should see where the deck fails on the same data (rules.md Code
-     * 3). Until 2026-10-06 both cases rendered the same empty line.
+     * ([ListRowSummary.Unreadable], "Couldn't read this list's rhythm")
+     * instead of passing for a list with no rhythm: both are Orbit's own
+     * writes, so a failed decode is a bug the user should see where the deck
+     * fails on the same data (rules.md Code 3). Until 2026-10-06 both cases
+     * rendered the same empty line.
      */
-    private suspend fun rhythmSummary(entity: ListEntity): UiText? {
+    private suspend fun rhythmSummary(entity: ListEntity): ListRowSummary? {
         // One cached lookup per row per emission: the template table holds
         // three immutable rows, so this never reaches the database.
         val template = entity.ruleTemplateId?.let { ruleTemplateRepo.getById(it) }
         val resolved = resolveRuleParams(entity.ruleParamsOverrideJson, template?.paramsJson, json)
         val params = when (resolved) {
             RuleParamsResolution.None -> return null
-            RuleParamsResolution.Unreadable -> return UiText.res(R.string.lists_rhythm_unreadable)
+            RuleParamsResolution.Unreadable -> return ListRowSummary.Unreadable
             is RuleParamsResolution.Decoded -> resolved.params
         }
         // Whole days, as How often words them (48h reads "Every 2 days").
-        return howOftenEveryLabel(intervalDaysFor(params.baseIntervalHours))
+        return ListRowSummary.Readable(howOftenEveryLabel(intervalDaysFor(params.baseIntervalHours)))
     }
 
     private companion object {

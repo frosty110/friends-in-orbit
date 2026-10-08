@@ -19,7 +19,7 @@
 - **Rhythm**: Keep in touch / Late night / Energize as radio rows in ink, each with a plain description.
 - **How often**: "Aim for every 2 days" (one sentence, the value its argument) on a slider whose ticks read 1 day, 2 weeks, 1 month, 2 months, and which tells TalkBack "Every 2 days". The scale is linear, so the 1 to 7 day end still sits in the first tenth of the track (see `CONFIG-5`).
 - **Active hours**: an "Always active" switch, else from/to pickers and a day bar whose ticks follow the phone's 12 or 24 hour setting.
-- **Nudges**: a **Send nudges** switch ("A gentle nudge when someone here is worth a call."), then **When to nudge**: seven day chips (tinted when selected, ink, never the accent), one or more times with Change time and remove, **Add time**, and a one-line summary ("Every day at 10am", "No days selected: nudges off"). A "Nudges paused" badge shows while nudges are off.
+- **Nudges**: a **Send nudges** switch ("A gentle nudge when someone here is worth a call."), then **When to nudge**: seven day chips (tinted when selected, ink, never the accent), one or more times with Change time and remove, **Add time**, and a one-line summary ("Every day at 10am", "No days selected: nudges off"). While nudges are off the summary reads "Nudges paused" in place of the schedule; a "Nudges paused" pill under the summary said so until 2026-10-08 (rules.md Design 9).
 - For a smart list, a **Smart rule** editor and **Make this a regular list** with a confirmation that names how many people stay.
 - **People** (it was "Members preview": the section adds and removes people) with the count, remove (Undo) and **Add people**.
 - "Orbit couldn't load this list" with Try again if reading fails (LIST-22).

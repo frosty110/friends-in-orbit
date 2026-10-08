@@ -267,7 +267,7 @@ class ListsManagerViewModelTest {
             if (first is ListsManagerUiState.Loading) first = awaitItem()
             val ready = first as ListsManagerUiState.Ready
             val tile = ready.active.single()
-            assertEquals("Recently added · 30 days", tile.ruleSummary?.asString(context))
+            assertEquals("Recently added · 30 days", tile.ruleSummary?.text?.asString(context))
             assertEquals(ListType.SMART, tile.type)
             cancelAndIgnoreRemainingEvents()
         }
@@ -290,24 +290,27 @@ class ListsManagerViewModelTest {
         )
     }
 
-    private suspend fun singleTileSubtitle(list: ListEntity, templates: FakeRuleTemplateRepository): String? {
+    private suspend fun singleTileSummary(list: ListEntity, templates: FakeRuleTemplateRepository): ListRowSummary? {
         val vm =
             ListsManagerViewModel(
                 listRepo = FakeListRepository(initialLists = listOf(list)),
                 ruleTemplateRepo = templates,
                 nudgeScheduler = ListsManagerFakeNudgeScheduler()
             )
-        var subtitle: String? = null
+        var summary: ListRowSummary? = null
         vm.uiState.test(timeout = 2.seconds) {
             var first = awaitItem()
             if (first is ListsManagerUiState.Loading) first = awaitItem()
             val tile = (first as ListsManagerUiState.Ready).active.single()
             assertEquals(ListType.STATIC, tile.type)
-            subtitle = tile.ruleSummary?.asString(context)
+            summary = tile.ruleSummary
             cancelAndIgnoreRemainingEvents()
         }
-        return subtitle
+        return summary
     }
+
+    private suspend fun singleTileSubtitle(list: ListEntity, templates: FakeRuleTemplateRepository): String? =
+        singleTileSummary(list, templates)?.text?.asString(context)
 
     @Test
     fun regular_list_carries_its_override_rhythm() = runTest {
@@ -381,6 +384,9 @@ class ListsManagerViewModelTest {
             ruleParamsOverrideJson = "{not json"
         )
         assertEquals(unreadable, singleTileSubtitle(corruptOverride, seededTemplates))
+        // Said as the error, not as a rhythm, so the row never joins the
+        // member count to it (rules.md Design 9 put the count on this line).
+        assertEquals(ListRowSummary.Unreadable, singleTileSummary(corruptOverride, seededTemplates))
 
         // The same when the override is absent and the template's own blob
         // is the broken one.

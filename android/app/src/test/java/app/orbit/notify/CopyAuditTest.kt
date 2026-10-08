@@ -107,7 +107,7 @@ class CopyAuditTest {
             // "Send nudges" switch's subtitle, which said "notification" until
             // 2026-10-06 (the glossary's word for it is nudge).
             context.getString(R.string.lists_nudge_add_time),
-            context.getString(R.string.lists_nudge_paused_badge),
+            context.getString(R.string.lists_nudge_summary_paused),
             context.getString(R.string.lists_nudge_summary_no_days),
             context.getString(R.string.lists_nudge_summary_no_time),
             context.getString(R.string.lists_send_nudges_sub),

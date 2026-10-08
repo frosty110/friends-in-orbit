@@ -44,8 +44,10 @@ interface ListRepository {
 
     /**
      * H6 — set `nextDueAt` directly without touching `skipCount`. [SurfaceSoonerUseCase]
-     * uses this so that "sooner" (a negative skip) does not pollute downstream
-     * consumers (badges, dampening, analytics) that read `skipCount` semantically.
+     * uses this so that "sooner" (a negative skip) does not pollute `skipCount`,
+     * which the rule engines read as the number of Laters: each one lengthens
+     * the next cooldown by the skip penalty, up to `cooldownMaxHours`
+     * (`KeepInTouchEngine`). Nothing on screen shows it (rules.md Design 9).
      * Returns [MutationResult.MembershipMissing] when the row has vanished between
      * dispatch and write.
      */

@@ -70,7 +70,7 @@ fun ArchivedListRow(
             )
             if (tile.ruleSummary != null) {
                 Text(
-                    text = tile.ruleSummary.asString(),
+                    text = tile.ruleSummary.text.asString(),
                     style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgSubtle),
                     modifier = Modifier.padding(top = OrbitTheme.spacing.x1 / 2),
                 )
@@ -145,7 +145,7 @@ private fun ArchivedListRowPreviewDark() {
                 name = "Recently added, not called",
                 memberCount = 0,
                 type = ListType.SMART,
-                ruleSummary = UiText.plural(R.plurals.lists_rule_summary_recently_added, 30, 30),
+                ruleSummary = ListRowSummary.Readable(UiText.plural(R.plurals.lists_rule_summary_recently_added, 30, 30)),
             ),
             onRestore = {},
             onDelete = {},
