@@ -121,6 +121,17 @@ class NewListViewModelTest {
 
     private val state: NewListUiState get() = vm.uiState.value
 
+    /**
+     * The state once Create has landed. The "Created" message and the state
+     * are two flows: Room finishes the write on its own thread, where the
+     * ViewModel (on the unconfined test Main) sets the id and publishes, and
+     * the state's combine recomputes on that thread too. So the message can
+     * reach the test before the state has caught up, and reading [state] the
+     * instant it lands failed about one run in a full suite (2026-10-08).
+     * This waits for the state instead.
+     */
+    private suspend fun created(): NewListUiState = vm.uiState.first { it.createdListId != null }
+
     private fun select(template: TemplateChoice) =
         vm.selectTemplate(template.id, template.defaultNameRes?.let { context.getString(it) }.orEmpty())
 
@@ -349,8 +360,9 @@ class NewListViewModelTest {
             assertEquals("Created Close friends.", awaitItem().message.text())
         }
 
-        val id = assertNotNull(state.createdListId, "the screen leaves on this")
-        assertFalse(state.creating)
+        val done = created()
+        val id = assertNotNull(done.createdListId, "the screen leaves on this")
+        assertFalse(done.creating)
         val list = checkNotNull(db.listDao().get(id))
         assertEquals("Close friends", list.name)
         assertEquals(ListType.STATIC, list.type)
@@ -373,7 +385,7 @@ class NewListViewModelTest {
             awaitItem()
         }
 
-        val id = assertNotNull(state.createdListId)
+        val id = assertNotNull(created().createdListId)
         assertTrue(db.listMembershipDao().getMembersOfList(id).isEmpty())
     }
 
@@ -397,7 +409,7 @@ class NewListViewModelTest {
             assertEquals("Created New faces.", awaitItem().message.text())
         }
 
-        val list = checkNotNull(db.listDao().get(checkNotNull(state.createdListId)))
+        val list = checkNotNull(db.listDao().get(checkNotNull(created().createdListId)))
         assertEquals(ListType.SMART, list.type)
         assertTrue(db.listMembershipDao().getMembersOfList(list.id).isEmpty(), "its rule chooses its people")
     }
@@ -415,7 +427,7 @@ class NewListViewModelTest {
             awaitItem()
         }
 
-        val id = checkNotNull(state.createdListId)
+        val id = checkNotNull(created().createdListId)
         assertEquals(listOf(1L), db.listMembershipDao().getMembersOfList(id).map { it.contactId }, "is what is made")
     }
 
