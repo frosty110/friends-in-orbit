@@ -42,11 +42,6 @@
     <string name="card_later">Later</string>
     <string name="card_sooner">Sooner</string>
 
-    <!-- Small label above the person's name: a fact about the rhythm, never a deadline
-         (voice.md never says "due"). "Up now" when their time has come, "Coming up" before it. -->
-    <string name="card_due_today">Up now</string>
-    <string name="card_not_due_yet">Coming up</string>
-
     <!-- The user's most recent note about this person, in quotation marks. Use your
          language's quotation marks. %1$s: the note. -->
     <string name="card_last_note_quoted">“%1$s”</string>
@@ -60,9 +55,6 @@
     <string name="card_usually_answers">Usually answers</string>
     <string name="card_usually_tooltip">Based on when you usually answer or call this person.</string>
     <string name="card_usually_tooltip_label">About usually answers</string>
-    <string name="card_answer_good">Good time to call</string>
-    <string name="card_answer_sometimes">Sometimes answers now</string>
-    <string name="card_answer_rarely">Rarely answers now</string>
 
     <!-- Three small stats at the foot of the card, the glossary's labels (voice.md: "Last
          call", "Average length", "Total calls"). A stat with nothing to say uses the shared
@@ -74,15 +66,11 @@
     <!-- Snackbar action after a call: open the person to write a note. -->
     <string name="card_snackbar_add_note">Add a note</string>
 
-    <!-- Snackbars after Later or Sooner. %1$s: the person's first name, %2$s: when they come
-         back, for example "tomorrow", "on Tuesday" or "in 2 weeks". The "They" versions are
-         for when the name isn't known. -->
-    <string name="card_later_named_when">%1$s will come up again %2$s.</string>
-    <string name="card_later_unnamed_when">They will come up again %1$s.</string>
+    <!-- Snackbars after Later or Sooner, with Undo. They say that the person moved, never
+         when they come back. %1$s: the person's first name. The "They" versions are for when
+         the name isn't known or the app is covered (privacy curtain). -->
     <string name="card_later_named">%1$s moved to later.</string>
     <string name="card_later_unnamed">They moved to later.</string>
-    <string name="card_sooner_named_when">%1$s comes up %2$s.</string>
-    <string name="card_sooner_unnamed_when">They come up %1$s.</string>
     <string name="card_sooner_named">%1$s moved sooner.</string>
     <string name="card_sooner_unnamed">They moved sooner.</string>
 
@@ -112,23 +100,8 @@
     <string name="card_attempt_logged_unnamed_when">Attempt logged. They come up again %1$s.</string>
     <string name="card_attempt_logged">Attempt logged.</string>
 
-    <!-- Hints that fade in over the card's edges when it sits untouched, to show what a swipe
-         does: "Later · Thursday" on the left with an arrow pointing left, "Sooner · Tomorrow"
-         on the right. The middle dot separates the move from when the person would come up.
-         %1$s: when, one of the four strings below. Not read by TalkBack (the Later and Sooner
-         buttons are). Without a "when" the hint is the plain card_later or card_sooner. -->
-    <string name="card_hint_later_when">Later · %1$s</string>
-    <string name="card_hint_sooner_when">Sooner · %1$s</string>
-    <!-- When, standing alone after the dot. The same buckets as the snackbars' lowercase
-         phrases below ("later today", "tomorrow", "on Tuesday", "in 2 weeks"). -->
-    <string name="card_hint_today">Today</string>
-    <string name="card_hint_tomorrow">Tomorrow</string>
-    <!-- %1$s: a weekday, for example "Tuesday". -->
-    <string name="card_hint_on_day">%1$s</string>
-    <!-- %1$s: a span, for example "2 weeks". -->
-    <string name="card_hint_in_span">In %1$s</string>
-
-    <!-- Lowercase phrases for when someone comes back; they slot into the sentences above. -->
+    <!-- Lowercase phrases for when someone comes back; they slot into the sentences after a
+         log above and into card_quiet_body_up_next. -->
     <string name="card_due_later_today">later today</string>
     <string name="card_due_tomorrow">tomorrow</string>
     <!-- %1$s: a weekday, for example "on Tuesday". -->

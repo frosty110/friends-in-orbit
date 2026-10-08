@@ -30,9 +30,7 @@ import app.orbit.domain.usecase.SkipContactUseCase
 import app.orbit.domain.usecase.SurfaceNextUseCase
 import app.orbit.domain.usecase.SurfaceQueueUseCase
 import app.orbit.domain.usecase.SurfaceSoonerUseCase
-import app.orbit.testutil.InMemoryPrefsStore
 import app.orbit.testutil.MainDispatcherRule
-import app.orbit.testutil.inMemoryPrefs
 import app.orbit.ui.util.UiText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -59,7 +57,9 @@ import kotlin.time.Duration.Companion.seconds
  * acknowledgement surface that [CardViewViewModelTest] (state contract) does
  * not cover: Later and Sooner with their undo (CARD-02), the failure snackbar
  * (rules.md Code 3), and "Called {name}" with what confirms and what cancels
- * it (CARD-03).
+ * it (CARD-03). Since 2026-10-08 a Later or Sooner says only that the person
+ * moved ("Sarah moved to later."), never when they come back (CARD-02); the
+ * idle hints and their move count (CARD-09) are retired.
  *
  * Same construction pattern as [CardViewViewModelTest]: real use cases over the
  * [app.orbit.domain.FakeRepositories] fakes, [TestClock] pinned at
@@ -91,9 +91,8 @@ class CardViewViewModelInteractionTest {
         val undoStack: UndoStack,
         val resync: RecordingResync,
         val noteRepo: FakeNoteRepository,
-        val prefsStore: InMemoryPrefsStore,
         val savedState: SavedStateHandle,
-        /** A second ViewModel over the same data and preferences, from [handle]: a restored process. */
+        /** A second ViewModel over the same data, from [handle]: a restored process. */
         val rebuild: (handle: SavedStateHandle) -> CardViewViewModel,
         /** The writes "Log a connection" goes through; can be made to fail. */
         val logWrites: ReschedulingCallEvents,
@@ -181,7 +180,6 @@ class CardViewViewModelInteractionTest {
         )
         val undoStack = UndoStack()
         val resync = RecordingResync()
-        val prefsStore = InMemoryPrefsStore()
         val logWrites = ReschedulingCallEvents(callEventRepo, listRepo)
         val logConnection = LogConnectionUseCase(
             markCalled = MarkCalledUseCase(
@@ -204,7 +202,6 @@ class CardViewViewModelInteractionTest {
                 logConnection = logConnection,
                 listRepo = listRepo,
                 callEventRepo = callEventRepo,
-                appPrefs = inMemoryPrefs(prefsStore),
                 undoStack = undoStack,
                 callLogResync = resync,
                 clock = clock,
@@ -213,7 +210,7 @@ class CardViewViewModelInteractionTest {
             )
         }
         val vm = build(savedState)
-        return Setup(vm, contactRepo, listRepo, callEventRepo, undoStack, resync, noteRepo, prefsStore, savedState, build, logWrites)
+        return Setup(vm, contactRepo, listRepo, callEventRepo, undoStack, resync, noteRepo, savedState, build, logWrites)
     }
 
     /**
@@ -306,17 +303,15 @@ class CardViewViewModelInteractionTest {
             awaitItem() // drain to Ready
             setup.vm.messages.test(timeout = 2.seconds) {
                 setup.vm.onSwipeLeft(contactId = 1L)
-                val event = awaitItem()
-                assertTrue(event is CardMessage.Undoable, "expected an undoable message, got $event")
-                // The copy is a string resource; assert which sentence was chosen and that
-                // it names Sarah and carries a "when" ("Sarah will come up again {when}.").
-                val text = event.text
-                assertTrue(
-                    text is app.orbit.ui.util.UiText.Res &&
-                        text.id == app.orbit.R.string.card_later_named_when &&
-                        text.args.first() == "Sarah" &&
-                        text.args.size == 2,
-                    "expected the snackbar to name Sarah and say when, got $text",
+                // "Sarah moved to later.", and "They moved to later." under
+                // the curtain (CARD-02).
+                assertEquals(
+                    CardMessage.Undoable(
+                        text = UiText.res(R.string.card_later_named, "Sarah"),
+                        curtainText = UiText.res(R.string.card_later_unnamed),
+                        token = 1L,
+                    ),
+                    awaitItem(),
                 )
                 cancelAndIgnoreRemainingEvents()
             }
@@ -371,17 +366,16 @@ class CardViewViewModelInteractionTest {
             awaitItem()
             setup.vm.messages.test(timeout = 2.seconds) {
                 setup.vm.onSwipeRight(contactId = 1L)
-                val event = awaitItem()
-                assertTrue(event is CardMessage.Undoable, "expected an undoable message, got $event")
-                // "Sarah comes up {when}." from strings_card.xml (CARD-02; not
-                // "is now due", the deadline framing voice.md retired).
-                val text = event.text
-                assertTrue(
-                    text is app.orbit.ui.util.UiText.Res &&
-                        text.id == app.orbit.R.string.card_sooner_named_when &&
-                        text.args.first() == "Sarah" &&
-                        text.args.size == 2,
-                    "expected the snackbar to name Sarah and say when, got $text",
+                // "Sarah moved sooner." (CARD-02; not "is now due", the
+                // deadline framing voice.md retired, and since 2026-10-08 no
+                // "comes up {when}" either).
+                assertEquals(
+                    CardMessage.Undoable(
+                        text = UiText.res(R.string.card_sooner_named, "Sarah"),
+                        curtainText = UiText.res(R.string.card_sooner_unnamed),
+                        token = 1L,
+                    ),
+                    awaitItem(),
                 )
                 cancelAndIgnoreRemainingEvents()
             }
@@ -587,8 +581,8 @@ class CardViewViewModelInteractionTest {
     // cancels the wait.
     //
     // The first test is the case the old motion-only check missed: on a
-    // one-member list the called person stays at the head (re-surfaced as
-    // "Coming up"), so a real, logged call was never acknowledged.
+    // one-member list the called person stays at the head (re-surfaced,
+    // now ahead of today), so a real, logged call was never acknowledged.
     // ========================================================================
 
     private val calledSarah = CardMessage.Called(UiText.res(R.string.card_called_named, "Sarah"), contactId = 1L)
@@ -768,87 +762,82 @@ class CardViewViewModelInteractionTest {
     }
 
     // ========================================================================
-    // CARD-09: what the idle hints say, and when they stop. The "when" in a
-    // hint must be the day the move's own snackbar then says: both come from
-    // the move's use case (its preview, then its write) and one comesUp
-    // bucket, worded once to stand alone ("Thursday") and once mid-sentence
-    // ("on Thursday").
+    // CARD-02 (owner, 2026-10-08): a Later or Sooner says that the person
+    // moved, never when they come back. Until then the snackbar read "Sarah
+    // will come up again tomorrow." and "Sarah comes up later today.". How
+    // far each move goes is unchanged (the tests above pin the amounts);
+    // only the words changed.
     // ========================================================================
 
-    /** Hint ids and snackbar ids for the same bucket. */
-    private val sameBucket = mapOf(
-        R.string.card_hint_today to R.string.card_due_later_today,
-        R.string.card_hint_tomorrow to R.string.card_due_tomorrow,
-        R.string.card_hint_on_day to R.string.card_due_on_day,
-        R.string.card_hint_in_span to R.string.card_due_in_span,
-    )
-
-    /** The hint ("Later · {when}") and the snackbar ("... {when}.") name the same day. */
-    private fun assertSameWhen(hint: UiText, snackbar: UiText, case: String) {
-        val hintWhen = ((hint as UiText.Res).args.single() as UiText.Res)
-        val snackbarWhen = (snackbar as UiText.Res).args.last() as UiText.Res
-        assertEquals(sameBucket[hintWhen.id], snackbarWhen.id, "$case: hint $hintWhen, snackbar $snackbarWhen")
-        assertEquals(hintWhen.args, snackbarWhen.args, "$case: the same day or span")
-    }
-
-    /**
-     * Sarah on list 1 with [nextDueAt]; returns the hints, then the snackbar
-     * of [move]. [onReady] runs once the deck is Ready, before the hints are
-     * asked for (where a [SteppingClock] starts moving).
-     */
-    private suspend fun hintThenMove(
+    /** Sarah on list 1 with [nextDueAt]; returns the snackbar [move] raises. */
+    private suspend fun snackbarAfter(
         nextDueAt: Instant?,
-        clock: Clock = TestClock(T0),
-        onReady: () -> Unit = {},
         move: CardViewViewModel.() -> Unit,
-    ): Pair<CardMoveHints, UiText> {
-        val setup = fixture(clock = clock)
+    ): CardMessage.Undoable {
+        val setup = fixture()
         setup.contactRepo.seed(listOf(contactFixture(id = 1L, displayName = "Sarah Connor")))
         setup.listRepo.seed(listOf(listFixture(id = 1L, ruleTemplateId = 1L)))
         setup.listRepo.seedMemberships(listOf(membershipFixture(contactId = 1L, listId = 1L, nextDueAt = nextDueAt)))
-        lateinit var result: Pair<CardMoveHints, UiText>
+        lateinit var message: CardMessage.Undoable
         setup.vm.uiState.test(timeout = 2.seconds) {
             awaitItem()
-            onReady()
-            val hints = assertNotNull(setup.vm.moveHints(contactId = 1L))
             setup.vm.messages.test(timeout = 2.seconds) {
                 setup.vm.move()
-                result = hints to (awaitItem() as CardMessage.Undoable).text
+                message = awaitItem() as CardMessage.Undoable
                 cancelAndIgnoreRemainingEvents()
             }
             cancelAndIgnoreRemainingEvents()
         }
-        return result
+        return message
     }
 
     @Test
-    fun `CARD-09 - a Later hint says the day the Later snackbar then says`() = runTest {
-        // Up now, cold start, ahead by days, ahead by weeks: tomorrow, a
-        // weekday and a span, the buckets a Later can land in.
-        val cases = listOf(
+    fun `CARD-02 - a Later or Sooner snackbar says the person moved, and never when`() = runTest {
+        // Up now, never scheduled, days ahead and weeks ahead: each landed in
+        // a different "when" bucket ("tomorrow", "on Sunday", "in 3 weeks"),
+        // so the old snackbar named a when in every case. Now every case is
+        // the same one-argument sentence, whose only argument is the name.
+        val schedules = listOf(
             "up now" to T0.minus(Duration.ofHours(1)),
             "never scheduled" to null,
             "in 3 days" to T0.plus(Duration.ofDays(3)),
             "in 20 days" to T0.plus(Duration.ofDays(20)),
         )
-        cases.forEach { (case, due) ->
-            val (hints, snackbar) = hintThenMove(due) { onSwipeLeft(contactId = 1L) }
-            assertEquals(R.string.card_hint_later_when, (hints.later as UiText.Res).id, case)
-            assertSameWhen(hints.later, snackbar, case)
+        schedules.forEach { (case, due) ->
+            val later = snackbarAfter(due) { onSwipeLeft(contactId = 1L) }
+            assertEquals(UiText.res(R.string.card_later_named, "Sarah"), later.text, "Later, $case")
+            assertEquals(UiText.res(R.string.card_later_unnamed), later.curtainText, "Later, $case")
+
+            val sooner = snackbarAfter(due) { onSwipeRight(contactId = 1L) }
+            assertEquals(UiText.res(R.string.card_sooner_named, "Sarah"), sooner.text, "Sooner, $case")
+            assertEquals(UiText.res(R.string.card_sooner_unnamed), sooner.curtainText, "Sooner, $case")
         }
     }
 
     @Test
-    fun `CARD-09 - a Sooner hint says the day the Sooner snackbar then says`() = runTest {
-        val cases = listOf(
-            "up now" to T0.minus(Duration.ofHours(1)),
-            "in 3 days" to T0.plus(Duration.ofDays(3)),
-            "in 20 days" to T0.plus(Duration.ofDays(20)),
-        )
-        cases.forEach { (case, due) ->
-            val (hints, snackbar) = hintThenMove(due) { onSwipeRight(contactId = 1L) }
-            assertEquals(R.string.card_hint_sooner_when, (hints.sooner as UiText.Res).id, case)
-            assertSameWhen(hints.sooner, snackbar, case)
+    fun `CARD-02 - a move for someone the card no longer shows says They`() = runTest {
+        // The name is read from the card as the move starts; when the deck
+        // has already moved off the person (id 9 here), there is no name to
+        // give, and the sentence is the nameless one, not a blank.
+        val setup = fixture()
+        setup.seedSarahReady()
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            awaitItem()
+            setup.vm.messages.test(timeout = 2.seconds) {
+                setup.vm.onSwipeLeft(contactId = 9L)
+                assertEquals(
+                    CardMessage.Undoable(
+                        text = UiText.res(R.string.card_later_unnamed),
+                        curtainText = UiText.res(R.string.card_later_unnamed),
+                        token = 1L,
+                    ),
+                    awaitItem(),
+                )
+                setup.vm.onSwipeRight(contactId = 9L)
+                assertEquals(UiText.res(R.string.card_sooner_unnamed), (awaitItem() as CardMessage.Undoable).text)
+                cancelAndIgnoreRemainingEvents()
+            }
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -863,75 +852,6 @@ class CardViewViewModelInteractionTest {
         "a millisecond a read from noon" to (Instant.parse("2026-01-01T12:00:00Z") to Duration.ofMillis(1)),
         "a second a read from 23:59:59" to (Instant.parse("2026-01-01T23:59:59Z") to Duration.ofSeconds(1)),
     )
-
-    @Test
-    fun `CARD-09 - Later on someone up now says tomorrow, in the hint and the snackbar, as the clock moves`() =
-        runTest {
-            // The default Keep in touch list's Later is 24 hours, so someone
-            // up now comes up again tomorrow. Both said today ("Later ·
-            // Today", "will come up again later today."): each measured the
-            // 24 hours from a clock read taken after the one the move used,
-            // and counted whole 24-hour spans.
-            movingClocks.forEach { (case, clockAt) ->
-                val (start, step) = clockAt
-                val clock = SteppingClock(start)
-                val (hints, snackbar) = hintThenMove(
-                    nextDueAt = start.minus(Duration.ofHours(1)),
-                    clock = clock,
-                    onReady = { clock.step = step },
-                ) { onSwipeLeft(contactId = 1L) }
-                assertEquals(
-                    UiText.res(R.string.card_hint_later_when, UiText.res(R.string.card_hint_tomorrow)),
-                    hints.later,
-                    case,
-                )
-                assertEquals(
-                    UiText.res(R.string.card_later_named_when, "Sarah", UiText.res(R.string.card_due_tomorrow)),
-                    snackbar,
-                    case,
-                )
-            }
-        }
-
-    @Test
-    fun `CARD-09 - the hints stop for good after five moves, in a new process too`() = runTest {
-        val setup = fixture()
-        setup.seedSarahReady()
-        setup.vm.uiState.test(timeout = 2.seconds) {
-            awaitItem()
-            repeat(SWIPE_HINT_MOVES_TO_LEARN - 1) { setup.vm.onSwipeLeft(contactId = 1L) }
-            assertNotNull(setup.vm.moveHints(contactId = 1L), "four moves: still learning")
-            setup.vm.onSwipeRight(contactId = 1L)
-            assertNull(setup.vm.moveHints(contactId = 1L), "five moves, Later or Sooner: no more hints")
-            cancelAndIgnoreRemainingEvents()
-        }
-        // The count is in the preferences, not the ViewModel: a new process
-        // over the same preferences shows none either.
-        val restoredVm = setup.rebuild(SavedStateHandle(mapOf("listId" to "1")))
-        assertNull(restoredVm.moveHints(contactId = 1L), "the count survives the process")
-        assertEquals(SWIPE_HINT_MOVES_TO_LEARN, inMemoryPrefs(setup.prefsStore).cardMovesMade.first())
-    }
-
-    @Test
-    fun `CARD-09 - a move the hints cannot see ahead says Later and Sooner alone`() = runTest {
-        val setup = fixture()
-        setup.seedSarahReady()
-        // Someone not on this list: neither use case can say what a move
-        // would do, so the hint is the bare word, never a guess.
-        setup.contactRepo.seed(
-            listOf(contactFixture(id = 1L, displayName = "Sarah Connor"), contactFixture(id = 9L, displayName = "Kai")),
-        )
-        assertEquals(
-            CardMoveHints(later = UiText.res(R.string.card_later), sooner = UiText.res(R.string.card_sooner)),
-            setup.vm.moveHints(contactId = 9L),
-        )
-    }
-
-    @Test
-    fun `CARD-09 - no hints on a deck whose list id never parsed`() = runTest {
-        val setup = fixture(savedStateListId = "not-a-number")
-        assertNull(setup.vm.moveHints(contactId = 1L))
-    }
 
     // ========================================================================
     // CARD-10: Log a connection from the card. One write through the shared

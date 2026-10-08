@@ -8,14 +8,15 @@ import java.time.temporal.ChronoUnit
 /**
  * When someone next comes up, in the buckets Orbit words it by: later today,
  * tomorrow, a weekday within the week, then a span ("2 weeks"). One function
- * for the buckets, so Card view's Later, Sooner and Log a connection
- * snackbars ("Sam will come up again on Thursday.", the lowercase fragments
- * in strings_card.xml), its All quiet line, the card's swipe hints ("Later ·
- * Thursday", CARD-09) and Browse's rows ("Thursday", BROWSE-07,
- * strings_browse.xml) can never put the same person in two different
- * buckets. Each screen owns its own words: a fragment that slots
+ * for the buckets, so Card view's Log a connection snackbar ("Logged. Sam
+ * comes up again on Thursday.", the lowercase fragments in
+ * strings_card.xml), its All quiet line and Browse's rows ("Thursday",
+ * BROWSE-07, strings_browse.xml) can never put the same person in two
+ * different buckets. Each screen owns its own words: a fragment that slots
  * mid-sentence and a label that stands alone are separate strings for
- * translators.
+ * translators. (The card's Later and Sooner snackbars and its idle hints
+ * said a "when" from here too, until the owner removed both on 2026-10-08:
+ * CARD-02, CARD-09.)
  *
  * The buckets are days on the phone's calendar: the local date of [due] in
  * [zone] against the local date of [now], the way [formatRelative] words a
@@ -28,13 +29,12 @@ import java.time.temporal.ChronoUnit
  * daylight-saving day from moving a bucket.
  *
  * [now] is the instant to count from. Where [due] was just worked out from an
- * instant (a move, a log), pass that instant, not a fresh clock read: two
- * reads either side of midnight are a day apart, and the words would name a
- * day early (CARD-02).
+ * instant (a log), pass that instant, not a fresh clock read: two reads
+ * either side of midnight are a day apart, and the words would name a day
+ * early (CARD-10).
  *
  * Callers decide what a time at or before [now] means: Browse says "Up now"
- * before asking; the card passes only future times, or Sooner's own instant
- * when it lands on now.
+ * before asking; the card passes only future times.
  */
 sealed interface ComesUp {
     /** On [now]'s own date, or before it. */

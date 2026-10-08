@@ -10,8 +10,9 @@ import kotlin.test.assertEquals
 
 /**
  * [comesUp], the one definition of "when someone comes up" that Card view's
- * Later, Sooner and Log a connection snackbars, the card's idle hints and
- * Browse's rows all word (CARD-02, CARD-09, CARD-10, BROWSE-07).
+ * Log a connection snackbar and All quiet line and Browse's rows all word
+ * (CARD-10, CARD-05, BROWSE-07). The card's Later and Sooner snackbars and
+ * its idle hints worded it too until 2026-10-08 (CARD-02, CARD-09).
  *
  * The buckets are local calendar dates in the zone, the way [formatRelative]
  * words a call's age. Until 2026-10-08 they were whole 24-hour spans from
@@ -38,8 +39,9 @@ class ComesUpTest {
 
     @Test
     fun `a time at or before the moment it is measured from is later today`() {
-        // Sooner can land on the move's own instant; Browse says "Up now"
-        // before asking, the card only ever passes that instant or later.
+        // The function's own edge: Browse says "Up now" before asking, and
+        // the card passes only future times, but a time on the instant
+        // itself is still a bucket, never an error.
         val from = at("2026-10-05T10:00")
         assertEquals(ComesUp.LaterToday, comesUp(from, from, london))
         assertEquals(ComesUp.LaterToday, comesUp(at("2026-10-04T09:00"), from, london))

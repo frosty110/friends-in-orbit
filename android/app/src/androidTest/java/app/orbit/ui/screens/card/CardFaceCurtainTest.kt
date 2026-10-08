@@ -51,7 +51,6 @@ class CardFaceCurtainTest {
                         contact = contact,
                         listContext = "Inner orbit",
                         nowHour = 19,
-                        isAheadOfToday = false,
                         whyNowLine = UiText.res(R.string.card_why_ago, formatAgo(11)),
                     )
                 }

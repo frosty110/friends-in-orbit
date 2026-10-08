@@ -9,17 +9,12 @@ import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.orbit.R
 import app.orbit.data.Contact
@@ -29,7 +24,6 @@ import app.orbit.ui.theme.LocalReducedMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import org.junit.Rule
@@ -44,9 +38,9 @@ import org.robolectric.annotation.Config
  * - CARD-08: Later and Sooner play the swipe. A button flies the card off
  *   through [CardSwipeFrame]'s settle, with one haptic and one commit; with
  *   animations off the move lands in a frame, with no flight.
- * - CARD-09: the idle hints are on a real card's clock (asked for after four
- *   untouched seconds, a touch restarts the wait, three at most) and never
- *   reach the semantics tree.
+ * - CARD-02: the snackbar after a Later or Sooner, in its real words: the
+ *   person moved, never when, and "They" under the curtain. (CARD-09's idle
+ *   hints were tested here until the owner removed them on 2026-10-08.)
  * - CARD-10: "Log a connection" opens the shared sheet for the person on the
  *   card, and the snackbar after it drops the name under the curtain.
  * - CARD-11: the page for a call worth a note opens without a snackbar, and
@@ -89,11 +83,6 @@ class CardViewMovesTest {
         }
     }
 
-    private val hints = CardMoveHints(
-        later = UiText.res(R.string.card_hint_later_when, UiText.res(R.string.card_hint_on_day, "Thursday")),
-        sooner = UiText.res(R.string.card_hint_sooner_when, UiText.res(R.string.card_hint_tomorrow)),
-    )
-
     private val messages = MutableSharedFlow<CardMessage>(extraBufferCapacity = 4)
 
     private fun setCard(
@@ -105,8 +94,6 @@ class CardViewMovesTest {
         onSwipeRight: (Long) -> Unit = {},
         onAddNote: (Long, Long?) -> Unit = { _, _ -> },
         onLogConnection: (Long, LogConnectionWhen, String, Boolean) -> Unit = { _, _, _, _ -> },
-        moveHints: suspend (Long) -> CardMoveHints? = { null },
-        pinnedHints: CardMoveHints? = null,
     ) {
         compose.setContent {
             OrbitTheme {
@@ -133,8 +120,6 @@ class CardViewMovesTest {
                         onOpenContact = {},
                         onAddNote = onAddNote,
                         onLogConnection = onLogConnection,
-                        moveHints = moveHints,
-                        pinnedHints = pinnedHints,
                     )
                 }
             }
@@ -200,105 +185,6 @@ class CardViewMovesTest {
         assertEquals(listOf(1L), lefts, "still exactly once")
     }
 
-    // CARD-09 ------------------------------------------------------------
-
-    // Read on the merged tree, which is what accessibility services are given
-    // and where clearAndSetSemantics applies (the AvatarTest convention). The
-    // unmerged tree, a debugging view that still lists what was cleared, shows
-    // the hints are really drawn, so the absence is not for want of a hint.
-    @Test
-    fun `CARD-09 - the hints never reach the semantics tree`() {
-        setCard(pinnedHints = hints)
-        compose.waitForIdle()
-
-        compose.onAllNodesWithText("Later · Thursday", useUnmergedTree = true).assertCountEquals(1)
-        compose.onAllNodesWithText("Sooner · Tomorrow", useUnmergedTree = true).assertCountEquals(1)
-
-        compose.onAllNodesWithText("Thursday", substring = true).assertCountEquals(0)
-        compose.onAllNodesWithText("Later · ", substring = true).assertCountEquals(0)
-        compose.onAllNodesWithText("Sooner · ", substring = true).assertCountEquals(0)
-        // Nor through a description: nothing TalkBack is given mentions them.
-        val described = compose.onRoot().fetchSemanticsNode().let { root ->
-            buildList {
-                fun walk(node: androidx.compose.ui.semantics.SemanticsNode) {
-                    node.config.getOrNull(SemanticsProperties.ContentDescription)?.let { addAll(it) }
-                    node.children.forEach(::walk)
-                }
-                walk(root)
-            }
-        }
-        assertTrue(described.none { "Thursday" in it || "·" in it }, "content descriptions: $described")
-        // The labelled buttons TalkBack uses are still there.
-        compose.onAllNodesWithText("Later").assertCountEquals(1)
-        compose.onAllNodesWithText("Sooner").assertCountEquals(1)
-    }
-
-    @Test
-    fun `CARD-09 - on the card, hints come after four untouched seconds and a touch restarts the wait`() {
-        var asked = 0
-        compose.mainClock.autoAdvance = false
-        setCard(moveHints = { asked++; hints })
-        frames(2)
-
-        compose.mainClock.advanceTimeBy(SwipeHintTiming.IDLE_MS - 200)
-        assertEquals(0, asked, "not before four seconds")
-        compose.mainClock.advanceTimeBy(400)
-        assertEquals(1, asked, "asked for, for the person on the card")
-
-        // A touch on the card (no drag, no button: a press and a lift).
-        compose.onNodeWithText("Avery Quinn").performTouchInput {
-            down(center)
-            up()
-        }
-        frames(2)
-        compose.mainClock.advanceTimeBy(SwipeHintTiming.IDLE_MS - 200)
-        assertEquals(1, asked, "the touch restarted the four seconds")
-        compose.mainClock.advanceTimeBy(400)
-        assertEquals(2, asked)
-
-        compose.mainClock.advanceTimeBy(10 * SwipeHintTiming.EVERY_MS)
-        assertEquals(SwipeHintTiming.MAX_PER_PERSON, asked, "three times at most for one person")
-    }
-
-    @Test
-    fun `CARD-09 - no hints while the Log a connection sheet covers the card`() {
-        var asked = 0
-        compose.mainClock.autoAdvance = false
-        setCard(moveHints = { asked++; hints })
-        frames(2)
-        compose.onNodeWithText("Log a connection").performClick()
-        frames(2)
-        compose.mainClock.advanceTimeBy(3 * SwipeHintTiming.EVERY_MS)
-        assertEquals(0, asked)
-    }
-
-    @Test
-    fun `CARD-09 - no hints while the list menu is open, and the wait starts again once it closes`() {
-        // The prototype's rule: the hints wait while a menu covers the card.
-        // The menu's button is in the app bar, outside the card's touch
-        // watcher, and its popup takes the touches after it, so only the
-        // menu's own open state can pause them.
-        var asked = 0
-        compose.mainClock.autoAdvance = false
-        setCard(moveHints = { asked++; hints })
-        frames(2)
-        compose.mainClock.advanceTimeBy(SwipeHintTiming.IDLE_MS - 1_000)
-
-        compose.onNodeWithContentDescription("More actions for Inner orbit").performClick()
-        frames(5)
-        compose.onNodeWithText("Browse people").assertExists()
-        compose.mainClock.advanceTimeBy(3 * SwipeHintTiming.EVERY_MS)
-        assertEquals(0, asked, "nothing while the menu is open")
-
-        // Closing it (here by choosing an item) starts the four seconds again.
-        compose.onNodeWithText("List settings").performClick()
-        frames(5)
-        compose.mainClock.advanceTimeBy(SwipeHintTiming.IDLE_MS - 200)
-        assertEquals(0, asked, "a fresh four seconds after the menu")
-        compose.mainClock.advanceTimeBy(400)
-        assertEquals(1, asked)
-    }
-
     // CARD-10 ------------------------------------------------------------
 
     @Test
@@ -338,6 +224,54 @@ class CardViewMovesTest {
         messages.tryEmit(message)
         frames(20)
     }
+
+    // CARD-02 ------------------------------------------------------------
+
+    // The words the ViewModel picks (CardViewViewModelInteractionTest),
+    // resolved against the real strings: the person moved, and nothing about
+    // when they come back ("will come up again tomorrow" until 2026-10-08).
+    private val laterAvery = CardMessage.Undoable(
+        text = UiText.res(R.string.card_later_named, "Avery"),
+        curtainText = UiText.res(R.string.card_later_unnamed),
+        token = 1L,
+    )
+
+    @Test
+    fun `CARD-02 - the snackbar after Later says Avery moved to later, and never when`() {
+        setCard()
+        show(laterAvery)
+        compose.onNodeWithText("Avery moved to later.").assertExists()
+        compose.onNodeWithText("Undo").assertExists()
+        listOf("come up", "comes up", "today", "tomorrow").forEach { word ->
+            compose.onAllNodesWithText(word, substring = true, ignoreCase = true).assertCountEquals(0)
+        }
+    }
+
+    @Test
+    fun `CARD-02 - the snackbar after Sooner says Avery moved sooner`() {
+        setCard()
+        show(
+            CardMessage.Undoable(
+                text = UiText.res(R.string.card_sooner_named, "Avery"),
+                curtainText = UiText.res(R.string.card_sooner_unnamed),
+                token = 1L,
+            ),
+        )
+        compose.onNodeWithText("Avery moved sooner.").assertExists()
+    }
+
+    @Test
+    fun `CARD-02 - under the curtain the snackbar after Later has no name`() {
+        // Until 2026-10-08 a Later's snackbar showed its one sentence whatever
+        // the curtain, so "Avery will come up again tomorrow." stayed readable
+        // over a covered app.
+        setCard(curtain = true)
+        show(laterAvery)
+        compose.onNodeWithText("They moved to later.").assertExists()
+        compose.onAllNodesWithText("Avery", substring = true).assertCountEquals(0)
+    }
+
+    // CARD-10 (the snackbar) ---------------------------------------------
 
     @Test
     fun `CARD-10 - the snackbar after a log has no name under the curtain`() {
