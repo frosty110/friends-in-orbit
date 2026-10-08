@@ -97,6 +97,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import sh.calvin.reorderable.ReorderableItem
@@ -145,7 +146,9 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
  *            with the ids of `Ready.contacts`, the searched and filtered set.
  * MOVE-06  : BackHandler(enabled = isMultiSelect) consumes back gesture.
  * MOVE-07  : Snackbar undo backed by [UndoStack]; the bar is disabled while a
- *            write is in flight, so a second tap cannot replace the Undo.
+ *            write is in flight, so a second tap cannot replace the Undo. A
+ *            newer snackbar replaces the one on screen, and each Undo hands
+ *            back its own change's token, so it reverts only that change.
  * PRIV-03:   app-bar title + row primary names obey `LocalPrivacyCurtain.current`;
  *            [OrbitSearchField] masks what is typed.
  *
@@ -257,7 +260,7 @@ private fun BrowseContent(
     onSingleRowIgnore: (Long, String) -> Unit,
     onSingleRowPause: (Long, String, PauseDuration) -> Unit,
     onSingleRowUnpause: (Long, String) -> Unit,
-    onUndo: () -> Unit,
+    onUndo: (token: Long) -> Unit,
     onContactIdParseFail: () -> Unit,
     onReorder: (contactId: Long, placeAfter: Long?, name: String) -> Unit,
     snackbarEvents: SharedFlow<SnackbarEvent>
@@ -283,13 +286,20 @@ private fun BrowseContent(
     // releases it (see SequenceDrag).
     val drag = remember { SequenceDrag() }
 
-    // Snackbar event collector. VM emits a SnackbarEvent on Bulk* commit; tap
-    // on Undo runs the inverse closure recorded on UndoStack.
+    // Snackbar event collector. One snackbar at a time, newest wins (MOVE-07,
+    // BROWSE-08; Card view's collector is the precedent): collectLatest
+    // cancels the older showSnackbar, which dismisses it, so the Undo on
+    // screen always belongs to the change it names, and its tap hands back
+    // that change's token (`actionPayload`), which the ViewModel checks.
+    // Until 2026-10-08 a plain collect queued snackbars behind each other
+    // while the undo stack held only the newest change, so Undo on "Moved Kai
+    // earlier" reverted the drop made after it (browse-1).
     // Gated by STARTED so the snackbar does not fire on a
     // backgrounded screen (SnackbarEvent SharedFlow has replay = 0).
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            snackbarEvents.collect { event ->
+            snackbarEvents.collectLatest { event ->
+                snackbarHostState.currentSnackbarData?.dismiss()
                 drag.release()
                 val r = snackbarHostState.showSnackbar(
                     message = event.message.asString(context),
@@ -297,7 +307,7 @@ private fun BrowseContent(
                     duration = SnackbarDuration.Short,
                     withDismissAction = false
                 )
-                if (r == SnackbarResult.ActionPerformed) onUndo()
+                if (r == SnackbarResult.ActionPerformed) event.actionPayload?.let(onUndo)
             }
         }
     }
@@ -1209,7 +1219,8 @@ internal fun BrowsePreviewHost(
     activeFilters: Set<BrowseFilter> = emptySet(),
     listType: ListType = ListType.STATIC,
     onReorder: (contactId: Long, placeAfter: Long?, name: String) -> Unit = { _, _, _ -> },
-    snackbarEvents: SharedFlow<SnackbarEvent> = MutableSharedFlow<SnackbarEvent>().asSharedFlow()
+    snackbarEvents: SharedFlow<SnackbarEvent> = MutableSharedFlow<SnackbarEvent>().asSharedFlow(),
+    onUndo: (token: Long) -> Unit = {}
 ) {
     OrbitTheme {
         BrowseContent(
@@ -1241,7 +1252,7 @@ internal fun BrowsePreviewHost(
             onSingleRowIgnore = { _, _ -> },
             onSingleRowPause = { _, _, _ -> },
             onSingleRowUnpause = { _, _ -> },
-            onUndo = {},
+            onUndo = onUndo,
             onContactIdParseFail = {},
             onReorder = onReorder,
             snackbarEvents = snackbarEvents

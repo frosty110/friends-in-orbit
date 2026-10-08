@@ -3,7 +3,7 @@
 **Route:** `browse/{listId}?focus={focus}` (`focus`, optional: the id of the person on the card when Card view's menu opened Browse)
 **Group:** Core loop
 **Status:** active
-**Last reviewed:** 2026-10-07
+**Last reviewed:** 2026-10-08
 **Spec:** [browse](../browse/README.md): BROWSE-01, BROWSE-02, BROWSE-04 to BROWSE-09, MOVE-01 to MOVE-07; BULK-05 in [orbit-lists](../orbit-lists/README.md); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
@@ -42,6 +42,7 @@
 - When no other regular list exists the sheet says "No other lists yet" / "Make another list first." with "Done"
 - The overflow, in order: "Select all" (every row matching the current search and filters, including those not yet on screen; MOVE-05), "Pause all" (the same duration sheet; "Paused 3 people for 1 week" with Undo), then "Ignore all" ("Ignored 3 people" with Undo)
 - Every bulk action can be undone from its snackbar (MOVE-07); a second tap while one is committing does nothing extra
+- One snackbar at a time: a newer one (a second drop, or any other change) replaces the one on screen at once, and its Undo reverts only the change it names ("Moved Theo earlier" puts Theo back and leaves Kai's earlier drop where it is). An Undo that finds nothing left to undo says "Couldn't save your change" (MOVE-07)
 - A move or copy that could not happen says "Couldn't save your change"; so does any write that fails (a bulk action, a row's Pause, Unpause or Ignore, a drag, an Undo), with no Undo and no success message, and the selection stays for another try
 - Back, the bar's close, or deselecting the last row leaves multi-select (MOVE-06)
 - "+" and the empty list's "Add people" open the Add people picker for this list (BULK-05)
@@ -69,12 +70,12 @@
 
 ## Tests that pin it
 
-- `BrowseViewModelTest` (states, filters and search, every bulk action with its snackbar and undo, smart-list targets refused, select all after a search, a second dispatch ignored, a write that throws reported with no Undo, a malformed id unchanged by Retry; added 2026-10-07: the sequence with its when words and groups, a filter and a search that keep the order and the numbers, the card's person marked where they are and the mark following the head, a drop's snackbar both ways and its Undo, a failed drop put back with no Undo, a drop for someone who left the order)
-- `BrowseSequenceContentTest` (added 2026-10-07, Robolectric: the second lines and the group headings, "Reorder {name}" on rows in the order only, "Move up" and "Move down" after "Call {name}" and what each asks for, nothing moves while selecting, "Reorder" under the curtain, the card's person marked and scrolled into view)
+- `BrowseViewModelTest` (states, filters and search, every bulk action with its snackbar and undo, smart-list targets refused, select all after a search, a second dispatch ignored, a write that throws reported with no Undo, a malformed id unchanged by Retry; added 2026-10-07: the sequence with its when words and groups, a filter and a search that keep the order and the numbers, the card's person marked where they are and the mark following the head, a drop's snackbar both ways and its Undo, a failed drop put back with no Undo, a drop for someone who left the order; added 2026-10-08: two drops in a row, where the first drop's Undo cannot touch the second and the second's reverts only itself, and an Undo with nothing left to undo reported)
+- `BrowseSequenceContentTest` (added 2026-10-07, Robolectric: the second lines and the group headings, "Reorder {name}" on rows in the order only, "Move up" and "Move down" after "Call {name}" and what each asks for, nothing moves while selecting, "Reorder" under the curtain, the card's person marked and scrolled into view, a drag by the handle to the top, and a failed drop that puts the row back; added 2026-10-08: a newer drop's snackbar replaces the one on screen and its Undo hands back the newer drop's token)
 - `SurfaceOrderTest` (added 2026-10-07: Browse's order is the card's for a mixed list; a stored time beats the rule's; never-scheduled people tie on one clock reading) and `ReorderSequenceUseCaseTest` (top, middle, end, equal times up now and in the future, people never scheduled as time passes, Undo exact, nothing written when nothing moves, a missing person or row, a failed write)
 - `BrowseErrorShellTest` (a failed feed offers Try again; a malformed id offers Go back and no Try again)
 - `BrowseRowMenuTest` (quick-action order); `MultiSelectOverflowMenuTest` (Select all, Pause all, Ignore all)
 - `MoveContactsUseCaseTest`, `CopyContactsUseCaseTest`, `BulkPauseUseCaseTest`, `BulkIgnoreUseCaseTest`
-- `BrowseRowGestureTest` (instrumented: tap and long-press stay separate); the drag gesture itself has no test (it needs an emulator)
+- `BrowseRowGestureTest` (instrumented: tap and long-press stay separate). The drag by the handle is covered on the JVM by `BrowseSequenceContentTest` (Robolectric, through the real handle); only a drag on a real device, including the list scrolling under a row held at its edge, has no test (it needs an emulator)
 - `OrbitNavHostTest` ("Open settings" leads to Settings; Card view's "Browse people" opens Browse with the card's person as `focus`, "Browse this list" with none) and `RoutesTest`
 - Gallery previews: `BrowseContentPreview` (the order with when, the handles and the line under it, the groups, the card's person), `BrowseCardPersonMovedPreview`, `BrowseNoCardPersonPreview`, `BrowseMultiSelectPreview`, `BrowseLoadingPreview`, `BrowseEmptyPreview`, `BrowseFilteredEmptyPreview`, `BrowseErrorPreview`, `BrowseBadLinkPreview`, `BrowseNoMatchesPreview`, `BrowseCallLogDeniedPreview`, `BrowseCallLogNoticePreview`, `BrowseSmartListPreview`, `BrowseSmartListEmptyPreview`, `ListSelectorSheetPreview`, `ListSelectorSheetNoTargetsPreview`, `MultiSelectActionBarPreview`, `BrowseRowPreview`, with the curtain pass

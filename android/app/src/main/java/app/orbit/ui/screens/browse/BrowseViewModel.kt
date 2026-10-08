@@ -247,6 +247,13 @@ class BrowseViewModel @Inject constructor(
     private val _snackbarEvents = MutableSharedFlow<SnackbarEvent>(extraBufferCapacity = 1)
     val snackbarEvents: SharedFlow<SnackbarEvent> = _snackbarEvents.asSharedFlow()
 
+    // MOVE-07, BROWSE-08: the newest undoable action's token, the card's
+    // precedent (CardViewViewModel.undoToken). Every Undo snackbar carries its
+    // own as `actionPayload` ([stageUndo]); the screen replaces an older
+    // snackbar the moment a newer one arrives, and [onUndo] ignores a stale
+    // token, so an Undo can only ever revert the change its snackbar names.
+    private var undoToken = 0L
+
     /**
      * Every list, for the inline Move/Copy `ListSelectorSheet`, which keeps the
      * regular (static), non-archived ones other than this list: a smart list
@@ -425,15 +432,13 @@ class BrowseViewModel @Inject constructor(
             runMutation {
                 val sourceListName = listRepo.getById(srcListId)?.name ?: ""
                 val result = bulkRemoveFromListUseCase(srcListId, ids)
-                undoStack.put(UndoStack.PendingUndo(result.inverse))
-                _snackbarEvents.tryEmit(
-                    SnackbarEvent.undoable(
-                        UiText.plural(
-                            R.plurals.browse_snackbar_removed,
-                            result.count,
-                            result.count,
-                            sourceListName
-                        )
+                stageUndo(
+                    result.inverse,
+                    UiText.plural(
+                        R.plurals.browse_snackbar_removed,
+                        result.count,
+                        result.count,
+                        sourceListName
                     )
                 )
                 onExitMultiSelect()
@@ -450,11 +455,9 @@ class BrowseViewModel @Inject constructor(
             if (ids.isEmpty()) return@launch
             runMutation {
                 val result = bulkIgnoreUseCase(ids)
-                undoStack.put(UndoStack.PendingUndo(result.inverse))
-                _snackbarEvents.tryEmit(
-                    SnackbarEvent.undoable(
-                        UiText.plural(R.plurals.browse_snackbar_ignored, result.count, result.count)
-                    )
+                stageUndo(
+                    result.inverse,
+                    UiText.plural(R.plurals.browse_snackbar_ignored, result.count, result.count)
                 )
                 onExitMultiSelect()
             }
@@ -470,10 +473,7 @@ class BrowseViewModel @Inject constructor(
             if (ids.isEmpty()) return@launch
             runMutation {
                 val result = bulkPauseUseCase(ids, duration)
-                undoStack.put(UndoStack.PendingUndo(result.inverse))
-                _snackbarEvents.tryEmit(
-                    SnackbarEvent.undoable(pausedPeopleSnackbar(result.count, duration))
-                )
+                stageUndo(result.inverse, pausedPeopleSnackbar(result.count, duration))
                 onExitMultiSelect()
             }
         } finally {
@@ -499,12 +499,7 @@ class BrowseViewModel @Inject constructor(
     fun onSingleRowIgnore(contactId: Long, contactName: String) = viewModelScope.launch {
         runMutation {
             val result = ignoreContactUseCase(contactId)
-            undoStack.put(UndoStack.PendingUndo(result.inverse))
-            _snackbarEvents.tryEmit(
-                SnackbarEvent.undoable(
-                    UiText.res(R.string.components_snackbar_ignored, contactName)
-                )
-            )
+            stageUndo(result.inverse, UiText.res(R.string.components_snackbar_ignored, contactName))
         }
     }
 
@@ -517,18 +512,12 @@ class BrowseViewModel @Inject constructor(
             val prior = contactRepo.getById(contactId)?.pausedUntil
             contactRepo.setPausedUntil(contactId, null)
             widgetRefreshTrigger.scheduleRefresh()
-            undoStack.put(
-                UndoStack.PendingUndo(
-                    inverse = {
-                        contactRepo.setPausedUntil(contactId, prior)
-                        widgetRefreshTrigger.scheduleRefresh()
-                    }
-                )
-            )
-            _snackbarEvents.tryEmit(
-                SnackbarEvent.undoable(
-                    UiText.res(R.string.components_snackbar_unpaused, contactName)
-                )
+            stageUndo(
+                inverse = {
+                    contactRepo.setPausedUntil(contactId, prior)
+                    widgetRefreshTrigger.scheduleRefresh()
+                },
+                message = UiText.res(R.string.components_snackbar_unpaused, contactName)
             )
         }
     }
@@ -539,16 +528,12 @@ class BrowseViewModel @Inject constructor(
                 val prior = contactRepo.getById(contactId)?.pausedUntil
                 // The use case fires the widget refresh for the forward write.
                 pauseContactUseCase(contactId, duration)
-                undoStack.put(
-                    UndoStack.PendingUndo(
-                        inverse = {
-                            contactRepo.setPausedUntil(contactId, prior)
-                            widgetRefreshTrigger.scheduleRefresh()
-                        }
-                    )
-                )
-                _snackbarEvents.tryEmit(
-                    SnackbarEvent.undoable(pausedSnackbar(contactName, duration))
+                stageUndo(
+                    inverse = {
+                        contactRepo.setPausedUntil(contactId, prior)
+                        widgetRefreshTrigger.scheduleRefresh()
+                    },
+                    message = pausedSnackbar(contactName, duration)
                 )
             }
         }
@@ -630,9 +615,22 @@ class BrowseViewModel @Inject constructor(
             _snackbarEvents.tryEmit(SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)))
             return false
         }
-        undoStack.put(UndoStack.PendingUndo(inverse))
-        _snackbarEvents.tryEmit(SnackbarEvent.undoable(message))
+        stageUndo(inverse, message)
         return true
+    }
+
+    /**
+     * Holds [inverse] for Undo and announces [message] with it, under a new
+     * token ([undoToken]) that rides the snackbar as `actionPayload`. Every
+     * undoable write on this screen goes through here, so none can show an
+     * Undo that is not bound to its own change. The stack is depth 1, so the
+     * newer change's inverse replaces the older one's; the token is what
+     * stops the older snackbar's Undo from running the newer inverse.
+     */
+    private fun stageUndo(inverse: suspend () -> Unit, message: UiText) {
+        undoStack.put(UndoStack.PendingUndo(inverse))
+        val token = ++undoToken
+        _snackbarEvents.tryEmit(SnackbarEvent.undoable(message).copy(actionPayload = token))
     }
 
     // ─── BROWSE-08: drag to reorder ─────────────────────────────────────────────
@@ -659,18 +657,16 @@ class BrowseViewModel @Inject constructor(
             val result = reorderMutex.withLock { reorderSequence(id, contactId, placeAfter) }
             when (result) {
                 is ReorderSequenceUseCase.Result.Moved -> {
-                    undoStack.put(UndoStack.PendingUndo(result.inverse))
                     val firstName = name.trim().substringBefore(' ').ifBlank { name }
-                    _snackbarEvents.tryEmit(
-                        SnackbarEvent.undoable(
-                            UiText.res(
-                                if (result.earlier) {
-                                    R.string.browse_snackbar_moved_earlier
-                                } else {
-                                    R.string.browse_snackbar_moved_later
-                                },
-                                firstName
-                            )
+                    stageUndo(
+                        result.inverse,
+                        UiText.res(
+                            if (result.earlier) {
+                                R.string.browse_snackbar_moved_earlier
+                            } else {
+                                R.string.browse_snackbar_moved_later
+                            },
+                            firstName
                         )
                     )
                 }
@@ -684,10 +680,28 @@ class BrowseViewModel @Inject constructor(
         if (!saved) pendingMove.value = null
     }
 
-    fun onUndo() = viewModelScope.launch {
+    /**
+     * A snackbar's Undo, with the [token] its event carried ([stageUndo]).
+     * Runs the inverse only when [token] is the newest change's. Until
+     * 2026-10-08 this took no token and the screen queued snackbars one after
+     * another, so Undo on "Moved Kai earlier", tapped while "Moved Theo
+     * earlier" waited behind it, ran Theo's inverse (the depth-1 stack held
+     * only his) and Theo's own Undo then found nothing (browse-1). The screen
+     * now replaces an older snackbar at once, so a stale token reaches here
+     * only in the instant of that replacement. It is ignored without a word:
+     * the newer snackbar on screen already says what happened, and anything
+     * said now would replace it and take its Undo away.
+     *
+     * The newest token with nothing on the stack says "Couldn't save your
+     * change" rather than nothing (rules.md Code 3). The stack is a singleton
+     * and the app-level picker snackbar's Undo takes from it too, so this
+     * screen cannot promise its entry is still there.
+     */
+    fun onUndo(token: Long) = viewModelScope.launch {
+        if (token != undoToken) return@launch
         // An Undo replaces whatever order a drop was still showing.
         pendingMove.value = null
-        runMutation { undoStack.take()?.inverse?.invoke() }
+        runMutation { checkNotNull(undoStack.take()) { "nothing to undo" }.inverse() }
     }
 
     /**

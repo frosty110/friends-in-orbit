@@ -37,6 +37,7 @@ import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.domain.usecase.ReorderSequenceUseCase
 import app.orbit.domain.usecase.SurfaceQueueUseCase
 import app.orbit.testutil.MainDispatcherRule
+import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatSpan
 import app.orbit.ui.util.pausedPeopleSnackbar
@@ -49,6 +50,8 @@ import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -57,6 +60,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -645,6 +649,7 @@ class BrowseViewModelTest {
         s.recDao.seed(membershipFixture(contactId = 1L, listId = 1L), membershipFixture(contactId = 2L, listId = 1L))
         s.vm.onEnterMultiSelect(1L)
         s.vm.onToggleSelect(2L)
+        var token = 0L
         s.vm.snackbarEvents.test(timeout = 2.seconds) {
             s.vm.onBulkRemove()
             val event = awaitItem()
@@ -654,6 +659,7 @@ class BrowseViewModelTest {
                 event.message
             )
             assertEquals(UiText.res(R.string.components_action_undo), event.actionLabel)
+            token = assertNotNull(event.actionPayload, "the Undo carries its change's token")
             cancel()
         }
         // After commit, multi-select auto-exits (MOVE-06).
@@ -664,7 +670,7 @@ class BrowseViewModelTest {
         }
         // The Undo snackbar's action runs the inverse, which puts both rows back.
         assertEquals(listOf(1L, 2L), s.recDao.removeCalls.single().ids)
-        s.vm.onUndo()
+        s.vm.onUndo(token)
         assertEquals(setOf(1L, 2L), s.recDao.insertCalls.single().memberships.map { it.contactId }.toSet())
         assertNull(s.undoStack.peek(), "onUndo consumed the pending entry")
     }
@@ -941,16 +947,18 @@ class BrowseViewModelTest {
     @Test
     fun `onSingleRowIgnore says who, and Undo brings them back`() = runTest {
         val s = makeVmWithContacts()
+        var token = 0L
         s.vm.snackbarEvents.test(timeout = 2.seconds) {
             s.vm.onSingleRowIgnore(1L, "Alex")
             val event = awaitItem()
             // "Ignored Alex" (SnackbarCopyTest pins the English).
             assertEquals(UiText.res(R.string.components_snackbar_ignored, "Alex"), event.message)
             assertEquals(UiText.res(R.string.components_action_undo), event.actionLabel)
+            token = assertNotNull(event.actionPayload)
             cancel()
         }
         assertEquals(true, s.contactRepo.getById(1L)?.isIgnored)
-        s.vm.onUndo()
+        s.vm.onUndo(token)
         assertEquals(false, s.contactRepo.getById(1L)?.isIgnored)
     }
 
@@ -958,19 +966,21 @@ class BrowseViewModelTest {
     fun `onSingleRowPause words the duration, and Undo restores the prior pause`() = runTest {
         val s = makeVmWithContacts()
         val now = Instant.parse("2026-01-01T12:00:00Z") // TestClock's default
+        var token = 0L
         s.vm.snackbarEvents.test(timeout = 2.seconds) {
             s.vm.onSingleRowPause(1L, "Alex", PauseDuration.OneWeek)
             val event = awaitItem()
             // "Paused Alex for 1 week" (strings_components.xml, PauseTextTest).
             assertEquals(pausedSnackbar("Alex", PauseDuration.OneWeek), event.message)
             assertEquals(UiText.res(R.string.components_action_undo), event.actionLabel)
+            token = assertNotNull(event.actionPayload)
             cancel()
         }
         assertEquals(now.plus(Duration.ofDays(7)), s.contactRepo.getById(1L)?.pausedUntil)
         // The use case fires the widget refresh for the forward write (its own
         // test); the VM fires it for the Undo, which is a direct write (wnl-6).
         assertEquals(0, s.widgetRefreshes)
-        s.vm.onUndo()
+        s.vm.onUndo(token)
         assertNull(s.contactRepo.getById(1L)?.pausedUntil, "Undo clears the pause that was not there before")
         assertEquals(1, s.widgetRefreshes, "the Undo's direct write schedules a widget refresh")
     }
@@ -1405,15 +1415,97 @@ class BrowseViewModelTest {
             val moved = awaitReadyWhere(this) { it.contacts.first().id == "c-3" }
             assertEquals(UiText.res(R.string.browse_when_up_now), moved.whenLabels["c-3"])
 
+            var token = 0L
             s.vm.snackbarEvents.test(timeout = 2.seconds) {
                 s.vm.onReorder(1L, 2L, "Ada Byron")
-                assertEquals(UiText.res(R.string.browse_snackbar_moved_later, "Ada"), awaitItem().message)
+                val event = awaitItem()
+                assertEquals(UiText.res(R.string.browse_snackbar_moved_later, "Ada"), event.message)
+                token = assertNotNull(event.actionPayload)
                 cancelAndIgnoreRemainingEvents()
             }
             awaitReadyWhere(this) { it.contacts.map { c -> c.id } == listOf("c-3", "c-2", "c-1") }
 
-            s.vm.onUndo()
+            s.vm.onUndo(token)
             awaitReadyWhere(this) { it.contacts.map { c -> c.id } == listOf("c-3", "c-1", "c-2") }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `after two drops the first one's Undo cannot touch the second, and the second's reverts only itself`() = runTest {
+        // Regression (browse-1): Browse queued its snackbars and its Undo took
+        // no token, so Undo on "Moved Cy earlier", tapped while "Moved Ada
+        // later" waited behind it, ran Ada's inverse (the depth-1 stack held
+        // only hers) and Ada's own Undo then found nothing. Each Undo now
+        // hands back its drop's token and only the newest is honoured.
+        val s = sequenceVm()
+        s.seedThree()
+        suspend fun storedTimes(): Map<Long, Instant?> =
+            s.listRepo.observeMembersOfList(1L).first().associate { it.contactId to it.nextDueAt }
+
+        s.vm.uiState.test(timeout = 2.seconds) {
+            awaitReadyWhere(this) { it.contacts.map { c -> c.id } == listOf("c-1", "c-2", "c-3") }
+            val beforeAny = storedTimes()
+
+            var cyEarlier: SnackbarEvent? = null
+            s.vm.snackbarEvents.test(timeout = 2.seconds) {
+                s.vm.onReorder(3L, null, "Cy Twombly")
+                cyEarlier = awaitItem()
+                cancelAndIgnoreRemainingEvents()
+            }
+            awaitReadyWhere(this) { it.contacts.map { c -> c.id } == listOf("c-3", "c-1", "c-2") }
+            val afterCy = storedTimes()
+
+            var adaLater: SnackbarEvent? = null
+            s.vm.snackbarEvents.test(timeout = 2.seconds) {
+                s.vm.onReorder(1L, 2L, "Ada Byron")
+                adaLater = awaitItem()
+                cancelAndIgnoreRemainingEvents()
+            }
+            awaitReadyWhere(this) { it.contacts.map { c -> c.id } == listOf("c-3", "c-2", "c-1") }
+            val afterBoth = storedTimes()
+
+            val cyToken = assertNotNull(cyEarlier?.actionPayload)
+            val adaToken = assertNotNull(adaLater?.actionPayload)
+            assertEquals(UiText.res(R.string.browse_snackbar_moved_earlier, "Cy"), cyEarlier?.message)
+            assertEquals(UiText.res(R.string.browse_snackbar_moved_later, "Ada"), adaLater?.message)
+            assertNotEquals(cyToken, adaToken, "each Undo is bound to its own drop")
+
+            // Cy's Undo, from the snackbar Ada's replaced: nothing is written
+            // and nothing is said, and Ada's Undo stays for her own snackbar.
+            s.vm.snackbarEvents.test(timeout = 2.seconds) {
+                s.vm.onUndo(cyToken)
+                expectNoEvents()
+                cancel()
+            }
+            assertEquals(afterBoth, storedTimes(), "the first drop's Undo did not run the second's inverse")
+            assertNotNull(s.undoStack.peek(), "Ada's inverse is still held")
+
+            // Ada's Undo reverts her drop alone: Cy stays first, with the
+            // times his drop wrote.
+            s.vm.onUndo(adaToken)
+            awaitReadyWhere(this) { it.contacts.map { c -> c.id } == listOf("c-3", "c-1", "c-2") }
+            assertEquals(afterCy, storedTimes(), "only Ada's drop is undone")
+            assertNotEquals(beforeAny, storedTimes())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the newest Undo with nothing left on the shared stack says so`() = runTest {
+        // The stack is a singleton that other hosts also take from (the
+        // picker's snackbar over this screen). An Undo that found nothing used
+        // to do nothing without a word (rules.md Code 3).
+        val s = sequenceVm()
+        s.seedThree()
+        s.vm.snackbarEvents.test(timeout = 2.seconds) {
+            s.vm.onReorder(3L, null, "Cy Twombly")
+            val token = assertNotNull(awaitItem().actionPayload)
+            s.undoStack.clear()
+            s.vm.onUndo(token)
+            val event = awaitItem()
+            assertEquals(UiText.res(R.string.components_snackbar_save_failed), event.message)
+            assertNull(event.actionLabel)
             cancelAndIgnoreRemainingEvents()
         }
     }
