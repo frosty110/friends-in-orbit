@@ -143,7 +143,8 @@ val CardViewUiState.listType: ListType?
     }
 
 /**
- * One-off messages for the Card view's snackbar (2026-10-05).
+ * One-off messages for the Card view (2026-10-05): its snackbars, and since
+ * 2026-10-07 the one message that is not a snackbar, [OpenNote].
  *
  * Each Later or Sooner carries its own [Undoable.token], and only the newest
  * token can be undone: the screen replaces an older snackbar the moment a
@@ -151,18 +152,43 @@ val CardViewUiState.listType: ListType?
  * the latest action, so Undo on the first of three quick swipes reverted the
  * third person (UX rubric gate G1).
  *
- * [text] is [UiText]: the screen resolves it when it shows the snackbar, so
+ * Text is [UiText]: the screen resolves it when it shows the snackbar, so
  * the copy lives in strings_card.xml.
  */
 sealed interface CardMessage {
-    val text: UiText
 
     /** A Later or Sooner the user can take back with "Undo". */
-    data class Undoable(override val text: UiText, val token: Long) : CardMessage
+    data class Undoable(val text: UiText, val token: Long) : CardMessage
 
-    /** The call log confirmed a call placed from this card; offers "Add a note" (CARD-03). */
-    data class Called(override val text: UiText, val contactId: Long) : CardMessage
+    /**
+     * The call log confirmed a call placed from this card; offers "Add a
+     * note" (CARD-03). Only for a call too short or unanswered to be worth a
+     * note by itself; one that is opens the page instead ([OpenNote]).
+     */
+    data class Called(val text: UiText, val contactId: Long) : CardMessage
+
+    /**
+     * CARD-10: a connection or attempt logged from the card. [curtainText]
+     * is the same sentence without the name, shown instead of [text] while
+     * the privacy curtain is down (PRIV-03).
+     */
+    data class Logged(val text: UiText, val curtainText: UiText) : CardMessage
+
+    /**
+     * CARD-11: a call placed from this card connected and lasted a minute or
+     * more (NOTE-05's rule), so the page for writing about it opens by
+     * itself, once, in place of [Called]'s snackbar.
+     */
+    data class OpenNote(val contactId: Long, val callEventId: Long) : CardMessage
 
     /** A write failed; says so (rules.md Code 3, no silent fallbacks). */
-    data class Failed(override val text: UiText) : CardMessage
+    data class Failed(val text: UiText) : CardMessage
 }
+
+/**
+ * CARD-09: what the idle hints say, each already worded with its direction:
+ * "Later · Thursday" and "Sooner · Tomorrow", or "Later" and "Sooner" alone
+ * when the move's "when" could not be worked out.
+ */
+@Immutable
+data class CardMoveHints(val later: UiText, val sooner: UiText)

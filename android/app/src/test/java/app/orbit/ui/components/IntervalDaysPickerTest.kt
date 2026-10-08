@@ -30,9 +30,9 @@ class IntervalDaysPickerTest {
 
     private val commits = mutableListOf<Int>()
 
-    private fun picker(hours: Int) {
+    private fun picker(hours: Int, valueIsSet: Boolean = true) {
         compose.setContent {
-            OrbitTheme { IntervalDaysPicker(currentHours = hours, onCommit = { commits += it }) }
+            OrbitTheme { IntervalDaysPicker(currentHours = hours, onCommit = { commits += it }, valueIsSet = valueIsSet) }
         }
     }
 
@@ -57,9 +57,34 @@ class IntervalDaysPickerTest {
     }
 
     @Test
-    fun one_day_is_reachable_and_singular() {
+    fun one_day_is_reachable_and_reads_every_day() {
+        // "every 1 day" is not how anyone says it (LIST-30).
         picker(hours = 24)
-        compose.onNodeWithText("Aim for every 1 day").assertExists()
+        compose.onNodeWithText("Aim for every day").assertExists()
+        compose.onNodeWithContentDescription("How often to aim for")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Every day"))
+    }
+
+    @Test
+    fun choosing_the_saved_value_again_writes_nothing() {
+        picker(hours = 48)
+        compose.onNodeWithContentDescription("How often to aim for")
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(2f) }
+        compose.waitForIdle()
+
+        assertEquals(emptyList(), commits)
+    }
+
+    @Test
+    fun with_nothing_saved_the_value_it_opens_on_can_be_chosen() {
+        // A list with no rhythm yet opens on 2 days (LIST-30); 2 days must
+        // still be choosable, or "This list has no rhythm yet" never goes.
+        picker(hours = 48, valueIsSet = false)
+        compose.onNodeWithContentDescription("How often to aim for")
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(2f) }
+        compose.waitForIdle()
+
+        assertEquals(listOf(2), commits)
     }
 
     @Test

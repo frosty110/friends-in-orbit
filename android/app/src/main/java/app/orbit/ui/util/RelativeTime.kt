@@ -90,8 +90,10 @@ fun formatAgo(days: Long): UiText = when (val d = days.coerceAtLeast(0L)) {
  * minute, then "5 minutes ago", then "3 hours ago", and from a calendar day
  * on exactly what [formatRelative] says ("yesterday", "3 days ago"). For
  * things that happen all day and are read moments later, such as the sync
- * rows in Settings ("Last synced 5 minutes ago"); a call's age stays on the
- * day grain, where a finer one would read as a stopwatch.
+ * rows in Settings ("Last synced 5 minutes ago"), and Home's calls waiting
+ * for a note ("14 min · 2 hours ago", HOME-14), which are all from the last
+ * day, so the day grain would call every one "today". Elsewhere a call's age
+ * stays on the day grain, where a finer one would read as a stopwatch.
  *
  * Hours count elapsed time, so "23 hours ago" can cross midnight; the
  * calendar-day fallback takes over only once a full day has passed. Lowercase

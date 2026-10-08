@@ -35,13 +35,10 @@
     <!-- A change that could not be saved says components_snackbar_save_failed, the same
          words as Home and every other screen. -->
 
-    <!-- Second line under a regular list's name on Lists: its rhythm. Keep in touch lists
-         say "Every 14 days" (lists_interval_every_days, below); these two rhythms have
-         nothing to set, so the line names the rhythm. -->
-    <string name="lists_rhythm_late_night">Late night rhythm</string>
-    <string name="lists_rhythm_energize">Energize rhythm</string>
-    <!-- Shown as a list's second line when its stored rule cannot be decoded; the deck
-         fails on the same data. -->
+    <!-- Second line under a regular list's name on Lists: its rhythm, as its interval
+         ("Every 14 days", "Every day": lists_interval_every_days and lists_interval_every_day,
+         below) whichever rhythm it runs (LIST-30). Shown instead when its stored rule cannot
+         be decoded; the deck fails on the same data. -->
     <string name="lists_rhythm_unreadable">Couldn\'t read this list\'s rhythm</string>
 
     <!-- Subtitle under a smart list's name: its rule, then its setting. -->
@@ -86,22 +83,58 @@
 
     <string name="lists_rename_title">Rename list</string>
 
-    <!-- ===== Create a list ===== -->
-    <string name="lists_create_choose_template">Choose a template</string>
-    <string name="lists_create_name_label">Name your list</string>
-    <!-- Placeholder in the empty name field. -->
-    <string name="lists_create_name_placeholder">e.g. Inner orbit</string>
-    <!-- Create stays disabled until a template and a name are chosen; the "Name your list"
-         heading is the prompt, so there is no error line. -->
-    <string name="lists_create_cta">Create</string>
+    <!-- ===== New list (LIST-28, LIST-29): a full-screen flow, one decision per step ===== -->
+    <!-- The flow's app bar title. -->
+    <string name="lists_new_title">New list</string>
+    <!-- Progress in the app bar. %1$d: this step, %2$d: how many steps there are (4, or 3
+         for a list that fills itself). A plural on the total, because other languages
+         inflect "of N". -->
+    <plurals name="lists_new_progress">
+        <item quantity="one">Step %1$d of %2$d</item>
+        <item quantity="other">Step %1$d of %2$d</item>
+    </plurals>
+    <!-- Screen-reader name of the X that leaves the flow (asking first when something is
+         entered). -->
+    <string name="lists_new_close">Close</string>
+    <!-- Moves to the next step. -->
+    <string name="lists_new_next">Next</string>
+    <!-- The last step's button: makes the list, its rhythm and its people. -->
+    <string name="lists_new_create">Create list</string>
 
-    <!-- List templates. The name also becomes the new list's starting name. -->
+    <!-- Step 1, Start with: one choice among the tiles below. -->
+    <string name="lists_new_start_heading">How do you want to start?</string>
+    <!-- The small label over the one template whose people come from a rule: the name the
+         Lists screen's chip gives such a list (lists_row_smart_chip). -->
+    <string name="lists_new_smart_label">Smart list</string>
+
+    <!-- Step 2, the list's name. -->
+    <string name="lists_new_name_heading">Name your list</string>
+
+    <!-- Step 3, the list's rhythm (the How often day wheel List settings uses). -->
+    <string name="lists_new_how_often_heading">How often</string>
+    <string name="lists_new_how_often_hint">You can change this any time in the list\'s settings.</string>
+
+    <!-- Step 4, the people. -->
+    <string name="lists_new_people_heading">Add people</string>
+    <string name="lists_new_people_hint">Choose the people you want to keep in touch with on this list.</string>
+    <!-- Opens the contact picker while nobody is chosen yet. -->
+    <string name="lists_new_add_people">Add people</string>
+    <!-- Makes the list with nobody on it; add people later from its settings. -->
+    <string name="lists_new_create_empty">Create without people</string>
+
+    <!-- Leaving the flow with something entered. -->
+    <string name="lists_new_discard_title">Discard this list?</string>
+    <string name="lists_new_discard_keep">Keep going</string>
+    <string name="lists_new_discard_confirm">Discard</string>
+
+    <!-- On the screen the flow returns to, once the list is made. %1$s: the list's name. -->
+    <string name="lists_snackbar_created">Created %1$s.</string>
+
+    <!-- List templates, step 1. The name also becomes the new list's starting name. -->
     <string name="lists_template_inner_orbit">Inner orbit</string>
     <string name="lists_template_inner_orbit_subtitle">Closest people, about weekly.</string>
     <string name="lists_template_family">Family</string>
     <string name="lists_template_family_subtitle">Steady, every couple of weeks.</string>
-    <string name="lists_template_mentors">Mentors</string>
-    <string name="lists_template_mentors_subtitle">Every couple of months.</string>
     <!-- People the user has drifted apart from. -->
     <string name="lists_template_drifted">Drifted</string>
     <string name="lists_template_drifted_subtitle">Reconnect about once a month.</string>
@@ -120,10 +153,13 @@
     <string name="lists_config_not_found_body">It may have been deleted.</string>
 
     <!-- Section titles. -->
+    <!-- Make your first list only: List settings renames from its title (LIST-26). -->
     <string name="lists_section_name">Name</string>
-    <string name="lists_section_rhythm">Rhythm</string>
+    <!-- Placeholder in Make your first list's empty name field. -->
+    <string name="lists_create_name_placeholder">e.g. Inner orbit</string>
     <string name="lists_section_how_often">How often</string>
-    <string name="lists_section_active_hours">Active hours</string>
+    <!-- The part of the day a list's nudges may come in (LIST-25). -->
+    <string name="lists_section_time_of_day">Time of day</string>
     <string name="lists_section_nudges">Nudges</string>
     <string name="lists_section_when_to_nudge">When to nudge</string>
     <string name="lists_section_smart_rule">Smart rule</string>
@@ -138,20 +174,25 @@
     <string name="lists_convert_note">The people here now stay, and the list stops adding people by itself. This can\'t be undone.</string>
     <string name="lists_converted_snackbar">This is now a regular list.</string>
 
-    <!-- Interval slider, as one sentence over the slider. %1$s: the interval, from
+    <!-- How often, as one sentence over the day wheel. %1$s: the interval, from
          lists_interval_days below ("Aim for every 14 days"). Contact detail's custom
          schedule uses the same sentence. -->
     <string name="lists_interval_aim">Aim for every %1$s</string>
+    <!-- The same sentence for an interval of one day, which reads "every day", not
+         "every 1 day". -->
+    <string name="lists_interval_aim_every_day">Aim for every day</string>
     <plurals name="lists_interval_days">
         <item quantity="one">%1$d day</item>
         <item quantity="other">%1$d days</item>
     </plurals>
-    <!-- Screen-reader name and value of the interval slider. -->
+    <!-- Screen-reader name and value of the How often day wheel. -->
     <string name="lists_interval_label">How often to aim for</string>
     <plurals name="lists_interval_every_days">
         <item quantity="one">Every %1$d day</item>
         <item quantity="other">Every %1$d days</item>
     </plurals>
+    <!-- A rhythm of one day, on the Lists row and as the day wheel's screen-reader value. -->
+    <string name="lists_interval_every_day">Every day</string>
     <!-- Landmark words under a day wheel's familiar values ("2 weeks" under 14). -->
     <plurals name="lists_interval_tick_weeks">
         <item quantity="one">%1$d week</item>
@@ -166,22 +207,20 @@
         <item quantity="other">%1$d years</item>
     </plurals>
 
-    <!-- Shown instead of the slider for rhythms that have nothing to set. -->
-    <string name="lists_rhythm_note_late_night">This list keeps the late night rhythm on its own: slower and more patient, with nothing to set.</string>
-    <string name="lists_rhythm_note_energize">This list keeps the energize rhythm on its own: quicker, with nothing to set.</string>
+    <!-- Over the day wheel when the list has no rhythm Orbit can read: nothing set yet, or
+         a stored rule that no longer decodes. Choosing a number on the wheel sets one. -->
+    <string name="lists_rhythm_unset">This list has no rhythm yet. Choose how often below to set one.</string>
 
-    <!-- Inline rename of the list. -->
-    <string name="lists_name_save">Save list name</string>
-    <string name="lists_name_unnamed">Unnamed list</string>
+    <!-- Rename from the title (LIST-26). The title is a button; screen readers hear
+         "Rename list, Inner orbit" (%1$s: the list's name), or lists_name_rename alone
+         under the privacy curtain. -->
     <string name="lists_name_rename">Rename list</string>
-
-    <!-- Rhythm choices. -->
-    <string name="lists_rule_keep_in_touch">Keep in touch</string>
-    <string name="lists_rule_keep_in_touch_sub">Surfaces each person on a steady rhythm you set.</string>
-    <string name="lists_rule_late_night">Late night</string>
-    <string name="lists_rule_late_night_sub">A slower, more patient rhythm for people you reach at night.</string>
-    <string name="lists_rule_energize">Energize</string>
-    <string name="lists_rule_energize_sub">A quicker rhythm that brings people back sooner after a call.</string>
+    <string name="lists_name_rename_named">Rename list, %1$s</string>
+    <!-- The label on the title's text field while renaming. -->
+    <string name="lists_name_field">List name</string>
+    <!-- Screen-reader names of the two controls beside the field; Cancel is
+         components_action_cancel. -->
+    <string name="lists_name_save">Save list name</string>
 
     <!-- Smart rule editor. Each rule is one sentence over its control, with the current
          setting as the argument, so a translator can reorder the words. -->
@@ -232,8 +271,8 @@
     </plurals>
     <!-- %1$s: the person's name. -->
     <string name="lists_members_remove">Remove %1$s from list</string>
+    <!-- The text button on the right of the People header (LIST-27). -->
     <string name="lists_members_add">Add people</string>
-    <string name="lists_members_add_a11y">Add people to this list</string>
 
     <!-- Nudge schedule. -->
     <string name="lists_nudge_change_time">Change time</string>
@@ -260,13 +299,27 @@
     <!-- Shown while this list's nudges are paused. -->
     <string name="lists_nudge_paused_badge">Nudges paused</string>
 
-    <!-- Active hours. "9am to 5pm". -->
-    <string name="lists_hours_to">to</string>
-    <string name="lists_hours_overnight">Overnight list: active across midnight.</string>
-    <string name="lists_hours_always_active">Always active</string>
-    <!-- Active hours gate when a nudge may post, so the line says what they open up. -->
-    <string name="lists_hours_always_active_sub">Nudges can come at any time of day</string>
-    <!-- Confirms the time picker. -->
+    <!-- Time of day (LIST-25): one choice of the part of the day this list's nudges may
+         come in. A nudge is held to that part; the times are fixed (7am to noon, noon to
+         5pm, 5pm to 9pm, 9pm to 7am). -->
+    <string name="lists_time_any">Any time</string>
+    <string name="lists_time_mornings">Mornings</string>
+    <string name="lists_time_afternoons">Afternoons</string>
+    <string name="lists_time_evenings">Evenings</string>
+    <string name="lists_time_nights">Nights</string>
+    <!-- A window set earlier that is none of the parts. %1$s and %2$s: its start and end
+         in the phone's clock style ("Custom: 9am to 5pm"). -->
+    <string name="lists_time_custom">Custom: %1$s to %2$s</string>
+    <!-- The line under the choice, saying what it does. %1$s and %2$s: the start and end
+         in the phone's clock style ("7am", "12pm", or "07:00", "12:00"). -->
+    <string name="lists_time_note_any">Nudges can come at any time of day.</string>
+    <string name="lists_time_note_mornings">Nudges for this list come only in the morning, from %1$s to %2$s.</string>
+    <string name="lists_time_note_afternoons">Nudges for this list come only in the afternoon, from %1$s to %2$s.</string>
+    <string name="lists_time_note_evenings">Nudges for this list come only in the evening, from %1$s to %2$s.</string>
+    <string name="lists_time_note_nights">Nudges for this list come only at night, from %1$s to %2$s.</string>
+    <string name="lists_time_note_custom">Nudges for this list come only from %1$s to %2$s.</string>
+
+    <!-- Confirms the time picker (a nudge time). -->
     <string name="lists_hours_ok">OK</string>
     <!-- The time picker's headline, and its toggle between the dial and typing. -->
     <string name="lists_hours_dialog_title">Choose a time</string>

@@ -33,6 +33,7 @@ import app.orbit.domain.usecase.WidgetSurfaceUseCase
 import app.orbit.nav.AppLinks
 import app.orbit.nav.OrbitNavHost
 import app.orbit.nav.Routes
+import app.orbit.notify.AppForeground
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.screens.picker.PickerCommitBus
 import app.orbit.ui.screens.picker.SnackbarEvent
@@ -104,6 +105,15 @@ class MainActivity : ComponentActivity() {
      * scope and its failure may land after Settings has been popped.
      */
     @Inject lateinit var commitBus: PickerCommitBus
+
+    /**
+     * NOTIF-16: whether Orbit is on screen, for the notification after a
+     * call, which posts only while it is not (on screen, Home's stack says
+     * the same thing). Set from the same ON_START / ON_STOP as the curtain.
+     * The notification's tap needs nothing here: it is a NAVIGATE_TO route
+     * like a nudge's, read by [routeFrom].
+     */
+    @Inject lateinit var appForeground: AppForeground
 
     /**
      * D-17: the NAVIGATE_TO route string from a notification, widget or
@@ -246,9 +256,13 @@ class MainActivity : ComponentActivity() {
         lifecycle.addObserver(
             LifecycleEventObserver { _, event ->
                 when (event) {
-                    Lifecycle.Event.ON_STOP  -> appViewModel.onForegroundChanged(false)
+                    Lifecycle.Event.ON_STOP  -> {
+                        appViewModel.onForegroundChanged(false)
+                        appForeground.onStopped()
+                    }
                     Lifecycle.Event.ON_START -> {
                         appViewModel.onForegroundChanged(true)
+                        appForeground.onStarted()
                         // The phone's 12/24-hour setting may have changed while
                         // the app was in the background.
                         TimeStyle.refresh(this@MainActivity)

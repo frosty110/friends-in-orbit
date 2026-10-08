@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -91,17 +92,7 @@ fun OrbitTextField(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     trailing: @Composable (() -> Unit)? = null,
 ) {
-    val c = OrbitTheme.colors
     val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
-    val isError = errorText != null
-    val ring = when {
-        isError -> c.danger
-        focused -> c.fg
-        else -> c.fgSubtle
-    }
-    val ringWidth = if (isError || focused) 2.dp else 1.dp
-
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
@@ -113,59 +104,161 @@ fun OrbitTextField(
         keyboardActions = keyboardActions,
         visualTransformation = visualTransformation,
         interactionSource = interaction,
-        textStyle = OrbitTheme.type.body.copy(color = if (enabled) c.fg else c.fgMuted),
-        cursorBrush = SolidColor(c.fg),
-        modifier = modifier
-            .fillMaxWidth()
-            .keepAboveKeyboard(OrbitTheme.spacing.x4)
-            .semantics {
-                if (contentDescription != null) this.contentDescription = contentDescription
-                if (errorText != null) error(errorText)
-            },
+        textStyle = orbitFieldTextStyle(enabled),
+        cursorBrush = SolidColor(OrbitTheme.colors.fg),
+        modifier = modifier.orbitField(contentDescription, errorText),
         decorationBox = { innerTextField ->
-            Column(verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2)) {
-                if (label != null) {
-                    Text(
-                        text = label,
-                        style = OrbitTheme.type.body,
-                        color = c.fgMuted,
-                    )
-                }
-                Row(
-                    verticalAlignment = if (singleLine) Alignment.CenterVertically else Alignment.Top,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = OrbitTheme.spacing.tapMin)
-                        .background(c.bgSubtle, OrbitTheme.shapes.md)
-                        .border(ringWidth, ring, OrbitTheme.shapes.md)
-                        .padding(start = OrbitTheme.spacing.x4, end = if (trailing != null) 0.dp else OrbitTheme.spacing.x4),
-                ) {
-                    // One line sits centred in the 48dp box; several start at
-                    // the top, where the first line of a note is written.
-                    Box(
-                        contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(vertical = OrbitTheme.spacing.x3),
-                    ) {
-                        if (value.isEmpty() && placeholder != null) {
-                            Text(text = placeholder, style = OrbitTheme.type.body, color = c.fgSubtle)
-                        }
-                        innerTextField()
-                    }
-                    trailing?.invoke()
-                }
-                val below = errorText ?: supportingText
-                if (below != null) {
-                    Text(
-                        text = below,
-                        style = OrbitTheme.type.meta,
-                        color = if (isError) c.danger else c.fgMuted,
-                    )
-                }
-            }
+            OrbitTextFieldDecoration(
+                innerTextField = innerTextField,
+                isEmpty = value.isEmpty(),
+                interaction = interaction,
+                label = label,
+                placeholder = placeholder,
+                supportingText = supportingText,
+                errorText = errorText,
+                singleLine = singleLine,
+                trailing = trailing,
+            )
         },
     )
+}
+
+/**
+ * The same field over a [TextFieldValue], for the one caller that places the
+ * cursor itself: List settings' rename from the title (LIST-26) opens with
+ * the cursor after the old name, where a rename starts, rather than before
+ * it. Everything else (look, keyboard, staying above it) is the String
+ * field's.
+ */
+@Composable
+fun OrbitTextField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    label: String?,
+    modifier: Modifier = Modifier,
+    placeholder: String? = null,
+    supportingText: String? = null,
+    errorText: String? = null,
+    contentDescription: String? = null,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
+    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
+    enabled: Boolean = true,
+    keyboardOptions: KeyboardOptions = OrbitTextFieldDefaults.keyboardOptions(singleLine),
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    trailing: @Composable (() -> Unit)? = null,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        enabled = enabled,
+        singleLine = singleLine,
+        minLines = minLines,
+        maxLines = maxLines,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
+        visualTransformation = visualTransformation,
+        interactionSource = interaction,
+        textStyle = orbitFieldTextStyle(enabled),
+        cursorBrush = SolidColor(OrbitTheme.colors.fg),
+        modifier = modifier.orbitField(contentDescription, errorText),
+        decorationBox = { innerTextField ->
+            OrbitTextFieldDecoration(
+                innerTextField = innerTextField,
+                isEmpty = value.text.isEmpty(),
+                interaction = interaction,
+                label = label,
+                placeholder = placeholder,
+                supportingText = supportingText,
+                errorText = errorText,
+                singleLine = singleLine,
+                trailing = trailing,
+            )
+        },
+    )
+}
+
+@Composable
+private fun orbitFieldTextStyle(enabled: Boolean) =
+    OrbitTheme.type.body.copy(color = if (enabled) OrbitTheme.colors.fg else OrbitTheme.colors.fgMuted)
+
+/** Full width, kept above the keyboard, and named for TalkBack. */
+private fun Modifier.orbitField(contentDescription: String?, errorText: String?): Modifier = composed {
+    val margin = OrbitTheme.spacing.x4
+    this
+        .fillMaxWidth()
+        .keepAboveKeyboard(margin)
+        .semantics {
+            if (contentDescription != null) this.contentDescription = contentDescription
+            if (errorText != null) error(errorText)
+        }
+}
+
+/** Label, outlined box, placeholder, trailing slot and the line under it. */
+@Composable
+private fun OrbitTextFieldDecoration(
+    innerTextField: @Composable () -> Unit,
+    isEmpty: Boolean,
+    interaction: MutableInteractionSource,
+    label: String?,
+    placeholder: String?,
+    supportingText: String?,
+    errorText: String?,
+    singleLine: Boolean,
+    trailing: @Composable (() -> Unit)?,
+) {
+    val c = OrbitTheme.colors
+    val focused by interaction.collectIsFocusedAsState()
+    val isError = errorText != null
+    val ring = when {
+        isError -> c.danger
+        focused -> c.fg
+        else -> c.fgSubtle
+    }
+    val ringWidth = if (isError || focused) 2.dp else 1.dp
+    Column(verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2)) {
+        if (label != null) {
+            Text(
+                text = label,
+                style = OrbitTheme.type.body,
+                color = c.fgMuted,
+            )
+        }
+        Row(
+            verticalAlignment = if (singleLine) Alignment.CenterVertically else Alignment.Top,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = OrbitTheme.spacing.tapMin)
+                .background(c.bgSubtle, OrbitTheme.shapes.md)
+                .border(ringWidth, ring, OrbitTheme.shapes.md)
+                .padding(start = OrbitTheme.spacing.x4, end = if (trailing != null) 0.dp else OrbitTheme.spacing.x4),
+        ) {
+            // One line sits centred in the 48dp box; several start at
+            // the top, where the first line of a note is written.
+            Box(
+                contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = OrbitTheme.spacing.x3),
+            ) {
+                if (isEmpty && placeholder != null) {
+                    Text(text = placeholder, style = OrbitTheme.type.body, color = c.fgSubtle)
+                }
+                innerTextField()
+            }
+            trailing?.invoke()
+        }
+        val below = errorText ?: supportingText
+        if (below != null) {
+            Text(
+                text = below,
+                style = OrbitTheme.type.meta,
+                color = if (isError) c.danger else c.fgMuted,
+            )
+        }
+    }
 }
 
 object OrbitTextFieldDefaults {

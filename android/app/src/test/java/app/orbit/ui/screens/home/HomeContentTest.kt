@@ -3,10 +3,12 @@ package app.orbit.ui.screens.home
 import android.app.Application
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertAll
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasNoClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -16,6 +18,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -64,6 +68,7 @@ class HomeContentTest {
         direction = direction,
         durationLabel = formatDuration(600),
         timeLabel = "4:30pm",
+        minuteOfDay = 16 * 60 + 30,
     )
 
     // index 0 = six days ago (one call, tappable), index 1 = five days ago (quiet).
@@ -92,6 +97,8 @@ class HomeContentTest {
         ),
     )
 
+    private val weeksOpened = mutableListOf<Long>()
+
     private fun setHome(curtain: Boolean = false) {
         compose.setContent {
             CompositionLocalProvider(LocalPrivacyCurtain provides curtain) {
@@ -104,6 +111,7 @@ class HomeContentTest {
                         onOpenSettings = {},
                         onOpenLists = {},
                         onCreateList = {},
+                        onOpenWeek = { weeksOpened += it },
                     )
                 }
             }
@@ -194,6 +202,44 @@ class HomeContentTest {
         compose.onAllNodesWithContentDescription(expected)
             .assertCountEquals(2)
             .assertAll(hasNoClickAction())
+    }
+
+    // HOME-13: the strip's header line is the way to the list's Week screen,
+    // one per card, each opening its own list's week.
+    @Test
+    fun the_strips_header_is_a_button_to_that_lists_week() {
+        setHome()
+        val buttons = compose.onAllNodesWithText(context.getString(R.string.home_rhythm_see_week))
+        buttons.assertCountEquals(2)
+        buttons.assertAll(hasClickAction())
+
+        buttons.onFirst().performClick()
+
+        assertEquals(listOf(1L), weeksOpened)
+    }
+
+    // HOME-13: the day sheet ends in "See the whole week", which closes the
+    // sheet and opens the week that holds the day.
+    @Test
+    fun the_day_sheet_links_to_the_whole_week() {
+        setHome()
+        val day = context.getString(
+            R.string.home_rhythm_day_a11y,
+            spokenDay(6),
+            context.resources.getQuantityString(R.plurals.home_rhythm_day_calls, 1, 1),
+            directionSummary(rhythm[0].calls).asString(context),
+        )
+        compose.onNodeWithContentDescription(day).performClick()
+        compose.waitForIdle()
+
+        // The sheet is a window of its own, which Robolectric does not route
+        // an injected touch into; the click action is what a tap runs.
+        compose.onNodeWithText(context.getString(R.string.home_rhythm_see_whole_week))
+            .performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+
+        assertEquals(listOf(1L), weeksOpened)
+        compose.onAllNodesWithText(context.getString(R.string.home_rhythm_see_whole_week)).assertCountEquals(0)
     }
 
     // The glyph is decorative; the card says "Smart list" for it (LIST-07).

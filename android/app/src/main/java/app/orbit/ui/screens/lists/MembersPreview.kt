@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,14 +20,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewFontScale
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import app.orbit.R
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.components.OrbitButton
+import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
 
@@ -45,8 +47,13 @@ import app.orbit.ui.theme.OrbitTheme
  * F-6 / F-7 — STATIC lists also expose:
  *   - Trailing remove ("x") affordance per row → fires [onRemoveMember] which
  *     dispatches the optimistic remove + UndoStack-backed snackbar in the VM.
- *   - "Add contacts" row at the bottom → fires [onAddContacts] which routes to
- *     ContactPickerScreen via the nav graph.
+ *   - LIST-27: an "Add people" text button with a plus on the right of the
+ *     header row, beside the count ("11 people") → fires [onAddContacts],
+ *     which routes to the contact picker via the nav graph. It sits in the
+ *     header so it is in view without scrolling past everyone; the owner
+ *     looked for it there and did not find it. Until 2026-10-07 it was a row
+ *     under the last member, and that row is gone, so there is one way to do
+ *     it.
  * SMART lists hide both (membership is rule-derived, not user-curated) and
  * say so under the count, with Ignore as the way to keep someone off.
  *
@@ -56,8 +63,9 @@ import app.orbit.ui.theme.OrbitTheme
  *
  * Token-clean — no inline color hex literals, no RoundedCornerShape, no fontSize literals.
  *
- * Section eyebrow + count is rendered by the parent [SettingGroup] in
- * `ListConfigScreen`; this composable owns only the body content.
+ * The section label ("People") is the parent [SettingGroup]'s; the header row
+ * (the count and Add people) and the rows are this composable's. Make your
+ * first list uses the same composable, so the header button is there too.
  */
 @Composable
 fun MembersPreview(
@@ -72,10 +80,30 @@ fun MembersPreview(
             .fillMaxWidth()
             .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4),
     ) {
-        Text(
-            text = pluralStringResource(R.plurals.lists_members_count, members.size, members.size),
-            style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted),
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = pluralStringResource(R.plurals.lists_members_count, members.size, members.size),
+                style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgMuted),
+                modifier = Modifier.weight(1f),
+            )
+            if (!isSmart) {
+                // Ghost, not Primary or Secondary: a quiet text action that
+                // spends no accent (LIST-21: only the app bar's Done is in the
+                // accent) and draws no slab beside a count. OrbitButton keeps
+                // the 48dp height and Role.Button; its visible words are its
+                // TalkBack name, so the person hears the same "Add people"
+                // they see.
+                OrbitButton(
+                    text = stringResource(R.string.lists_members_add),
+                    onClick = onAddContacts,
+                    variant = OrbitButtonVariant.Ghost,
+                    leadingIcon = "plus",
+                )
+            }
+        }
         // Says why there is no remove control, before a long list, and where
         // the one exclusion there is lives. Without it a smart list read as
         // a list that would not let you edit it (2026-10-08).
@@ -120,12 +148,6 @@ fun MembersPreview(
                     onShowAll = { expanded = true },
                 )
             }
-        }
-        if (!isSmart) {
-            AddContactsRow(
-                hasMembers = members.isNotEmpty(),
-                onAddContacts = onAddContacts,
-            )
         }
     }
 }
@@ -215,40 +237,6 @@ private fun MemberRow(
     }
 }
 
-@Composable
-private fun AddContactsRow(
-    hasMembers: Boolean,
-    onAddContacts: () -> Unit,
-) {
-    // Resolved here: the semantics block below is not composable.
-    val addDescription = stringResource(R.string.lists_members_add_a11y)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = OrbitTheme.spacing.tapMin)
-            .clickable(role = Role.Button, onClick = onAddContacts)
-            .padding(top = if (hasMembers) OrbitTheme.spacing.rowY else OrbitTheme.spacing.x3, bottom = OrbitTheme.spacing.x1)
-            .semantics { contentDescription = addDescription },
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.defaultMinSize(minWidth = 32.dp, minHeight = 32.dp),
-        ) {
-            PhIcon(
-                name = "user-plus",
-                size = 20.dp,
-                tint = OrbitTheme.colors.fg,
-            )
-        }
-        Text(
-            text = stringResource(R.string.lists_members_add),
-            style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-        )
-    }
-}
-
 // region Previews
 
 @Preview(name = "MembersPreview — smart, empty, light", showBackground = true)
@@ -275,10 +263,13 @@ private fun MembersPreviewStaticEmptyDarkPreview() {
     }
 }
 
-@Preview(name = "MembersPreview — populated, light", showBackground = true)
+// Light and dark, and at 200%: the header row holds the count and Add people
+// side by side, and both must stay whole when the text grows.
+@PreviewLightDark
+@PreviewFontScale
 @Composable
-private fun MembersPreviewPopulatedLightPreview() {
-    OrbitTheme(darkTheme = false) {
+private fun MembersPreviewPopulatedPreview() {
+    OrbitTheme {
         Box(
             modifier = Modifier.background(OrbitTheme.colors.surface).padding(OrbitTheme.spacing.x2),
         ) {

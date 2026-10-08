@@ -1,5 +1,6 @@
 package app.orbit.data.repository
 
+import app.orbit.data.dao.WaitingCallRow
 import app.orbit.data.entity.CallEventEntity
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
@@ -100,8 +101,17 @@ interface CallEventRepository {
      */
     fun observeForLog(limit: Int): Flow<List<CallEventEntity>>
 
-    /** NOTE-02 — derived "unnoted outgoing within `since`" check; null when banner not warranted. */
-    suspend fun latestUnnotedOutgoing(since: Instant): CallEventEntity?
+    /**
+     * NOTE-05: the calls waiting for a note, one per person, newest first,
+     * before the user's dismissals are applied. The rules are the DAO query's
+     * ([app.orbit.data.dao.CallEventDao.observeWaitingForNote]); callers go
+     * through [WaitingCalls], which owns the 24 hour window, the 60 second
+     * floor and the dismissals.
+     */
+    fun observeWaitingForNote(since: Instant, minSeconds: Int): Flow<List<WaitingCallRow>>
+
+    /** NOTIF-16: the highest call event id so far (0 when there are none). */
+    suspend fun maxId(): Long
 
     /** O(1) primary-key lookup; used by the retroactive-note flow. */
     suspend fun byId(id: Long): CallEventEntity?

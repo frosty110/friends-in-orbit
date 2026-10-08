@@ -15,6 +15,7 @@ import app.orbit.domain.ReorderArgs
 import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.listFixture
 import app.orbit.domain.rule.RuleParams
+import app.orbit.domain.rule.toKeepInTouchEvery
 import app.orbit.domain.ruleTemplateFixture
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeScheduler
@@ -28,7 +29,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -326,11 +326,38 @@ class ListsManagerViewModelTest {
         val blank = listFixture(id = 12L, ruleTemplateId = 1L, ruleParamsOverrideJson = null)
         assertEquals("Every 2 days", singleTileSubtitle(blank, seededTemplates))
 
+        // LIST-30: every rule type reads as its interval. Late night's base is
+        // 72 hours and Energize's 24; the row said "Late night rhythm" and
+        // "Energize rhythm" until 2026-10-07, names List settings no longer
+        // shows. One day is "Every day", not "Every 1 day".
         val lateNight = listFixture(id = 13L, ruleTemplateId = 2L, ruleParamsOverrideJson = null)
-        assertEquals("Late night rhythm", singleTileSubtitle(lateNight, seededTemplates))
+        assertEquals("Every 3 days", singleTileSubtitle(lateNight, seededTemplates))
 
         val energize = listFixture(id = 14L, ruleTemplateId = 3L, ruleParamsOverrideJson = null)
-        assertEquals("Energize rhythm", singleTileSubtitle(energize, seededTemplates))
+        assertEquals("Every day", singleTileSubtitle(energize, seededTemplates))
+    }
+
+    @Test
+    fun a_keep_in_touch_list_at_one_day_reads_every_day() = runTest {
+        val daily = JsonProvider.json.encodeToString(
+            RuleParams.serializer(),
+            RuleParams.KeepInTouch().withIntervalHours(24)
+        )
+        val list = listFixture(id = 18L, ruleTemplateId = 1L, ruleParamsOverrideJson = daily)
+        assertEquals("Every day", singleTileSubtitle(list, seededTemplates))
+    }
+
+    @Test
+    fun a_late_night_list_moved_to_keep_in_touch_reads_its_new_interval() = runTest {
+        // What List settings writes when a Late night list's slider moves
+        // (the template becomes Keep in touch and the override carries the
+        // interval) reads like any other list.
+        val moved = JsonProvider.json.encodeToString(
+            RuleParams.serializer(),
+            RuleParams.LateNight().toKeepInTouchEvery(10 * 24)
+        )
+        val list = listFixture(id = 19L, ruleTemplateId = 1L, ruleParamsOverrideJson = moved)
+        assertEquals("Every 10 days", singleTileSubtitle(list, seededTemplates))
     }
 
     @Test
@@ -449,82 +476,6 @@ class ListsManagerViewModelTest {
         val before = repo.updateNameCalls.size
         vm.renameList(listId = 7L, name = "")
         assertEquals(before, repo.updateNameCalls.size, "empty input must not dispatch updateName")
-    }
-
-    // ============================================================================
-    // 2026-06-09 #26 — create must hand the new id to the screen so it can
-    // navigate to the new list's configuration instead of stranding the user.
-    // ============================================================================
-
-    @Test
-    fun createList_emits_new_id_for_navigation() = runTest {
-        val repo = FakeListRepository(initialLists = listOf(listFixture(id = 3L, sortOrder = 0)))
-        val vm =
-            ListsManagerViewModel(
-                listRepo = repo,
-                ruleTemplateRepo = FakeRuleTemplateRepository(),
-                nudgeScheduler = ListsManagerFakeNudgeScheduler()
-            )
-        val blank = TemplateChoice.Catalog.first { it.id == "blank" }
-
-        vm.createdListEvents.test(timeout = 2.seconds) {
-            vm.createList(blank, "Night owls")
-            // FakeListRepository.create assigns max(id) + 1.
-            assertEquals(4L, awaitItem())
-            cancelAndIgnoreRemainingEvents()
-        }
-        assertEquals("Night owls", repo.createCalls.single().name)
-    }
-
-    @Test
-    fun createList_writes_the_templates_own_interval() = runTest {
-        // Regression: every template made the same 2-day list (the Keep in
-        // touch default), whatever its subtitle promised.
-        val repo = FakeListRepository()
-        val vm =
-            ListsManagerViewModel(
-                listRepo = repo,
-                ruleTemplateRepo = FakeRuleTemplateRepository(),
-                nudgeScheduler = ListsManagerFakeNudgeScheduler()
-            )
-        val family = TemplateChoice.Catalog.first { it.id == "family" }
-        val blank = TemplateChoice.Catalog.first { it.id == "blank" }
-
-        vm.createdListEvents.test(timeout = 2.seconds) {
-            vm.createList(family, "Family")
-            awaitItem()
-            vm.createList(blank, "Night owls")
-            awaitItem()
-            cancelAndIgnoreRemainingEvents()
-        }
-
-        val familyJson =
-            assertNotNull(repo.createCalls.first { it.name == "Family" }.ruleParamsOverrideJson)
-        val params = JsonProvider.json.decodeFromString(RuleParams.serializer(), familyJson)
-        assertEquals(RuleParams.KeepInTouch().withIntervalHours(14 * 24), params)
-        assertNull(
-            repo.createCalls.first { it.name == "Night owls" }.ruleParamsOverrideJson,
-            "Start from blank keeps the template default"
-        )
-    }
-
-    @Test
-    fun createList_blank_name_emits_no_navigation_event() = runTest {
-        val repo = FakeListRepository()
-        val vm =
-            ListsManagerViewModel(
-                listRepo = repo,
-                ruleTemplateRepo = FakeRuleTemplateRepository(),
-                nudgeScheduler = ListsManagerFakeNudgeScheduler()
-            )
-        val blank = TemplateChoice.Catalog.first { it.id == "blank" }
-
-        vm.createdListEvents.test(timeout = 2.seconds) {
-            vm.createList(blank, "   ")
-            expectNoEvents()
-            cancelAndIgnoreRemainingEvents()
-        }
-        assertTrue(repo.createCalls.isEmpty(), "blank name must not create a list")
     }
 
     // ============================================================================

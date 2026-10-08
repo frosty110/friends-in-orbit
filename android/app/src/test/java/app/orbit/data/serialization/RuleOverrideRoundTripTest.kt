@@ -61,8 +61,8 @@ class RuleOverrideRoundTripTest {
     /**
      * Malformed JSON in `Contact.ruleOverrideJson` MUST raise a
      * [SerializationException] so [ContactDetailViewModel.deriveOverrideDisplay]
-     * can catch it and flip `currentParams` to null + `currentTemplateName`
-     * to "Custom schedule (recovering)". The VM-side test
+     * can catch it and flip `currentParams` and `inheritedRhythm` to null
+     * (the section then shows the editor on defaults). The VM-side test
      * `corrupted ruleOverrideJson recovers via try-catch and flips to
      * recovering copy` exercises the VM-side catch; this test pins the
      * library-side throw contract.

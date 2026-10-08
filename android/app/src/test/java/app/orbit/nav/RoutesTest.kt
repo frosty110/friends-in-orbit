@@ -20,6 +20,16 @@ class RoutesTest {
         assertEquals("lists/7/config", Routes.listConfig("7"))
         assertEquals("onboard/first-list/7", Routes.firstList("7"))
         assertEquals("pick/lists?contactId=7", Routes.pickLists("7"))
+        // HOME-13
+        assertEquals("week/7", Routes.week("7"))
+    }
+
+    @Test
+    fun `browse adds the card's person as focus only when there is one`() {
+        // BROWSE-09: Card view's "Browse people" passes the person on the card;
+        // "Browse this list" passes none and keeps the bare path.
+        assertEquals("browse/7?focus=42", Routes.browse("7", focusContactId = 42L))
+        assertEquals("browse/7", Routes.browse("7", focusContactId = null))
     }
 
     @Test
@@ -27,6 +37,20 @@ class RoutesTest {
         assertEquals("lists?openCreate=false", Routes.lists())
         assertEquals("lists?openCreate=false", Routes.lists(false))
         assertEquals("lists?openCreate=true", Routes.lists(true))
+    }
+
+    @Test
+    fun `new list is its own route, apart from Lists and a list's settings`() {
+        // LIST-28: the step-by-step flow, opened by Home and Lists.
+        assertEquals("lists/new", Routes.NewList)
+    }
+
+    @Test
+    fun `collectPeople opens the picker to collect, with who is already chosen`() {
+        // LIST-28: no list id (the list does not exist yet), and the chosen
+        // people comma-separated so the picker opens with them ticked.
+        assertEquals("pick/contacts?mode=collect", Routes.collectPeople())
+        assertEquals("pick/contacts?mode=collect&selected=3,7,12", Routes.collectPeople(listOf(3L, 7L, 12L)))
     }
 
     @Test
@@ -68,5 +92,11 @@ class RoutesTest {
         val route = Routes.relinkContact("7")
         assertEquals("pick/contacts?mode=relink&relinkContactId=7", route)
         assertFalse("targetListId" in route)
+    }
+
+    @Test
+    fun `postCallNote names the call only when there is one (NOTE-04)`() {
+        assertEquals("note/7?callEventId=41", Routes.postCallNote("7", 41L))
+        assertEquals("note/c-7", Routes.postCallNote("c-7"))
     }
 }

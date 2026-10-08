@@ -106,6 +106,11 @@ import kotlinx.coroutines.launch
  *
  * [caption] puts a quiet word under landmark values ("2 weeks" under 14) so a
  * row of bare numbers still says where the familiar rhythms are.
+ *
+ * [valueIsSet] false says [value] is only where the row opens, not a stored
+ * value (List settings for a list with no rhythm yet, LIST-30). Then choosing
+ * it, by a tap or by coming to rest on it, commits it too: otherwise the one
+ * value a person could not pick would be the one it opened on.
  */
 @Composable
 fun OrbitWheelPicker(
@@ -117,6 +122,7 @@ fun OrbitWheelPicker(
     valueDescription: @Composable (Int) -> String,
     modifier: Modifier = Modifier,
     caption: @Composable (Int) -> String? = { null },
+    valueIsSet: Boolean = true,
 ) {
     require(!range.isEmpty()) { "OrbitWheelPicker needs at least one value" }
     val count = range.last - range.first + 1
@@ -133,14 +139,15 @@ fun OrbitWheelPicker(
     val centredIndex by remember(state) { derivedStateOf { state.layoutInfo.centredIndex(state) } }
     val centredValue = range.first + centredIndex.coerceIn(0, count - 1)
 
-    // The value this control last wrote, or last received from outside.
-    var lastCommitted by remember { mutableIntStateOf(value) }
+    // The value this control last wrote, or last received from outside; none
+    // while [value] is only where it opened ([valueIsSet] false).
+    var lastCommitted by remember { mutableIntStateOf(if (valueIsSet) value else NOTHING_COMMITTED) }
 
     // A value arriving from outside (the screen loaded, another surface saved)
     // moves the row there at once: it is not a gesture, so it neither ticks
     // nor commits.
-    LaunchedEffect(value, range) {
-        lastCommitted = value
+    LaunchedEffect(value, range, valueIsSet) {
+        lastCommitted = if (valueIsSet) value else NOTHING_COMMITTED
         if (!state.isScrollInProgress && centredIndex != indexOf(value)) {
             state.scrollToItem(indexOf(value))
         }
@@ -349,6 +356,9 @@ private fun LazyListLayoutInfo.itemScale(index: Int): Float {
 
 /** `snapshotFlow`, named for what it reads here. */
 private fun <T> snapshotFlowOf(block: () -> T) = androidx.compose.runtime.snapshotFlow(block)
+
+/** Below any range: nothing committed yet, so the first choice always commits. */
+private const val NOTHING_COMMITTED = Int.MIN_VALUE
 
 @Preview(name = "OrbitWheelPicker, light", showBackground = true)
 @Composable

@@ -1,7 +1,7 @@
 # Page views: what each screen owes the user
 
 **Status:** active
-**Last reviewed:** 2026-10-06
+**Last reviewed:** 2026-10-07
 **Purpose:** One file per screen, each saying what a user expects to see and do there: how the screen is reached, what is on it, every action and menu, every state, where it leads, and the tests that pin it. Expectation-framed, not an implementation spec. For the canonical per-feature PRD/TECH, see [`INDEX.md`](INDEX.md).
 
 > Cross-cutting expectations that hold on every screen: warm, unhurried, sentence-case copy with no gamification; explicit empty states (never a blank screen, and never a false one while data loads: quiet chrome where the data is already cached, a quiet skeleton where the first read takes time); a failed read says so and offers Try again; destructive and bulk actions are undoable from a snackbar, and a write that fails says so; names, photos, list names, numbers and notes are masked when the app loses focus (the privacy curtain, PRIV-03); denied permissions degrade gracefully and never make a false claim ("Never called" is not said about someone Orbit cannot see); every gesture has a visible path; one accent element per screen (rules.md Design 5).
@@ -27,13 +27,15 @@ Each page view lives in its own file under [`page-views/`](page-views/). When a 
 |---|---|
 | [Home](page-views/home.md) | `home` |
 | [Card view](page-views/card-view.md) | `card/{listId}` |
-| [Browse people](page-views/browse.md) | `browse/{listId}` (the numbered queue lives here, under "Next up") |
+| [Browse people](page-views/browse.md) | `browse/{listId}`, with optional `focus` (the card's person); the numbered sequence lives here, under "Next up" |
+| [Your week](page-views/week.md) | `week/{listId}`, from Home's strip ("See your week") and its day sheet ("See the whole week") |
 
 ## People
 
 | Page view | Route |
 |---|---|
 | [Contact detail](page-views/contact-detail.md) | `contact/{contactId}`, with optional `focusNote` and `scrollToCallEventId` |
+| [Your call (the post-call note page)](page-views/post-call-note.md) | `note/{contactId}`, with optional `callEventId` |
 | [Search](page-views/search.md) | `search` |
 | [Add to lists](page-views/picker-lists.md) | `pick/lists?contactId={contactId}` |
 
@@ -41,7 +43,8 @@ Each page view lives in its own file under [`page-views/`](page-views/). When a 
 
 | Page view | Route |
 |---|---|
-| [Lists](page-views/lists-manager.md) | `lists`, `lists?openCreate=true` |
+| [Lists](page-views/lists-manager.md) | `lists` (`lists?openCreate=true` opens New list over it) |
+| [New list](page-views/new-list.md) | `lists/new` |
 | [List settings](page-views/list-config.md) | `lists/{listId}/config` |
 | [Add people](page-views/picker-contacts.md) | `pick/contacts?targetListId={listId}`; Re-link: `pick/contacts?mode=relink&relinkContactId={contactId}` |
 

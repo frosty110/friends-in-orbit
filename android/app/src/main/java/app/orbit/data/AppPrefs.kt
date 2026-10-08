@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.Instant
@@ -359,6 +360,74 @@ open class AppPrefs(private val dataStore: DataStore<Preferences>) {
     }
 
     /**
+     * NOTE-05: the call events the user dismissed from Home's stack of calls
+     * waiting for a note. A dismissal is a decision about that call, so it is
+     * kept across process death (until 2026-10-07 it lived in an in-memory
+     * set and a fresh process asked again). Ids and the moment of the
+     * dismissal only, never a name: this store is not encrypted.
+     *
+     * Stored as `"{callEventId}:{dismissedAtEpochMs}"` strings in one set, so
+     * an entry can be forgotten by age ([addPostCallDismissals]). An entry
+     * that does not parse is ignored here and dropped on the next write.
+     */
+    val dismissedPostCallIds: Flow<Set<Long>> =
+        dataStore.data.map { prefs ->
+            prefs[KEY_POST_CALL_DISMISSED].orEmpty().mapNotNullTo(mutableSetOf()) { parseDismissal(it)?.first }
+        }
+
+    /**
+     * NOTE-05: records [callEventIds] as dismissed at [at], and in the same
+     * write forgets every dismissal made before [forgetBefore]. A call waits
+     * for at most a day, so a dismissal older than that can never matter
+     * again; the caller passes 48 hours to keep a margin
+     * ([app.orbit.data.repository.WaitingCalls]). Re-dismissing an id keeps
+     * its first time.
+     */
+    suspend fun addPostCallDismissals(callEventIds: Collection<Long>, at: Instant, forgetBefore: Instant) {
+        dataStore.edit { prefs ->
+            val kept = prefs[KEY_POST_CALL_DISMISSED].orEmpty()
+                .mapNotNull(::parseDismissal)
+                .filter { (_, atMs) -> atMs >= forgetBefore.toEpochMilli() }
+            val keptIds = kept.mapTo(mutableSetOf()) { it.first }
+            val added = callEventIds.filterNot { it in keptIds }.map { it to at.toEpochMilli() }
+            prefs[KEY_POST_CALL_DISMISSED] = (kept + added).mapTo(mutableSetOf()) { (id, atMs) -> "$id:$atMs" }
+        }
+    }
+
+    /** NOTE-05: Undo for [addPostCallDismissals]: the calls wait again. */
+    suspend fun removePostCallDismissals(callEventIds: Collection<Long>) {
+        dataStore.edit { prefs ->
+            val ids = callEventIds.toSet()
+            prefs[KEY_POST_CALL_DISMISSED] = prefs[KEY_POST_CALL_DISMISSED].orEmpty()
+                .filterTo(mutableSetOf()) { entry -> parseDismissal(entry)?.first?.let { it !in ids } ?: false }
+        }
+    }
+
+    private fun parseDismissal(entry: String): Pair<Long, Long>? {
+        val id = entry.substringBefore(':').toLongOrNull() ?: return null
+        val atMs = entry.substringAfter(':', missingDelimiterValue = "").toLongOrNull() ?: return null
+        return id to atMs
+    }
+
+    /**
+     * CARD-09: how many Later and Sooner moves the user has made on the card
+     * (a swipe, a button, or TalkBack's action), so the idle hints that teach
+     * the swipe stop for good once it is learnt. A count, nothing about who
+     * was moved (this store is not encrypted). It only matters up to the
+     * card's threshold, so [recordCardMove] stops counting at [cap].
+     */
+    val cardMovesMade: Flow<Int> =
+        dataStore.data.map { it[KEY_CARD_MOVES_MADE] ?: 0 }
+
+    /** CARD-09: one more move, counted up to [cap] and no further. */
+    suspend fun recordCardMove(cap: Int) {
+        dataStore.edit { prefs ->
+            val made = prefs[KEY_CARD_MOVES_MADE] ?: 0
+            if (made < cap) prefs[KEY_CARD_MOVES_MADE] = made + 1
+        }
+    }
+
+    /**
      * SET-06 — destructive wipe of every key in the DataStore. Used by
      * [app.orbit.data.repository.ResetService] in the user-confirmed Reset path.
      *
@@ -405,6 +474,12 @@ open class AppPrefs(private val dataStore: DataStore<Preferences>) {
 
         // NOTIF-15: per-list record of who the last nudge named.
         private fun nudgeLastNamedKey(listId: Long) = longPreferencesKey("nudge_last_named_$listId")
+
+        // NOTE-05: calls dismissed from Home's stack, "{id}:{dismissedAtMs}".
+        private val KEY_POST_CALL_DISMISSED = stringSetPreferencesKey("post_call_dismissed")
+
+        // CARD-09: Later and Sooner moves made on the card, for the idle hints.
+        private val KEY_CARD_MOVES_MADE = intPreferencesKey("card_moves_made")
     }
 }
 

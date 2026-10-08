@@ -210,6 +210,10 @@ class ContactPickerViewModelTest {
         // False builds the VM with READ_CONTACTS denied (the Robolectric
         // default), so a test can grant it afterwards and drive the edge.
         grantContacts: Boolean = true,
+        // LIST-28: Collect's route argument, the chosen ids comma-separated.
+        selected: String? = null,
+        // What a process death left in the handle, merged over the route.
+        restoredState: Map<String, Any?> = emptyMap(),
         // Lists beyond the target (1, "Inner orbit") and "Late night" (2).
         extraLists: List<app.orbit.data.entity.ListEntity> = emptyList()
     ): Setup {
@@ -229,11 +233,14 @@ class ContactPickerViewModelTest {
         val undoStack = UndoStack()
         val commitBus = PickerCommitBus()
         val savedStateArgs = buildMap<String, Any?> {
-            // A Relink route carries the orphan, not a list (Routes.relinkContact).
-            if (mode != "relink") put("targetListId", targetListId)
+            // A Relink route carries the orphan, not a list (Routes.relinkContact),
+            // and a Collect route nothing at all (Routes.collectPeople).
+            if (mode != "relink" && mode != "collect") put("targetListId", targetListId)
             put("mode", mode)
             if (sourceListId != null) put("sourceListId", sourceListId)
             if (relinkContactId != null) put("relinkContactId", relinkContactId)
+            if (selected != null) put("selected", selected)
+            putAll(restoredState)
         }
         val savedState = SavedStateHandle(savedStateArgs)
 
@@ -1026,6 +1033,70 @@ class ContactPickerViewModelTest {
             assertEquals("Couldn't save that", awaitItem().message.text())
         }
         assertTrue(s.membershipDao.insertCalls.isEmpty())
+    }
+
+    // ─── LIST-28: Collect, New list's People step ────────────
+
+    @Test
+    fun `Collect needs no list, opens with the chosen ticked, and offers everyone`() = runTest {
+        // Sarah is already on Inner orbit: Add mode for that list would hide
+        // her, but a list that does not exist yet has no members to hide.
+        val sarahOnInnerOrbit = ListMembershipEntity(contactId = 12L, listId = 1L, addedAt = Instant.EPOCH)
+        val membershipDao = object : RecordingListMembershipDao() {
+            override fun observeAll(): Flow<List<ListMembershipEntity>> = kotlinx.coroutines.flow.flowOf(listOf(sarahOnInnerOrbit))
+        }
+        val s = fixture(membershipDao = membershipDao, mode = "collect", selected = "12,13")
+        s.contactRepo.seed(
+            listOf(
+                contactFixture(id = 12L, displayName = "Sarah"),
+                contactFixture(id = 13L, displayName = "Marcus"),
+                contactFixture(id = 14L, displayName = "Priya")
+            )
+        )
+
+        s.vm.uiState.test {
+            var item = awaitItem()
+            while (item.phase != ContactPickerUiState.Phase.Ready) item = awaitItem()
+            assertEquals(PickerMode.Collect, item.mode)
+            assertEquals(setOf(12L, 13L), item.selectedIds)
+            assertEquals(setOf(12L, 13L, 14L), item.allContacts.map { it.contactId }.toSet())
+            // "On a list" can offer every list: there is no target to leave out.
+            assertEquals(setOf(1L, 2L), item.availableLists.map { it.id }.toSet())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `Collect keeps what the user changed over the route's selection`() = runTest {
+        // A process death restores the handle: the route's "12,13" must not
+        // overwrite the selection the user had narrowed to 13.
+        val s = fixture(
+            mode = "collect",
+            selected = "12,13",
+            restoredState = mapOf("selectedIds" to longArrayOf(13L))
+        )
+
+        assertEquals(setOf(13L), selectedIdsIn(s.savedState))
+    }
+
+    @Test
+    fun `Collect never commits, so nothing reaches a list`() = runTest {
+        val s = fixture(mode = "collect", selected = "12")
+        s.contactRepo.seed(listOf(contactFixture(id = 12L, displayName = "Sarah")))
+
+        // The screen hands the selection back instead; a commit here would
+        // be to no list, so it fails loudly (rules.md Code 3).
+        kotlin.test.assertFailsWith<IllegalStateException> { s.vm.onCommit() }
+        assertTrue(s.membershipDao.insertCalls.isEmpty())
+        assertEquals(setOf(12L), selectedIdsIn(s.savedState))
+    }
+
+    @Test
+    fun `the selected argument reads as ids and drops what is not one`() {
+        assertEquals(listOf(3L, 7L, 12L), parseSelected("3,7,12").toList())
+        assertEquals(listOf(3L, 12L), parseSelected("3, x,,12,3").toList())
+        assertTrue(parseSelected(null).isEmpty())
+        assertTrue(parseSelected("").isEmpty())
     }
 
     // ─── A well-formed id whose row is gone ──────────────────

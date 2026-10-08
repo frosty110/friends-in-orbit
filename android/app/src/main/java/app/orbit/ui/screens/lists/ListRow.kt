@@ -48,7 +48,8 @@ import app.orbit.ui.util.asString
  *   |                                                +-- overflow ([listRowMenuActions])
  *   +-- drag handle (own touch region)
  *
- * The second line is the list's rhythm ("Every 14 days") or, for a smart
+ * The second line is the list's rhythm as its interval ("Every 14 days",
+ * "Every 3 days" for a Late night list, "Every day"; LIST-30) or, for a smart
  * list, its rule; the ViewModel decides which. [onConfigure] is the menu's
  * "List settings" and opens List settings, while [onClick] on the row opens
  * the list's deck (LIST-23): two destinations, so the screen wires them to

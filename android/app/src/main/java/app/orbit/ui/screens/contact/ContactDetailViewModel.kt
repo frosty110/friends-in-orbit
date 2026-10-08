@@ -12,7 +12,6 @@ import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.entity.NoteEntity
-import app.orbit.data.entity.RuleKind
 import app.orbit.data.entity.RuleTemplateEntity
 import app.orbit.data.mappers.toUiContact
 import app.orbit.data.mappers.withCallPatterns
@@ -28,6 +27,7 @@ import app.orbit.domain.clock.Clock
 import app.orbit.domain.model.PauseDuration
 import app.orbit.domain.model.onActiveLists
 import app.orbit.domain.rule.RuleParams
+import app.orbit.domain.rule.baseIntervalHours
 import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.AddNoteUseCase
 import app.orbit.domain.usecase.AddRetroactiveNoteUseCase
@@ -35,9 +35,12 @@ import app.orbit.domain.usecase.ArchiveContactUseCase
 import app.orbit.domain.usecase.DeleteNoteUseCase
 import app.orbit.domain.usecase.EditNoteUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
-import app.orbit.domain.usecase.MarkCalledUseCase
+import app.orbit.domain.usecase.LogConnectionUseCase
+import app.orbit.domain.usecase.LogConnectionWhen
 import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
+import app.orbit.ui.screens.lists.RuleParamsResolution
+import app.orbit.ui.screens.lists.resolveRuleParams
 import app.orbit.ui.screens.contact.sections.showsCustomSchedule
 import app.orbit.ui.screens.picker.SnackbarEvent
 import app.orbit.ui.util.UiText
@@ -49,7 +52,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.inject.Inject
@@ -135,7 +137,9 @@ class ContactDetailViewModel @Inject constructor(
     private val archiveContactUseCase: ArchiveContactUseCase,
     private val ruleTemplateRepo: RuleTemplateRepository,
     private val addRetroactiveNoteUseCase: AddRetroactiveNoteUseCase,
-    private val markCalledUseCase: MarkCalledUseCase,
+    // CONTACT-09 / CARD-10: the one way to log a connection, shared with the
+    // card (it was MarkCalledUseCase plus this VM's own body until 2026-10-07).
+    private val logConnection: LogConnectionUseCase,
     private val undoStack: UndoStack,
     private val clock: Clock,
     // Buckets call times into day-parts for the "Usually" stat; injected (as on
@@ -152,7 +156,8 @@ class ContactDetailViewModel @Inject constructor(
     private val contactIdString: String? = savedStateHandle["contactId"]
     private val contactId: Long? = contactIdString?.removePrefix("c-")?.toLongOrNull()
 
-    // NOTE-02 — PostCallBanner deep-link: when true, the Notes input
+    // NOTE-02: the focusNote deep-link (a Call history row; Home's post-call
+    // banner used it until 2026-10-07, NOTE-04): when true, the Notes input
     // should claim focus on first composition. The Routes.contactWithFocus
     // helper encodes the boolean as "1"; nullable / unset / "0" all read as
     // false. Owned by VM so rotation doesn't re-fire focus: cleared by the
@@ -367,13 +372,13 @@ class ContactDetailViewModel @Inject constructor(
         // CONTACT-03: derive RuleOverrideSection
         // inputs. Corrupted-JSON recovery is the try/catch
         // around decodeFromString; failed decode flips currentParams and
-        // currentTemplateName to null (the section shows the editor).
+        // inheritedRhythm to null (the section shows the editor).
         val customScheduleVisible = showsCustomSchedule(listsOn.size, entity.ruleOverrideJson != null)
         // The editor branch renders when an override is
         // PERSISTED or the user peeked the editor open this session.
         // Opening alone persists nothing (see onOpenOverride).
         val hasOverride = entity.ruleOverrideJson != null || six.overrideEditorOpen
-        val (currentTemplateName, currentParams) = deriveOverrideDisplay(
+        val (inheritedRhythm, currentParams) = deriveOverrideDisplay(
             ruleOverrideJson = entity.ruleOverrideJson,
             memberships = memberships,
             allLists = tuple.allLists,
@@ -427,7 +432,7 @@ class ContactDetailViewModel @Inject constructor(
                 phoneContactId = entity.phoneContactId,
                 callLogDenied = six.callLogDenied,
                 customScheduleVisible = customScheduleVisible,
-                currentTemplateName = currentTemplateName,
+                inheritedRhythm = inheritedRhythm,
                 primaryListName = primaryListName,
                 hasOverride = hasOverride,
                 currentParams = currentParams,
@@ -447,20 +452,21 @@ class ContactDetailViewModel @Inject constructor(
     }.catch { emit(ContactDetailUiState.Error) }
 
     /**
-     * CONTACT-03 — resolves the (template-name, RuleParams) pair driving the
-     * RuleOverrideSection copy.
+     * CONTACT-03: resolves the (inherited rhythm, RuleParams) pair driving the
+     * RuleOverrideSection.
      *
      * Three branches:
-     *   1. Override exists + decodes cleanly → ("keep in touch" / "late
-     *      night" / "energize" via [labelForKind], decoded RuleParams).
-     *   2. Override exists + decode throws (corrupted JSON) → (null, null).
+     *   1. Override exists + decodes cleanly: (null, decoded RuleParams). With
+     *      an override stored the section shows the editor, never the
+     *      "Comes up every ..." sentence, so there is nothing to describe.
+     *   2. Override exists + decode throws (corrupted JSON): (null, null).
      *      The screen passes a fresh default RuleParams so the editor still
-     *      renders; with an override stored the section never shows the
-     *      "Follows the ... rhythm" sentence, so there is no name to give.
-     *   3. No override → (template name from primary list, null params).
-     *
-     * The name is the lowercase form that sits mid-sentence
-     * (strings_contact.xml, `contact_rhythm_name_*`).
+     *      renders.
+     *   3. No override: (how often the primary list brings people up, null).
+     *      The list's own override or template, resolved the way List
+     *      settings resolves it ([resolveRuleParams]), described by its
+     *      interval ("every 14 days", LIST-30: no rhythm names), or null when
+     *      the list has no readable rhythm.
      */
     private fun deriveOverrideDisplay(
         ruleOverrideJson: String?,
@@ -470,37 +476,36 @@ class ContactDetailViewModel @Inject constructor(
     ): Pair<UiText?, RuleParams?> {
         if (ruleOverrideJson != null) {
             return try {
-                val params = JsonProvider.json.decodeFromString<RuleParams>(ruleOverrideJson)
-                Pair(labelForKind(params.toRuleKind()), params)
+                Pair(null, JsonProvider.json.decodeFromString<RuleParams>(ruleOverrideJson))
             } catch (_: Throwable) {
                 Pair(null, null)
             }
         }
-        // No per-contact override — show the template inherited from the
-        // primary list. The "primary" list is the first membership row;
-        // the RoundRobinEngine treats memberships as ordered so this
-        // matches the surfacing path's notion of "first".
+        // No per-contact override: describe the primary list's rhythm. The
+        // "primary" list is the first membership row; the RoundRobinEngine
+        // treats memberships as ordered so this matches the surfacing path's
+        // notion of "first".
         val primaryListId = memberships.firstOrNull()?.listId
         val primaryList = primaryListId?.let { lid -> allLists.firstOrNull { it.id == lid } }
-        val templateId = primaryList?.ruleTemplateId
-        val templateKind = templateId?.let { tid -> templates.firstOrNull { it.id == tid } }?.kind
-        val name = labelForKind(templateKind ?: RuleKind.KEEP_IN_TOUCH)
-        return Pair(name, null)
+        val template = primaryList?.ruleTemplateId?.let { tid -> templates.firstOrNull { it.id == tid } }
+        val resolved = resolveRuleParams(
+            overrideJson = primaryList?.ruleParamsOverrideJson,
+            templateParamsJson = template?.paramsJson,
+            json = JsonProvider.json,
+        )
+        val inherited = (resolved as? RuleParamsResolution.Decoded)?.let { everyFor(it.params.baseIntervalHours) }
+        return Pair(inherited, null)
     }
 
-    private fun RuleParams.toRuleKind(): RuleKind = when (this) {
-        is RuleParams.KeepInTouch -> RuleKind.KEEP_IN_TOUCH
-        is RuleParams.LateNight -> RuleKind.LATE_NIGHT
-        is RuleParams.Energize -> RuleKind.ENERGIZE
-    }
-
-    private fun labelForKind(kind: RuleKind): UiText = UiText.res(
-        when (kind) {
-            RuleKind.KEEP_IN_TOUCH -> R.string.contact_rhythm_name_keep_in_touch
-            RuleKind.LATE_NIGHT -> R.string.contact_rhythm_name_late_night
-            RuleKind.ENERGIZE -> R.string.contact_rhythm_name_energize
+    /** "every day" or "every 14 days", as it sits mid-sentence (strings_contact.xml). */
+    private fun everyFor(hours: Int): UiText {
+        val days = (hours / 24).coerceAtLeast(1)
+        return if (days == 1) {
+            UiText.res(R.string.contact_rhythm_every_day)
+        } else {
+            UiText.plural(R.plurals.contact_rhythm_every_days, days, days)
         }
-    )
+    }
 
     /**
      * Longest gap between consecutive call events: "21 days". Null if fewer
@@ -593,73 +598,21 @@ class ContactDetailViewModel @Inject constructor(
     }
 
     /**
-     * Manual connection / attempt log — records something Orbit's call-log sync
-     * can't see as a [CallEventEntity] with `durationSeconds = 0`.
-     *
-     * When [isAttempt] is false the event is a connection (`source = MANUAL`) —
-     * another app, in person — and resets the full template cadence. When true
-     * it is a reach-out that didn't connect (`source = ATTEMPT` — voicemail / no
-     * answer) and advances the rotation by only the flat [app.orbit.domain.rule.AttemptCooldown]
-     * window, without claiming you actually talked (it never sets "last
-     * contacted" or feeds heat — see ContactMapper.withCallStats).
-     *
-     * Routes through [MarkCalledUseCase] — the same atomic path the call-log
-     * reconciler uses — so per-list `nextDueAt` recomputes for every list the
-     * contact is on (DOM-06 cross-list propagation). The engines treat MANUAL
-     * as "not a real call" for the short-call/incoming *adjustments* only;
-     * the base cooldown still keys off `occurredAt`, so the contact stops
-     * surfacing as due.
-     *
-     * `whenChoice` time resolution (single `clock.now()` read — B3):
-     *   - [LogConnectionWhen.Today] → now.
-     *   - [LogConnectionWhen.Yesterday] → now minus 24h.
-     *   - [LogConnectionWhen.OnDate] → the picker hands back UTC midnight of
-     *     the chosen calendar day; we pin to local noon so the event lands on
-     *     the chosen day in every timezone, then clamp to now (authoritative
-     *     no-future-events guard — the sheet's date bound is advisory).
-     *
-     * A non-blank note is attached via [AddRetroactiveNoteUseCase] back-dated
-     * to the same `occurredAt`, mirroring the LOG-03 retro-note convention.
-     * The screen's state refreshes by itself — [recentEventsSource] is a Room
-     * flow that re-emits on insert.
+     * Manual connection / attempt log ("Log a connection", CONTACT-09):
+     * records something Orbit's call-log sync can't see. The write is the
+     * shared [LogConnectionUseCase], the one the card calls too (CARD-10):
+     * a connection is `CallSource.MANUAL`, an attempt `CallSource.ATTEMPT`,
+     * through MarkCalledUseCase so every list's `nextDueAt` recomputes, with
+     * the optional note back-dated to the same moment. The use case owns how
+     * Today, Yesterday and a picked date become an instant. The screen's
+     * state refreshes by itself: [recentEventsSource] is a Room flow that
+     * re-emits on insert.
      */
     fun onLogConnection(whenChoice: LogConnectionWhen, note: String, isAttempt: Boolean = false) {
         val cid = contactId ?: return
         viewModelScope.launch {
             runMutation(UiText.res(R.string.contact_snackbar_log_failed)) {
-                val now = clock.now()
-                val occurredAt: Instant = when (whenChoice) {
-                    LogConnectionWhen.Today -> now
-                    LogConnectionWhen.Yesterday -> now.minus(Duration.ofDays(1))
-                    is LogConnectionWhen.OnDate ->
-                        Instant
-                            .ofEpochMilli(whenChoice.utcMidnightMillis)
-                            .atZone(ZoneOffset.UTC)
-                            .toLocalDate()
-                            .atTime(12, 0)
-                            // The injected zone, as the rest of the screen's
-                            // day grouping uses; production injects the
-                            // system zone. Until 2026-10-06 this alone read
-                            // ZoneId.systemDefault(), which the test fixture
-                            // cannot pin.
-                            .atZone(zoneId)
-                            .toInstant()
-                            .coerceAtMost(now)
-                }
-                val event = CallEventEntity(
-                    contactId = cid,
-                    occurredAt = occurredAt,
-                    // OUTGOING is the closest fit — the user reached out (or
-                    // met up). Engines ignore direction for MANUAL/ATTEMPT
-                    // anyway (isRealCall gate / attempt short-circuit).
-                    direction = app.orbit.data.entity.CallDirection.OUTGOING,
-                    durationSeconds = 0,
-                    source = if (isAttempt) CallSource.ATTEMPT else CallSource.MANUAL
-                )
-                markCalledUseCase(cid, event)
-                if (note.isNotBlank()) {
-                    addRetroactiveNoteUseCase(cid, note.trim(), occurredAt)
-                }
+                logConnection(cid, whenChoice, note, isAttempt)
                 _snackbarEvents.tryEmit(
                     SnackbarEvent(
                         UiText.res(
@@ -904,11 +857,11 @@ class ContactDetailViewModel @Inject constructor(
     /**
      * CONTACT-03 — clears the per-contact override. Passing null to the
      * setter wipes the column; on the next emission the section flips back
-     * to the no-override branch ("Inherits {template} from {primary list}").
+     * to the no-override branch ("Comes up every 14 days, like the rest of {primary list}").
      *
      * Also covers the corrupted-JSON recovery path: when decode fails the
      * section shows the editor primed with default RuleParams under its
-     * usual "Custom schedule" label (no special copy; `currentTemplateName`
+     * usual "Custom schedule" label (no special copy; `inheritedRhythm`
      * is null and nothing displays it), and tapping Reset to default here
      * clears the corrupted column without forcing the user to overwrite it.
      */
@@ -975,21 +928,6 @@ class ContactDetailViewModel @Inject constructor(
          */
         private const val RECENT_EVENTS_LIMIT: Int = 50
     }
-}
-
-/**
- * "When did you connect?" choice handed from the Log-connection sheet to
- * [ContactDetailViewModel.onLogConnection]. Plain data — lives beside the VM
- * (not under sections/) so the VM never imports from a composable package.
- *
- * [OnDate.utcMidnightMillis] is the raw Material DatePicker selection — UTC
- * midnight of the chosen calendar day. The VM converts it to a local-noon
- * Instant; the sheet never touches java.time "now".
- */
-sealed interface LogConnectionWhen {
-    data object Today : LogConnectionWhen
-    data object Yesterday : LogConnectionWhen
-    data class OnDate(val utcMidnightMillis: Long) : LogConnectionWhen
 }
 
 /** "12 Oct": short and unambiguous next to "Paused until". */

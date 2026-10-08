@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import app.orbit.data.entity.ListType
 import app.orbit.data.entity.RuleKind
 import app.orbit.domain.rule.RuleParams
+import app.orbit.domain.rule.baseIntervalHours
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeSchedule
 import java.time.LocalTime
@@ -14,7 +15,8 @@ import java.time.LocalTime
  * Sealed interface with three variants — every variant is `@Immutable`. Replaces
  * the original read-only stub: [Ready] now carries the full editable surface
  * (ruleKind + resolved [RuleParams] for STATIC, [SmartListRule] for SMART,
- * active hours, notifications flag, and a Flow-driven members preview). Writes
+ * the time-of-day window, notifications flag, and a Flow-driven members
+ * preview). Writes
  * are dispatched via [ListConfigViewModel] save-on-change setters; this state
  * type is read-only — the screen never mutates it locally.
  */
@@ -29,9 +31,17 @@ sealed interface ListConfigUiState {
      *    template default) and [members] from `ListRepository.observeMembersOfList`
      *    joined to `ContactRepository.observeAll`.
      *
-     * `ruleParams` is null only when the list has no `ruleTemplateId` AND no
-     * `ruleParamsOverrideJson` (a partially-configured row); the screen renders
-     * the rule-template picker but skips the interval slider in that case.
+     * `ruleParams` is null when the list has no `ruleTemplateId` AND no
+     * `ruleParamsOverrideJson` (a partially-configured row), or when the stored
+     * override no longer decodes; How often then says the list has no rhythm
+     * yet and lets the slider set one.
+     *
+     * Two values are derived once, at construction (ARCH-02), so the body and
+     * the tests read the same answer: [intervalHours], the base interval How
+     * often shows for every rule type (LIST-30: 72h for Late night, 24h for
+     * Energize), and [timeOfDay], the stored window read back as a part of the
+     * day or a custom window (LIST-25). Both are body properties, so they stay
+     * out of the constructor and out of `equals`: they follow from the fields.
      */
     @Immutable
     data class Ready(
@@ -46,7 +56,10 @@ sealed interface ListConfigUiState {
         val notificationsEnabled: Boolean,
         val nudgeSchedule: NudgeSchedule?,
         val members: List<ListConfigContactSnapshot>,
-    ) : ListConfigUiState
+    ) : ListConfigUiState {
+        val intervalHours: Int? = ruleParams?.baseIntervalHours
+        val timeOfDay: TimeOfDay = timeOfDayFor(activeHoursStart, activeHoursEnd)
+    }
 
     @Immutable data object NotFound : ListConfigUiState
 

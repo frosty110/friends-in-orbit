@@ -1,43 +1,28 @@
 package app.orbit.ui.screens.lists
 
-import androidx.annotation.StringRes
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.unit.dp
 import app.orbit.R
 import app.orbit.data.entity.ListType
-import app.orbit.data.entity.RuleKind
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeSchedule
@@ -48,18 +33,17 @@ import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
 import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.OrbitTextField
-import app.orbit.ui.components.PhIcon
 import app.orbit.ui.theme.OrbitTheme
-import java.time.LocalTime
 
 /**
  * ONB-20 — production-and-onboarding body for List Configuration.
  *
- * Hosts the optional name editor (onboarding only — see `isOnboarding`
- * gate), the three SettingGroups (Cadence / Active hours / Notifications),
- * the optional Smart-rule editor, the Members preview, and the convert-to-
- * static action. The chrome (OrbitScreen + OrbitAppBar) lives in the
- * caller — production [ListConfigScreen] for the standard nav, and
+ * Hosts the onboarding-only name field (see the `isOnboarding` gate), How
+ * often (LIST-30), Time of day (LIST-25), Nudges, the nudge schedule, the
+ * optional Smart-rule editor, the People section (LIST-27) and the
+ * convert-to-static action. The chrome (OrbitScreen + OrbitAppBar) lives in
+ * the caller: production [ListConfigScreen] for the standard nav, whose
+ * title is also the rename control (LIST-26), and
  * [app.orbit.ui.screens.onboarding.OnboardingFirstListScreen] for the
  * onboarding first-list step (which renders OnboardingScaffold instead of
  * the standard app bar).
@@ -74,17 +58,16 @@ import java.time.LocalTime
  *     The onboarding branch instead uses `fillMaxWidth()` and lets the
  *     OnboardingScaffold scroll container be the only scroll parent.
  *   - An [OrbitTextField] for the list name renders at the top of the
- *     body (BLOCKER 1 / ONB-11). The production path renders the name as an
- *     inline rename row instead (F-12, [ListNameRenameRow]: static text with
- *     a pencil, a field while editing); both commit through `onNameChange`.
+ *     body (BLOCKER 1 / ONB-11). Production has no Name section since
+ *     LIST-26: the app bar's title is the name and renames in place. Make
+ *     your first list keeps its field (that flow was not part of the review).
  *
  * Save-on-change semantics — every control commits via a VM setter (LIST-04);
  * the body never holds editable form state of its own beyond a typing buffer.
  * The onboarding name field emits to `onNameChange` on every keystroke (the VM
- * coalesces inside `runMutation`; v1 ships with no debounce); the rename row
- * commits once, on IME Done, focus loss or the check. Confirmations ("This is
- * now a regular list.") come from the ViewModel through the screen's one
- * snackbar collector, so they say only what was saved.
+ * coalesces inside `runMutation`; v1 ships with no debounce). Confirmations
+ * ("This is now a regular list.") come from the ViewModel through the
+ * screen's one snackbar collector, so they say only what was saved.
  */
 @Composable
 internal fun ListConfigBody(
@@ -94,14 +77,12 @@ internal fun ListConfigBody(
     // Non-null on the production path only: onboarding has its own
     // "Continue" in [OnboardingScaffold] and must not grow a second exit.
     onDone: (() -> Unit)? = null,
-    onNameChange: (String) -> Unit,
-    // Callers hand over the RuleKind; the VM resolves the template row via
-    // RuleTemplateRepository.getByKind. The previous (Long) shape required
-    // UI-side hardcoded seed ids (1L/2L/3L).
-    onRuleTemplateChange: (RuleKind) -> Unit,
-    onRuleParamsChange: (RuleParams) -> Unit,
-    onActiveHoursChange: (LocalTime?, LocalTime?) -> Unit,
-    onAlwaysActiveToggled: (Boolean) -> Unit,
+    // Onboarding's name field only; production renames from its title.
+    onNameChange: (String) -> Unit = {},
+    // LIST-30: hours, from How often. The ViewModel decides what a move does
+    // to the list (setIntervalHours); the body only reports the number.
+    onIntervalChange: (Int) -> Unit,
+    onTimeOfDayChange: (DayPart) -> Unit,
     onNotificationsToggle: (Boolean) -> Unit,
     onNudgeScheduleChange: (NudgeSchedule) -> Unit,
     onSmartRuleChange: (SmartListRule) -> Unit,
@@ -132,10 +113,8 @@ internal fun ListConfigBody(
                 isOnboarding = true,
                 onDone = null,
                 onNameChange = onNameChange,
-                onRuleTemplateChange = onRuleTemplateChange,
-                onRuleParamsChange = onRuleParamsChange,
-                onActiveHoursChange = onActiveHoursChange,
-                onAlwaysActiveToggled = onAlwaysActiveToggled,
+                onIntervalChange = onIntervalChange,
+                onTimeOfDayChange = onTimeOfDayChange,
                 onNotificationsToggle = onNotificationsToggle,
                 onNudgeScheduleChange = onNudgeScheduleChange,
                 onSmartRuleChange = onSmartRuleChange,
@@ -158,10 +137,8 @@ internal fun ListConfigBody(
                     isOnboarding = false,
                     onDone = onDone,
                     onNameChange = onNameChange,
-                    onRuleTemplateChange = onRuleTemplateChange,
-                    onRuleParamsChange = onRuleParamsChange,
-                    onActiveHoursChange = onActiveHoursChange,
-                    onAlwaysActiveToggled = onAlwaysActiveToggled,
+                    onIntervalChange = onIntervalChange,
+                    onTimeOfDayChange = onTimeOfDayChange,
                     onNotificationsToggle = onNotificationsToggle,
                     onNudgeScheduleChange = onNudgeScheduleChange,
                     onSmartRuleChange = onSmartRuleChange,
@@ -206,10 +183,8 @@ private fun ColumnScope.ListConfigBodySections(
     isOnboarding: Boolean,
     onDone: (() -> Unit)?,
     onNameChange: (String) -> Unit,
-    onRuleTemplateChange: (RuleKind) -> Unit,
-    onRuleParamsChange: (RuleParams) -> Unit,
-    onActiveHoursChange: (LocalTime?, LocalTime?) -> Unit,
-    onAlwaysActiveToggled: (Boolean) -> Unit,
+    onIntervalChange: (Int) -> Unit,
+    onTimeOfDayChange: (DayPart) -> Unit,
     onNotificationsToggle: (Boolean) -> Unit,
     onNudgeScheduleChange: (NudgeSchedule) -> Unit,
     onSmartRuleChange: (SmartListRule) -> Unit,
@@ -220,9 +195,9 @@ private fun ColumnScope.ListConfigBodySections(
     if (isOnboarding) {
         // BLOCKER 1 fix — name editor is required so onboarding
         // can satisfy ONB-11 ("no empty/unnamed lists can leave
-        // onboarding"). The production branch below renders the name as
-        // an inline rename row instead (F-12), since a list arrives there
-        // already named by the create sheet.
+        // onboarding"). List settings renames from its app bar title instead
+        // (LIST-26), since a list arrives there already named by New list
+        // (LIST-28).
         SettingGroup(title = stringResource(R.string.lists_section_name)) {
             // Local typing buffer prevents the async VM round-trip
             // from racing the IME — without it, fast typing drops the
@@ -248,77 +223,48 @@ private fun ColumnScope.ListConfigBodySections(
                 modifier = Modifier.padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x2)
             )
         }
-    } else {
-        // F-12 — production inline rename. The list name is rendered as
-        // static text alongside a pencil affordance that flips the row
-        // into an OrbitTextField. Save paths: IME "Done", focus loss,
-        // or trailing check icon. Empty names revert silently — the VM
-        // setter is never invoked when the trimmed buffer is blank.
-        SettingGroup(title = stringResource(R.string.lists_section_name)) {
-            ListNameRenameRow(
-                currentName = state.name,
-                onCommit = onNameChange
-            )
-        }
     }
 
-    // Cadence applies to smart lists too: their members surface on the card
-    // like anyone else's, so they need a rhythm. This used to be static-only,
-    // which left a smart list with no way to get one.
-    run {
-        // LIST-21: "Rhythm", not "Cadence" (voice.md glossary); no accent spent
-        // on settings in this body. The app bar's "Done" is the screen's one
-        // accent; the foot-of-form Done below is Secondary for that reason.
-        SettingGroup(title = stringResource(R.string.lists_section_rhythm)) {
-            RuleTemplatePicker(
-                currentKind = state.ruleKind,
-                templates = emptyList(),
-                onSelect = onRuleTemplateChange
+    // LIST-30: one control for the rhythm, for every list. The rhythm choice
+    // (Keep in touch, Late night, Energize) that sat above it is gone: the
+    // three are one calculation with different numbers, so a Late night or
+    // Energize list shows its real base interval here (every 3 days, every
+    // day) and turning the wheel makes it an ordinary list at the interval
+    // chosen. Smart lists have it too: their members surface on the card like
+    // anyone else's. "How often", not "Interval" (voice.md glossary, LIST-21);
+    // no accent spent on settings in this body.
+    SettingGroup(title = stringResource(R.string.lists_section_how_often)) {
+        val intervalHours = state.intervalHours
+        if (intervalHours == null) {
+            // Nothing configured, or an override that no longer decodes: say
+            // so, and offer the wheel at Keep in touch's starting interval.
+            // Moving it is how such a list gets a rhythm (setIntervalHours
+            // writes any choice when there is nothing to compare against).
+            Text(
+                text = stringResource(R.string.lists_rhythm_unset),
+                style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = OrbitTheme.spacing.x4, end = OrbitTheme.spacing.x4, top = OrbitTheme.spacing.x4)
             )
         }
-
-        val keepInTouch = state.ruleParams as? RuleParams.KeepInTouch
-        if (keepInTouch != null) {
-            SettingGroup(title = stringResource(R.string.lists_section_how_often)) {
-                // The day wheel, shared with Contact detail's custom schedule
-                // (ADR 0011).
-                IntervalDaysPicker(
-                    currentHours = keepInTouch.cooldownMinHours,
-                    onCommit = { days ->
-                        // Rule-correctness fix — commit through withIntervalHours
-                        // so cooldownMaxHours moves with the chosen interval.
-                        // Committing only cooldownMinHours let the default 336h
-                        // cap silently turn "aim for every 30 days" into every
-                        // 14 (see RuleParams.KeepInTouch.withIntervalHours KDoc).
-                        onRuleParamsChange(keepInTouch.withIntervalHours(days * 24))
-                    }
-                )
-            }
-        } else {
-            // Late night / Energize carry no user-facing tunables. One quiet
-            // line replaces the interval group so the hidden controls don't
-            // read as something missing.
-            val note = state.ruleKind?.let { rhythmNoteFor(it) }
-            if (note != null) {
-                SettingGroup(title = stringResource(R.string.lists_section_how_often)) {
-                    Text(
-                        text = stringResource(note),
-                        style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY)
-                    )
-                }
-            }
-        }
+        // The day wheel (ADR 0011), the same one New list and Contact
+        // detail's custom schedule draw. It hands back whole days; the
+        // ViewModel takes hours. With no rhythm yet it opens on Keep in
+        // touch's starting interval, and choosing that one saves it too.
+        IntervalDaysPicker(
+            currentHours = intervalHours ?: RuleParams.KeepInTouch().cooldownMinHours,
+            onCommit = { days -> onIntervalChange(days * 24) },
+            valueIsSet = intervalHours != null,
+        )
     }
 
-    SettingGroup(title = stringResource(R.string.lists_section_active_hours)) {
-        ActiveHoursEditor(
-            start = state.activeHoursStart,
-            end = state.activeHoursEnd,
-            onAlwaysActiveToggled = onAlwaysActiveToggled,
-            onTimesChanged = onActiveHoursChange
+    // LIST-25: which part of the day this list's nudges may come in, in place
+    // of the active-hours editor ("Always active" with two time pickers).
+    SettingGroup(title = stringResource(R.string.lists_section_time_of_day)) {
+        TimeOfDayPicker(
+            selection = state.timeOfDay,
+            onSelect = onTimeOfDayChange,
         )
     }
 
@@ -410,144 +356,5 @@ private fun ColumnScope.ListConfigBodySections(
 
 // `templateIdForKindLocal` (the hardcoded 1L/2L/3L kind → seed id map) is gone:
 // the picker hands the RuleKind straight to the VM, which resolves the row via
-// RuleTemplateRepository.getByKind.
-
-/**
- * One quiet line shown in place of the interval slider when the selected
- * template has no user-facing tunables. Copy is checked against the engine
- * defaults in [RuleParams]: late night runs the longest cooldowns (72h base)
- * with the gentlest resets; energize runs the shortest cooldowns (24h base)
- * with the strongest call-driven resets. Returns null for keep in touch,
- * which renders the slider instead.
- */
-@StringRes
-private fun rhythmNoteFor(kind: RuleKind): Int? = when (kind) {
-    RuleKind.KEEP_IN_TOUCH -> null
-    RuleKind.LATE_NIGHT -> R.string.lists_rhythm_note_late_night
-    RuleKind.ENERGIZE -> R.string.lists_rhythm_note_energize
-}
-
-/**
- * F-12 — production inline rename row. Renders the current list name as
- * static text with a trailing pencil affordance; tapping the pencil (or
- * the row itself) flips into an [OrbitTextField] with the keyboard
- * raised. Save paths:
- *  - IME "Done" tap
- *  - Focus loss
- *  - Trailing check icon
- *
- * Empty names revert silently — when the trimmed buffer is blank the row
- * exits edit mode without dispatching to [onCommit]. Saves dispatch
- * through the supplied [onCommit] (wired in [ListConfigBody] to
- * `vm::setName` → `ListRepository.updateName`); the composable never
- * touches the DAO directly.
- */
-@Composable
-private fun ListNameRenameRow(currentName: String, onCommit: (String) -> Unit) {
-    val curtain = LocalPrivacyCurtain.current
-    val curtainList = stringResource(R.string.components_curtain_list)
-    var editing by rememberSaveable { mutableStateOf(false) }
-    // Guards the focus-loss commit below. onFocusChanged fires once with
-    // isFocused=false the moment the field enters composition — before the
-    // LaunchedEffect requestFocus lands — so committing on any unfocused
-    // state would unmount the field on its first frame (the "flash" bug).
-    // We only commit on blur after the field has genuinely held focus.
-    var hasFocused by remember { mutableStateOf(false) }
-    // Local typing buffer mirrors the onboarding name editor's H3 fix —
-    // an in-flight Room write + Flow round-trip would otherwise overwrite
-    // the next IME event with stale state. Keyed on `editing` only — keying
-    // on currentName too let a mid-edit Flow re-emission wipe the buffer.
-    var nameText by rememberSaveable(editing) { mutableStateOf(currentName) }
-    val focusRequester = remember { FocusRequester() }
-    val focusManager = LocalFocusManager.current
-    // Resolved here: the semantics blocks below are not composable.
-    val saveDescription = stringResource(R.string.lists_name_save)
-    val renameDescription = stringResource(R.string.lists_name_rename)
-
-    fun commit() {
-        val trimmed = nameText.trim()
-        if (trimmed.isNotEmpty() && trimmed != currentName) {
-            onCommit(trimmed)
-        }
-        hasFocused = false
-        editing = false
-    }
-
-    if (editing) {
-        // Auto-focus the field when entering edit mode so the keyboard
-        // raises immediately. requestFocus is wrapped in runCatching to
-        // mirror the ContactDetailScreen pattern (focus may not be
-        // available the first composition pass on slow devices).
-        LaunchedEffect(Unit) {
-            runCatching { focusRequester.requestFocus() }
-        }
-        OrbitTextField(
-            value = nameText,
-            onValueChange = { nameText = it },
-            label = null,
-            contentDescription = stringResource(R.string.lists_section_name),
-            // PRIV-03: drawn as "List" under the curtain; the buffer, which
-            // saves on focus loss, is untouched (CurtainMask).
-            visualTransformation = if (curtain) CurtainMask(curtainList) else VisualTransformation.None,
-            keyboardActions = KeyboardActions(onDone = {
-                commit()
-                focusManager.clearFocus()
-            }),
-            trailing = {
-                Box(
-                    modifier = Modifier
-                        .size(OrbitTheme.spacing.tapMin)
-                        .clickable {
-                            commit()
-                            focusManager.clearFocus()
-                        }
-                        .semantics { contentDescription = saveDescription },
-                    contentAlignment = Alignment.Center
-                ) {
-                    PhIcon(
-                        name = "check",
-                        size = 20.dp,
-                        tint = OrbitTheme.colors.fg
-                    )
-                }
-            },
-            modifier = Modifier
-                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x2)
-                .focusRequester(focusRequester)
-                .onFocusChanged { focusState ->
-                    if (focusState.isFocused) {
-                        hasFocused = true
-                    } else if (hasFocused && editing) {
-                        commit()
-                    }
-                }
-        )
-    } else {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { editing = true }
-                .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.rowY)
-        ) {
-            Text(
-                text = if (curtain) curtainList else currentName.ifBlank { stringResource(R.string.lists_name_unnamed) },
-                style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
-                modifier = Modifier.weight(1f)
-            )
-            Box(
-                modifier = Modifier
-                    .size(OrbitTheme.spacing.tapMin)
-                    .clickable { editing = true }
-                    .semantics { contentDescription = renameDescription },
-                contentAlignment = Alignment.Center
-            ) {
-                PhIcon(
-                    name = "pencil-simple",
-                    size = 18.dp,
-                    tint = OrbitTheme.colors.fgMuted
-                )
-            }
-        }
-    }
-}
+// RuleTemplateRepository.getByKind. The rhythm picker itself left this body
+// with LIST-30; How often is the shared day wheel, IntervalDaysPicker.

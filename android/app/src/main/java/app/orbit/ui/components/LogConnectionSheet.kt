@@ -1,4 +1,4 @@
-package app.orbit.ui.screens.contact.sections
+package app.orbit.ui.components
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
@@ -39,11 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.orbit.R
-import app.orbit.ui.components.OrbitButton
-import app.orbit.ui.components.OrbitButtonVariant
-import app.orbit.ui.components.OrbitTextField
-import app.orbit.ui.components.PhIcon
-import app.orbit.ui.screens.contact.LogConnectionWhen
+import app.orbit.domain.usecase.LogConnectionWhen
 import app.orbit.ui.theme.OrbitTheme
 import java.time.Instant
 import java.time.ZoneOffset
@@ -52,32 +48,37 @@ import java.util.Locale
 import kotlinx.coroutines.launch
 
 /**
- * Log a connection — OR an attempt — Orbit's call-log sync can't see.
+ * Log a connection, or an attempt, that Orbit's call-log sync can't see. The
+ * one sheet for it, opened from Contact detail's hero (CONTACT-09) and from
+ * the card's "Log a connection" (CARD-10). It moved here from Contact
+ * detail's `sections/` on 2026-10-07 when the card started logging too, so
+ * the two screens show the same words and hand the same choice to the same
+ * write ([app.orbit.domain.usecase.LogConnectionUseCase]).
  *
  * A leading two-segment toggle picks what happened:
- *   - "We connected" → a connection (another app, in person) written as
- *     `CallEventEntity(source = MANUAL)`; resets the full template cadence.
- *   - "Couldn't reach them" → an attempt (voicemail / no answer) written as
+ *   - "We connected": a connection (another app, in person), written as
+ *     `CallEventEntity(source = MANUAL)`; resets the full rule cadence.
+ *   - "Couldn't reach them": an attempt (voicemail, no answer), written as
  *     `CallEventEntity(source = ATTEMPT)`; advances the rotation by a short
  *     flat cooldown without claiming you actually talked.
  *
- * ModalBottomSheet launched from the Contact Detail hero action row. Below the
- * toggle: three radio-style "when" options (Today / Yesterday / Pick a date via
- * the Material date picker) + an optional one-line note + a single Primary
- * confirm.
+ * Below the toggle: three radio-style "when" options (Today, Yesterday, Pick
+ * a date through the Material date picker), an optional note of up to four lines and a
+ * single Primary confirm. On confirm the caller hands the choice to its
+ * ViewModel, which calls the use case.
  *
- * On confirm the parent routes to `ContactDetailViewModel.onLogConnection`,
- * which writes the event (durationSeconds = 0) through MarkCalledUseCase — the
- * same atomic nextDueAt-recompute path as the call-log reconciler.
+ * The sheet says nothing about who it is for: the caller decides that before
+ * opening it (the card captures the person on screen at the tap, so a deck
+ * that moves while the sheet is open still logs the person it was opened
+ * for). Nothing in it is a name, so it needs no curtain handling.
  *
- * Pitfall 1 dismissal pattern (the PauseDurationSheet convention, in
- * ui/components): hide animates first, then the parent visibility flag flips
- * via [onDismiss].
+ * Pitfall 1 dismissal pattern (the PauseDurationSheet convention): hide
+ * animates first, then the parent visibility flag flips via [onDismiss].
  *
- * Time hygiene: this composable never reads "now" for display — the VM
- * resolves Today/Yesterday against its injected Clock. The single
+ * Time hygiene: this composable never reads "now" for display; the use case
+ * resolves Today and Yesterday against its injected Clock. The single
  * `System.currentTimeMillis()` here only bounds the date picker so future
- * days are unselectable; the VM clamps `occurredAt` to now regardless.
+ * days are unselectable; the use case clamps `occurredAt` to now regardless.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -143,7 +144,7 @@ fun LogConnectionSheet(
         )
         fun closePicker() {
             showDatePicker = false
-            // Nothing picked and nothing previously picked — fall back to
+            // Nothing picked and nothing previously picked: fall back to
             // Today so the confirm button never points at an empty date.
             if (pickedDateMillis == null) selected = 0
         }
@@ -175,7 +176,7 @@ fun LogConnectionSheet(
 }
 
 /**
- * Stateless sheet body — shared by the live ModalBottomSheet and the previews
+ * Stateless sheet body, shared by the live ModalBottomSheet and the previews
  * (ModalBottomSheet is window-anchored and renders nothing inside @Preview).
  */
 @Composable
@@ -207,7 +208,7 @@ private fun LogConnectionSheetContent(
     ) {
         Text(
             text = stringResource(
-                if (isAttempt) R.string.contact_log_title_attempt else R.string.contact_log_title_connection,
+                if (isAttempt) R.string.components_log_title_attempt else R.string.components_log_title_connection,
             ),
             style = OrbitTheme.type.h3.copy(color = OrbitTheme.colors.fg),
             textAlign = TextAlign.Center,
@@ -216,7 +217,7 @@ private fun LogConnectionSheetContent(
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
         Text(
             text = stringResource(
-                if (isAttempt) R.string.contact_log_body_attempt else R.string.contact_log_body_connection,
+                if (isAttempt) R.string.components_log_body_attempt else R.string.components_log_body_connection,
             ),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fgMuted),
             textAlign = TextAlign.Center,
@@ -226,24 +227,24 @@ private fun LogConnectionSheetContent(
         ModeToggle(isAttempt = isAttempt, onModeChange = onModeChange)
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
         WhenOptionRow(
-            label = stringResource(R.string.contact_log_today),
+            label = stringResource(R.string.components_log_today),
             selected = selected == 0,
             onSelect = { onSelect(0) },
         )
         WhenOptionRow(
-            label = stringResource(R.string.contact_log_yesterday),
+            label = stringResource(R.string.components_log_yesterday),
             selected = selected == 1,
             onSelect = { onSelect(1) },
         )
         WhenOptionRow(
-            label = pickedDateLabel ?: stringResource(R.string.contact_log_pick_date),
+            label = pickedDateLabel ?: stringResource(R.string.components_log_pick_date),
             selected = selected == 2,
             onSelect = { onSelect(2) },
         )
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
         // Up to four lines, like every other note; it was one line that
         // scrolled sideways out of sight.
-        val hint = stringResource(R.string.contact_log_note_hint)
+        val hint = stringResource(R.string.components_log_note_hint)
         OrbitTextField(
             value = note,
             onValueChange = onNoteChange,
@@ -256,7 +257,7 @@ private fun LogConnectionSheetContent(
         Spacer(Modifier.height(OrbitTheme.spacing.x4))
         OrbitButton(
             text = stringResource(
-                if (isAttempt) R.string.contact_log_confirm_attempt else R.string.contact_log_confirm_connection,
+                if (isAttempt) R.string.components_log_confirm_attempt else R.string.components_log_confirm_connection,
             ),
             onClick = onConfirm,
             enabled = confirmEnabled,
@@ -268,7 +269,7 @@ private fun LogConnectionSheetContent(
 }
 
 /**
- * Two-segment "what happened" toggle — connection vs attempt. The selected
+ * Two-segment "what happened" toggle: connection or attempt. The selected
  * segment lifts onto the surface colour against the subtle track; the
  * unselected one stays quiet. Tab semantics so a screen reader announces the
  * pair as a single selection.
@@ -287,13 +288,13 @@ private fun ModeToggle(
         horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1),
     ) {
         ModeSegment(
-            label = stringResource(R.string.contact_log_mode_connected),
+            label = stringResource(R.string.components_log_mode_connected),
             selected = !isAttempt,
             onClick = { onModeChange(false) },
             modifier = Modifier.weight(1f),
         )
         ModeSegment(
-            label = stringResource(R.string.contact_log_mode_attempt),
+            label = stringResource(R.string.components_log_mode_attempt),
             selected = isAttempt,
             onClick = { onModeChange(true) },
             modifier = Modifier.weight(1f),
@@ -327,7 +328,7 @@ private fun ModeSegment(
     }
 }
 
-/** Radio-style "when" row — 48dp target, RadioButton semantics, quiet check mark. */
+/** Radio-style "when" row: 48dp target, RadioButton semantics, quiet check mark. */
 @Composable
 private fun WhenOptionRow(
     label: String,
@@ -355,14 +356,14 @@ private fun WhenOptionRow(
     }
 }
 
-/** "5 Jun 2026" — pure formatting of the user's pick; no clock read. */
+/** "5 Jun 2026": pure formatting of the user's pick; no clock read. */
 private fun formatPickedDate(utcMidnightMillis: Long): String =
     DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault())
         .format(Instant.ofEpochMilli(utcMidnightMillis).atZone(ZoneOffset.UTC).toLocalDate())
 
 // region Previews: sheet content rendered directly (the PauseDurationSheet convention).
 
-@Preview(name = "LogConnectionSheet — light", showBackground = true)
+@Preview(name = "LogConnectionSheet, light", showBackground = true)
 @Composable
 private fun LogConnectionSheetLightPreview() {
     OrbitTheme(darkTheme = false) {
@@ -382,7 +383,7 @@ private fun LogConnectionSheetLightPreview() {
     }
 }
 
-@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "LogConnectionSheet — attempt, dark", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "LogConnectionSheet, attempt, dark", showBackground = true)
 @Composable
 private fun LogConnectionSheetDarkPreview() {
     OrbitTheme(darkTheme = true) {

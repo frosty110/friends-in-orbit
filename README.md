@@ -10,11 +10,33 @@ Orbit organizes your contacts into mood and context-based lists and surfaces one
 
 Grab the latest sideloadable APK from the project's **[Releases page](https://github.com/frosty110/friends-in-orbit/releases)**.
 
-On your phone, open the most recent release, tap the `.apk` asset, and allow installation from unknown sources once. No laptop, adb, or USB cable needed — release assets download without a login. These are unsigned debug builds (`io.github.frosty110.orbit.debug`) intended for testing, not the Play Store build.
+On your phone, open the most recent release, tap the `.apk` asset, and allow installation from unknown sources once. No laptop, adb, or USB cable needed: release assets download without a login. These are debug builds (`io.github.frosty110.orbit.debug`) for testing, not the Play Store build, and they install beside it.
 
 A fresh build is published automatically on every merge to `main` (the **Release APK**
 workflow), so the newest release is always the latest code. Maintainers can also cut an
 off-cycle build by hand from GitHub → Actions → "Release APK" → Run workflow.
+
+### Staying up to date
+
+Every dev build is signed with the same key, so each one installs over the last and keeps your lists and notes. Orbit has no update check of its own (it has no internet access at all), so let an updater watch the Releases page:
+
+1. Install [Obtainium](https://github.com/ImranR98/Obtainium), a free, open-source app that installs and updates apps from their GitHub releases.
+2. In Obtainium, tap **Add app** and enter `https://github.com/frosty110/friends-in-orbit`.
+3. Turn on **Include prereleases**: dev builds are marked as prereleases so they never pose as a store release.
+4. Tap **Add**. Obtainium installs the newest dev build and offers each new one as an update.
+
+Each release's notes end with its signing certificate's SHA-256. Builds with the same fingerprint update each other; the shared key's fingerprint starts `f987f59f`.
+
+**Switching from a build made before 2026-10-07:** those were each signed with a different throwaway key, so the first shared-key build cannot install over them. Once: Settings → Export your data, uninstall Orbit, install the new build, then Settings → Import backup.
+
+**For maintainers:** the key lives in the `ORBIT_DEV_KEYSTORE_BASE64` repository secret (Settings → Secrets and variables → Actions), the base64 of a keystore that uses the standard debug credentials. Keep a copy of the keystore file somewhere safe: a new key means one more uninstall for everyone. If the secret is missing, builds still publish, signed with a throwaway key, and both the workflow run and the release notes say so. To make a new key:
+
+```sh
+keytool -genkeypair -keystore orbit-dev.keystore -storetype PKCS12 \
+  -alias androiddebugkey -storepass android -keypass android \
+  -keyalg RSA -keysize 2048 -validity 10950 -dname "CN=Orbit dev builds, O=Orbit"
+base64 -w0 orbit-dev.keystore   # paste the output into the secret
+```
 
 ## What it does
 

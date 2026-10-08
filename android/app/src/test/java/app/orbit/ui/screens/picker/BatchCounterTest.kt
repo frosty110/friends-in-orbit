@@ -54,6 +54,18 @@ class BatchCounterTest {
     }
 
     @Test
+    fun collect_says_Add_and_TalkBack_hears_the_count_with_no_list() {
+        // LIST-28: New list's People step chooses people for a list that does
+        // not exist yet, so neither the button nor the sentence names one.
+        bar(PickerMode.Collect, count = 3, target = "")
+
+        compose.onNodeWithText("Add").assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Add 3 people"))
+        )
+        compose.onNodeWithText("Add 3 people").assertDoesNotExist()
+    }
+
+    @Test
     fun relink_keeps_the_name_on_the_button() {
         // One person, no count to repeat: the name is what the button is for.
         bar(PickerMode.Relink, count = 1, target = "Sarah")

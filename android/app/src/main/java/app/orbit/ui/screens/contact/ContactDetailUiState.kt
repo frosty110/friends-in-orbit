@@ -21,7 +21,7 @@ import app.orbit.ui.util.UiText
  * text the user has typed but not yet submitted.
  *
  * Labels a person reads (`longestGapLabel`, `pausedLabel`,
- * `currentTemplateName`) are [UiText]: the VM holds no Context and the copy
+ * `inheritedRhythm`) are [UiText]: the VM holds no Context and the copy
  * lives in strings_contact.xml / strings_time.xml (UX rubric 3.4). Null means
  * "nothing to say", and the screen words that itself.
  *
@@ -30,12 +30,13 @@ import app.orbit.ui.util.UiText
  *   - `customScheduleVisible`: derived `listsOn.size >= 2`; the section's
  *     own AnimatedVisibility wraps the body but the screen also conditions
  *     the LazyColumn item on this flag for cleaner recomposition.
- *   - `currentTemplateName`: the inherited rhythm's name as it sits
- *     mid-sentence ("keep in touch") in "Follows the {X} rhythm from {Y}."
- *     Null when a stored override failed to decode (`currentParams == null`):
- *     that state always shows the editor, never the sentence, so there is no
- *     rhythm to name. (It used to hold "Custom schedule (recovering)", which
- *     no branch of the section ever displayed.)
+ *   - `inheritedRhythm`: how often the primary list brings people up, as it
+ *     sits mid-sentence ("every 14 days") in "Comes up {X}, like the rest of
+ *     {Y}." (LIST-30: a rhythm is described by its interval, never named).
+ *     Null with an override stored (the section shows the editor, never the
+ *     sentence) and when the list's rhythm cannot be read (the sentence then
+ *     names the list alone). Until 2026-10-07 it held the rhythm's name
+ *     ("keep in touch").
  *   - `primaryListName`: the first list the contact appears on — drives the
  *     "from {Y}" half of the inherits copy.
  *   - `hasOverride`: true when `Contact.ruleOverrideJson != null` OR the
@@ -94,7 +95,7 @@ sealed interface ContactDetailUiState {
         val callLogDenied: Boolean = false,
         // CONTACT-03 — RuleOverrideSection inputs.
         val customScheduleVisible: Boolean = false,
-        val currentTemplateName: UiText? = null,
+        val inheritedRhythm: UiText? = null,
         val primaryListName: String = "",
         val hasOverride: Boolean = false,
         val currentParams: RuleParams? = null,

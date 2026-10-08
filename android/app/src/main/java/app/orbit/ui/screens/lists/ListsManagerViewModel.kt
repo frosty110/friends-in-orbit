@@ -9,15 +9,16 @@ import app.orbit.data.repository.ListRepository
 import app.orbit.data.repository.RuleTemplateRepository
 import app.orbit.domain.JsonProvider
 import app.orbit.domain.WidgetRefreshTrigger
-import app.orbit.domain.rule.RuleParams
+import app.orbit.domain.rule.baseIntervalHours
 import app.orbit.domain.smart.SmartListRule
 import app.orbit.notify.NudgeScheduler
+import app.orbit.ui.components.howOftenEveryLabel
+import app.orbit.ui.components.intervalDaysFor
 import app.orbit.ui.screens.home.HomeSnackbarEvent
 import app.orbit.ui.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -26,7 +27,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -96,12 +96,10 @@ class ListsManagerViewModel @Inject constructor(
     // in [commitDelete] once the Undo window closes (mirrors HomeViewModel).
     private val pendingDeletes = MutableStateFlow<Set<Long>>(emptySet())
 
-    // 2026-06-09 #26 — create no longer strands the user on the manager with a
-    // "List created." toast. [createList] emits the new row id here; the screen
-    // collector navigates straight to the new list's settings screen
-    // (naming, cadence, adding people — the work the user came to do).
-    private val _createdListEvents = MutableSharedFlow<Long>(extraBufferCapacity = 1)
-    val createdListEvents: SharedFlow<Long> = _createdListEvents.asSharedFlow()
+    // Creating a list is New list's (LIST-28: NewListViewModel and
+    // CreateListUseCase); this screen only opens it. Until 2026-10-07 a
+    // create sheet here called a createList of this ViewModel, and the new
+    // list's id was emitted for the screen to open its settings.
 
     // LIST-22: bumped by [onRetry] to re-subscribe after a failure.
     private val retryCount = MutableStateFlow(0)
@@ -340,64 +338,6 @@ class ListsManagerViewModel @Inject constructor(
     }
 
     /**
-     * LIST-01 / SMART-02 — persist a fresh [ListEntity] from a [TemplateChoice]
-     * + user-typed [name].
-     *
-     * Behaviour:
-     *  - Trims [name]; defensive no-op if empty (the bottom sheet blocks empty
-     *    submission, but the VM double-guards in case future callers skip the
-     *    sheet's validation).
-     *  - Resolves the rule template id by [TemplateChoice.ruleKind] when set
-     *    (the four named static templates and Start from blank all default to
-     *    KEEP_IN_TOUCH so the new list is immediately surfaceable).
-     *  - Encodes [TemplateChoice.smartRule] to JSON via
-     *    [JsonProvider.json] + [SmartListRule.serializer] when set (only the
-     *    "Recently added, not called" template carries one).
-     *  - Computes the next `sortOrder` as `max(existing) + 1` over the current
-     *    [listRepo] snapshot — keeps the new row at the bottom of the active
-     *    list per LIST-02's stable ordering invariant.
-     *  - Dispatches the insert via [listRepo.create] on [viewModelScope]; the
-     *    returned [Job] lets the caller observe completion if it wants to.
-     *  - 2026-06-09 #26 — emits the new row id on [createdListEvents] so the
-     *    screen can navigate to the new list's settings screen.
-     */
-    fun createList(template: TemplateChoice, name: String): Job = viewModelScope.launch {
-        runMutation {
-            val trimmed = name.trim()
-            if (trimmed.isEmpty()) return@runMutation
-            val ruleTemplateId: Long? = template.ruleKind
-                ?.let { ruleTemplateRepo.getByKind(it) }
-                ?.id
-            val smartRuleJson: String? = template.smartRule
-                ?.let { json.encodeToString(SmartListRule.serializer(), it) }
-            val nextSortOrder =
-                (listRepo.observeAll().first().maxOfOrNull { it.sortOrder } ?: -1) + 1
-            val draft = ListEntity(
-                name = trimmed,
-                sortOrder = nextSortOrder,
-                isArchived = false,
-                type = template.type,
-                smartRuleJson = smartRuleJson,
-                ruleTemplateId = ruleTemplateId,
-                activeHoursStart = null,
-                activeHoursEnd = null,
-                notificationsEnabled = true,
-                // The template's own rhythm, encoded exactly as the interval
-                // slider writes it (KeepInTouch.withIntervalHours keeps both
-                // cooldown bounds consistent).
-                ruleParamsOverrideJson = template.intervalDays?.let { days ->
-                    json.encodeToString(
-                        RuleParams.serializer(),
-                        RuleParams.KeepInTouch().withIntervalHours(days * 24)
-                    )
-                }
-            )
-            val newListId = listRepo.create(draft)
-            _createdListEvents.tryEmit(newListId)
-        }
-    }
-
-    /**
      * H4 fix — wraps a mutation block with a uniform try/catch + snackbar
      * surface. Without it an exception inside `viewModelScope.launch` is not
      * dropped: viewModelScope installs no CoroutineExceptionHandler, so the
@@ -468,9 +408,12 @@ class ListsManagerViewModel @Inject constructor(
     }
 
     /**
-     * A regular list's rhythm as its row subtitle: "Every 14 days" for Keep
-     * in touch (the slider's own words, `lists_interval_every_days`), or the
-     * name of a rhythm that has nothing to set. The parameters resolve through
+     * A regular list's rhythm as its row subtitle, as its interval whichever
+     * rule it runs (LIST-30): "Every 14 days" for Keep in touch, "Every 3
+     * days" for Late night, "Every day" for Energize, in the words How often
+     * uses ([howOftenEveryLabel]). Until 2026-10-07 the last two read "Late
+     * night rhythm" and "Energize rhythm", names List settings no longer
+     * shows anywhere. The parameters resolve through
      * the resolver List settings shares ([resolveRuleParams]): the per-list
      * override wins, else the template's defaults. A "Start from blank" list
      * has no override, so its rhythm lives only in the seeded
@@ -492,15 +435,8 @@ class ListsManagerViewModel @Inject constructor(
             RuleParamsResolution.Unreadable -> return UiText.res(R.string.lists_rhythm_unreadable)
             is RuleParamsResolution.Decoded -> resolved.params
         }
-        return when (params) {
-            is RuleParams.KeepInTouch -> {
-                // Whole days, as the interval slider shows them (48h reads "Every 2 days").
-                val days = (params.cooldownMinHours / 24).coerceAtLeast(1)
-                UiText.plural(R.plurals.lists_interval_every_days, days, days)
-            }
-            is RuleParams.LateNight -> UiText.res(R.string.lists_rhythm_late_night)
-            is RuleParams.Energize -> UiText.res(R.string.lists_rhythm_energize)
-        }
+        // Whole days, as How often words them (48h reads "Every 2 days").
+        return howOftenEveryLabel(intervalDaysFor(params.baseIntervalHours))
     }
 
     private companion object {

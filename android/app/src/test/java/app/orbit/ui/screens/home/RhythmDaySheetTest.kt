@@ -36,6 +36,7 @@ class RhythmDaySheetTest {
         direction = direction,
         durationLabel = formatDuration(600),
         timeLabel = "4:30pm",
+        minuteOfDay = 16 * 60 + 30,
     )
 
     private fun summary(calls: List<RhythmCall>): String = directionSummary(calls).asString(context)

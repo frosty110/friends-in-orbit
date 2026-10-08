@@ -81,6 +81,21 @@
     <!-- The open-ended choice. The status line and the snackbar use the same words. -->
     <string name="components_pause_until_unpause">Until you unpause</string>
 
+    <!-- The one Log a connection sheet (Contact detail, Card view): a call or a visit Orbit
+         couldn't see, or a call that didn't connect. -->
+    <string name="components_log_title_connection">Log a connection</string>
+    <string name="components_log_title_attempt">Log an attempt</string>
+    <string name="components_log_body_connection">For calls Orbit can\'t see, like a video call or time together in person.</string>
+    <string name="components_log_body_attempt">A voicemail or no answer: you reached out but didn\'t connect.</string>
+    <string name="components_log_mode_connected">We connected</string>
+    <string name="components_log_mode_attempt">Couldn\'t reach them</string>
+    <string name="components_log_today">Today</string>
+    <string name="components_log_yesterday">Yesterday</string>
+    <string name="components_log_pick_date">Pick a date</string>
+    <string name="components_log_note_hint">Add a note (optional)</string>
+    <string name="components_log_confirm_connection">Log connection</string>
+    <string name="components_log_confirm_attempt">Log attempt</string>
+
     <!-- A stat that has no value yet (Card view, Contact detail). Words, never a dash. -->
     <string name="components_stat_never_called">Never called</string>
     <string name="components_stat_not_enough_calls">Not enough calls yet</string>
@@ -91,13 +106,38 @@
     <string name="components_curtain_list">List</string>
     <string name="components_curtain_someone">Someone</string>
 
-    <!-- Banner after the user returns from a call. -->
-    <string name="components_post_call_heading_generic">You just made a call</string>
-    <!-- %1$s: the person's name. -->
-    <string name="components_post_call_heading_named">You just called %1$s</string>
-    <string name="components_post_call_body">Add a note while it\'s fresh</string>
-    <string name="components_post_call_add_note">Add a note</string>
-    <string name="components_post_call_dismiss">Dismiss</string>
+    <!-- Home's calls waiting for a note: a call of a minute or more in the last day with
+         someone on a list, with nothing written about them since. One shows as a card; two
+         or more stack like a pile of cards that opens into one row per call.
+         %1$s: the person's first name. -->
+    <string name="components_notes_waiting_you_called">You called %1$s</string>
+    <string name="components_notes_waiting_they_called">%1$s called you</string>
+    <!-- The same two lines while the app is covered (privacy curtain): no name. -->
+    <string name="components_notes_waiting_you_called_someone">You called someone</string>
+    <string name="components_notes_waiting_someone_called">Someone called you</string>
+    <!-- Under each call: how long it lasted and how long ago. "14 min · 2 hours ago". -->
+    <string name="components_notes_waiting_meta">%1$s · %2$s</string>
+    <!-- The line on the pile, and what TalkBack calls the pile. -->
+    <plurals name="components_notes_waiting_count">
+        <item quantity="one">%1$d call to write about</item>
+        <item quantity="other">%1$d calls to write about</item>
+    </plurals>
+    <!-- Whether the pile is open, said by TalkBack after the line above. -->
+    <string name="components_notes_waiting_collapsed">Collapsed</string>
+    <string name="components_notes_waiting_expanded">Expanded</string>
+    <!-- What a tap on the pile does, for TalkBack ("Double-tap to show each call"). -->
+    <string name="components_notes_waiting_show_each">Show each call</string>
+    <string name="components_notes_waiting_show_less">Show less</string>
+    <string name="components_notes_waiting_add_note">Add a note</string>
+    <string name="components_notes_waiting_dismiss">Dismiss</string>
+    <string name="components_notes_waiting_dismiss_all">Dismiss all</string>
+    <!-- TalkBack names for the two buttons on a call, which say whose call it is.
+         %1$s: the person's first name. -->
+    <string name="components_notes_waiting_add_note_named">Add a note about your call with %1$s</string>
+    <string name="components_notes_waiting_dismiss_named">Dismiss your call with %1$s</string>
+    <!-- The same while the app is covered (privacy curtain). -->
+    <string name="components_notes_waiting_add_note_masked">Add a note about this call</string>
+    <string name="components_notes_waiting_dismiss_masked">Dismiss this call</string>
     <!-- TalkBack label for the X that closes a snackbar. -->
     <string name="components_snackbar_dismiss">Dismiss</string>
 
@@ -109,6 +149,10 @@
     <string name="components_browse_row_never_called">Never called</string>
     <!-- %1$s: how long ago, for example "3 days ago". -->
     <string name="components_browse_row_last_call">Last call: %1$s</string>
+    <!-- Browse's second line: when the person comes up, then their last call, as two facts on
+         one line. %1$s: "Up now", "Thursday", "In 2 weeks" or "Until 12 Oct". %2$s: "Last call:
+         3 days ago" or "Never called". -->
+    <string name="components_browse_row_when_meta">%1$s · %2$s</string>
 
     <string name="components_search_clear">Clear search</string>
     <!-- Screen-reader name of the placeholder shapes shown while a list loads. -->

@@ -251,18 +251,212 @@ class OrbitNavHostTest {
         assertEquals("5", arg("listId"))
     }
 
-    // CARD-03 / NOTE-02
+    // LIST-28: New list is a screen of its own, opened from Home and Lists,
+    // and Create (or leaving) returns to whichever opened it.
 
     @Test
-    fun cardAddANote_opensThePerson_withTheNoteFieldFocused() {
+    fun homeNewList_opensTheFlow_andLeavingReturnsHome() {
+        start(Routes.Home)
+
+        act { screens.homeOnCreateList() }
+
+        assertEquals(Routes.NewList, route)
+        assertEquals(Routes.Home, previousRoute)
+
+        act { screens.newListOnLeave() }
+        assertEquals(Routes.Home, route)
+        assertEquals(1, depth)
+    }
+
+    @Test
+    fun listsNewList_opensTheFlow_andLeavingReturnsToLists() {
+        start(Routes.Home)
+        navigate(Routes.lists())
+
+        act { screens.listsOnCreateList() }
+
+        assertEquals(Routes.NewList, route)
+        assertEquals(Routes.Lists, previousRoute)
+
+        act { screens.newListOnLeave() }
+        assertEquals(Routes.Lists, route)
+    }
+
+    @Test
+    fun theFlow_leavesOnce_evenWhenAskedTwice() {
+        start(Routes.Home)
+        navigate(Routes.lists())
+        navigate(Routes.NewList)
+
+        // Create landing as Back is pressed: the second must not pop Lists.
+        act {
+            screens.newListOnLeave()
+            screens.newListOnLeave()
+        }
+
+        assertEquals(Routes.Lists, route)
+    }
+
+    @Test
+    fun theOldOpenCreateRoute_opensTheFlowOverLists_once() {
+        start(Routes.Home)
+
+        // What a NAVIGATE_TO written before the flow existed would hand over.
+        act { deepLink = Routes.lists(openCreate = true) }
+        awaitRoute(Routes.NewList)
+
+        assertEquals(Routes.Lists, previousRoute, "the flow opens over Lists, as the sheet did")
+        assertEquals(1, consumed)
+
+        act { screens.newListOnLeave() }
+        compose.waitForIdle()
+        assertEquals(Routes.Lists, route, "coming back to Lists does not open the flow again")
+        assertEquals(2, depth)
+    }
+
+    @Test
+    fun addPeople_opensThePickerToCollect_andItsSelectionComesBackToTheFlow() {
+        start(Routes.Home)
+        navigate(Routes.NewList)
+        val flow = assertNotNull(nav.currentBackStackEntry)
+
+        act { screens.newListOnChoosePeople(listOf(3L, 7L)) }
+
+        assertEquals(Routes.PickContacts, route)
+        assertEquals("collect", arg("mode"))
+        assertEquals("3,7", arg("selected"), "the picker opens with who is already chosen")
+        assertNull(arg("targetListId"), "there is no list yet")
+
+        act { screens.pickContactsOnCollect(listOf(3L, 9L)) }
+
+        assertSame(flow, nav.currentBackStackEntry, "back on the same flow, with everything entered")
+        assertEquals(listOf(3L, 9L), screens.newListChosenPeople)
+
+        act { screens.newListOnChosenPeopleTaken() }
+        assertNull(screens.newListChosenPeople, "handed over once")
+    }
+
+    @Test
+    fun backFromTheCollectPicker_changesNothing() {
+        start(Routes.Home)
+        navigate(Routes.NewList)
+        act { screens.newListOnChoosePeople(emptyList()) }
+        assertEquals(Routes.PickContacts, route)
+        assertNull(arg("selected"))
+
+        act { nav.popBackStack() }
+
+        assertEquals(Routes.NewList, route)
+        assertNull(screens.newListChosenPeople)
+    }
+
+    // BROWSE-09
+
+    @Test
+    fun cardBrowsePeople_opensBrowse_onTheCardsPerson() {
         start(Routes.Home)
         navigate(Routes.card("3"))
 
-        act { screens.cardOnAddNote("c-7") }
+        act { screens.cardOnBrowse("3", 42L) }
 
-        assertEquals(Routes.Contact, route)
+        assertEquals(Routes.Browse, route)
+        assertEquals("3", arg("listId"))
+        assertEquals("42", arg("focus"), "Browse reads the card's person from the focus argument")
+    }
+
+    @Test
+    fun cardBrowseThisList_opensBrowse_withNoOneToFocus() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+
+        act { screens.cardOnBrowse("3", null) }
+
+        assertEquals(Routes.Browse, route)
+        assertEquals("3", arg("listId"))
+        assertNull(arg("focus"))
+    }
+
+    // CARD-03 / NOTE-04: the card's "Add a note" opens the page for writing
+    // about the call. Until 2026-10-07 it opened the person with the note
+    // field focused (NOTE-02).
+
+    @Test
+    fun cardAddANote_opensTheNotePage_forThatPerson() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+
+        act { screens.cardOnAddNote("c-7", null) }
+
+        assertEquals(Routes.PostCallNote, route)
         assertEquals("c-7", arg("contactId"))
-        assertEquals("1", arg("focusNote"))
+        // The card knows who was called, not which call: the page finds it.
+        assertNull(arg("callEventId"))
+        assertEquals("c-7", screens.noteShownFor?.first)
+    }
+
+    // CARD-11: after a call worth a note the card opens the page for that call
+    // by itself, and leaving the page lands back on the deck.
+
+    @Test
+    fun cardAfterACallWorthANote_opensTheNotePage_forThatCall_andLeavingReturnsToTheDeck() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+
+        act { screens.cardOnAddNote("c-7", 41L) }
+
+        assertEquals(Routes.PostCallNote, route)
+        assertEquals("c-7", arg("contactId"))
+        assertEquals("41", arg("callEventId"))
+        assertEquals("c-7" to "41", screens.noteShownFor)
+
+        act { screens.noteOnLeave() }
+        assertEquals(Routes.Card, route)
+        assertEquals("3", arg("listId"))
+    }
+
+    // HOME-14 / NOTE-04
+
+    @Test
+    fun homeAddANote_opensTheNotePage_forThatCall_andLeavingReturnsHome() {
+        start(Routes.Home)
+
+        act { screens.homeOnOpenPostCallNote("7", 41L) }
+
+        assertEquals(Routes.PostCallNote, route)
+        assertEquals("7", arg("contactId"))
+        assertEquals("41", arg("callEventId"))
+        assertEquals("7" to "41", screens.noteShownFor)
+
+        act { screens.noteOnLeave() }
+        assertEquals(Routes.Home, route)
+    }
+
+    @Test
+    fun theNotePage_leavesOnce_evenWhenAskedTwice() {
+        start(Routes.Home)
+        navigate(Routes.card("3"))
+        navigate(Routes.postCallNote("7", 41L))
+
+        // "Not now" tapped twice, or a save landing as it is tapped: the
+        // second must not pop the deck under the page.
+        act {
+            screens.noteOnLeave()
+            screens.noteOnLeave()
+        }
+
+        assertEquals(Routes.Card, route)
+    }
+
+    @Test
+    fun theNotification_opensTheNotePage_overHome() {
+        start(Routes.Home)
+
+        // What NOTIF-16's tap hands MainActivity, through NAVIGATE_TO.
+        act { deepLink = Routes.postCallNote("7", 41L) }
+
+        assertEquals(Routes.PostCallNote, route)
+        assertEquals("41", arg("callEventId"))
+        assertEquals(Routes.Home, previousRoute)
     }
 
     @Test
@@ -275,6 +469,38 @@ class OrbitNavHostTest {
         assertEquals(Routes.Contact, route)
         assertEquals("c-7", arg("contactId"))
         assertNull(arg("focusNote"))
+    }
+
+    // HOME-13: the strip's "See your week" and the day sheet's "See the
+    // whole week" open the list's Week screen; Back returns Home, and a
+    // block opens the person at the top.
+
+    @Test
+    fun homeSeeYourWeek_opensTheWeek_forThatList_andBackReturnsHome() {
+        start(Routes.Home)
+
+        act { screens.homeOnOpenWeek("5") }
+
+        assertEquals(Routes.Week, route)
+        assertEquals("5", arg("listId"))
+        assertEquals(Routes.Home, previousRoute)
+
+        act { screens.weekOnBack() }
+        assertEquals(Routes.Home, route)
+        assertEquals(1, depth)
+    }
+
+    @Test
+    fun theWeek_opensAPerson_atTheTop() {
+        start(Routes.Home)
+        navigate(Routes.week("5"))
+
+        act { screens.weekOnOpenContact("7") }
+
+        assertEquals(Routes.Contact, route)
+        assertEquals("7", arg("contactId"))
+        assertNull(arg("focusNote"))
+        assertEquals(Routes.Week, previousRoute)
     }
 
     // Open settings from the call-log notices
@@ -380,13 +606,31 @@ private class StubScreens : OrbitNavScreens {
     lateinit var firstListOnStartAgain: () -> Unit
     lateinit var doneOnFinish: () -> Unit
     lateinit var cardOnOpenContact: (String) -> Unit
-    lateinit var cardOnAddNote: (String) -> Unit
+    lateinit var cardOnAddNote: (String, Long?) -> Unit
+    lateinit var homeOnOpenPostCallNote: (String, Long) -> Unit
+    lateinit var homeOnOpenWeek: (String) -> Unit
+    lateinit var weekOnBack: () -> Unit
+    lateinit var weekOnOpenContact: (String) -> Unit
+    lateinit var noteOnLeave: () -> Unit
+
+    /** The person and call the note page was last composed for. */
+    var noteShownFor: Pair<String, String?>? = null
+    lateinit var cardOnBrowse: (String, Long?) -> Unit
     lateinit var browseOnOpenSettings: () -> Unit
     lateinit var searchOnOpenSettings: () -> Unit
     lateinit var contactOnViewAllCalls: () -> Unit
     lateinit var contactOnOpenSettings: () -> Unit
     lateinit var listsOnOpenList: (String) -> Unit
     lateinit var listsOnOpenListSettings: (String) -> Unit
+    lateinit var listsOnCreateList: () -> Unit
+    lateinit var homeOnCreateList: () -> Unit
+    lateinit var newListOnChoosePeople: (List<Long>) -> Unit
+    lateinit var newListOnLeave: () -> Unit
+    lateinit var newListOnChosenPeopleTaken: () -> Unit
+    lateinit var pickContactsOnCollect: (List<Long>) -> Unit
+
+    /** What the graph last handed New list as the picker's result. */
+    var newListChosenPeople: List<Long>? = null
     lateinit var callLogOnOpenSettings: () -> Unit
 
     /** The count the host last composed [UnknownRouteNotice] with; -1 until it has. */
@@ -407,21 +651,40 @@ private class StubScreens : OrbitNavScreens {
         onAddPeopleToList: (listId: String) -> Unit,
         onOpenListSettings: (listId: String) -> Unit,
         onOpenContactWithFocus: (contactId: String, focusNote: Boolean) -> Unit,
-    ) = Stub(Routes.Home)
+        onOpenPostCallNote: (contactId: String, callEventId: Long) -> Unit,
+        onOpenWeek: (listId: String) -> Unit,
+    ) {
+        homeOnOpenPostCallNote = onOpenPostCallNote
+        homeOnOpenWeek = onOpenWeek
+        homeOnCreateList = onCreateList
+        Stub(Routes.Home)
+    }
+
+    @Composable
+    override fun Week(
+        listId: String,
+        onBack: () -> Unit,
+        onOpenContact: (contactId: String) -> Unit,
+    ) {
+        weekOnBack = onBack
+        weekOnOpenContact = onOpenContact
+        Stub(Routes.week(listId))
+    }
 
     @Composable
     override fun Card(
         listId: String,
         onBack: () -> Unit,
         onOpenContact: (contactId: String) -> Unit,
-        onAddNote: (contactId: String) -> Unit,
-        onBrowse: (listId: String) -> Unit,
+        onAddNote: (contactId: String, callEventId: Long?) -> Unit,
+        onBrowse: (listId: String, focusContactId: Long?) -> Unit,
         onEditList: (listId: String) -> Unit,
         onAddContacts: (listId: String) -> Unit,
         onOpenSettings: () -> Unit,
     ) {
         cardOnOpenContact = onOpenContact
         cardOnAddNote = onAddNote
+        cardOnBrowse = onBrowse
         Stub(Routes.card(listId))
     }
 
@@ -468,11 +731,26 @@ private class StubScreens : OrbitNavScreens {
         onOpenList: (listId: String) -> Unit,
         onOpenListSettings: (listId: String) -> Unit,
         onAddContacts: (listId: String) -> Unit,
-        openCreateOnLaunch: Boolean,
+        onCreateList: () -> Unit,
     ) {
         listsOnOpenList = onOpenList
         listsOnOpenListSettings = onOpenListSettings
-        Stub(Routes.lists(openCreateOnLaunch))
+        listsOnCreateList = onCreateList
+        Stub(Routes.Lists)
+    }
+
+    @Composable
+    override fun NewList(
+        chosenPeople: List<Long>?,
+        onChosenPeopleTaken: () -> Unit,
+        onChoosePeople: (selectedContactIds: List<Long>) -> Unit,
+        onLeave: () -> Unit,
+    ) {
+        newListChosenPeople = chosenPeople
+        newListOnChosenPeopleTaken = onChosenPeopleTaken
+        newListOnChoosePeople = onChoosePeople
+        newListOnLeave = onLeave
+        Stub(Routes.NewList)
     }
 
     @Composable
@@ -557,10 +835,20 @@ private class StubScreens : OrbitNavScreens {
     }
 
     @Composable
-    override fun PickContacts(onBack: () -> Unit, onCommit: () -> Unit) = Stub("pick/contacts")
+    override fun PickContacts(onBack: () -> Unit, onCommit: () -> Unit, onCollect: (contactIds: List<Long>) -> Unit) {
+        pickContactsOnCollect = onCollect
+        Stub("pick/contacts")
+    }
 
     @Composable
     override fun PickLists(onBack: () -> Unit, onCommit: () -> Unit) = Stub("pick/lists")
+
+    @Composable
+    override fun PostCallNote(contactId: String, callEventId: String?, onLeave: () -> Unit) {
+        noteShownFor = contactId to callEventId
+        noteOnLeave = onLeave
+        Stub(Routes.PostCallNote)
+    }
 
     @Composable
     override fun CommitSnackbarHost(modifier: Modifier) = Unit

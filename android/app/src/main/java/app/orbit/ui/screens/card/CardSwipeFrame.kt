@@ -1,6 +1,7 @@
 package app.orbit.ui.screens.card
 
 import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.AnchoredDraggableState
@@ -30,6 +31,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
+import app.orbit.ui.theme.LocalReducedMotion
 import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
 import kotlinx.coroutines.delay
@@ -66,6 +68,16 @@ import kotlin.math.abs
  * anchors register via `onSizeChanged`, haptic fires exactly once per commit
  * off `snapshotFlow { settledValue }`, and the a11y custom actions mirror the
  * two gestures.
+ *
+ * CARD-08 (2026-10-07): Later and Sooner play the swipe. The owner asked for
+ * the buttons to fly the card off the way a swipe does, so people see they
+ * can swipe; they already did, through the programmatic path above, and
+ * `CardSwipeFrameTest` now pins it. With Android's animations turned off
+ * ([LocalReducedMotion]) every settle here is a snap: a button, a TalkBack
+ * action or a released drag moves the card to its anchor in one frame, with
+ * the same haptic and the same single commit, and nothing flies (rules.md
+ * Design 8). On a device the system's animator scale already made the spring
+ * instant; reading the setting here says so in code, where a test can hold it.
  */
 @Stable
 internal class CardSwipeFrameState {
@@ -100,13 +112,16 @@ internal fun CardSwipeFrame(
     val haptics = LocalHapticFeedback.current
     val currentOnSwipeLeft by rememberUpdatedState(onSwipeLeft)
     val currentOnSwipeRight by rememberUpdatedState(onSwipeRight)
+    val reducedMotion = LocalReducedMotion.current
 
-    val state = remember {
+    // CARD-08: one spec for every settle (a released drag, a button, the
+    // re-center), so animations off means a snap everywhere at once.
+    val state = remember(reducedMotion) {
         AnchoredDraggableState(
             initialValue = CardAnchor.Center,
             positionalThreshold = { totalDistance -> totalDistance * 0.3f },
             velocityThreshold = { with(density) { 125.dp.toPx() } },
-            snapAnimationSpec = OrbitMotion.springCardCommit,
+            snapAnimationSpec = if (reducedMotion) snap() else OrbitMotion.springCardCommit,
             decayAnimationSpec = exponentialDecay(),
         )
     }

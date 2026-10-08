@@ -73,6 +73,15 @@ class CopyAuditTest {
         assertEquals("Want to call?", NotificationCopy.PUBLIC_BODY.text())
     }
 
+    /** NOTIF-16: the notification after a call, and its name-free lock-screen version. */
+    @Test
+    fun postCall_goldenStrings() {
+        assertEquals("How was your call with Kai?", NotificationCopy.postCallTitle("Kai").text())
+        assertEquals("Add a note while it's fresh.", NotificationCopy.POST_CALL_BODY.text())
+        assertEquals("How was your call?", NotificationCopy.POST_CALL_PUBLIC_TITLE.text())
+        assertEquals("After a call", NotificationCopy.CHANNEL_LABEL_AFTER_CALL.text())
+    }
+
     // --- Forbidden-pattern audit ---
 
     @Test
@@ -87,6 +96,12 @@ class CopyAuditTest {
             NotificationCopy.PUBLIC_BODY.text(),
             NotificationCopy.CHANNEL_LABEL_LIST_PROMPTS.text(),
             NotificationCopy.CHANNEL_DESC_LIST_PROMPTS.text(),
+            // NOTIF-16: the notification after a call and its channel.
+            NotificationCopy.postCallTitle(firstName = "Kai").text(),
+            NotificationCopy.POST_CALL_BODY.text(),
+            NotificationCopy.POST_CALL_PUBLIC_TITLE.text(),
+            NotificationCopy.CHANNEL_LABEL_AFTER_CALL.text(),
+            NotificationCopy.CHANNEL_DESC_AFTER_CALL.text(),
             // The nudge schedule editor's words, which lived on NotificationCopy
             // until 2026-10-05 and are audited with the rest, and the per-list
             // "Send nudges" switch's subtitle, which said "notification" until

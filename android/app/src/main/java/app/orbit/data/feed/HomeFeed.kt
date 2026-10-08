@@ -226,10 +226,9 @@ open class HomeFeed @Inject constructor(
         }
 
     /**
-     * Buckets the list's qualifying calls into the trailing 7 local days
-     * (index 0 = six days ago, index 6 = today). "Qualifying" = at least
-     * [MIN_RHYTHM_SECONDS] (HOME-7 drops sub-3-min calls). Bars/colors are the
-     * UI's job; this only places each call on its day.
+     * The trailing 7 local days (index 0 = six days ago, index 6 = today),
+     * through the one bucketing the Week screen shares ([bucketRhythm]).
+     * Bars/colors are the UI's job; this only places each call on its day.
      */
     private fun buildRhythm(
         calls: List<CallEventEntity>,
@@ -237,40 +236,7 @@ open class HomeFeed @Inject constructor(
     ): List<RhythmDay> {
         val zone = ZoneId.systemDefault()
         val today = clock.now().atZone(zone).toLocalDate()
-        val start = today.minusDays(6)
-        val byDate = calls.asSequence()
-            .filter { it.durationSeconds >= MIN_RHYTHM_SECONDS }
-            .mapNotNull { ev ->
-                val d = ev.occurredAt.atZone(zone).toLocalDate()
-                if (d.isBefore(start) || d.isAfter(today)) null else d to ev
-            }
-            .groupBy({ it.first }, { it.second })
-        return (0..6).map { offset ->
-            val date = start.plusDays(offset.toLong())
-            RhythmDay(
-                // Oldest-first within the day so the stacked bars read top-down
-                // in the same order the day sheet lists them.
-                calls = (byDate[date] ?: emptyList())
-                    .sortedBy { it.occurredAt }
-                    .map { ev ->
-                        val contact = contactsById[ev.contactId]
-                        RhythmCall(
-                            callEventId = ev.id,
-                            contactId = ev.contactId,
-                            // A member removed from the list between the call
-                            // and now still has its bar; a null name renders as
-                            // "Someone" (strings_home.xml), which keeps the day
-                            // honest rather than dropping the call.
-                            contactName = contact?.displayName,
-                            photoUri = contact?.photoUri,
-                            durationSeconds = ev.durationSeconds,
-                            direction = ev.direction,
-                            durationLabel = formatDuration(ev.durationSeconds),
-                            timeLabel = formatWallClock(ev.occurredAt, zone),
-                        )
-                    },
-            )
-        }
+        return bucketRhythm(calls, contactsById, firstDay = today.minusDays(6), days = 7, zone = zone)
     }
 
     /**
@@ -329,9 +295,78 @@ open class HomeFeed @Inject constructor(
 
     private companion object {
         const val FIVE_MINUTES_MS: Long = 5 * 60 * 1000L
+    }
+}
 
-        /** HOME-7 — calls shorter than 3 minutes are dropped from the rhythm strip. */
-        const val MIN_RHYTHM_SECONDS: Int = 180
+/**
+ * HOME-7: calls shorter than 3 minutes stay off the rhythm strip, and so off
+ * the Week screen (HOME-13), which draws the same calls.
+ */
+internal const val MIN_RHYTHM_SECONDS: Int = 180
+
+/**
+ * HOME-7 / HOME-13: the one bucketing of a list's calls into local days.
+ * Home's strip asks for the seven days ending today; the Week screen asks for
+ * every whole week back to the list's first call. One function, so the two
+ * can never disagree about which calls count, which day a call fell on, or
+ * the order within a day (the owner review, decision 2: the Week screen
+ * shows the strip's calls).
+ *
+ * - **Which calls**: at least [MIN_RHYTHM_SECONDS]. A connection logged by
+ *   hand is written with 0 seconds, so it never qualifies.
+ * - **Which day**: the local date the call started on, in [zone] (the
+ *   device's). A call that runs past midnight belongs to the day it began,
+ *   on the strip and on the Week screen alike. A day is a calendar date, not
+ *   a 24 hour window, so a 23 or 25 hour day when the clocks change keeps
+ *   every call that started on it.
+ * - **Where in the day**: [RhythmCall.minuteOfDay], the wall-clock start in
+ *   [zone], for the same reason.
+ * - **Order**: oldest first within the day, so the strip's stacked bars read
+ *   top-down in the order the day sheet lists them.
+ *
+ * Returns [days] entries, index 0 = [firstDay]. Calls outside the range are
+ * dropped.
+ */
+internal fun bucketRhythm(
+    calls: List<CallEventEntity>,
+    contactsById: Map<Long, ContactEntity>,
+    firstDay: LocalDate,
+    days: Int,
+    zone: ZoneId,
+): List<RhythmDay> {
+    val lastDay = firstDay.plusDays(days.toLong() - 1)
+    val byDate = calls.asSequence()
+        .filter { it.durationSeconds >= MIN_RHYTHM_SECONDS }
+        .mapNotNull { ev ->
+            val d = ev.occurredAt.atZone(zone).toLocalDate()
+            if (d.isBefore(firstDay) || d.isAfter(lastDay)) null else d to ev
+        }
+        .groupBy({ it.first }, { it.second })
+    return (0 until days).map { offset ->
+        val date = firstDay.plusDays(offset.toLong())
+        RhythmDay(
+            calls = (byDate[date] ?: emptyList())
+                .sortedWith(compareBy({ it.occurredAt }, { it.id }))
+                .map { ev ->
+                    val contact = contactsById[ev.contactId]
+                    val start = ev.occurredAt.atZone(zone).toLocalTime()
+                    RhythmCall(
+                        callEventId = ev.id,
+                        contactId = ev.contactId,
+                        // A member removed from the list between the call
+                        // and now still has its bar; a null name renders as
+                        // "Someone" (strings_home.xml), which keeps the day
+                        // honest rather than dropping the call.
+                        contactName = contact?.displayName,
+                        photoUri = contact?.photoUri,
+                        durationSeconds = ev.durationSeconds,
+                        direction = ev.direction,
+                        durationLabel = formatDuration(ev.durationSeconds),
+                        timeLabel = formatWallClock(ev.occurredAt, zone),
+                        minuteOfDay = start.hour * 60 + start.minute,
+                    )
+                },
+        )
     }
 }
 

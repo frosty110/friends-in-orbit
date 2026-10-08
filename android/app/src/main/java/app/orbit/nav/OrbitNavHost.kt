@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -224,16 +225,37 @@ private fun OrbitNavGraph(
                 onOpenSearch = { nav.navigate(Routes.GlobalSearch) },
                 onOpenSettings = openSettings,
                 onOpenLists = { nav.navigate(Routes.lists()) },
-                onCreateList = { nav.navigate(Routes.lists(openCreate = true)) },
+                // LIST-28: "New list" and "Create your first list" open the
+                // flow straight from Home, and Create returns here.
+                onCreateList = { nav.navigate(Routes.NewList) },
                 // Long-press quick-actions: navigation legs (add people, list settings).
                 onAddPeopleToList = { listId -> nav.navigate(Routes.pickContacts(listId)) },
                 onOpenListSettings = { listId -> nav.navigate(Routes.listConfig(listId)) },
-                // NOTE-02: PostCallBanner "Add a note" tap routes to
-                // ContactDetail with focusNote=true so the Notes input claims
-                // focus once the screen settles.
+                // HOME-8: a row on the rhythm day sheet opens the person at the
+                // top (no note focus: "who was that", not a post-call prompt).
                 onOpenContactWithFocus = { id, focus ->
                     nav.navigate(Routes.contactWithFocus(id, focus))
-                }
+                },
+                // HOME-14 / NOTE-04: "Add a note" on a call waiting for one
+                // opens the page for writing about that call.
+                onOpenPostCallNote = { contactId, callEventId ->
+                    nav.navigate(Routes.postCallNote(contactId, callEventId))
+                },
+                // HOME-13: the strip's "See your week" and the day sheet's
+                // "See the whole week".
+                onOpenWeek = { listId -> nav.navigate(Routes.week(listId)) }
+            )
+        }
+        // HOME-13: one list's calls, week by week. Back returns to Home; a
+        // block or a day sheet row opens the person at the top.
+        composable(
+            Routes.Week,
+            arguments = listOf(navArgument("listId") { type = NavType.StringType })
+        ) { entry ->
+            screens.Week(
+                listId = entry.requiredString("listId"),
+                onBack = { nav.popBackStack() },
+                onOpenContact = openContact
             )
         }
         composable(
@@ -244,11 +266,19 @@ private fun OrbitNavGraph(
                 listId = entry.requiredString("listId"),
                 onBack = { nav.popBackStack() },
                 onOpenContact = openContact,
-                // CARD-03 / NOTE-02: "Add a note" lands in the note field, the
-                // same as Home's "Add a note"; a plain tap on the face opens
-                // the person at the top.
-                onAddNote = { contactId -> nav.navigate(Routes.contactWithFocus(contactId, focusNote = true)) },
-                onBrowse = { listId -> nav.navigate(Routes.browse(listId)) },
+                // CARD-03 / NOTE-04: "Add a note" on "Called Kai" opens the
+                // page for writing about the call, as Home's does, with no
+                // call id: the page describes their latest connected call.
+                // CARD-11: after a call worth a note the card opens the page
+                // by itself and names the call. Leaving the page pops back to
+                // the deck, which has moved on to the next person. A plain tap
+                // on the face opens the person at the top.
+                onAddNote = { contactId, callEventId ->
+                    nav.navigate(Routes.postCallNote(contactId, callEventId))
+                },
+                // BROWSE-09: the menu's "Browse people" passes the person on
+                // the card; "Browse this list" on the All quiet deck passes none.
+                onBrowse = { listId, focusContactId -> nav.navigate(Routes.browse(listId, focusContactId)) },
                 onEditList = { listId -> nav.navigate(Routes.listConfig(listId)) },
                 onAddContacts = { listId -> nav.navigate(Routes.pickContacts(listId)) },
                 // 2026-06-09: the call-log-denied notice deep-links to Settings,
@@ -258,7 +288,16 @@ private fun OrbitNavGraph(
         }
         composable(
             Routes.Browse,
-            arguments = listOf(navArgument("listId") { type = NavType.StringType })
+            arguments = listOf(
+                navArgument("listId") { type = NavType.StringType },
+                // BROWSE-09: optional, StringType like Contact's query args;
+                // BrowseViewModel reads it from SavedStateHandle and parses it.
+                navArgument("focus") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
         ) { entry ->
             screens.Browse(
                 listId = entry.requiredString("listId"),
@@ -327,16 +366,52 @@ private fun OrbitNavGraph(
                 }
             )
         ) { entry ->
+            // LIST-28: `lists?openCreate=true` used to open the create sheet
+            // over Lists. The sheet is gone, so the route opens New list over
+            // Lists instead, once: the entry remembers it did, so coming back
+            // to Lists (Create, or leaving the flow) does not open it again,
+            // and neither does a rotation or a process death.
+            if (entry.arguments?.getBoolean("openCreate") == true) {
+                LaunchedEffect(entry) {
+                    if (entry.savedStateHandle.get<Boolean>(OPEN_CREATE_HANDLED) != true) {
+                        entry.savedStateHandle[OPEN_CREATE_HANDLED] = true
+                        nav.navigate(Routes.NewList)
+                    }
+                }
+            }
             screens.Lists(
                 onBack = { nav.popBackStack() },
                 // LIST-23: tapping a list opens its deck, as on Home. List
                 // settings is one step away in the row's menu, and is where
-                // the archived row's settings icon and a just-created list
-                // land; until 2026-10-06 all three opened the deck.
+                // the archived row's settings icon lands; until 2026-10-06
+                // both opened the deck.
                 onOpenList = { listId -> nav.navigate(Routes.card(listId)) },
                 onOpenListSettings = { listId -> nav.navigate(Routes.listConfig(listId)) },
                 onAddContacts = { listId -> nav.navigate(Routes.pickContacts(listId)) },
-                openCreateOnLaunch = entry.arguments?.getBoolean("openCreate") == true
+                onCreateList = { nav.navigate(Routes.NewList) }
+            )
+        }
+        // LIST-28: New list, step by step. Its People step opens the picker
+        // in Collect mode, which hands the chosen ids back through this
+        // entry's SavedStateHandle (the nav result pattern: one caller, so
+        // the app-level bus the other picker modes use would be one reader
+        // too many). Leaving pops back to the opener, Home or Lists, where
+        // "Created {name}." shows; only while the flow is on top, so a second
+        // leave (Create landing as Back is pressed) never pops the opener.
+        composable(Routes.NewList) { entry ->
+            val chosen by entry.savedStateHandle
+                .getStateFlow<LongArray?>(NEW_LIST_CHOSEN_PEOPLE, null)
+                .collectAsState()
+            screens.NewList(
+                chosenPeople = chosen?.toList(),
+                // Cleared by writing null, not remove(): remove drops the
+                // flow collected above without telling it, so it would keep
+                // the old selection and miss the next one.
+                onChosenPeopleTaken = { entry.savedStateHandle[NEW_LIST_CHOSEN_PEOPLE] = null },
+                onChoosePeople = { selected -> nav.navigate(Routes.collectPeople(selected)) },
+                onLeave = {
+                    if (nav.currentBackStackEntry?.id == entry.id) nav.popBackStack()
+                }
             )
         }
         composable(
@@ -590,12 +665,28 @@ private fun OrbitNavGraph(
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
+                },
+                // mode=collect only (LIST-28): the people New list has
+                // already chosen, comma-separated.
+                navArgument("selected") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
                 }
             )
-        ) {
+        ) { entry ->
             screens.PickContacts(
                 onBack = { nav.popBackStack() },
-                onCommit = { nav.popBackStack() }
+                onCommit = { nav.popBackStack() },
+                // LIST-28: Collect hands its selection to New list, the entry
+                // under it, and returns there. Only while the picker is on
+                // top, so a double tap cannot pop New list too.
+                onCollect = { ids ->
+                    if (nav.currentBackStackEntry?.id == entry.id) {
+                        nav.previousBackStackEntry?.savedStateHandle?.set(NEW_LIST_CHOSEN_PEOPLE, ids.toLongArray())
+                        nav.popBackStack()
+                    }
+                }
             )
         }
         composable(
@@ -607,8 +698,43 @@ private fun OrbitNavGraph(
                 onCommit = { nav.popBackStack() }
             )
         }
+        // NOTE-04: writing about a call, from Home's stack, Card view's
+        // "Called Kai" and the notification after a call (a NAVIGATE_TO
+        // route, so a cold start lands on Home with this page on top and
+        // Back returns to Home).
+        composable(
+            Routes.PostCallNote,
+            arguments = listOf(
+                navArgument("contactId") { type = NavType.StringType },
+                navArgument("callEventId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { entry ->
+            screens.PostCallNote(
+                contactId = entry.requiredString("contactId"),
+                callEventId = entry.arguments?.getString("callEventId"),
+                // Leaves once: "Not now" tapped twice, or a save landing as
+                // the user taps it, must not pop the screen under this one
+                // (Home is the root, and popping it empties the graph).
+                onLeave = {
+                    if (nav.currentBackStackEntry?.id == entry.id) nav.popBackStack()
+                }
+            )
+        }
     }
 }
+
+/**
+ * LIST-28: the key under which the Collect picker leaves its selection on New
+ * list's entry. Not copy: a SavedStateHandle key.
+ */
+internal const val NEW_LIST_CHOSEN_PEOPLE = "new_list_chosen_people"
+
+/** LIST-28: set on a Lists entry once its `openCreate` has opened New list. */
+private const val OPEN_CREATE_HANDLED = "lists_open_create_handled"
 
 /**
  * A back leg when there is somewhere to go back to, null when this is the

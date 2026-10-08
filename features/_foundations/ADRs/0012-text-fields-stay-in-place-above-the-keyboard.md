@@ -62,7 +62,7 @@ Call.
   below. The cursor is ink.
 - **Keyboard defaults**: sentence capitalisation; Done on a single line, a newline on
   several; password fields use the password keyboard, with Next then Done. Where a form
-  has one obvious action, Done performs it (create the list, export) once it is allowed,
+  has one obvious action, Done performs it (export) once it is allowed,
   and otherwise only puts the keyboard away.
 - A docked input stays the right pattern for one case this app does not have yet: a
   chat-style composer pinned to the bottom of a conversation.
@@ -77,8 +77,15 @@ Call.
   theirs as documented guards.
 - Snackbar hosts that sit outside `OrbitScreen` (Contact detail, Settings) pad for the
   navigation bar and the keyboard themselves.
+- Two surfaces are not boxes and so are not `OrbitTextField`: search (`OrbitSearchField`)
+  and the post-call note page's writing area (NOTE-04), which is the page itself and
+  scrolls its own cursor into view inside a screen `OrbitScreen` already shrinks above
+  the keyboard. The note page draws the ink cursor; search keeps its accent cursor. Both
+  are named for TalkBack by their placeholder while empty. List settings' rename from
+  the title uses the field's `TextFieldValue` form, so the cursor opens after the old
+  name (added when the owner-review branch merged this ADR, 2026-10-08).
 
 ## Related
 
-- `OrbitTextFieldTest`, `CreateListContentTest`, `ExportPassphraseContentTest`.
+- `OrbitTextFieldTest`, `NewListContentTest` (New list's name step; it replaced the create sheet `CreateListContentTest` covered), `ExportPassphraseContentTest`.
 - `design/README.md`, "Text input and the keyboard".

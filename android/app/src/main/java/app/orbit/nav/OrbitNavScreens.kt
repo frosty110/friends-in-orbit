@@ -10,6 +10,8 @@ import app.orbit.ui.screens.contact.ContactDetailScreen
 import app.orbit.ui.screens.home.HomeScreen
 import app.orbit.ui.screens.lists.ListConfigScreen
 import app.orbit.ui.screens.lists.ListsManagerScreen
+import app.orbit.ui.screens.lists.newlist.NewListScreen
+import app.orbit.ui.screens.note.PostCallNoteScreen
 import app.orbit.ui.screens.onboarding.OnboardingDoneScreen
 import app.orbit.ui.screens.onboarding.OnboardingFirstListScreen
 import app.orbit.ui.screens.onboarding.OnboardingPermCallLogScreen
@@ -24,6 +26,7 @@ import app.orbit.ui.screens.picker.PickerCommitSnackbarHost
 import app.orbit.ui.screens.picker.UnknownRouteSnackbar
 import app.orbit.ui.screens.settings.SettingsScreen
 import app.orbit.ui.screens.settings.ignored.SettingsIgnoredScreen
+import app.orbit.ui.screens.week.WeekScreen
 
 /**
  * The screens the navigation graph composes, one slot per route, plus the
@@ -51,6 +54,19 @@ interface OrbitNavScreens {
         onAddPeopleToList: (listId: String) -> Unit,
         onOpenListSettings: (listId: String) -> Unit,
         onOpenContactWithFocus: (contactId: String, focusNote: Boolean) -> Unit,
+        onOpenPostCallNote: (contactId: String, callEventId: Long) -> Unit,
+        onOpenWeek: (listId: String) -> Unit,
+    )
+
+    /**
+     * HOME-13: one list's week. The real screen reads [listId] from its own
+     * SavedStateHandle; it is in the slot so a stub can show which list.
+     */
+    @Composable
+    fun Week(
+        listId: String,
+        onBack: () -> Unit,
+        onOpenContact: (contactId: String) -> Unit,
     )
 
     @Composable
@@ -58,8 +74,8 @@ interface OrbitNavScreens {
         listId: String,
         onBack: () -> Unit,
         onOpenContact: (contactId: String) -> Unit,
-        onAddNote: (contactId: String) -> Unit,
-        onBrowse: (listId: String) -> Unit,
+        onAddNote: (contactId: String, callEventId: Long?) -> Unit,
+        onBrowse: (listId: String, focusContactId: Long?) -> Unit,
         onEditList: (listId: String) -> Unit,
         onAddContacts: (listId: String) -> Unit,
         onOpenSettings: () -> Unit,
@@ -98,7 +114,23 @@ interface OrbitNavScreens {
         onOpenList: (listId: String) -> Unit,
         onOpenListSettings: (listId: String) -> Unit,
         onAddContacts: (listId: String) -> Unit,
-        openCreateOnLaunch: Boolean,
+        onCreateList: () -> Unit,
+    )
+
+    /**
+     * LIST-28: New list, step by step. [chosenPeople] is the Collect
+     * picker's result, handed over once: the screen takes it and calls
+     * [onChosenPeopleTaken] so a recomposition does not hand it over again.
+     * [onChoosePeople] opens the picker with the people already chosen.
+     * [onLeave] returns to the screen the flow was opened from, after Create
+     * or when the user leaves part way.
+     */
+    @Composable
+    fun NewList(
+        chosenPeople: List<Long>?,
+        onChosenPeopleTaken: () -> Unit,
+        onChoosePeople: (selectedContactIds: List<Long>) -> Unit,
+        onLeave: () -> Unit,
     )
 
     @Composable
@@ -160,11 +192,20 @@ interface OrbitNavScreens {
     @Composable
     fun OnboardDone(onFinish: () -> Unit)
 
+    /** [onCollect]: Collect mode's selection, for New list's People step (LIST-28). */
     @Composable
-    fun PickContacts(onBack: () -> Unit, onCommit: () -> Unit)
+    fun PickContacts(onBack: () -> Unit, onCommit: () -> Unit, onCollect: (contactIds: List<Long>) -> Unit)
 
     @Composable
     fun PickLists(onBack: () -> Unit, onCommit: () -> Unit)
+
+    /**
+     * NOTE-04: the page for writing about a call. The real screen reads
+     * [contactId] and [callEventId] from its own SavedStateHandle; they are in
+     * the slot so a stub can show which call the graph opened.
+     */
+    @Composable
+    fun PostCallNote(contactId: String, callEventId: String?, onLeave: () -> Unit)
 
     /**
      * The app-level snackbar host for picker commits. It is drawn over the
@@ -199,6 +240,8 @@ interface OrbitNavScreens {
             onAddPeopleToList: (listId: String) -> Unit,
             onOpenListSettings: (listId: String) -> Unit,
             onOpenContactWithFocus: (contactId: String, focusNote: Boolean) -> Unit,
+            onOpenPostCallNote: (contactId: String, callEventId: Long) -> Unit,
+            onOpenWeek: (listId: String) -> Unit,
         ) = HomeScreen(
             onOpenList = onOpenList,
             onOpenSearch = onOpenSearch,
@@ -208,15 +251,24 @@ interface OrbitNavScreens {
             onAddPeopleToList = onAddPeopleToList,
             onOpenListSettings = onOpenListSettings,
             onOpenContactWithFocus = onOpenContactWithFocus,
+            onOpenPostCallNote = onOpenPostCallNote,
+            onOpenWeek = onOpenWeek,
         )
+
+        @Composable
+        override fun Week(
+            listId: String,
+            onBack: () -> Unit,
+            onOpenContact: (contactId: String) -> Unit,
+        ) = WeekScreen(onBack = onBack, onOpenContact = onOpenContact)
 
         @Composable
         override fun Card(
             listId: String,
             onBack: () -> Unit,
             onOpenContact: (contactId: String) -> Unit,
-            onAddNote: (contactId: String) -> Unit,
-            onBrowse: (listId: String) -> Unit,
+            onAddNote: (contactId: String, callEventId: Long?) -> Unit,
+            onBrowse: (listId: String, focusContactId: Long?) -> Unit,
             onEditList: (listId: String) -> Unit,
             onAddContacts: (listId: String) -> Unit,
             onOpenSettings: () -> Unit,
@@ -288,13 +340,26 @@ interface OrbitNavScreens {
             onOpenList: (listId: String) -> Unit,
             onOpenListSettings: (listId: String) -> Unit,
             onAddContacts: (listId: String) -> Unit,
-            openCreateOnLaunch: Boolean,
+            onCreateList: () -> Unit,
         ) = ListsManagerScreen(
             onBack = onBack,
             onOpenList = onOpenList,
             onOpenListSettings = onOpenListSettings,
             onAddContacts = onAddContacts,
-            openCreateOnLaunch = openCreateOnLaunch,
+            onCreateList = onCreateList,
+        )
+
+        @Composable
+        override fun NewList(
+            chosenPeople: List<Long>?,
+            onChosenPeopleTaken: () -> Unit,
+            onChoosePeople: (selectedContactIds: List<Long>) -> Unit,
+            onLeave: () -> Unit,
+        ) = NewListScreen(
+            chosenPeople = chosenPeople,
+            onChosenPeopleTaken = onChosenPeopleTaken,
+            onChoosePeople = onChoosePeople,
+            onLeave = onLeave,
         )
 
         @Composable
@@ -378,12 +443,16 @@ interface OrbitNavScreens {
         override fun OnboardDone(onFinish: () -> Unit) = OnboardingDoneScreen(onFinish = onFinish)
 
         @Composable
-        override fun PickContacts(onBack: () -> Unit, onCommit: () -> Unit) =
-            ContactPickerScreen(onBack = onBack, onCommit = onCommit)
+        override fun PickContacts(onBack: () -> Unit, onCommit: () -> Unit, onCollect: (contactIds: List<Long>) -> Unit) =
+            ContactPickerScreen(onBack = onBack, onCommit = onCommit, onCollect = onCollect)
 
         @Composable
         override fun PickLists(onBack: () -> Unit, onCommit: () -> Unit) =
             ListPickerScreen(onBack = onBack, onCommit = onCommit)
+
+        @Composable
+        override fun PostCallNote(contactId: String, callEventId: String?, onLeave: () -> Unit) =
+            PostCallNoteScreen(onLeave = onLeave)
 
         @Composable
         override fun CommitSnackbarHost(modifier: Modifier) =

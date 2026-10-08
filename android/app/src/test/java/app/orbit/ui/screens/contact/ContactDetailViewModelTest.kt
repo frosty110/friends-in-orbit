@@ -32,6 +32,8 @@ import app.orbit.domain.usecase.ArchiveContactUseCase
 import app.orbit.domain.usecase.DeleteNoteUseCase
 import app.orbit.domain.usecase.EditNoteUseCase
 import app.orbit.domain.usecase.IgnoreContactUseCase
+import app.orbit.domain.usecase.LogConnectionUseCase
+import app.orbit.domain.usecase.LogConnectionWhen
 import app.orbit.domain.usecase.MarkCalledUseCase
 import app.orbit.domain.usecase.PauseContactUseCase
 import app.orbit.domain.usecase.UnignoreContactUseCase
@@ -138,9 +140,9 @@ class ContactDetailViewModelTest {
         // archive write went through.
         val archiveContactUseCase = ArchiveContactUseCase(contactRepo = contactRepo)
         // RuleTemplateRepository injected into the VM so the combine can derive
-        // `currentTemplateName` from the primary list's `ruleTemplateId`.
+        // `inheritedRhythm` from the primary list's `ruleTemplateId`.
         // FakeRuleTemplateRepository over an empty initial list is fine for the
-        // existing tests — the no-override branch falls back to "Keep in touch"
+        // existing tests: the no-override branch has no rhythm to describe
         // and the override-decode path doesn't read the repo at all.
         val ruleTemplateRepo = app.orbit.domain.FakeRuleTemplateRepository()
         // AddRetroactiveNoteUseCase wired into the VM so onAddRetroactiveNote()
@@ -178,7 +180,7 @@ class ContactDetailViewModelTest {
             archiveContactUseCase = archiveContactUseCase,
             ruleTemplateRepo = ruleTemplateRepo,
             addRetroactiveNoteUseCase = addRetroactiveNoteUseCase,
-            markCalledUseCase = markCalledUseCase,
+            logConnection = LogConnectionUseCase(markCalledUseCase, addRetroactiveNoteUseCase, clock, zoneId),
             undoStack = undoStack,
             clock = clock,
             zoneId = zoneId,
@@ -509,6 +511,69 @@ class ContactDetailViewModelTest {
     }
 
     // ============================================================================
+    // CONTACT-03 + LIST-30: the inherited rhythm is described by its interval,
+    // never named. Until 2026-10-07 the sentence read "Follows the late night
+    // rhythm from Late night." and the editor offered the three rhythm names.
+    // ============================================================================
+
+    private suspend fun inheritedRhythmFor(listOverride: RuleParams?): UiText? {
+        val setup = fixture(contactIdArg = "c-5")
+        setup.contactRepo.seed(listOf(contactFixture(id = 5L, displayName = "Sarah")))
+        setup.listRepo.seed(
+            listOf(
+                ListEntity(
+                    id = 1L,
+                    name = "Late night",
+                    sortOrder = 0,
+                    ruleParamsOverrideJson = listOverride?.let {
+                        JsonProvider.json.encodeToString(RuleParams.serializer(), it)
+                    },
+                ),
+                ListEntity(id = 2L, name = "Inner orbit", sortOrder = 1),
+            )
+        )
+        setup.listRepo.seedMemberships(
+            listOf(
+                ListMembershipEntity(contactId = 5L, listId = 1L, addedAt = T0),
+                ListMembershipEntity(contactId = 5L, listId = 2L, addedAt = T0),
+            )
+        )
+        var rhythm: UiText? = null
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            var ready: ContactDetailUiState.Ready? = null
+            while (ready?.customScheduleVisible != true) {
+                val next = awaitItem()
+                if (next is ContactDetailUiState.Ready) ready = next
+            }
+            rhythm = ready.inheritedRhythm
+            cancelAndIgnoreRemainingEvents()
+        }
+        return rhythm
+    }
+
+    @Test
+    fun `a late night list is described by its interval, not its name`() = runTest {
+        assertEquals(
+            UiText.plural(R.plurals.contact_rhythm_every_days, 3, 3),
+            inheritedRhythmFor(RuleParams.LateNight()),
+        )
+    }
+
+    @Test
+    fun `a one day rhythm reads every day, and a keep in touch list its own interval`() = runTest {
+        assertEquals(UiText.res(R.string.contact_rhythm_every_day), inheritedRhythmFor(RuleParams.Energize()))
+        assertEquals(
+            UiText.plural(R.plurals.contact_rhythm_every_days, 14, 14),
+            inheritedRhythmFor(RuleParams.KeepInTouch().withIntervalHours(14 * 24)),
+        )
+    }
+
+    @Test
+    fun `a list with no readable rhythm has nothing to describe`() = runTest {
+        assertNull(inheritedRhythmFor(null))
+    }
+
+    // ============================================================================
     // Opening the override editor is READ-ONLY (peek != mutation).
     // Previously onOpenOverride persisted a default RuleParams the moment the
     // sheet opened — no user change, no undo.
@@ -617,7 +682,7 @@ class ContactDetailViewModelTest {
 
     // ============================================================================
     // Test 8 — CONTACT-03: corrupted JSON recovers gracefully —
-    // currentParams flips to null + currentTemplateName flips to "Custom
+    // currentParams flips to null + inheritedRhythm flips to "Custom
     // schedule (recovering)" without crashing the VM.
     // ============================================================================
 
@@ -716,7 +781,7 @@ class ContactDetailViewModelTest {
                 // the editor (on defaults), never the "Follows the ... rhythm"
                 // sentence. It used to hold "Custom schedule (recovering)",
                 // which no branch displayed.
-                assertNull(ready.currentTemplateName)
+                assertNull(ready.inheritedRhythm)
                 cancelAndIgnoreRemainingEvents()
             }
         }

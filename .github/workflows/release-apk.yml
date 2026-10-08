@@ -10,6 +10,14 @@ name: Release APK
 # The repo is public, so release assets download without a login — the tap-to-
 # install flow works in plain mobile Chrome. The published APK is therefore
 # publicly downloadable; that is an accepted trade-off of this approach.
+#
+# Every build is signed with one shared dev key (the ORBIT_DEV_KEYSTORE_BASE64
+# secret), so each installs over the last and keeps the app's data, and an
+# updater such as Obtainium can follow the Releases page. Android refuses an
+# update signed by a different key. Until 2026-10-07 each run signed with the
+# runner's freshly generated debug key, so every build needed an uninstall
+# first. If the secret is missing the build still publishes, signed with a
+# throwaway key, and says so in a warning and in the release notes.
 on:
   push:
     branches: [main]
@@ -52,6 +60,22 @@ jobs:
       - name: Compute build metadata
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
 
+      # The shared dev key: app/build.gradle.kts signs debug builds with the
+      # file ORBIT_DEV_KEYSTORE names (standard debug credentials inside).
+      - name: Use the shared dev signing key
+        env:
+          ORBIT_DEV_KEYSTORE_BASE64: ${{ secrets.ORBIT_DEV_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ORBIT_DEV_KEYSTORE_BASE64" ]; then
+            KS="${RUNNER_TEMP}/orbit-dev.keystore"
+            echo "$ORBIT_DEV_KEYSTORE_BASE64" | base64 --decode > "$KS"
+            echo "ORBIT_DEV_KEYSTORE=$KS" >> "$GITHUB_ENV"
+            echo "SIGNING_NOTE=Signed with the shared dev key: installs over the previous dev build and keeps your data." >> "$GITHUB_ENV"
+          else
+            echo "::warning::ORBIT_DEV_KEYSTORE_BASE64 is not set, so this build is signed with a throwaway key and will not install over the previous one."
+            echo "SIGNING_NOTE=Signed with a throwaway key (the ORBIT_DEV_KEYSTORE_BASE64 secret is not set): uninstall the previous build first, which deletes Orbit's data unless you export it in Settings." >> "$GITHUB_ENV"
+          fi
+
       - name: Assemble debug APK
         # CI stamps the version so the installed app's Settings → About shows this
         # exact build (see android/app/build.gradle.kts). versionCode = run number
@@ -60,6 +84,17 @@ jobs:
           ORBIT_VERSION_CODE: ${{ github.run_number }}
           ORBIT_BUILD_LABEL: build ${{ github.run_number }} ${{ env.SHORT_SHA }}
         run: ./gradlew :app:assembleDebug --no-daemon
+
+      # The certificate fingerprint goes in the release notes, so two builds
+      # can be compared at a glance: the same fingerprint means one updates
+      # the other.
+      - name: Read the signing certificate
+        run: |
+          APKSIGNER="${ANDROID_HOME}/build-tools/35.0.0/apksigner"
+          CERT=$("$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk \
+            | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
+          [ -n "$CERT" ] || { echo "::error::could not read the APK's signing certificate"; exit 1; }
+          echo "CERT_SHA256=$CERT" >> "$GITHUB_ENV"
 
       # Give the asset a distinguishable name so multiple downloads in the
       # browser don't all collide on "app-debug.apk".
@@ -86,6 +121,9 @@ jobs:
             --notes "Debug APK built from \`${{ github.ref_name }}\` @ \`${SHORT_SHA}\`.
 
           Install: open this release on your phone and tap the \`.apk\` (allow install from unknown sources once).
+
+          ${SIGNING_NOTE}
+          Signing certificate SHA-256: \`${CERT_SHA256}\`
 
           ${{ inputs.note }}"
 

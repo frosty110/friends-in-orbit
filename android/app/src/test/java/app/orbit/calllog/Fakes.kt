@@ -1,6 +1,7 @@
 package app.orbit.calllog
 
 import app.orbit.data.dao.CallEventDao
+import app.orbit.data.dao.WaitingCallRow
 import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.ContactPhoneEntity
@@ -146,8 +147,10 @@ internal class FakeCallEventDao : CallEventDao {
         rows.count { it.contactId == contactId && it.occurredAt == occurredAt }
 
     // Reconciler never exercises any of these; throw on access.
-    override suspend fun latestUnnotedOutgoing(since: Instant): CallEventEntity? =
+    override fun observeWaitingForNote(since: Instant, minSeconds: Int): Flow<List<WaitingCallRow>> =
         throw NotImplementedError("not used by CallLogReconciler")
+
+    override suspend fun maxId(): Long = rows.maxOfOrNull { it.id } ?: 0L
 
     // Reconciler does not consume the call-log feed; throw on access.
     override fun observeForLog(limit: Int): Flow<List<CallEventEntity>> =
@@ -337,8 +340,10 @@ internal object ThrowingCallEventRepository : CallEventRepository {
     override fun observeForLog(limit: Int) =
         throw NotImplementedError()
 
-    override suspend fun latestUnnotedOutgoing(since: Instant): CallEventEntity? =
+    override fun observeWaitingForNote(since: Instant, minSeconds: Int): Flow<List<WaitingCallRow>> =
         throw NotImplementedError()
+
+    override suspend fun maxId(): Long = throw NotImplementedError()
 
     override suspend fun byId(id: Long): CallEventEntity? =
         throw NotImplementedError()

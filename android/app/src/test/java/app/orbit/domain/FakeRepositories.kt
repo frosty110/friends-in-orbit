@@ -1,6 +1,7 @@
 package app.orbit.domain
 
 import app.orbit.data.dao.PreIgnoreSnapshot
+import app.orbit.data.dao.WaitingCallRow
 import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.CallSource
@@ -646,19 +647,19 @@ class FakeCallEventRepository(initial: List<CallEventEntity> = emptyList()) : Ca
         events.sortedByDescending { it.occurredAt }.take(limit)
     }
 
+    override fun observeWaitingForNote(since: Instant, minSeconds: Int): Flow<List<WaitingCallRow>> =
+        waitingRows.map { rows -> rows.filter { !it.occurredAt.isBefore(since) && it.durationSeconds >= minSeconds } }
+
     /**
-     * NOTE-02 — simplified fake. Returns the latest OUTGOING event within
-     * `since`; does NOT cross-check against [FakeNoteRepository] for "unnoted"
-     * status (the production query joins notes — this fake covers the most-recent
-     * window-and-direction filter). Tests that need real correlation should use
-     * the in-memory Room DAO test fixture or override this method via
-     * subclassing.
+     * NOTE-05 rows the fake answers with. The production query joins notes,
+     * contacts, lists and memberships (pinned in Room by
+     * `CallEventDaoWaitingTest`); here a test states the rows directly, and
+     * the fake applies only the window and the floor it is asked for, so a
+     * test can see the caller pass them.
      */
-    override suspend fun latestUnnotedOutgoing(since: Instant): CallEventEntity? = state.value
-        .filter {
-            it.direction == CallDirection.OUTGOING && !it.occurredAt.isBefore(since)
-        }
-        .maxByOrNull { it.occurredAt }
+    val waitingRows: MutableStateFlow<List<WaitingCallRow>> = MutableStateFlow(emptyList())
+
+    override suspend fun maxId(): Long = state.value.maxOfOrNull { it.id } ?: 0L
 
     override suspend fun byId(id: Long): CallEventEntity? = state.value.firstOrNull { it.id == id }
 

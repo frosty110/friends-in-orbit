@@ -3,40 +3,42 @@ package app.orbit.ui.screens.lists
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
 import app.orbit.R
-import app.orbit.data.entity.ListType
-import app.orbit.data.entity.RuleKind
+import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.smart.SmartListRule
 
 /**
- * Six-template catalog for the Create List bottom sheet.
+ * LIST-29: what New list's first step offers, "Start with", in the order it
+ * shows them (the owner's review of 2026-10-07, decision 13: "start from
+ * blank at the very top", fewer templates, sorted by how often):
  *
- * Order in [Catalog] is locked — the picker grid renders rows in this
- * order, and tests assert on the id ordering.
+ *  1. "Start from blank" ("Choose your own rhythm."), full width: no
+ *     default name, and the slider on the next steps starts at Keep in
+ *     touch's default (every 2 days).
+ *  2. Three [Group.Rhythm] templates, most frequent first, each tinted a step
+ *     along one ramp (`rhythmTemplateTints`): "Inner orbit", about weekly (7
+ *     days); "Family", every couple of weeks (14); "Drifted", about monthly
+ *     (30). Each subtitle names the rhythm its [intervalDays] gives, so the
+ *     tint is decoration, never the only cue.
+ *  3. Set apart under a small label, the list that fills itself, "Recently
+ *     added, not called" ("Auto-updates as you add people."):
+ *     [SmartListRule.RecentlyAddedNotCalled] with the SMART-02 default
+ *     `daysWindow = 30`. Its people come from its rule, so the flow has no
+ *     People step for it.
+ *
+ * "Mentors" (every couple of months) went with LIST-29: the How often
+ * slider on the next step reaches 60 days for anyone who wants that rhythm.
+ *
+ * Every list New list makes runs Keep in touch at the interval the How often
+ * step ends on (LIST-30: one control, one calculation), so a template carries
+ * a starting interval, not a rule kind. `CreateListTemplateCatalogTest` pins
+ * the order, the intervals, the smart rule and that Mentors is gone.
  *
  * Names and subtitles are string resources (strings_lists.xml); the screen
- * resolves them. [defaultNameRes] is null for "Start from blank".
+ * resolves them. A template's name is also the new list's starting name
+ * ([defaultNameRes]; null for blank).
  *
- * Each entry maps to a single fresh [app.orbit.data.entity.ListEntity] shape:
- *   - Four "static named" templates (Inner orbit, Family, Mentors, Drifted)
- *     attach to the seeded [RuleKind.KEEP_IN_TOUCH] template with their own
- *     [intervalDays], written as the list's override at creation exactly as the
- *     interval slider would write it. They used to share the template's 2-day
- *     default, so "Mentors: Quarterly check-ins" surfaced each mentor every
- *     2 days. Each subtitle now names the rhythm the list actually gets.
- *   - Intervals stay within the slider's 1–60 day range (ADR 0010), which is
- *     why Mentors promises "every couple of months" rather than quarterly.
- *   - "Recently added, not called" is the only SMART entry; it carries
- *     [SmartListRule.RecentlyAddedNotCalled] with the SMART-02 default
- *     `daysWindow = 30`, and KEEP_IN_TOUCH like every other template so its
- *     members surface on the card (a smart list with no cadence surfaced no one).
- *   - "Start from blank" requires the user to type a name; the rule kind still
- *     defaults to KEEP_IN_TOUCH so the new list is immediately surfaceable.
- *
- * Icon-name notes (verified against `assets/icons/` 2026-04-25):
- *   - `compass` and `wind` from the original design are NOT in the bundle.
- *     Substituted: Mentors → `star` (mentors as guides), Drifted →
- *     `clock-counter-clockwise` (drift as time-since-last-call).
- *   - `heart`, `users`, `shuffle-angular`, `plus` all present and used as-spec'd.
+ * Icons are Phosphor names in the bundle: `clock-counter-clockwise` for
+ * Drifted (time since the last call; the spec's `wind` is not in the set).
  */
 @Immutable
 data class TemplateChoice(
@@ -44,82 +46,74 @@ data class TemplateChoice(
     @StringRes val displayNameRes: Int,
     @StringRes val subtitleRes: Int,
     val iconName: String,
-    val type: ListType,
+    val group: Group,
     @StringRes val defaultNameRes: Int?,
-    val smartRule: SmartListRule?,
-    val ruleKind: RuleKind?,
-    /** Keep-in-touch interval written at creation; null keeps the template default (2 days). */
-    val intervalDays: Int? = null
+    /** The rule a list that fills itself runs; null for every regular list. */
+    val smartRule: SmartListRule? = null,
+    /** The rhythm the How often step starts at; null starts at Keep in touch's default. */
+    val intervalDays: Int? = null,
 ) {
+    /** Where the template sits on "Start with", and whether it is tinted. */
+    enum class Group { Blank, Rhythm, Smart }
+
+    val isSmart: Boolean get() = smartRule != null
+
+    /** The How often slider's starting point for this template, in hours. */
+    val startingIntervalHours: Int get() = intervalDays?.let { it * HOURS_PER_DAY } ?: DEFAULT_INTERVAL_HOURS
+
     companion object {
+        private const val HOURS_PER_DAY = 24
+
+        /** Keep in touch's own starting interval (every 2 days): blank's and the smart list's. */
+        val DEFAULT_INTERVAL_HOURS: Int = RuleParams.KeepInTouch().cooldownMinHours
+
         val Catalog: List<TemplateChoice> = listOf(
+            TemplateChoice(
+                id = "blank",
+                displayNameRes = R.string.lists_template_blank,
+                subtitleRes = R.string.lists_template_blank_subtitle,
+                iconName = "plus",
+                group = Group.Blank,
+                defaultNameRes = null,
+            ),
             TemplateChoice(
                 id = "inner_orbit",
                 displayNameRes = R.string.lists_template_inner_orbit,
                 subtitleRes = R.string.lists_template_inner_orbit_subtitle,
                 iconName = "heart",
-                type = ListType.STATIC,
+                group = Group.Rhythm,
                 defaultNameRes = R.string.lists_template_inner_orbit,
-                smartRule = null,
-                ruleKind = RuleKind.KEEP_IN_TOUCH,
-                intervalDays = 7
+                intervalDays = 7,
             ),
             TemplateChoice(
                 id = "family",
                 displayNameRes = R.string.lists_template_family,
                 subtitleRes = R.string.lists_template_family_subtitle,
                 iconName = "users",
-                type = ListType.STATIC,
+                group = Group.Rhythm,
                 defaultNameRes = R.string.lists_template_family,
-                smartRule = null,
-                ruleKind = RuleKind.KEEP_IN_TOUCH,
-                intervalDays = 14
-            ),
-            TemplateChoice(
-                id = "mentors",
-                displayNameRes = R.string.lists_template_mentors,
-                subtitleRes = R.string.lists_template_mentors_subtitle,
-                // Spec'd `compass` not in assets/icons/ — `star` reads as guidance.
-                iconName = "star",
-                type = ListType.STATIC,
-                defaultNameRes = R.string.lists_template_mentors,
-                smartRule = null,
-                ruleKind = RuleKind.KEEP_IN_TOUCH,
-                intervalDays = 60
+                intervalDays = 14,
             ),
             TemplateChoice(
                 id = "drifted",
                 displayNameRes = R.string.lists_template_drifted,
                 subtitleRes = R.string.lists_template_drifted_subtitle,
-                // Spec'd `wind` not in assets/icons/ — clock-counter-clockwise
-                // carries the "time since last call" sense better than wind anyway.
                 iconName = "clock-counter-clockwise",
-                type = ListType.STATIC,
+                group = Group.Rhythm,
                 defaultNameRes = R.string.lists_template_drifted,
-                smartRule = null,
-                ruleKind = RuleKind.KEEP_IN_TOUCH,
-                intervalDays = 30
+                intervalDays = 30,
             ),
             TemplateChoice(
                 id = "recently_added_not_called",
                 displayNameRes = R.string.lists_template_recently_added,
                 subtitleRes = R.string.lists_template_recently_added_subtitle,
                 iconName = "shuffle-angular",
-                type = ListType.SMART,
+                group = Group.Smart,
                 defaultNameRes = R.string.lists_template_recently_added,
                 smartRule = SmartListRule.RecentlyAddedNotCalled(daysWindow = 30),
-                ruleKind = RuleKind.KEEP_IN_TOUCH
             ),
-            TemplateChoice(
-                id = "blank",
-                displayNameRes = R.string.lists_template_blank,
-                subtitleRes = R.string.lists_template_blank_subtitle,
-                iconName = "plus",
-                type = ListType.STATIC,
-                defaultNameRes = null,
-                smartRule = null,
-                ruleKind = RuleKind.KEEP_IN_TOUCH
-            )
         )
+
+        fun byId(id: String?): TemplateChoice? = Catalog.firstOrNull { it.id == id }
     }
 }

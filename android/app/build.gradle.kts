@@ -54,6 +54,16 @@ android {
     sourceSets["androidTest"].assets.srcDirs("$projectDir/schemas")
 
     signingConfigs {
+        // Dev builds (the Release APK workflow) are signed with one shared key,
+        // so each installs over the last and keeps the app's data: Android
+        // refuses an update signed by a different key. CI decodes the
+        // ORBIT_DEV_KEYSTORE_BASE64 secret and points ORBIT_DEV_KEYSTORE at the
+        // file; it uses the standard debug credentials (store and key password
+        // "android", alias "androiddebugkey"), so only the file changes. Unset,
+        // as on a laptop, the usual ~/.android/debug.keystore is used.
+        getByName("debug") {
+            providers.environmentVariable("ORBIT_DEV_KEYSTORE").orNull?.let { storeFile = file(it) }
+        }
         create("release") {
             storeFile = keystoreProps["storeFile"]?.let { file(it as String) }
             storePassword = keystoreProps["storePassword"] as? String

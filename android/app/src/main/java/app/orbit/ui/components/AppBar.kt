@@ -23,6 +23,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.orbit.ui.theme.OrbitTheme
 
+/**
+ * Every screen's top bar: the title is a heading and the screen's pane title.
+ *
+ * [titleContent] replaces the title's text with a control of the screen's own
+ * while [title] stays the pane title, so TalkBack still announces the screen
+ * by its name. One caller: List settings, whose title is its rename control
+ * (LIST-26), a button that becomes a text field. The content owns its
+ * semantics, and should stay a heading when it shows the title.
+ */
 @Composable
 fun OrbitAppBar(
     title: String,
@@ -30,6 +39,7 @@ fun OrbitAppBar(
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     subtle: Boolean = false,
+    titleContent: (@Composable () -> Unit)? = null,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -48,19 +58,27 @@ fun OrbitAppBar(
         if (leading != null) {
             Box { leading() }
         }
-        Text(
-            text = title,
-            style = OrbitTheme.type.h3.copy(
-                color = OrbitTheme.colors.fg,
-                fontWeight = FontWeight.SemiBold,
-            ),
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = if (leading != null) OrbitTheme.spacing.x1 else 0.dp, top = OrbitTheme.spacing.x2, bottom = OrbitTheme.spacing.x2)
-                // The screen title is a heading, so TalkBack users can jump
-                // to it and hear where they are.
-                .semantics { heading() },
-        )
+        if (titleContent != null) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = if (leading != null) OrbitTheme.spacing.x1 else 0.dp),
+            ) { titleContent() }
+        } else {
+            Text(
+                text = title,
+                style = OrbitTheme.type.h3.copy(
+                    color = OrbitTheme.colors.fg,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = if (leading != null) OrbitTheme.spacing.x1 else 0.dp, top = OrbitTheme.spacing.x2, bottom = OrbitTheme.spacing.x2)
+                    // The screen title is a heading, so TalkBack users can jump
+                    // to it and hear where they are.
+                    .semantics { heading() },
+            )
+        }
         if (trailing != null) {
             Box { trailing() }
         }

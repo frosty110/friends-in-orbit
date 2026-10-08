@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -41,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,10 +73,12 @@ import app.orbit.data.ChipTone
 import app.orbit.data.Contact
 import app.orbit.data.NoteRow
 import app.orbit.data.entity.ListType
+import app.orbit.domain.usecase.LogConnectionWhen
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.InfoTip
 import app.orbit.ui.components.ListContextChip
 import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.components.LogConnectionSheet
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
@@ -110,25 +115,32 @@ import kotlin.math.abs
 // 2026-10-06 card-view audit: every state message is the shared
 // OrbitScreenMessage (the error one with Try again, CARD-07, or Go home alone
 // when nothing can be retried), the app bar is titled in every state, and
-// "Add a note" lands in the note field (NOTE-02).
+// "Add a note" lands in the note field (NOTE-02; since 2026-10-07 the
+// post-call note page, NOTE-04, which the NavHost wires).
+// 2026-10-07 owner review: hints that teach the swipe (CARD-09,
+// CardSwipeHints.kt), "Log a connection" under the card (CARD-10), and the
+// note page opening by itself after a call worth a note (CARD-11).
 
 /**
  * @param onOpenContact opens a person's page from the face or "Open details".
- * @param onAddNote opens the same page with the note field focused (NOTE-02),
- *   from the "Called {name}" snackbar's "Add a note" (CARD-03). Defaults to
- *   [onOpenContact] so a host that has not wired the focus still opens the
- *   person; the NavHost passes `Routes.contactWithFocus`.
+ * @param onAddNote opens the page for writing about a call (NOTE-04; until
+ *   2026-10-07 the person's page with the note field focused, NOTE-02):
+ *   from the "Called {name}" snackbar's "Add a note" (CARD-03) with no call
+ *   id, so the page finds the person's latest call, and by itself after a
+ *   call worth a note (CARD-11) with that call's id. Defaults to
+ *   [onOpenContact] so a host that has not wired it still opens the person;
+ *   the NavHost passes `Routes.postCallNote`.
  */
 @Composable
 fun CardViewScreen(
     listId: String,
     onBack: () -> Unit,
     onCall: (contactId: String) -> Unit,
-    onBrowse: (listId: String) -> Unit,
+    onBrowse: (listId: String, focusContactId: Long?) -> Unit,
     onEditList: (listId: String) -> Unit = {},
     onAddContacts: (listId: String) -> Unit = {},
     onOpenContact: (contactId: String) -> Unit = onCall, // NOTE-03 — RecentNotesSummary tap target
-    onAddNote: (contactId: String) -> Unit = onOpenContact,
+    onAddNote: (contactId: String, callEventId: Long?) -> Unit = { contactId, _ -> onOpenContact(contactId) },
     onOpenSettings: () -> Unit = {},
     vm: CardViewViewModel = hiltViewModel()
 ) {
@@ -171,7 +183,9 @@ fun CardViewScreen(
         onRetry = vm::onRetry,
         onOpenSettings = onOpenSettings,
         onOpenContact = { contactId -> onOpenContact("c-$contactId") },
-        onAddNote = { contactId -> onAddNote("c-$contactId") }
+        onAddNote = { contactId, callEventId -> onAddNote("c-$contactId", callEventId) },
+        onLogConnection = vm::onLogConnection,
+        moveHints = vm::moveHints
     )
 }
 
@@ -250,6 +264,16 @@ internal fun cardListMenuActions(
 // internal (not private) so CardViewScreenTest can drive the stateless content
 // with a Ready state and callbacks (CARD-01, CARD-06); CardViewScreen itself
 // takes a Hilt ViewModel and cannot be composed on the JVM.
+/**
+ * @param onAddNote opens the note page: from "Called {name}"'s "Add a note"
+ *   with no call id, and by itself for a call worth a note (CARD-11) with it.
+ * @param onLogConnection CARD-10: the sheet's choice, for the person the
+ *   sheet was opened over.
+ * @param moveHints CARD-09: what the idle hints say for a person, asked just
+ *   before each appearance; null shows none.
+ * @param pinnedHints CARD-09, previews only: shows the hints at full
+ *   strength with no idle clock, so the gallery and its audits see them.
+ */
 @Composable
 internal fun CardViewContent(
     state: CardViewUiState,
@@ -257,7 +281,7 @@ internal fun CardViewContent(
     callLogDenied: Boolean,
     messages: SharedFlow<CardMessage>,
     onBack: () -> Unit,
-    onBrowse: (listId: String) -> Unit,
+    onBrowse: (listId: String, focusContactId: Long?) -> Unit,
     onEditList: (listId: String) -> Unit,
     onAddContacts: (listId: String) -> Unit,
     onTapToCall: (contactId: Long, phone: String) -> Unit,
@@ -267,10 +291,20 @@ internal fun CardViewContent(
     onRetry: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenContact: (contactId: Long) -> Unit,
-    onAddNote: (contactId: Long) -> Unit = onOpenContact
+    onAddNote: (contactId: Long, callEventId: Long?) -> Unit = { contactId, _ -> onOpenContact(contactId) },
+    onLogConnection: (contactId: Long, whenChoice: LogConnectionWhen, note: String, isAttempt: Boolean) -> Unit =
+        { _, _, _, _ -> },
+    moveHints: suspend (contactId: Long) -> CardMoveHints? = { null },
+    pinnedHints: CardMoveHints? = null
 ) {
     val curtain = LocalPrivacyCurtain.current
     val context = LocalContext.current
+    // CARD-10: who the Log a connection sheet is open for, or null when it is
+    // closed. One owner, here, above the deck's branches (rules.md Code 7), so
+    // the sheet outlives the deck changing under it, and it holds the person
+    // the sheet was opened over: a deck that moves while it is open (a call
+    // log sync) still logs that person, never whoever replaced them.
+    var logSheetFor by rememberSaveable { mutableStateOf<Long?>(null) }
     // The list's name titles every state that knows it (an empty or failed
     // deck used to leave the bar untitled, so TalkBack announced no pane and
     // "this list" was never named on screen). PRIV-03: it masks as "List"
@@ -303,16 +337,35 @@ internal fun CardViewContent(
     val snackbarHostState = remember { SnackbarHostState() }
     val currentOnUndo by rememberUpdatedState(onUndo)
     val currentOnAddNote by rememberUpdatedState(onAddNote)
+    val currentCurtain by rememberUpdatedState(curtain)
     LaunchedEffect(Unit) {
         messages.collectLatest { message ->
             snackbarHostState.currentSnackbarData?.dismiss()
+            val text = when (message) {
+                is CardMessage.Undoable -> message.text
+                is CardMessage.Called -> message.text
+                // PRIV-03: the nameless sentence while the curtain is down.
+                is CardMessage.Logged -> if (currentCurtain) message.curtainText else message.text
+                is CardMessage.Failed -> message.text
+                is CardMessage.OpenNote -> {
+                    // CARD-11: the page for the call, in place of a snackbar.
+                    // NOTIF-16's notification for the same call (posted only
+                    // while Orbit is in the background, which on the
+                    // dial-and-return path means only when the user stayed
+                    // away 10 seconds or more after hanging up) is withdrawn by
+                    // the page itself as it opens, so the two never ask the
+                    // same question twice.
+                    currentOnAddNote(message.contactId, message.callEventId)
+                    return@collectLatest
+                }
+            }
             val actionLabel = when (message) {
                 is CardMessage.Undoable -> context.getString(R.string.components_action_undo)
                 is CardMessage.Called -> context.getString(R.string.card_snackbar_add_note)
-                is CardMessage.Failed -> null
+                else -> null
             }
             val result = snackbarHostState.showSnackbar(
-                message = message.text.asString(context),
+                message = text.asString(context),
                 actionLabel = actionLabel,
                 duration = if (actionLabel != null) SnackbarDuration.Long else SnackbarDuration.Short,
                 withDismissAction = false
@@ -320,10 +373,11 @@ internal fun CardViewContent(
             if (result == SnackbarResult.ActionPerformed) {
                 when (message) {
                     is CardMessage.Undoable -> currentOnUndo(message.token)
-                    // CARD-03: "Add a note" lands in the note field (NOTE-02),
+                    // CARD-03: "Add a note" opens the note page (NOTE-04),
                     // as Home's does; it used to open the top of the page.
-                    is CardMessage.Called -> currentOnAddNote(message.contactId)
-                    is CardMessage.Failed -> Unit
+                    // No call id: the page describes their latest call.
+                    is CardMessage.Called -> currentOnAddNote(message.contactId, null)
+                    else -> Unit
                 }
             }
         }
@@ -341,7 +395,9 @@ internal fun CardViewContent(
                 ListActionsMenu(
                     listName = appBarTitle,
                     listType = state.listType,
-                    onBrowse = { onBrowse(listId) },
+                    // BROWSE-09: "Browse people" opens on the person this card
+                    // shows, marked and scrolled to; no one when it shows nobody.
+                    onBrowse = { onBrowse(listId, (state as? CardViewUiState.Ready)?.contactId) },
                     onEditList = { onEditList(listId) },
                     onAddContacts = { onAddContacts(listId) }
                 )
@@ -378,7 +434,7 @@ internal fun CardViewContent(
                 )
                 is CardViewUiState.EmptyNothingEligible -> NothingEligibleShell(
                     state = state,
-                    onBrowse = { onBrowse(listId) },
+                    onBrowse = { onBrowse(listId, null) },
                     onGoHome = onBack
                 )
                 is CardViewUiState.Error -> ErrorShell(
@@ -391,7 +447,12 @@ internal fun CardViewContent(
                     onTapToCall = onTapToCall,
                     onSwipeLeft = onSwipeLeft,
                     onSwipeRight = onSwipeRight,
-                    onOpenContact = onOpenContact
+                    onOpenContact = onOpenContact,
+                    onOpenLogConnection = { contactId -> logSheetFor = contactId },
+                    // CARD-09: no hints while the sheet covers the card.
+                    hintsActive = logSheetFor == null,
+                    moveHints = moveHints,
+                    pinnedHints = pinnedHints
                 )
             }
             OrbitSnackbarHost(
@@ -401,6 +462,15 @@ internal fun CardViewContent(
                     .padding(OrbitTheme.spacing.x4)
             )
         }
+    }
+
+    // CARD-10: the same sheet Contact detail opens (ui/components), and the
+    // same write behind it. The snackbar that follows comes from the VM.
+    logSheetFor?.let { contactId ->
+        LogConnectionSheet(
+            onConfirm = { whenChoice, note, isAttempt -> onLogConnection(contactId, whenChoice, note, isAttempt) },
+            onDismiss = { logSheetFor = null }
+        )
     }
 }
 
@@ -521,13 +591,18 @@ private fun ErrorShell(canRetry: Boolean, onRetry: () -> Unit, onGoHome: () -> U
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ReadyCard(
     state: CardViewUiState.Ready,
     onTapToCall: (contactId: Long, phone: String) -> Unit,
     onSwipeLeft: (contactId: Long) -> Unit,
     onSwipeRight: (contactId: Long) -> Unit,
-    onOpenContact: (contactId: Long) -> Unit
+    onOpenContact: (contactId: Long) -> Unit,
+    onOpenLogConnection: (contactId: Long) -> Unit,
+    hintsActive: Boolean,
+    moveHints: suspend (contactId: Long) -> CardMoveHints?,
+    pinnedHints: CardMoveHints?
 ) {
     val contactId = state.contactId
     val contact = state.contact
@@ -536,12 +611,19 @@ private fun ReadyCard(
     // Masked like the face and app bar: "Call Contact" under the curtain.
     val maskedName = stringResource(R.string.components_curtain_contact)
     val firstName = (if (curtain) maskedName else contact.name).substringBefore(' ')
+    // CARD-09: the idle clock for this person, and the touch watcher that
+    // hides the hints and restarts it. A previewed card has no clock.
+    val (hints, touchWatcher) = rememberSwipeHints(
+        contactId = contactId,
+        active = hintsActive && pinnedHints == null,
+        fetch = moveHints
+    )
 
     // CARD-06: in landscape on a phone (short and wide) the card and its
     // actions sit side by side. Stacked, the card face got about 120dp of
     // height and showed only the top of the avatar (rubric gate G3, found by
     // rendering at w740dp-h360dp). Portrait is unchanged.
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().then(touchWatcher)) {
         val sideBySide = maxWidth > maxHeight && maxHeight < LANDSCAPE_MAX_HEIGHT
         val frame: @Composable (Modifier) -> Unit = { frameModifier ->
             CardSwipeFrame(
@@ -552,7 +634,10 @@ private fun ReadyCard(
                 onSwipeRight = { onSwipeRight(contactId) },
                 modifier = frameModifier
                     .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x3),
-                ghostOverlay = { offsetFraction -> GhostHints(offsetFraction) }
+                ghostOverlay = { offsetFraction ->
+                    GhostHints(offsetFraction)
+                    SwipeHintsOverlay(state = hints, pinned = pinnedHints)
+                }
             ) {
                 // Crossfade keyed on contactId: the outgoing face fades while the
                 // incoming face fades in, so card advancement reads as one quiet
@@ -669,32 +754,43 @@ private fun ReadyCard(
             // "Skip" used to sit here too; it did exactly what Later does, under a
             // third name for the same thing. "Open details", the same words the
             // face's TalkBack label uses (it read "View details", a second name).
-            Box(
-                contentAlignment = Alignment.Center,
+            // CARD-10: "Log a connection" beside it, in the same quiet style, for
+            // a conversation Orbit couldn't see ("had dinner with them
+            // yesterday"). A flow row, so at 200% text the two wrap onto two
+            // lines instead of squeezing a label letter by letter.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2, Alignment.CenterHorizontally),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = OrbitTheme.spacing.x3)
             ) {
-                Text(
+                QuietCardAction(
                     text = stringResource(R.string.components_action_open_details),
-                    style = OrbitTheme.type.skipAffordance,
-                    color = OrbitTheme.colors.fgMuted,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .defaultMinSize(minWidth = 96.dp, minHeight = OrbitTheme.spacing.tapMin)
-                        .clip(OrbitTheme.shapes.md)
-                        .clickable(role = Role.Button) { onOpenContact(contactId) }
-                        .padding(OrbitTheme.spacing.x3)
+                    onClick = { onOpenContact(contactId) }
+                )
+                QuietCardAction(
+                    text = stringResource(R.string.card_log_connection),
+                    onClick = { onOpenLogConnection(contactId) }
                 )
             }
         }
         if (sideBySide) {
             Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                 frame(Modifier.weight(1f).fillMaxHeight())
-                Column(
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.width(LANDSCAPE_ACTIONS_WIDTH),
-                ) { actions() }
+                // Centred when it fits, scrolling when it does not (CARD-06:
+                // nothing is ever clipped). With "Log a connection" (CARD-10)
+                // the column outgrew a 360dp-high window at 200% text, and the
+                // last action sat below the edge, out of reach; a render at
+                // w740dp-h360dp found it.
+                BoxWithConstraints(modifier = Modifier.width(LANDSCAPE_ACTIONS_WIDTH).fillMaxHeight()) {
+                    Column(
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .heightIn(min = maxHeight),
+                    ) { actions() }
+                }
             }
         } else {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -741,6 +837,26 @@ private fun BoxScope.GhostHints(offsetFraction: Float) {
             OrbitChip(label = stringResource(R.string.card_later), tone = ChipTone.Stone)
         }
     }
+}
+
+/**
+ * A quiet text action under the card ("Open details", "Log a connection"):
+ * muted words with no fill, so the Call button stays the screen's one accent
+ * (rules.md Design 5), and a 48dp target (Design 3).
+ */
+@Composable
+private fun QuietCardAction(text: String, onClick: () -> Unit) {
+    Text(
+        text = text,
+        style = OrbitTheme.type.skipAffordance,
+        color = OrbitTheme.colors.fgMuted,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .defaultMinSize(minWidth = 96.dp, minHeight = OrbitTheme.spacing.tapMin)
+            .clip(OrbitTheme.shapes.md)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(OrbitTheme.spacing.x3)
+    )
 }
 
 @Composable
@@ -1138,14 +1254,19 @@ private val previewStateAhead: CardViewUiState = CardViewUiState.Ready(
 )
 
 @Composable
-private fun PreviewContent(state: CardViewUiState, callLogDenied: Boolean = false) {
+private fun PreviewContent(
+    state: CardViewUiState,
+    callLogDenied: Boolean = false,
+    pinnedHints: CardMoveHints? = null
+) {
     CardViewContent(
+        pinnedHints = pinnedHints,
         state = state,
         listId = "inner-orbit",
         callLogDenied = callLogDenied,
         messages = MutableSharedFlow<CardMessage>().asSharedFlow(),
         onBack = {},
-        onBrowse = {},
+        onBrowse = { _, _ -> },
         onEditList = {},
         onAddContacts = {},
         onTapToCall = { _, _ -> },
@@ -1164,6 +1285,23 @@ private fun PreviewContent(state: CardViewUiState, callLogDenied: Boolean = fals
 private fun CardViewContentPreview() {
     OrbitTheme {
         PreviewContent(state = previewState)
+    }
+}
+
+// CARD-09: the idle hints at full strength at the card's top corners, as they
+// show after four untouched seconds. Rendered at 100% and 200% text, in both
+// modes; the gallery's landscape and curtain runs render it too.
+private val previewHints = CardMoveHints(
+    later = UiText.res(R.string.card_hint_later_when, UiText.res(R.string.card_hint_on_day, "Thursday")),
+    sooner = UiText.res(R.string.card_hint_sooner_when, UiText.res(R.string.card_hint_tomorrow)),
+)
+
+@PreviewLightDark
+@Preview(name = "200%", fontScale = 2f)
+@Composable
+private fun CardViewContentHintsPreview() {
+    OrbitTheme {
+        PreviewContent(state = previewState, pinnedHints = previewHints)
     }
 }
 

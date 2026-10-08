@@ -15,8 +15,8 @@ import app.orbit.ui.util.UiText
  *     the screen reads a single immutable snapshot per emission.
  *   - `ListTileState` carries `type: ListType` and an optional `ruleSummary`
  *     ([UiText], resolved by the row): a smart list's rule ("Recently added ·
- *     30 days") or a regular list's rhythm ("Every 14 days", "Late night
- *     rhythm"), decoded once in the ViewModel rather than inside the
+ *     30 days") or a regular list's rhythm as its interval ("Every 14 days",
+ *     "Every 3 days", "Every day"; LIST-30), decoded once in the ViewModel rather than inside the
  *     composable. The README promises every row a rhythm summary; regular
  *     lists had none until 2026-10-06.
  *   - `notificationsEnabled` drives the row menu's "Pause nudges" / "Resume

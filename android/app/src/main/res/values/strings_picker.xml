@@ -56,6 +56,9 @@
     <string name="picker_everyone_ignored_title">Everyone here is ignored</string>
     <!-- Re-link mode: no other phone contact the person could be linked to. -->
     <string name="picker_relink_none_title">No other phone contacts to link to</string>
+    <!-- Choosing people for a list that New list has not made yet (LIST-28), and Orbit has
+         no one from the phone's contacts to offer. -->
+    <string name="picker_collect_none_title">No people to add yet</string>
 
     <!-- Sort menu. %1$s: the current order, one of the options below. -->
     <string name="picker_sort_label">Sort: %1$s</string>
@@ -161,6 +164,12 @@
     </plurals>
     <!-- %1$s: the person being re-linked. -->
     <string name="picker_commit_relink">Re-link %1$s</string>
+    <!-- New list's People step (LIST-28): the list is made only on "Create list", so the
+         button names no list. It takes the chosen people back to the step. -->
+    <plurals name="picker_commit_collect">
+        <item quantity="one">Add 1 person</item>
+        <item quantity="other">Add %1$d people</item>
+    </plurals>
     <string name="picker_clear">Clear</string>
     <string name="picker_clear_selection">Clear the selection</string>
 

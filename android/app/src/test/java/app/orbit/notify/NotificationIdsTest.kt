@@ -26,4 +26,11 @@ class NotificationIdsTest {
         val id2 = NotificationIds.listPrompt(2L)
         assertNotEquals("Distinct listIds must yield distinct notification IDs", id1, id2)
     }
+
+    /** NOTIF-16: one per person, in its own range, never a list nudge's id. */
+    @Test
+    fun postCall_usesBaseOffset_3_000_000_andNeverMeetsANudge() {
+        assertEquals(3_000_007, NotificationIds.postCall(7L))
+        assertNotEquals(NotificationIds.listPrompt(7L), NotificationIds.postCall(7L))
+    }
 }

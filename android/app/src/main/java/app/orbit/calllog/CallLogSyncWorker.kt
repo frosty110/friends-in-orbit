@@ -9,21 +9,30 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import app.orbit.data.AppPrefs
 import app.orbit.data.android.CallLogReader
+import app.orbit.notify.PostCallNotifier
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
 
 /**
  * Call-log reconciliation worker.
  *
- * Three triggers resolve to this single worker via
+ * Every trigger resolves to this single worker via
  * [ContentObserverController.UNIQUE_NAME_SYNC]:
  * 1. First-run import after permission grant — enqueued from Settings with
  *    [ContentObserverController.enqueueImmediateSync] (fullResync = true).
  * 2. Debounced observer fire — enqueued from
  *    ContentObserverController.enqueueDebouncedSync with fullResync = false.
+ *    The call-log trigger ([CallLogTriggerWorker], NOTIF-16), which wakes a
+ *    process that was dead during the call, enqueues the same request.
  * 3. Manual "Resync now" — enqueued from Settings with fullResync = true.
+ * 4. The resume sync and the card's return from the dialer (incremental).
+ *
+ * After a pass that wrote rows it hands the new calls to [PostCallNotifier]
+ * (NOTIF-16), the same post-reconcile hook shape ADR 0004's amendment records
+ * for the retired follow-up. A first import or a full resync never notifies.
  *
  * Permission handling (CALL-06, Pitfall 3): revoked permission → Result.success(),
  * NOT failure. Failure triggers exponential-backoff retries that would spam logs.
@@ -40,6 +49,7 @@ class CallLogSyncWorker @AssistedInject constructor(
     private val reconciler: CallLogReconciler,
     private val reader: CallLogReader,
     private val prefs: AppPrefs,
+    private val postCallNotifier: PostCallNotifier,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -60,13 +70,29 @@ class CallLogSyncWorker @AssistedInject constructor(
         val lookbackDays = maxOf(1, ((now - sinceMs) / DAY_MS + 1).toInt())
         val rows = reader.readAll(lookbackDays)
 
+        // NOTIF-16: the newest call id before this pass, so the notifier can
+        // tell the rows this pass writes (ids above it) from the ones before.
+        val newestBefore = postCallNotifier.markBeforeSync()
         val summary = reconciler.reconcile(sinceMs = sinceMs, rows = rows)
         prefs.setLastCallLogSyncAt(now)
 
-        // A missed inbound call surfaces the contact in-app (the engine sets
-        // nextDueAt = the moment they rang; see KeepInTouchEngine step 3c). There
-        // is no follow-up notification — Orbit only sends user-defined reminders,
-        // never event-driven pings (2026-07-03 notification principle).
+        // A missed inbound call still surfaces the contact in-app only (the
+        // engine sets nextDueAt = the moment they rang; KeepInTouchEngine step
+        // 3c), with no notification. The one notification a call earns is the
+        // after-a-call prompt for a connected call worth a note (NOTIF-16,
+        // ADR 0009's 2026-10-07 amendment). A failure there is logged and
+        // never fails the sync: the calls are written, and Home shows them.
+        if (summary.inserted > 0) {
+            try {
+                postCallNotifier.onSyncFinished(
+                    insertedAfterId = newestBefore,
+                    bulkPass = fullResync || lastSync == 0L,
+                )
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t // rules.md Code 5
+                Timber.tag(TAG).w("post_call_notify_failed %s", t.javaClass.simpleName)
+            }
+        }
 
         Timber.tag(TAG).i(
             "sync_complete full=%b scanned=%d inserted=%d skipped=%d propagated=%d",

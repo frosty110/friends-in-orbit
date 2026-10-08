@@ -4,7 +4,7 @@
 **Group:** People
 **Status:** active
 **Last reviewed:** 2026-10-08
-**Spec:** [contact-detail](../contact-detail/README.md): CONTACT-01 to CONTACT-08, LIST-24 in [orbit-lists](../orbit-lists/README.md), CONTACT-09 (defined this round), NOTE-01, NOTE-02; LOG-03 and LOG-04 in [call-history](../call-history/README.md); PRIV-03, PRIV-05 and PRIV-07 in [privacy-and-lock](../privacy-and-lock/README.md)
+**Spec:** [contact-detail](../contact-detail/README.md): CONTACT-01 to CONTACT-08, LIST-24 and LIST-30 in [orbit-lists](../orbit-lists/README.md), CONTACT-09 (defined this round), NOTE-01, NOTE-02; LOG-03 and LOG-04 in [call-history](../call-history/README.md); PRIV-03, PRIV-05 and PRIV-07 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
 
@@ -13,7 +13,7 @@
 - Card view: the card face or "Open details"; "Add a note" on the Called snackbar (note field focused)
 - Browse: tap a row
 - Search: tap a row
-- Home: a row on the rhythm day sheet; "Add a note" on the post-call banner (note field focused)
+- Home: a row on the rhythm day sheet. (Until 2026-10-07 the post-call banner's "Add a note" opened this page with the note field focused; Home's waiting calls open the note page now, NOTE-04)
 - Call history: tap a row, or "Open details" (scrolled to that call, with "Add note to this call" under it)
 
 ## What the user sees
@@ -24,7 +24,7 @@
 - "Call" and "Log a connection"
 - "On these lists": a chip per list that isn't archived (LIST-24), or "Not on any list yet"; "Add to lists"
 - "Stats": "Last call", "Total calls", "Average length", "Longest gap" and "Usually" (the part of the day you talk: "Mornings", "Evenings") with an info tip; a stat without enough history says "Not enough calls yet" (CONTACT-02)
-- "Custom schedule", for someone on two or more lists that aren't archived, or anyone with a schedule saved (so it can always be seen and reset): "Follows the keep in touch rhythm from {list}." with "Set a schedule for this person"; once set, the rhythm picker, "Aim for every 14 days" over the same day wheel as List settings (ADR 0011), and "Reset to default" (CONTACT-03)
+- "Custom schedule", for someone on two or more lists that aren't archived, or anyone with a schedule saved (so it can always be seen and reset): "Comes up every 14 days, like the rest of {list}." ("Follows the rhythm of {list}." when the list's rhythm cannot be read) with "Set a schedule for this person"; once set, List settings' "How often" day wheel ("Aim for every 14 days", "Aim for every day" at one day; ADR 0011) and "Reset to default" (CONTACT-03; no rhythm choice since LIST-30)
 - "Notes": a field ("Add a note") with "Add", then every note, newest first, with when it was written (NOTE-01)
 - "Recent calls": each with an icon for its kind, its length (or "Logged" / "Attempted"), and how long ago; "View all calls" in the overflow for the rest
 - The one accent element: "Call" (rules.md Design 6)
@@ -32,7 +32,7 @@
 ## Actions and menus
 
 - "Call", or tapping the number: opens the dialer with the number filled in; Orbit never places the call itself (PRIV-05)
-- "Log a connection" opens a sheet for a call or visit Orbit couldn't see: "We connected" or "Couldn't reach them" ("A voicemail or no answer: you reached out but didn't connect."), "Today" / "Yesterday" / "Pick a date", "Add a note (optional)", then "Log connection" or "Log attempt"; confirmed by "Logged." or "Attempt logged."; the call row reads "Logged" or "Attempted", and an attempt stays out of the stats (CONTACT-09)
+- "Log a connection" opens a sheet for a call or visit Orbit couldn't see: "We connected" or "Couldn't reach them" ("A voicemail or no answer: you reached out but didn't connect."), "Today" / "Yesterday" / "Pick a date", "Add a note (optional)", then "Log connection" or "Log attempt"; the same sheet and the same write as the card's "Log a connection" (CARD-10 in [card-view](../card-view/README.md)); confirmed by "Logged." or "Attempt logged."; the call row reads "Logged" or "Attempted", and an attempt stays out of the stats (CONTACT-09)
 - "More actions for {name}", in order: "View all calls", "Pause" (or "Unpause" while paused), "Open in Contacts" (when the person is in your phone's contacts), then "Ignore" (or "Unignore" while ignored)
   - "Pause" opens "Pause for how long?" with "1 week", "1 month", "Until you unpause"; then "Paused {name} for 1 week", "Paused {name} for 1 month" or "Paused {name} until you unpause", with Undo (CONTACT-04). "Unpause": "Unpaused {name}"
   - "Ignore": "Ignored {name}" with Undo. "Unignore": "Unignored {name}" with Undo. Pause is not offered while the person is ignored
@@ -41,7 +41,7 @@
 - "Add to lists": opens the Add to lists picker
 - Notes: "Add" saves ("Note saved"). Each note's "More actions for this note" offers "Edit" and "Delete" ("Note deleted" with Undo); a long-press edits and a swipe deletes, as shortcuts to the same menu. Tapping a note's time switches between "3 days ago" and the date
 - Arriving from Call history: "Add a note about this call" sits under that call with "Add note to this call", and the note is dated to the call (LOG-03)
-- Custom schedule: "Set a schedule for this person", the rhythm picker and the day wheel save as you go; "Reset to default" returns to the list's rhythm
+- Custom schedule: "Set a schedule for this person", then the day wheel saves as you go (settling where it started saves nothing); "Reset to default" returns to the list's rhythm
 - The orphan banner: "Re-link" opens the Add people picker in Re-link mode; it returns here with "Re-linked to {phone contact}" and Undo (Undo splits them again), or "Couldn't save that" with nothing changed (CONTACT-07). "Archive": "Archived {name}" with Undo
 - A write that fails says so: "Couldn't add note", "Couldn't log that", "Couldn't pause {name}", "Couldn't ignore {name}", "Couldn't archive {name}", "Couldn't undo"
 

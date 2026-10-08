@@ -46,6 +46,13 @@ class PickerModeTitleTest {
     }
 
     @Test
+    fun collect_mode_reads_add_people_like_the_step_that_opened_it() {
+        // LIST-28: New list's People step, headed "Add people".
+        assertEquals("Add people", title(PickerMode.Collect, 0))
+        assertEquals("Add people", title(PickerMode.Collect, 4))
+    }
+
+    @Test
     fun relink_mode_ignores_selection_count() {
         // CONTACT-07: one pick, so no count to show.
         assertEquals("Re-link contact", title(PickerMode.Relink, 0))

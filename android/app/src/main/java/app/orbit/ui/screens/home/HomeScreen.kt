@@ -1,21 +1,16 @@
 package app.orbit.ui.screens.home
 
 import android.content.res.Resources
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,8 +23,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -45,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -75,6 +71,8 @@ import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.ListType
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.components.NoteWaiting
+import app.orbit.ui.components.NotesWaitingStack
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitDropdownMenu
@@ -85,10 +83,8 @@ import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.PhIcon
-import app.orbit.ui.components.PostCallBanner
 import app.orbit.ui.screens.lists.DeleteListDialog
 import app.orbit.ui.theme.LocalReducedMotion
-import app.orbit.ui.theme.OrbitMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
 import app.orbit.ui.util.UiText
@@ -133,12 +129,16 @@ fun HomeScreen(
     onAddPeopleToList: (listId: String) -> Unit = {},
     onOpenListSettings: (listId: String) -> Unit = {},
     onOpenContactWithFocus: (contactId: String, focusNote: Boolean) -> Unit = { _, _ -> },
+    // HOME-14: "Add a note" on a call waiting for one opens the note page (NOTE-04).
+    onOpenPostCallNote: (contactId: String, callEventId: Long) -> Unit = { _, _ -> },
+    // HOME-13: the strip's "See your week" and the day sheet's "See the whole
+    // week" open the list's Week screen.
+    onOpenWeek: (listId: String) -> Unit = {},
     vm: HomeViewModel = hiltViewModel(),
     appVm: AppViewModel = hiltViewModel(),
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
-    val postCallPrompt by appVm.postCallPrompt.collectAsStateWithLifecycle()
-    val curtain = LocalPrivacyCurtain.current
+    val notesWaiting by appVm.notesWaiting.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -175,6 +175,28 @@ fun HomeScreen(
         }
     }
 
+    // HOME-14: what a dismissal says, on the same host. The newest message
+    // replaces whatever is showing, as above; the Undo's ids ride the event.
+    LaunchedEffect(lifecycleOwner, snackbarHostState) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            appVm.notesWaitingEvents.collectLatest { event ->
+                snackbarHostState.currentSnackbarData?.dismiss()
+                val result = snackbarHostState.showSnackbar(
+                    message = event.message.asString(context),
+                    actionLabel = if (event.undoCallEventIds.isEmpty()) {
+                        null
+                    } else {
+                        context.getString(R.string.components_action_undo)
+                    },
+                    duration = SnackbarDuration.Short,
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    appVm.undoDismissNotesWaiting(event.undoCallEventIds)
+                }
+            }
+        }
+    }
+
     // HOME-12: the day Home is showing, derived once per resume. Home is the
     // root destination and stays composed across the dialer round-trip and
     // across midnight; a `LocalDate.now()` read once at composition left the
@@ -183,16 +205,17 @@ fun HomeScreen(
     // the header, the strip and the day sheet so they can never disagree.
     var today by remember { mutableStateOf(LocalDate.now()) }
 
-    // NOTE-02 — `LifecycleResumeEffect` re-fires on every resume, so the
-    // dialer→app return path always re-derives the post-call prompt. (See git
-    // history for why `LaunchedEffect(Unit)` is insufficient here.) The same
-    // resume refreshes `today` and tells the feed (HOME-12), so the letters
-    // and the buckets move to the new day together.
+    // `LifecycleResumeEffect` re-fires on every resume, including the return
+    // from the dialer (Home stays composed across the call, so a
+    // `LaunchedEffect(Unit)` would miss it). It refreshes `today` and tells
+    // the feed (HOME-12), so the letters and the buckets move to the new day
+    // together, and moves the window of calls waiting for a note to now
+    // (HOME-14), so a call more than a day old leaves the stack.
     LifecycleResumeEffect(key1 = Unit, lifecycleOwner = lifecycleOwner) {
         today = LocalDate.now()
         vm.onResumed()
-        appVm.checkPostCallPrompt()
-        onPauseOrDispose { /* prompt state lives in the VM; nothing to clean up */ }
+        appVm.onHomeResumed()
+        onPauseOrDispose { /* the stack's state lives in the VM; nothing to clean up */ }
     }
 
     HomeContent(
@@ -214,15 +237,13 @@ fun HomeScreen(
         // HOME-8 — a rhythm-day sheet row taps through to the person. No note
         // focus: this is "who was that", not a post-call prompt.
         onOpenContact = { contactId -> onOpenContactWithFocus(contactId.toString(), false) },
-        postCallPrompt = postCallPrompt,
-        curtain = curtain,
-        onPostCallAddNote = { prompt ->
-            appVm.dismissPostCallPrompt(prompt.callEventId)
-            onOpenContactWithFocus(prompt.contactId.toString(), true)
-        },
-        onPostCallDismiss = { prompt ->
-            appVm.dismissPostCallPrompt(prompt.callEventId)
-        },
+        onOpenWeek = { listId -> onOpenWeek(listId.toString()) },
+        // HOME-14: the calls waiting for a note. "Add a note" opens the
+        // note page and leaves the call waiting until a note is saved
+        // (NOTE-05); only Dismiss closes it.
+        notesWaiting = notesWaiting,
+        onAddNoteForCall = { call -> onOpenPostCallNote(call.contactId.toString(), call.callEventId) },
+        onDismissWaiting = { callEventIds -> appVm.dismissNotesWaiting(callEventIds) },
     )
 }
 
@@ -252,10 +273,13 @@ internal fun HomeContent(
     onArchive: (Long) -> Unit = {},
     onDeleteConfirmed: (Long) -> Unit = {},
     onOpenContact: (contactId: Long) -> Unit = {},
-    postCallPrompt: AppViewModel.PostCallPromptState? = null,
-    curtain: Boolean = false,
-    onPostCallAddNote: (AppViewModel.PostCallPromptState) -> Unit = {},
-    onPostCallDismiss: (AppViewModel.PostCallPromptState) -> Unit = {},
+    // HOME-13: a card's Week screen, from its strip or its day sheet.
+    onOpenWeek: (listId: Long) -> Unit = {},
+    // HOME-14: the calls waiting for a note, newest first, and what their
+    // buttons do. Dismiss passes one id; "Dismiss all" passes every one shown.
+    notesWaiting: List<NoteWaiting> = emptyList(),
+    onAddNoteForCall: (NoteWaiting) -> Unit = {},
+    onDismissWaiting: (callEventIds: List<Long>) -> Unit = {},
 ) {
     // Which tile's quick-actions menu is open (null = none) — single-open
     // invariant. Plus the pending delete-confirm target; rememberSaveable so a
@@ -273,6 +297,21 @@ internal fun HomeContent(
     val isLoading = state is HomeUiState.Loading
     val isError = state is HomeUiState.Error
     val reducedMotion = LocalReducedMotion.current
+    // HOME-14: whether the pile of waiting calls is open. One owner, here,
+    // above the stack's own branches (rules.md Code 7), so it survives the
+    // pile shrinking to one card and growing again.
+    var notesWaitingOpen by rememberSaveable { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    // The stack is the list's first item. An item inserted above the first
+    // visible one leaves the list where it was, so a stack that arrives after
+    // the cards would sit above the top of the screen; bring it into view
+    // when the user was at the top anyway.
+    val hasWaiting = notesWaiting.isNotEmpty()
+    LaunchedEffect(hasWaiting) {
+        if (hasWaiting && listState.firstVisibleItemIndex <= 1 && listState.firstVisibleItemScrollOffset == 0) {
+            if (reducedMotion) listState.scrollToItem(0) else listState.animateScrollToItem(0)
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
       OrbitScreen {
@@ -301,29 +340,6 @@ internal fun HomeContent(
             },
         )
 
-        // NOTE-02 — PostCallBanner sits above the header so it earns the user's
-        // first glance after a return from the dialer.
-        AnimatedVisibility(
-            visible = postCallPrompt != null,
-            enter = slideInVertically(
-                initialOffsetY = { -it },
-                animationSpec = tween(OrbitMotion.DurBaseMs),
-            ) + fadeIn(animationSpec = tween(OrbitMotion.DurBaseMs)),
-            exit = slideOutVertically(
-                targetOffsetY = { -it },
-                animationSpec = tween(OrbitMotion.DurBaseMs),
-            ) + fadeOut(animationSpec = tween(OrbitMotion.DurBaseMs)),
-        ) {
-            postCallPrompt?.let { prompt ->
-                PostCallBanner(
-                    contactName = prompt.contactName,
-                    curtain = curtain,
-                    onAddNote = { onPostCallAddNote(prompt) },
-                    onDismiss = { onPostCallDismiss(prompt) },
-                )
-            }
-        }
-
         // HOME-6 — calm date orientation only. No count, no "caught up": Home is
         // an always-on recommender, not an inbox. Header shows only in Ready;
         // Loading is quiet chrome, Empty carries the first-install CTA.
@@ -351,8 +367,8 @@ internal fun HomeContent(
         }
 
         // HOME-11: the genuine first-install state gets a primary-weight CTA,
-        // centered, with one warm line above it. Routes to Lists Manager with
-        // the create-list bottom sheet auto-opened. Only when no list exists:
+        // centered, with one warm line above it. Opens New list (LIST-28),
+        // whose Create returns here. Only when no list exists:
         // Loading never renders it (ADR 0006), so it cannot flash at a user
         // who has lists.
         if (isError) {
@@ -386,6 +402,7 @@ internal fun HomeContent(
             // rhythm days get 48dp each on a 360dp phone.
             val sideMargin = if (LocalConfiguration.current.screenWidthDp < 380) OrbitTheme.spacing.x3 else OrbitTheme.spacing.x4
             LazyColumn(
+                state = listState,
                 contentPadding = PaddingValues(
                     start = sideMargin,
                     end = sideMargin,
@@ -398,6 +415,25 @@ internal fun HomeContent(
                 // Loading contributes no items — the list stays a quiet surface
                 // until the database answers (never the first-install CTA).
                 if (!isLoading) {
+                    // HOME-14: the calls waiting for a note lead the list, so
+                    // they are the first thing seen on return from a call and
+                    // scroll with the cards however tall an open pile grows.
+                    // They fade in and out like the cards (and not at all with
+                    // the system's animations off).
+                    if (hasWaiting) {
+                        item(key = NOTES_WAITING_KEY) {
+                            Box(if (reducedMotion) Modifier else Modifier.animateItem()) {
+                                NotesWaitingStack(
+                                    calls = notesWaiting,
+                                    open = notesWaitingOpen,
+                                    onOpenChange = { notesWaitingOpen = it },
+                                    onAddNote = onAddNoteForCall,
+                                    onDismiss = { call -> onDismissWaiting(listOf(call.callEventId)) },
+                                    onDismissAll = { onDismissWaiting(notesWaiting.map { it.callEventId }) },
+                                )
+                            }
+                        }
+                    }
                     itemsIndexed(tiles, key = { _, tile -> tile.id }) { index, tile ->
                         // Cards slide and fade when a list is archived, deleted,
                         // restored or reordered, instead of popping (rubric D5);
@@ -418,6 +454,7 @@ internal fun HomeContent(
                             onDelete = { pendingDeleteId = tile.id },
                             onOpenContact = onOpenContact,
                             onCallNextUp = onCallNextUp,
+                            onOpenWeek = { onOpenWeek(tile.id) },
                         )
                         }
                     }
@@ -464,6 +501,7 @@ private fun ListTile(
     onDelete: () -> Unit = {},
     onOpenContact: (contactId: Long) -> Unit = {},
     onCallNextUp: (phone: String) -> Unit = {},
+    onOpenWeek: () -> Unit = {},
 ) {
     val curtain = LocalPrivacyCurtain.current
     val isDark = OrbitTheme.colors.isDark
@@ -615,6 +653,7 @@ private fun ListTile(
                     rhythm = tile.rhythm,
                     today = today,
                     onDayClick = { index -> openDayIndex = index },
+                    onSeeWeek = onOpenWeek,
                     headerPadding = OrbitTheme.spacing.x4,
                 )
             }
@@ -640,6 +679,12 @@ private fun ListTile(
                     onOpenContact(contactId)
                 },
                 onDismiss = { openDayIndex = null },
+                // HOME-13: every day the strip shows is in this week, so the
+                // Week screen opens on it.
+                onSeeWeek = {
+                    openDayIndex = null
+                    onOpenWeek()
+                },
             )
         }
     }
@@ -788,18 +833,24 @@ private fun NextUpRow(
  * faint dot. Reflection, not a dashboard: no numbers, no targets.
  *
  * HOME-8 layers two things on top without changing that reading:
- *   - a **direction rim** on each bar (cool violet = you called, cool blue =
- *     they called). Fill stays the person, rim is the direction — two channels,
- *     never confusable, so "how much am I reaching out vs being reached" is
+ *   - a **direction rim** on each bar (pink = you called, teal = they
+ *     called), cut off from the fill by a near-black ring ([directionMark]).
+ *     Fill stays the person, rim is the direction: two channels, never
+ *     confusable, so "how much am I reaching out vs being reached" is
  *     answerable at a glance.
  *   - a **tap target per day**, which opens [RhythmDaySheet] with that day's
  *     calls: who, which way, how long, when.
+ *
+ * HOME-13 makes the header line the way into the Week screen: "See your
+ * week" with a chevron, the legend still beside it ([onSeeWeek]).
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RhythmStrip(
     rhythm: List<RhythmDay>,
     today: LocalDate,
     onDayClick: (index: Int) -> Unit,
+    onSeeWeek: () -> Unit,
     headerPadding: Dp = 0.dp,
 ) {
     // The drawn glyph is the one-letter weekday ("S M T W T F S"). Keyed on
@@ -823,21 +874,30 @@ private fun RhythmStrip(
     val scaleMax = ((totals.maxOrNull() ?: 0).coerceAtLeast(1)) * RHYTHM_HEADROOM
 
     Column(Modifier.fillMaxWidth()) {
-        Row(
+        // A flow, not a row: at large text the legend moves under the button
+        // rather than squeezing "See your week" onto two lines.
+        FlowRow(
             modifier = Modifier.fillMaxWidth().padding(horizontal = headerPadding),
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            itemVerticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = stringResource(R.string.home_rhythm_eyebrow),
-                style = OrbitTheme.type.eyebrow.copy(color = OrbitTheme.colors.fgSubtle),
-                modifier = Modifier.weight(1f),
+            // HOME-13: the line that said "Last 7 days" is the button to the
+            // whole week (the owner asked for a bigger chart behind "See this
+            // day"). Its own 48dp target, inside the card's: the card's tap
+            // still opens the deck everywhere else. The end padding is the
+            // least gap to the legend on one line, and nothing once it wraps.
+            SeeWeekLink(
+                text = stringResource(R.string.home_rhythm_see_week),
+                onClick = onSeeWeek,
+                modifier = Modifier.padding(end = OrbitTheme.spacing.x2),
             )
             // The rim colours are meaningless without a key, and the sheet is
             // one tap too far to serve as the only explanation. Kept to two
             // words so it survives large font scales on a narrow card.
             DirectionLegend()
         }
-        Spacer(Modifier.height(OrbitTheme.spacing.x2))
+        // The button's 48dp already leaves air above the bars.
+        Spacer(Modifier.height(OrbitTheme.spacing.x1))
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Bottom,
@@ -858,10 +918,11 @@ private fun RhythmStrip(
 }
 
 /** Two-swatch key for the direction rims. Swatches mirror the bar mark exactly:
- *  neutral fill, coloured rim — so the legend teaches the encoding, not a
- *  second one. */
+ *  coloured rim, black ring, neutral fill. The legend teaches the encoding,
+ *  not a second one. Internal so the Week screen (HOME-13) shows this same
+ *  key, not a second drawing of it. */
 @Composable
-private fun DirectionLegend() {
+internal fun DirectionLegend() {
     val legendDescription = stringResource(R.string.home_rhythm_legend_a11y)
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -881,12 +942,14 @@ private fun LegendSwatch(label: String, rim: Color) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x1),
     ) {
+        // The neutral fill is the old 22% subtle wash, composited onto the
+        // surface first: the mark paints its black ring under the content, so
+        // a translucent fill would come out near-black.
         Box(
             Modifier
-                .size(width = 12.dp, height = 10.dp)
-                .clip(RHYTHM_BAR_SHAPE)
-                .background(OrbitTheme.colors.fgSubtle.copy(alpha = 0.22f))
-                .border(RHYTHM_RIM, rim, RHYTHM_BAR_SHAPE),
+                .size(width = 16.dp, height = RHYTHM_BAR_MIN)
+                .directionMark(rim = rim, separator = OrbitTheme.colors.directionSeparator, corner = RHYTHM_BAR_CORNER)
+                .background(OrbitTheme.colors.fgSubtle.copy(alpha = 0.22f).compositeOver(OrbitTheme.colors.surface)),
         )
         Text(
             text = label,
@@ -956,11 +1019,13 @@ private fun DayColumn(
                         .background(OrbitTheme.colors.line),
                 )
             } else {
-                // Per-bar floor. The rim wants 10dp (a 6dp bar minus a 2dp rim
-                // top and bottom leaves a 2dp sliver of person-colour, and the
-                // fill stops reading) — but a busy day has to stay inside the
-                // 48dp strip, so the floor yields to an even split of whatever
-                // height the gaps leave over.
+                // Per-bar floor. The mark wants 14dp: 3dp of rim and 1.5dp of
+                // ring top and bottom leave 5dp of person colour, about the
+                // least that still reads as a hue. But a busy day has to stay
+                // inside the 48dp strip, so the floor yields to an even split
+                // of whatever height the gaps leave over, and below the floor
+                // the rim and ring shrink with the bar so the fill never
+                // vanishes (chrome).
                 val n = day.calls.size
                 val budget = RHYTHM_BAR_AREA.value - RHYTHM_BAR_GAP.value * (n - 1)
                 val minBar = (budget / n).coerceIn(4f, RHYTHM_BAR_MIN.value)
@@ -968,13 +1033,19 @@ private fun DayColumn(
                     day.calls.forEach { call ->
                         val frac = (call.durationSeconds / scaleMax).coerceIn(0f, 1f)
                         val h = (frac * RHYTHM_BAR_AREA.value).coerceAtLeast(minBar).dp
+                        val chrome = (h / RHYTHM_BAR_MIN).coerceAtMost(1f)
                         Box(
                             Modifier
                                 .height(h)
                                 .width(RHYTHM_BAR_WIDTH)
-                                .clip(RHYTHM_BAR_SHAPE)
-                                .background(OrbitTheme.tones.rhythmBarForId(call.contactId))
-                                .border(RHYTHM_RIM, directionColor(call.direction), RHYTHM_BAR_SHAPE),
+                                .directionMark(
+                                    rim = directionColor(call.direction),
+                                    separator = OrbitTheme.colors.directionSeparator,
+                                    corner = RHYTHM_BAR_CORNER,
+                                    rimWidth = DIRECTION_RIM * chrome,
+                                    separatorWidth = DIRECTION_SEPARATOR * chrome,
+                                )
+                                .background(OrbitTheme.tones.rhythmBarForId(call.contactId)),
                         )
                     }
                 }
@@ -1068,13 +1139,12 @@ private const val RHYTHM_HEADROOM: Float = 1.25f
 // card narrower than NARROW_CARD, so it never has to grow.
 private val NAME_COLUMN_WIDTH: Dp = 118.dp
 
-// HOME-8 — the direction rim. 2dp is the smallest width that still holds a
-// legible hue at this bar size; the shape is shared with the legend swatch so
-// the key and the mark are literally the same object.
-private val RHYTHM_BAR_SHAPE = RoundedCornerShape(6.dp)
-private val RHYTHM_RIM: Dp = 2.dp
+// HOME-8: the bar's outer corner, shared with the legend swatch so the key and
+// the mark are literally the same object. The rim and ring widths live with
+// [directionMark] because the day sheet's avatar rings use them too.
+private val RHYTHM_BAR_CORNER: Dp = 6.dp
 private val RHYTHM_BAR_GAP: Dp = 3.dp
-private val RHYTHM_BAR_MIN: Dp = 10.dp
+private val RHYTHM_BAR_MIN: Dp = 14.dp
 
 // ---- Previews ----
 
@@ -1096,6 +1166,7 @@ private fun previewCall(
     direction = direction,
     durationLabel = formatDuration(minutes * 60),
     timeLabel = "4:30pm",
+    minuteOfDay = 16 * 60 + 30,
 )
 
 private fun previewRhythm(seed: Int): List<RhythmDay> = listOf(
@@ -1175,6 +1246,41 @@ private fun HomeContentLongNamesPreview() {
     }
 }
 
+private fun previewWaiting(id: Long, name: String, direction: CallDirection, minutes: Int, hoursAgo: Int) = NoteWaiting(
+    callEventId = id,
+    contactId = id,
+    name = name,
+    photoUri = null,
+    direction = direction,
+    meta = UiText.res(
+        R.string.components_notes_waiting_meta,
+        formatDuration(minutes * 60),
+        UiText.plural(R.plurals.time_ago_hours, hoursAgo, hoursAgo),
+    ),
+)
+
+// HOME-14: three calls waiting for a note, as the closed pile over the cards.
+@PreviewLightDark
+@Preview(name = "200%", fontScale = 2f)
+@Composable
+private fun HomeContentNotesWaitingPreview() {
+    OrbitTheme {
+        HomeContent(
+            state = previewState,
+            onOpenList = {},
+            onOpenSearch = {},
+            onOpenSettings = {},
+            onOpenLists = {},
+            onCreateList = {},
+            notesWaiting = listOf(
+                previewWaiting(11L, "Kai Mensah", CallDirection.OUTGOING, minutes = 14, hoursAgo = 2),
+                previewWaiting(12L, "Mara Ellis", CallDirection.INCOMING, minutes = 26, hoursAgo = 5),
+                previewWaiting(13L, "Sam Okafor", CallDirection.OUTGOING, minutes = 41, hoursAgo = 20),
+            ),
+        )
+    }
+}
+
 @PreviewLightDark
 @Composable
 private fun HomeContentEmptyPreview() {
@@ -1219,6 +1325,9 @@ private fun HomeContentErrorPreview() {
         )
     }
 }
+
+/** HOME-14: the stack's key in Home's list; tile keys are list ids (Longs), so it cannot collide. */
+private const val NOTES_WAITING_KEY = "notes-waiting"
 
 /** Below this card width the list header stacks name over Next up. */
 private val NARROW_CARD = 360.dp

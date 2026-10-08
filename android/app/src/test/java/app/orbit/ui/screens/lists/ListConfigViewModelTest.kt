@@ -82,9 +82,9 @@ private class RecordingNudgeScheduler : NudgeScheduler(
 /**
  * A [ListRepository] that can fail on demand: [failReads] makes the list's
  * own stream throw on subscription, the way a database read error would
- * (LIST-22); [failWrites] makes the convert write throw (rules.md Code 3).
- * Every other call goes to the real fake, whose capture lists the tests
- * still assert on.
+ * (LIST-22); [failWrites] makes the convert, rename and template writes throw
+ * (rules.md Code 3). Every other call goes to the real fake, whose capture
+ * lists the tests still assert on.
  */
 private class ConfigThrowingListRepository(
     private val delegate: FakeListRepository
@@ -103,17 +103,30 @@ private class ConfigThrowingListRepository(
         if (failWrites) throw IllegalStateException("database write failed")
         delegate.convertSmartToStatic(listId)
     }
+
+    override suspend fun updateName(listId: Long, name: String) {
+        if (failWrites) throw IllegalStateException("database write failed")
+        delegate.updateName(listId, name)
+    }
+
+    override suspend fun updateRuleTemplate(listId: Long, templateId: Long) {
+        if (failWrites) throw IllegalStateException("database write failed")
+        delegate.updateRuleTemplate(listId, templateId)
+    }
 }
 
 /**
- * Behavioral tests for the rewritten [ListConfigViewModel] covering all five
+ * Behavioral tests for the rewritten [ListConfigViewModel] covering the
  * save-on-change setters plus the override-JSON round-trip:
  *  1. setRuleTemplate resolves RuleKind → seeded row id
- *  2. [setRuleParamsOverrideJson_writes_override_column]
- *  3. [setActiveHours_writes_LocalTime_pair_including_null]
+ *  2. setIntervalHours: How often for every rule type (LIST-30)
+ *  3. setTimeOfDay: each part writes its window, a custom one is left alone
+ *     (LIST-25)
  *  4. [setNotificationsEnabled_flips_boolean]
  *  5. [setSmartRuleJson_round_trips_through_polymorphic_json]
  *  6. [vm_resolves_override_in_uiState] — override beats template default
+ *  7. setName: rename from the title saves, blank keeps the name, a failed
+ *     write reports (LIST-26)
  *
  * Pattern mirrors HomeViewModelTest / CardViewViewModelTest:
  *   - Real VM over fake repositories with argument-capture lists.
@@ -345,44 +358,244 @@ class ListConfigViewModelTest {
     }
 
     // ────────────────────────────────────────────────────────────────────────
-    // Test 2 — LIST-04: setRuleParamsOverrideJson writes the override column.
+    // Test 2, LIST-30 + LIST-04: How often, one control for every list.
+    // A Late night or Energize list shows its real base interval; moving the
+    // slider on either makes it Keep in touch at that interval, through
+    // withIntervalHours, with the Keep in touch template.
     // ────────────────────────────────────────────────────────────────────────
 
+    private val allTemplates = listOf(
+        ruleTemplateFixture(id = 1L, kind = RuleKind.KEEP_IN_TOUCH, params = RuleParams.KeepInTouch()),
+        ruleTemplateFixture(id = 2L, kind = RuleKind.LATE_NIGHT, params = RuleParams.LateNight()),
+        ruleTemplateFixture(id = 3L, kind = RuleKind.ENERGIZE, params = RuleParams.Energize())
+    )
+
+    private fun listOnTemplate(templateId: Long?, overrideJson: String? = null) = listFixture(
+        id = 1L,
+        name = "Inner orbit",
+        type = ListType.STATIC,
+        ruleTemplateId = templateId,
+        ruleParamsOverrideJson = overrideJson
+    )
+
+    /**
+     * The first Ready state matching [predicate]. After a write, pass a
+     * predicate: a new subscriber can be handed the last state first, from
+     * before the write.
+     */
+    private suspend fun ListConfigViewModel.firstReady(
+        predicate: (ListConfigUiState.Ready) -> Boolean = { true }
+    ): ListConfigUiState.Ready {
+        lateinit var ready: ListConfigUiState.Ready
+        uiState.test(timeout = 2.seconds) {
+            ready = awaitReady(predicate)
+            cancelAndIgnoreRemainingEvents()
+        }
+        return ready
+    }
+
     @Test
-    fun `setRuleParamsOverrideJson writes override column`() = runTest {
-        val (vm, listRepo, _, _) = fixture()
-        val override = RuleParams.KeepInTouch(cooldownMinHours = 720)
-        val encoded = json.encodeToString(RuleParams.serializer(), override)
-        vm.setRuleParamsOverrideJson(encoded)
-        val (writtenListId, writtenJson) = listRepo.setRuleParamsOverrideJsonCalls.last()
-        assertEquals(1L, writtenListId)
-        assertNotNull(writtenJson)
-        val decoded = json.decodeFromString(RuleParams.serializer(), writtenJson)
-        assertTrue(decoded is RuleParams.KeepInTouch, "override decodes to KeepInTouch")
-        assertEquals(720, decoded.cooldownMinHours, "cooldownMinHours round-trips")
+    fun `a Late night list shows How often at 3 days and an Energize list at 1`() = runTest {
+        val lateNight = fixture(list = listOnTemplate(2L), templates = allTemplates)
+        assertEquals(72, lateNight.vm.firstReady().intervalHours, "Late night's base is 72 hours")
+
+        val energize = fixture(list = listOnTemplate(3L), templates = allTemplates)
+        assertEquals(24, energize.vm.firstReady().intervalHours, "Energize's base is 24 hours")
+
+        val keepInTouch = fixture(list = listOnTemplate(1L), templates = allTemplates)
+        assertEquals(48, keepInTouch.vm.firstReady().intervalHours, "Keep in touch's default is 48 hours")
+    }
+
+    @Test
+    fun `moving the slider on a Late night list makes it Keep in touch at that interval`() = runTest {
+        val s = fixture(list = listOnTemplate(2L), templates = allTemplates)
+        s.vm.setIntervalHours(10 * 24)
+
+        val (writtenId, writtenJson) = s.listRepo.setRuleParamsOverrideJsonCalls.single()
+        assertEquals(1L, writtenId)
+        assertEquals(
+            RuleParams.KeepInTouch().withIntervalHours(10 * 24),
+            json.decodeFromString(RuleParams.serializer(), writtenJson!!),
+            "Keep in touch's own numbers at the chosen interval, through withIntervalHours " +
+                "(both cooldown bounds move together)"
+        )
+        assertEquals(listOf(1L to 1L), s.listRepo.updateRuleTemplateCalls.toList(), "the template becomes Keep in touch")
+
+        // And it reads back as an ordinary list at that interval.
+        val after = s.vm.firstReady { it.ruleKind == RuleKind.KEEP_IN_TOUCH }
+        assertEquals(10 * 24, after.intervalHours)
+    }
+
+    @Test
+    fun `moving the slider on an Energize list makes it Keep in touch at that interval`() = runTest {
+        val s = fixture(list = listOnTemplate(3L), templates = allTemplates)
+        s.vm.setIntervalHours(5 * 24)
+
+        val written = json.decodeFromString(
+            RuleParams.serializer(),
+            s.listRepo.setRuleParamsOverrideJsonCalls.single().second!!
+        )
+        assertEquals(RuleParams.KeepInTouch().withIntervalHours(5 * 24), written)
+        assertEquals(listOf(1L to 1L), s.listRepo.updateRuleTemplateCalls.toList())
+    }
+
+    @Test
+    fun `moving the slider on a Keep in touch list keeps its template and its other numbers`() = runTest {
+        val tuned = RuleParams.KeepInTouch(skipPenaltyHours = 36, shortCallResetPct = 10).withIntervalHours(14 * 24)
+        val s = fixture(
+            list = listOnTemplate(1L, json.encodeToString(RuleParams.serializer(), tuned)),
+            templates = allTemplates
+        )
+        s.vm.setIntervalHours(30 * 24)
+
+        val written = json.decodeFromString(
+            RuleParams.serializer(),
+            s.listRepo.setRuleParamsOverrideJsonCalls.single().second!!
+        )
+        assertEquals(tuned.withIntervalHours(30 * 24), written)
+        assertTrue(s.listRepo.updateRuleTemplateCalls.isEmpty(), "already Keep in touch: no template write")
+    }
+
+    @Test
+    fun `letting go of the slider where it was writes nothing`() = runTest {
+        // A Late night list touched but not moved stays Late night.
+        val lateNight = fixture(list = listOnTemplate(2L), templates = allTemplates)
+        lateNight.vm.setIntervalHours(72)
+        assertTrue(lateNight.listRepo.setRuleParamsOverrideJsonCalls.isEmpty())
+        assertTrue(lateNight.listRepo.updateRuleTemplateCalls.isEmpty())
+
+        val keepInTouch = fixture(list = listOnTemplate(1L), templates = allTemplates)
+        keepInTouch.vm.setIntervalHours(48)
+        assertTrue(keepInTouch.listRepo.setRuleParamsOverrideJsonCalls.isEmpty())
+    }
+
+    @Test
+    fun `a list whose rhythm cannot be read gets one from the slider`() = runTest {
+        // An override that no longer decodes resolves to no params, so How
+        // often has no interval to compare: any choice is written, which is
+        // how the list gets a readable rhythm back.
+        val s = fixture(list = listOnTemplate(2L, overrideJson = "{not json"), templates = allTemplates)
+        assertNull(s.vm.firstReady().intervalHours)
+
+        s.vm.setIntervalHours(48)
+
+        assertEquals(
+            RuleParams.KeepInTouch().withIntervalHours(48),
+            json.decodeFromString(RuleParams.serializer(), s.listRepo.setRuleParamsOverrideJsonCalls.single().second!!)
+        )
+        assertEquals(listOf(1L to 1L), s.listRepo.updateRuleTemplateCalls.toList())
+    }
+
+    @Test
+    fun `a list with no template gets Keep in touch from the slider`() = runTest {
+        val s = fixture(list = listOnTemplate(null), templates = allTemplates)
+        assertNull(s.vm.firstReady().intervalHours)
+
+        s.vm.setIntervalHours(7 * 24)
+
+        assertEquals(listOf(1L to 1L), s.listRepo.updateRuleTemplateCalls.toList())
+        assertEquals(7 * 24, s.vm.firstReady { it.intervalHours != null }.intervalHours)
+    }
+
+    @Test
+    fun `a missing Keep in touch seed fails before anything is written`() = runTest {
+        val s = fixture(
+            list = listOnTemplate(2L),
+            templates = allTemplates.filterNot { it.kind == RuleKind.KEEP_IN_TOUCH }
+        )
+        s.vm.snackbarEvents.test(timeout = 2.seconds) {
+            s.vm.setIntervalHours(10 * 24)
+            assertEquals(SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)), awaitItem())
+            cancel()
+        }
+        assertTrue(s.listRepo.setRuleParamsOverrideJsonCalls.isEmpty(), "no half-written conversion")
+        assertTrue(s.listRepo.updateRuleTemplateCalls.isEmpty())
+    }
+
+    @Test
+    fun `a failed template write after the override still says so`() = runTest {
+        // The override lands first, so the engine (picked by the parameters'
+        // type) already runs the chosen interval; the failure is reported.
+        lateinit var throwing: ConfigThrowingListRepository
+        val s = fixture(
+            list = listOnTemplate(2L),
+            templates = allTemplates,
+            wrapListRepo = { ConfigThrowingListRepository(it).also { w -> throwing = w } }
+        )
+        throwing.failWrites = true
+        s.vm.snackbarEvents.test(timeout = 2.seconds) {
+            s.vm.setIntervalHours(10 * 24)
+            assertEquals(SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)), awaitItem())
+            expectNoEvents()
+            cancel()
+        }
+        assertEquals(1, s.listRepo.setRuleParamsOverrideJsonCalls.size, "the override was written first")
+        assertTrue(s.listRepo.updateRuleTemplateCalls.isEmpty(), "the template write threw before the fake saw it")
     }
 
     // ────────────────────────────────────────────────────────────────────────
-    // Test 3 — LIST-05: active-hours window writes LocalTime pair, including
-    // the null/null "always active" case.
+    // Test 3, LIST-25 + LIST-05: time of day. Each part writes its window
+    // through the atomic active-hours write, Any time writes nulls, and a
+    // custom window from the old editor reads back as Custom and is never
+    // written unless the user picks a part.
     // ────────────────────────────────────────────────────────────────────────
 
     @Test
-    fun `setActiveHours writes LocalTime pair including null`() = runTest {
+    fun `each time of day writes its window and Any time writes nulls`() = runTest {
         val (vm, listRepo, _, _) = fixture()
-        // Overnight pair — assert via the granular `updateActiveHoursCalls`
-        // capture list (the VM uses the per-field setter, not the broad
-        // `update(ListEntity)` setter).
-        vm.setActiveHours(LocalTime.of(21, 0), LocalTime.of(2, 0))
-        val first = listRepo.updateActiveHoursCalls.last()
-        assertEquals(1L, first.first, "listId should be the seeded list")
-        assertEquals(LocalTime.of(21, 0), first.second)
-        assertEquals(LocalTime.of(2, 0), first.third)
-        // Always active — both null
-        vm.setActiveHours(null, null)
-        val second = listRepo.updateActiveHoursCalls.last()
-        assertNull(second.second)
-        assertNull(second.third)
+        val expected = mapOf(
+            DayPart.Mornings to (LocalTime.of(7, 0) to LocalTime.of(12, 0)),
+            DayPart.Afternoons to (LocalTime.of(12, 0) to LocalTime.of(17, 0)),
+            DayPart.Evenings to (LocalTime.of(17, 0) to LocalTime.of(21, 0)),
+            DayPart.Nights to (LocalTime.of(21, 0) to LocalTime.of(7, 0)),
+            DayPart.AnyTime to (null to null)
+        )
+        expected.forEach { (part, window) ->
+            vm.setTimeOfDay(part)
+            val written = listRepo.updateActiveHoursCalls.last()
+            assertEquals(1L, written.first, "listId should be the seeded list")
+            assertEquals(window.first, written.second, "$part start")
+            assertEquals(window.second, written.third, "$part end")
+        }
+        assertEquals(expected.size, listRepo.updateActiveHoursCalls.size, "one write per choice")
+    }
+
+    @Test
+    fun `a stored window reads back as its part`() = runTest {
+        val evenings = listFixture(
+            id = 1L,
+            name = "Inner orbit",
+            type = ListType.STATIC,
+            ruleTemplateId = 1L,
+            activeHoursStart = LocalTime.of(17, 0),
+            activeHoursEnd = LocalTime.of(21, 0)
+        )
+        val s = fixture(list = evenings)
+        assertEquals(TimeOfDay.Part(DayPart.Evenings), s.vm.firstReady().timeOfDay)
+
+        val anyTime = fixture()
+        assertEquals(TimeOfDay.Part(DayPart.AnyTime), anyTime.vm.firstReady().timeOfDay)
+    }
+
+    @Test
+    fun `a custom window reads back as Custom and is left alone until a part is picked`() = runTest {
+        val nineToFive = listFixture(
+            id = 1L,
+            name = "Inner orbit",
+            type = ListType.STATIC,
+            ruleTemplateId = 1L,
+            activeHoursStart = LocalTime.of(9, 0),
+            activeHoursEnd = LocalTime.of(17, 0)
+        )
+        val s = fixture(list = nineToFive)
+        assertEquals(TimeOfDay.Custom(LocalTime.of(9, 0), LocalTime.of(17, 0)), s.vm.firstReady().timeOfDay)
+        assertTrue(s.listRepo.updateActiveHoursCalls.isEmpty(), "reading a custom window never rewrites it")
+        assertTrue(s.nudgeScheduler.scheduleCalls.isEmpty(), "nor reschedules its nudges")
+
+        s.vm.setTimeOfDay(DayPart.Afternoons)
+
+        assertEquals(Triple(1L, LocalTime.of(12, 0), LocalTime.of(17, 0)), s.listRepo.updateActiveHoursCalls.single())
+        s.vm.firstReady { it.timeOfDay == TimeOfDay.Part(DayPart.Afternoons) }
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -818,6 +1031,37 @@ class ListConfigViewModelTest {
     }
 
     @Test
+    fun `a rename from the title reads back as the new name`() = runTest {
+        // LIST-26: the title shows the stored name, so a save is seen there
+        // once the write lands.
+        val s = fixture()
+        s.vm.setName("Close friends")
+        assertEquals("Close friends", s.vm.firstReady { it.name == "Close friends" }.name)
+    }
+
+    @Test
+    fun `a rename that cannot be saved says so and keeps the old name`() = runTest {
+        // LIST-26 + rules.md Code 3: the title keeps showing the stored name,
+        // and the failure is said, with no success message.
+        lateinit var throwing: ConfigThrowingListRepository
+        val s = fixture(wrapListRepo = { ConfigThrowingListRepository(it).also { w -> throwing = w } })
+        throwing.failWrites = true
+        s.vm.snackbarEvents.test(timeout = 2.seconds) {
+            s.vm.setName("Close friends")
+            val event = awaitItem()
+            assertEquals(SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)), event)
+            assertEquals(
+                "Couldn't save your change",
+                event.message.asString(ApplicationProvider.getApplicationContext<Context>())
+            )
+            expectNoEvents()
+            cancel()
+        }
+        assertTrue(s.listRepo.updateNameCalls.isEmpty(), "the write threw before the fake saw it")
+        assertEquals("Inner orbit", s.vm.firstReady().name)
+    }
+
+    @Test
     fun `setName is a no-op when listId did not parse`() = runTest {
         val s = fixture(savedStateListId = "not-a-number")
         val before = s.listRepo.updateNameCalls.size
@@ -875,16 +1119,16 @@ class ListConfigViewModelTest {
     }
 
     @Test
-    fun `setActiveHours re-anchors the nudge chain against the new window`() = runTest {
+    fun `setTimeOfDay re-anchors the nudge chain against the new window`() = runTest {
         // Regression: the effective schedule depends on the window, but a window
         // edit used to leave the previously queued slot in place.
         val s = fixture()
-        s.vm.setActiveHours(LocalTime.of(21, 0), LocalTime.of(23, 0))
+        s.vm.setTimeOfDay(DayPart.Nights)
         val sched = s.nudgeScheduler.scheduleCalls.lastOrNull()
         assertNotNull(sched, "a window edit must reschedule the list's nudges")
         assertEquals(1L, sched.listId)
         assertEquals(LocalTime.of(21, 0), sched.activeHoursStart)
-        assertEquals(LocalTime.of(23, 0), sched.activeHoursEnd)
+        assertEquals(LocalTime.of(7, 0), sched.activeHoursEnd)
     }
 
     @Test

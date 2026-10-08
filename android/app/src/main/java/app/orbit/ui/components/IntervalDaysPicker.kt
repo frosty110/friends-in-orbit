@@ -17,6 +17,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import app.orbit.R
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.util.UiText
+import app.orbit.ui.util.asString
 
 /**
  * "Aim for every 14 days": the keep-in-touch interval, chosen on the day
@@ -30,24 +32,29 @@ import app.orbit.ui.theme.OrbitTheme
  * translator can order the words (voice.md, "keep a sentence whole"). The
  * range is 1 to 60 days with the 2-day default, per ADR 0010: only the
  * control changed. [onCommit] receives whole days, once per gesture.
+ *
+ * It is LIST-30's one "How often" control: List settings draws it for every
+ * list (a Late night list shows "Aim for every 3 days"), New list's How often
+ * step and Contact detail's custom schedule draw it too. What a commit does
+ * to the rule is the caller's; this only picks a number. One day reads "Aim
+ * for every day", because "every 1 day" is not how anyone says it.
  */
 @Composable
 fun IntervalDaysPicker(
     currentHours: Int,
     onCommit: (days: Int) -> Unit,
     modifier: Modifier = Modifier,
+    // False when currentHours is only where the wheel opens (a list with no
+    // rhythm yet): choosing that interval then saves it too.
+    valueIsSet: Boolean = true,
 ) {
     val saved = intervalDaysFromHours(currentHours)
     // What the sentence reads while the wheel turns; the wheel owns the value
     // and reports it here, and a saved value from outside resets it.
     var shown by remember(saved) { mutableIntStateOf(saved) }
     Column(modifier.fillMaxWidth().padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x4)) {
-        val sentence = stringResource(
-            R.string.lists_interval_aim,
-            pluralStringResource(R.plurals.lists_interval_days, shown, shown),
-        )
         Text(
-            text = sentence,
+            text = howOftenAimLabel(shown).asString(),
             style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             modifier = Modifier.fillMaxWidth(),
         )
@@ -57,12 +64,40 @@ fun IntervalDaysPicker(
             onValueChange = { shown = it },
             onValueCommit = onCommit,
             label = stringResource(R.string.lists_interval_label),
-            valueDescription = { d -> pluralStringResource(R.plurals.lists_interval_every_days, d, d) },
+            valueDescription = { d -> howOftenEveryLabel(d).asString() },
             caption = { d -> dayLandmark(d) },
             modifier = Modifier.padding(top = OrbitTheme.spacing.x3),
+            valueIsSet = valueIsSet,
         )
     }
 }
+
+/**
+ * Whole days, as the Lists row words an interval: 48h reads "2 days", and
+ * anything under a day reads one day. Unlike [intervalDaysFromHours] it has no
+ * upper bound: the wheel can only sit inside its range, but words describe
+ * whatever is stored.
+ */
+internal fun intervalDaysFor(hours: Int): Int = (hours / 24).coerceAtLeast(INTERVAL_DAYS.first)
+
+/**
+ * A rhythm in the words the Lists row and the wheel's TalkBack value use:
+ * "Every 14 days", and "Every day" for one.
+ */
+internal fun howOftenEveryLabel(days: Int): UiText =
+    if (days == 1) {
+        UiText.res(R.string.lists_interval_every_day)
+    } else {
+        UiText.plural(R.plurals.lists_interval_every_days, days, days)
+    }
+
+/** The sentence over the wheel: "Aim for every 14 days", and "Aim for every day" for one. */
+internal fun howOftenAimLabel(days: Int): UiText =
+    if (days == 1) {
+        UiText.res(R.string.lists_interval_aim_every_day)
+    } else {
+        UiText.res(R.string.lists_interval_aim, UiText.plural(R.plurals.lists_interval_days, days, days))
+    }
 
 /** 1 to 60 days (ADR 0010; the floor is not to rise without a new ADR). */
 val INTERVAL_DAYS: IntRange = 1..60

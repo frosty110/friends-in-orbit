@@ -87,7 +87,7 @@ class CardViewScreenTest {
                     callLogDenied = false,
                     messages = MutableSharedFlow<CardMessage>().asSharedFlow(),
                     onBack = {},
-                    onBrowse = {},
+                    onBrowse = { _, _ -> },
                     onEditList = {},
                     onAddContacts = {},
                     onTapToCall = onTapToCall,

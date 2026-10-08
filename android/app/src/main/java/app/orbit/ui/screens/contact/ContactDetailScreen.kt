@@ -76,11 +76,13 @@ import app.orbit.data.Contact
 import app.orbit.data.NoteRow
 import app.orbit.domain.model.PauseDuration
 import app.orbit.domain.rule.RuleParams
+import app.orbit.domain.usecase.LogConnectionWhen
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.ContactStatsPanel
 import app.orbit.ui.components.InfoTip
 import app.orbit.ui.components.ListContextChip
 import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.components.LogConnectionSheet
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
@@ -97,7 +99,6 @@ import app.orbit.ui.components.PauseDurationSheet
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.components.StatEntry
-import app.orbit.ui.screens.contact.sections.LogConnectionSheet
 import app.orbit.ui.screens.contact.sections.NotesSection
 import app.orbit.ui.screens.contact.sections.RuleOverrideSection
 import app.orbit.ui.screens.contact.sections.UnpauseBanner
@@ -256,9 +257,9 @@ fun ContactDetailScreen(
         // button rendered below the tinted call row when the user arrives
         // via Routes.contactWithFocus(scrollToCallEventId = ...).
         onAddRetroactiveNote = vm::onAddRetroactiveNote,
-        // Manual connection log — confirm handler for LogConnectionSheet.
-        // Inserts a CallEventEntity(source = MANUAL) via MarkCalledUseCase so
-        // per-list nextDueAt advances; quiet "Logged." snackbar on success.
+        // Manual connection log: confirm handler for the shared
+        // LogConnectionSheet. The VM writes through LogConnectionUseCase, the
+        // one the card uses too (CARD-10); quiet "Logged." snackbar on success.
         onLogConnection = vm::onLogConnection,
         onOpenSettings = onOpenSettings,
         notesInputFocusRequester = notesInputFocusRequester
@@ -295,7 +296,7 @@ private fun ContactDetailContent(
     // CONTACT-04, IGNORE-02 — overflow + pause sheet
     // visibility flags. `showOverflow` is non-saveable (transient); the
     // pause sheet flag uses rememberSaveable so a configuration change while
-    // the sheet is open keeps it open (matches CreateListBottomSheet pattern).
+    // the sheet is open keeps it open.
     var showOverflow by remember { mutableStateOf(false) }
     var showPauseSheet by rememberSaveable { mutableStateOf(false) }
     // Manual connection log: same rememberSaveable rationale as the pause sheet.
@@ -423,7 +424,7 @@ private fun ContactDetailContent(
                     isArchived = state.isArchived,
                     callLogDenied = state.callLogDenied,
                     customScheduleVisible = state.customScheduleVisible,
-                    currentTemplateName = state.currentTemplateName,
+                    inheritedRhythm = state.inheritedRhythm,
                     primaryListName = state.primaryListName,
                     hasOverride = state.hasOverride,
                     currentParams = state.currentParams,
@@ -473,7 +474,7 @@ private fun ContactDetailContent(
                         // wraps in its own AnimatedVisibility on listsOnSize >= 2,
                         // and edit affordances are off per the orphan banner copy.
                         customScheduleVisible = false,
-                        currentTemplateName = null,
+                        inheritedRhythm = null,
                         primaryListName = "",
                         hasOverride = false,
                         currentParams = null,
@@ -608,7 +609,7 @@ private fun ContactBodyLazyColumn(
     isArchived: Boolean,
     callLogDenied: Boolean,
     customScheduleVisible: Boolean,
-    currentTemplateName: UiText?,
+    inheritedRhythm: UiText?,
     primaryListName: String,
     hasOverride: Boolean,
     currentParams: RuleParams?,
@@ -997,12 +998,12 @@ private fun ContactBodyLazyColumn(
                 // for the in/out animation. Pitfall 6 corrupted-JSON recovery flows
                 // a fresh KeepInTouch default down so the editor still renders when
                 // currentParams == null, under the usual "Custom schedule" label
-                // (no special copy: currentTemplateName is null and nothing shows it).
+                // (no special copy: inheritedRhythm is null and nothing shows it).
                 ContactDetailItemKey.SCHEDULE -> {
                     Spacer(Modifier.height(OrbitTheme.spacing.x6))
                     RuleOverrideSection(
                         listsOnSize = listsOn.size,
-                        currentTemplateName = currentTemplateName,
+                        inheritedRhythm = inheritedRhythm,
                         // List names are masked under the curtain (ListContextChip):
                         // null makes the section say "from its list".
                         primaryListName = if (curtain) null else primaryListName,

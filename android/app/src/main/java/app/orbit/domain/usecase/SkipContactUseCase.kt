@@ -1,5 +1,7 @@
 package app.orbit.domain.usecase
 
+import app.orbit.data.entity.ContactEntity
+import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ListRepository
 import app.orbit.data.repository.RuleTemplateRepository
@@ -8,6 +10,7 @@ import app.orbit.domain.clock.Clock
 import app.orbit.domain.rule.RuleParams
 import app.orbit.domain.rule.resolveParamsFor
 import java.time.Duration
+import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
@@ -58,32 +61,10 @@ class SkipContactUseCase @Inject constructor(
             // Flip the aggregate to MembershipMissing before continuing so the
             // caller can distinguish a true Success from "preconditions vanished
             // → zero side effects".
-            val list = listRepo.getById(membership.listId) ?: run {
+            val newDue = nextDueAfterLater(contact, membership, now) ?: run {
                 aggregate = MutationResult.MembershipMissing
                 continue
             }
-            val templateId = list.ruleTemplateId ?: run {
-                aggregate = MutationResult.MembershipMissing
-                continue
-            }
-            val template = ruleTemplateRepo.getById(templateId) ?: run {
-                aggregate = MutationResult.MembershipMissing
-                continue
-            }
-            val params = resolveParamsFor(contact, list, template, json)
-
-            val skipPenaltyHours = when (params) {
-                is RuleParams.KeepInTouch -> params.skipPenaltyHours
-                is RuleParams.LateNight   -> params.skipPenaltyHours
-                is RuleParams.Energize    -> params.skipPenaltyHours
-            }
-            // Clamp the skip basis to `now` so an overdue contact (nextDueAt already
-            // in the past because the user hasn't opened the app in days) still gets
-            // pushed forward by skipPenaltyHours FROM NOW — not from the stale past
-            // value, which would leave the contact re-surfacing immediately after a
-            // skip. DOM-07 intent: Skip pushes the person down the queue.
-            val basis = maxOf(membership.nextDueAt ?: now, now)
-            val newDue = basis.plus(Duration.ofHours(skipPenaltyHours.toLong()))
 
             val result = listRepo.incrementSkipCount(
                 contactId = contactId,
@@ -97,5 +78,46 @@ class SkipContactUseCase @Inject constructor(
             widgetRefreshTrigger.scheduleRefresh()
         }
         return aggregate
+    }
+
+    /**
+     * CARD-09: the `nextDueAt` a Later would write for [contactId] on
+     * [listId] right now, without writing it. The card's idle hint says when
+     * the person would come up ("Later · Thursday"), and it must say what the
+     * Later's own snackbar then says, so it is computed here, by the same
+     * function [invoke] writes with, never by a copy of the arithmetic. Null
+     * when the move could not be made (the person, the membership, the list
+     * or its template is gone); the hint then says "Later" alone.
+     */
+    suspend fun preview(contactId: Long, listId: Long): Instant? {
+        val contact = contactRepo.observeById(contactId).first() ?: return null
+        val membership = listRepo.observeMembershipsForContact(contactId).first()
+            .firstOrNull { it.listId == listId } ?: return null
+        return nextDueAfterLater(contact, membership, clock.now())
+    }
+
+    /** The one computation of a Later's new `nextDueAt`; null when its list or template is gone. */
+    private suspend fun nextDueAfterLater(
+        contact: ContactEntity,
+        membership: ListMembershipEntity,
+        now: Instant,
+    ): Instant? {
+        val list = listRepo.getById(membership.listId) ?: return null
+        val templateId = list.ruleTemplateId ?: return null
+        val template = ruleTemplateRepo.getById(templateId) ?: return null
+        val params = resolveParamsFor(contact, list, template, json)
+
+        val skipPenaltyHours = when (params) {
+            is RuleParams.KeepInTouch -> params.skipPenaltyHours
+            is RuleParams.LateNight   -> params.skipPenaltyHours
+            is RuleParams.Energize    -> params.skipPenaltyHours
+        }
+        // Clamp the skip basis to `now` so an overdue contact (nextDueAt already
+        // in the past because the user hasn't opened the app in days) still gets
+        // pushed forward by skipPenaltyHours FROM NOW, not from the stale past
+        // value, which would leave the contact re-surfacing immediately after a
+        // skip. DOM-07 intent: Skip pushes the person down the queue.
+        val basis = maxOf(membership.nextDueAt ?: now, now)
+        return basis.plus(Duration.ofHours(skipPenaltyHours.toLong()))
     }
 }

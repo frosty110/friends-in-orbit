@@ -47,17 +47,34 @@ internal object OrbitPrimitives {
     val CreamDim       = Color(0xFFC9C2B9)
     val LineDark       = Color(0xFF3D3631)
 
-    // HOME-8 — call-direction rim colors for the 7-day rhythm bars. Deliberately
-    // COOL and outside every theme's warm personality range: a bar's FILL is the
-    // person (OrbitTones.rhythmBars), its RIM is the direction, so the two
-    // channels must never be confusable. Cool-on-warm also reads as "metadata,
-    // not identity". Violet vs. cyan-blue are ~65° apart in hue AND separated in
-    // lightness, so the pair survives a colour-vision deficiency and the 2dp
-    // rim size — a same-lightness purple/blue pair would not.
-    val DirOutgoing    = Color(0xFF5E3D96)   // light — you reached out
-    val DirIncoming    = Color(0xFF2F84B8)   // light — they reached you
-    val DirOutgoingDk  = Color(0xFFB49BEA)   // dark — lifted, same hue
-    val DirIncomingDk  = Color(0xFF6FBBE0)
+    // HOME-8: call-direction rim colors for the 7-day rhythm bars and the day
+    // sheet's avatar rings. A bar's FILL is the person (OrbitTones.rhythmBars),
+    // its RIM is the direction, so the two channels must never be confusable.
+    // Pink and teal sit outside every theme's warm personality range (the
+    // fills are terracotta, sage, amber, brick and stone dots), and they are
+    // ~180° apart, so the hue difference survives a 3dp band.
+    //
+    // Was violet #5E3D96 / blue #2F84B8 (dark #B49BEA / #6FBBE0) until
+    // 2026-10-07: a 2dp rim pressed straight against a pastel fill read as
+    // part of the fill, and in dark the lifted violet sat close to the warm
+    // fills. The owner could not tell who called whom. The fix has two parts:
+    // this pair (CIELAB ΔE 101 light, 116 dark, against 47 / 40 before), and
+    // the DirSeparator ring between rim and fill.
+    //
+    // Colour-vision deficiency: the pair is also separated in LIGHTNESS (1.6:1
+    // light, 2.4:1 dark), which is what still tells them apart once the
+    // red-green axis collapses. That is why the light pink is a deep raspberry
+    // and not the brighter #EC4899: the brighter one matches the teal's
+    // lightness and the deutan ΔE falls from 20 to 9.
+    val DirOutgoing    = Color(0xFFBE185D)   // light: you reached out
+    val DirIncoming    = Color(0xFF0D9488)   // light: they reached you
+    val DirOutgoingDk  = Color(0xFFEC4899)   // dark: neon, against the black ring
+    val DirIncomingDk  = Color(0xFF5EEAD4)
+    // The insulating ring between a direction rim and the person fill it
+    // wraps. Near-black in both modes: it is the darkest thing on the card, so
+    // both rims stand off it (light 3.1 and 5.0:1, dark 5.3 and 12.6:1) and the
+    // rim can no longer bleed into a fill of similar lightness.
+    val DirSeparator   = Color(0xFF141210)
 
     val AccentHover    = Color(0xFFA44A32)   // light; hover/press deepen from Terracotta
     // Green status text ("Allowed"): Sage itself is 2.76:1 on paper, so text
@@ -118,6 +135,8 @@ data class OrbitColors(
     // blue, Plum's violet) and the cue would vanish exactly where it's needed.
     val directionOutgoing: Color,
     val directionIncoming: Color,
+    // The black ring that insulates a direction rim from the fill inside it.
+    val directionSeparator: Color,
     val isDark: Boolean,
 )
 
@@ -153,6 +172,7 @@ internal val LightColors = OrbitColors(
     swipeGhostSooner = OrbitPrimitives.Sage,      // MT-06 — matches positive
     directionOutgoing = OrbitPrimitives.DirOutgoing,
     directionIncoming = OrbitPrimitives.DirIncoming,
+    directionSeparator = OrbitPrimitives.DirSeparator,
     isDark = false,
 )
 
@@ -190,6 +210,7 @@ internal val DarkColors = OrbitColors(
     swipeGhostSooner = OrbitPrimitives.Sage,      // MT-06 — same sage in dark per UI-SPEC
     directionOutgoing = OrbitPrimitives.DirOutgoingDk,
     directionIncoming = OrbitPrimitives.DirIncomingDk,
+    directionSeparator = OrbitPrimitives.DirSeparator,
     isDark = true,
 )
 

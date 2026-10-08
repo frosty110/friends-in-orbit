@@ -165,10 +165,27 @@ class CardViewViewModelTest {
             cardFeed = cardFeed,
             skipContact = skipContact,
             surfaceSooner = surfaceSooner,
+            // CARD-10: the shared log path; the state contract never logs.
+            logConnection = app.orbit.domain.usecase.LogConnectionUseCase(
+                markCalled = app.orbit.domain.usecase.MarkCalledUseCase(
+                    contactRepo = contactRepo,
+                    listRepo = listRepo,
+                    callEventRepo = callEventRepo,
+                    ruleTemplateRepo = templateRepo,
+                    clock = clock,
+                    json = json,
+                ),
+                addRetroactiveNote = app.orbit.domain.usecase.AddRetroactiveNoteUseCase(noteRepo),
+                clock = clock,
+                zoneId = java.time.ZoneId.of("UTC"),
+            ),
             // 2026-06-09 — swipe-undo surface: the VM captures + restores the
             // membership schedule through ListRepository and stages the inverse
             // on the depth-1 UndoStack.
             listRepo = listRepo,
+            // CARD-11 reads the confirmed call; CARD-09 counts moves.
+            callEventRepo = callEventRepo,
+            appPrefs = app.orbit.testutil.inMemoryPrefs(),
             undoStack = UndoStack(),
             // CORE-04 — return-from-dial resync seam; state-contract tests don't
             // exercise the dial path, so a no-op SAM suffices.
