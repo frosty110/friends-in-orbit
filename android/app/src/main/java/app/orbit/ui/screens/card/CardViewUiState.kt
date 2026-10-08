@@ -30,7 +30,7 @@ import java.time.Instant
  * Card-loop revision (2026-06-09):
  *  - `Ready.queueSize` now carries the list's real due-now count (was the
  *    dead constant 1).
- *  - `Ready.whyNowLine`: VM-built "You spoke 3 weeks ago." framing line
+ *  - `Ready.whyNowLine`: VM-built "Spoke 3 weeks ago." framing line
  *    derived from the last connected call; null when there is no history.
  *  - `EmptyNothingEligible` is a data class carrying the optional
  *    soonest-upcoming-member hint so the empty state can say
@@ -76,7 +76,7 @@ sealed interface CardViewUiState {
         // re-centers the held card on (`emissionKey`). Without it the card
         // would wait off-screen for the frame's stuck-card guard.
         val isAheadOfToday: Boolean = false,
-        // 2026-06-09: why-now framing line ("You spoke 3 weeks ago."), built
+        // 2026-06-09: why-now framing line ("Spoke 3 weeks ago."), built
         // by the VM from the most recent connected call as UiText (resolved by
         // the screen). Null when no history; the screen hides the line then.
         val whyNowLine: UiText? = null,

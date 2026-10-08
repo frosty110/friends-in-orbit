@@ -31,7 +31,7 @@ When this doc disagrees with `README.md` §Content fundamentals, this doc wins.
 - "Great job," "awesome," "keep it going!" — coach framing
 - Emoji, unicode glyphs, ASCII art in product copy
 - "The contact," "the user," "the entity" — clinical framing
-- "Due" as a deadline ("due today", "not due yet", "3 people due"): deadline framing. Orbit suggests; it never sets a deadline. Over a name say "Up now" or "Coming up"; for a quiet moment say who comes up next and when. (Added 2026-10-05. HOME-6 retired the word on Home in June; this makes the rule explicit for every screen, and the string audit `VoiceAuditTest` holds the resources to it.)
+- "Due" as a deadline ("due today", "not due yet", "3 people due"): deadline framing. Orbit suggests; it never sets a deadline. Where a row needs to say whose turn it is, say "Up now" (Browse's rows); for a quiet moment say who comes up next and when. Card view puts nothing over the name since 2026-10-08 (CARD-04). (Added 2026-10-05. HOME-6 retired the word on Home in June; this makes the rule explicit for every screen, and the string audit `VoiceAuditTest` holds the resources to it.)
 
 ## Always say
 

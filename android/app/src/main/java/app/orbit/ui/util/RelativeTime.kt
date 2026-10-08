@@ -74,7 +74,7 @@ fun formatRelative(
  * "today", "yesterday", then "{span} ago" in [formatSpan]'s buckets ("3 days
  * ago", "3 weeks ago"). For the why-now line on Card view and Home, which
  * count whole days between instants (their own day boundary) and then need
- * the one "ago" wording as the argument of "You spoke {ago}". Building the
+ * the one "ago" wording as the argument of "Spoke {ago}". Building the
  * line from [formatSpan] gave "3 days since you last spoke", the shame
  * framing voice.md never says, and the string audit could not see it because
  * the span arrived as an argument. Negative clamps to "today".

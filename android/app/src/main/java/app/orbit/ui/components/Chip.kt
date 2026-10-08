@@ -53,7 +53,7 @@ private fun toneTriple(tone: ChipTone): ToneTriple {
 }
 
 /**
- * A read-only label chip: a list name, a status ("Smart list"). Not a control,
+ * A read-only label chip: a list name, a status. Not a control,
  * so it carries no tap target; anything the user can toggle is an
  * [OrbitFilterChip].
  */

@@ -69,8 +69,9 @@ second accent element, one of them isn't the primary action.
 
 **Design 6 — One accent call action per screen.** A screen has at most one
 call control in the accent (Card view's Call button, Contact detail's Call). A
-screen that lists people (Browse, Search, and Home's "Next up" row on each list
-card) may also carry a quiet, muted, labelled dial button on each person,
+screen that lists people (Browse, Search) may also carry a quiet, muted,
+labelled dial button on each person (Home's "Next up" row had one until
+2026-10-08, when the owner asked for it to go, HOME-9),
 because dialing from a list is the shortest path to the app's job; no other
 surface repeats the phone icon. Iconography is Phosphor Regular, 1.5px
 stroke, drawn via `PhIcon` from the VectorDrawables in `res/drawable/ph_*.xml`

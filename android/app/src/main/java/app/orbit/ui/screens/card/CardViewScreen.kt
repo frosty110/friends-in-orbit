@@ -946,7 +946,7 @@ internal fun ContactCardFace(
                     textAlign = TextAlign.Center
                 )
                 // 2026-06-09 — why-now line from the last connected call
-                // ("You spoke 3 weeks ago."). Hidden when there's no history.
+                // ("Spoke 3 weeks ago."). Hidden when there's no history.
                 if (whyNowLine != null) {
                     Spacer(Modifier.height(OrbitTheme.spacing.x1))
                     Text(

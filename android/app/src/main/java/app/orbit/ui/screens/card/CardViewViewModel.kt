@@ -565,7 +565,7 @@ class CardViewViewModel @Inject constructor(
                 // Connections only for "when you last spoke" and for CARD-03's
                 // evidence: an ATTEMPT is a reach-out that did not connect
                 // (Enums.kt), the same filter withCallStats applies to "Last
-                // call", so the face never says "You spoke today" over a
+                // call", so the face never says "Spoke today" over a
                 // voicemail.
                 val connections = recentCalls.filter { it.source != CallSource.ATTEMPT }
                 CardViewUiState.Ready(
@@ -588,7 +588,7 @@ class CardViewViewModel @Inject constructor(
 
     /**
      * Honest one-line framing from the most recent connected call (manual
-     * marks count, the user told us they talked): "You spoke 3 weeks ago."
+     * marks count, the user told us they talked): "Spoke 3 weeks ago."
      * ([cardWhySince]; Home's words for the same gap, so one idea has one
      * wording). Null when there is no history at all; the face then shows
      * only the neutral "Not enough calls yet to see a pattern" panel.
@@ -676,10 +676,11 @@ private const val KEY_DIAL_CONTACT_ID = "card_dial_contact_id"
 private const val KEY_DIAL_AT_MS = "card_dial_at_ms"
 
 /**
- * The card's "when you last spoke" line for a gap of [days] whole days: "You
- * spoke today.", "You spoke yesterday.", then "You spoke 3 days ago." / "You
- * spoke 3 weeks ago." with [formatAgo]'s one wording as the argument. Active
- * voice, the form voice.md gives ("You spoke yesterday"). Until 2026-10-06 the
+ * The card's "when you last spoke" line for a gap of [days] whole days:
+ * "Spoke today.", "Spoke yesterday.", then "Spoke 3 days ago." / "Spoke 3
+ * weeks ago." with [formatAgo]'s one wording as the argument; "You" was
+ * dropped on 2026-10-08 at the owner's request, as on Home, and voice.md
+ * gives this form ("Spoke yesterday"). Until 2026-10-06 the
  * span filled "%1$s since you last spoke.", which for the most common gaps
  * read "3 days since you last spoke.", the shame framing voice.md never says
  * and `VoiceRules` forbids ("days since"); the string audit reads resource
