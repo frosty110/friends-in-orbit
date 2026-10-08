@@ -52,19 +52,15 @@ class SurfaceSoonerUseCase @Inject constructor(
      * surfaced rather than silently swallowed. Aggregation logic mirrors
      * [SkipContactUseCase].
      *
-     * [now] is the instant the new time is counted from, as in
-     * [SkipContactUseCase.invoke]: the card passes the one it words the
-     * snackbar from (CARD-02).
+     * One clock read, as in [SkipContactUseCase.invoke] (whose KDoc says why
+     * the card no longer hands in an instant).
      */
-    suspend operator fun invoke(
-        contactId: Long,
-        listId: Long? = null,
-        now: Instant = clock.now(),
-    ): MutationResult {
+    suspend operator fun invoke(contactId: Long, listId: Long? = null): MutationResult {
         val contact = contactRepo.observeById(contactId).first()
             ?: return MutationResult.MembershipMissing
         val memberships = listRepo.observeMembershipsForContact(contactId).first()
         val targets = if (listId == null) memberships else memberships.filter { it.listId == listId }
+        val now = clock.now()
 
         var aggregate: MutationResult = MutationResult.Success
         for (membership in targets) {
@@ -116,22 +112,6 @@ class SurfaceSoonerUseCase @Inject constructor(
             widgetRefreshTrigger.scheduleRefresh()
         }
         return aggregate
-    }
-
-    /**
-     * CARD-09: the `nextDueAt` a Sooner would write for [contactId] on
-     * [listId] right now, without writing it, for the card's idle hint
-     * ("Sooner · Tomorrow"). Computed by the function [invoke] writes with,
-     * so the hint and the Sooner's snackbar cannot disagree
-     * ([SkipContactUseCase.preview] is Later's twin). Null when the move
-     * could not be made; the hint then says "Sooner" alone. [now] as in
-     * [invoke].
-     */
-    suspend fun preview(contactId: Long, listId: Long, now: Instant = clock.now()): Instant? {
-        val contact = contactRepo.observeById(contactId).first() ?: return null
-        val membership = listRepo.observeMembershipsForContact(contactId).first()
-            .firstOrNull { it.listId == listId } ?: return null
-        return nextDueAfterSooner(contact, membership, now)
     }
 
     /** The one computation of a Sooner's new `nextDueAt`; null when its list or template is gone. */

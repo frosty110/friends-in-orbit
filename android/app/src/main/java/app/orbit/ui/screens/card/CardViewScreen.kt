@@ -117,9 +117,14 @@ import kotlin.math.abs
 // when nothing can be retried), the app bar is titled in every state, and
 // "Add a note" lands in the note field (NOTE-02; since 2026-10-07 the
 // post-call note page, NOTE-04, which the NavHost wires).
-// 2026-10-07 owner review: hints that teach the swipe (CARD-09,
-// CardSwipeHints.kt), "Log a connection" under the card (CARD-10), and the
-// note page opening by itself after a call worth a note (CARD-11).
+// 2026-10-07 owner review: hints that teach the swipe (CARD-09),
+// "Log a connection" under the card (CARD-10), and the note page opening by
+// itself after a call worth a note (CARD-11).
+// 2026-10-08 owner round 3, trims: no idle hints (CARD-09 retired; the
+// labelled Later and Sooner buttons already teach the swipe, CARD-08), no
+// "Up now" / "Coming up" over the name and no answer chip in the pattern
+// panel (CARD-04), and the Later and Sooner snackbars no longer say when the
+// person comes back (CARD-02).
 
 /**
  * @param onOpenContact opens a person's page from the face or "Open details".
@@ -186,8 +191,7 @@ fun CardViewScreen(
         onOpenSettings = onOpenSettings,
         onOpenContact = { contactId -> onOpenContact("c-$contactId") },
         onAddNote = { contactId, callEventId -> onAddNote("c-$contactId", callEventId) },
-        onLogConnection = vm::onLogConnection,
-        moveHints = vm::moveHints
+        onLogConnection = vm::onLogConnection
     )
 }
 
@@ -199,23 +203,23 @@ fun CardViewScreen(
  * overflow button (voice.md glossary; it said "List options", a third name
  * for the same control). [listName] is already masked under the curtain.
  *
- * Whether it is open is [CardViewContent]'s ([expanded], [onExpandedChange]),
- * so the idle hints can wait while it is (CARD-09).
+ * Whether it is open is its own state again since 2026-10-08: it lived in
+ * [CardViewContent] for a day only so the idle hints (CARD-09, retired) could
+ * wait while it was open.
  */
 @Composable
 private fun ListActionsMenu(
     listName: String,
     listType: ListType?,
-    expanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
     onBrowse: () -> Unit,
     onEditList: () -> Unit,
     onAddContacts: () -> Unit
 ) {
+    var expanded by remember { mutableStateOf(false) }
     Box {
         OrbitIconButton(
             icon = "dots-three-vertical",
-            onClick = { onExpandedChange(true) },
+            onClick = { expanded = true },
             contentDescription = if (listName.isBlank()) {
                 stringResource(R.string.card_list_options_unnamed)
             } else {
@@ -224,7 +228,7 @@ private fun ListActionsMenu(
         )
         OrbitDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { onExpandedChange(false) },
+            onDismissRequest = { expanded = false },
             actions = cardListMenuActions(
                 LocalContext.current.resources,
                 listType = listType,
@@ -275,10 +279,6 @@ internal fun cardListMenuActions(
  *   with no call id, and by itself for a call worth a note (CARD-11) with it.
  * @param onLogConnection CARD-10: the sheet's choice, for the person the
  *   sheet was opened over.
- * @param moveHints CARD-09: what the idle hints say for a person, asked just
- *   before each appearance; null shows none.
- * @param pinnedHints CARD-09, previews only: shows the hints at full
- *   strength with no idle clock, so the gallery and its audits see them.
  */
 @Composable
 internal fun CardViewContent(
@@ -299,9 +299,7 @@ internal fun CardViewContent(
     onOpenContact: (contactId: Long) -> Unit,
     onAddNote: (contactId: Long, callEventId: Long?) -> Unit = { contactId, _ -> onOpenContact(contactId) },
     onLogConnection: (contactId: Long, whenChoice: LogConnectionWhen, note: String, isAttempt: Boolean) -> Unit =
-        { _, _, _, _ -> },
-    moveHints: suspend (contactId: Long) -> CardMoveHints? = { null },
-    pinnedHints: CardMoveHints? = null
+        { _, _, _, _ -> }
 ) {
     val curtain = LocalPrivacyCurtain.current
     val context = LocalContext.current
@@ -311,14 +309,6 @@ internal fun CardViewContent(
     // the sheet was opened over: a deck that moves while it is open (a call
     // log sync) still logs that person, never whoever replaced them.
     var logSheetFor by rememberSaveable { mutableStateOf<Long?>(null) }
-    // CARD-09: whether the list menu is open, so the hints wait while it is,
-    // as the prototype's do while a menu covers the card. Owned here, not in
-    // ListActionsMenu (rules.md Code 7: the menu only asks to change it):
-    // its button sits in the app bar, outside the card's touch watcher, and
-    // its popup takes the touches after that, so a touch cannot pause them
-    // and only this flag can. Until 2026-10-08 the hints kept their clock
-    // and showed over an open menu.
-    var listMenuOpen by remember { mutableStateOf(false) }
     // The list's name titles every state that knows it (an empty or failed
     // deck used to leave the bar untitled, so TalkBack announced no pane and
     // "this list" was never named on screen). PRIV-03: it masks as "List"
@@ -356,9 +346,12 @@ internal fun CardViewContent(
         messages.collectLatest { message ->
             snackbarHostState.currentSnackbarData?.dismiss()
             val text = when (message) {
-                is CardMessage.Undoable -> message.text
+                // PRIV-03: the nameless sentence while the curtain is down,
+                // "They moved to later." (CARD-02) and "Logged. They come up
+                // again ..." (CARD-10). Until 2026-10-08 a Later or Sooner
+                // named the person under the curtain too.
+                is CardMessage.Undoable -> if (currentCurtain) message.curtainText else message.text
                 is CardMessage.Called -> message.text
-                // PRIV-03: the nameless sentence while the curtain is down.
                 is CardMessage.Logged -> if (currentCurtain) message.curtainText else message.text
                 is CardMessage.Failed -> message.text
                 is CardMessage.OpenNote -> {
@@ -415,8 +408,6 @@ internal fun CardViewContent(
                 ListActionsMenu(
                     listName = appBarTitle,
                     listType = state.listType,
-                    expanded = listMenuOpen,
-                    onExpandedChange = { listMenuOpen = it },
                     // BROWSE-09: "Browse people" opens on the person this card
                     // shows, marked and scrolled to; no one when it shows nobody.
                     onBrowse = { onBrowse(listId, (state as? CardViewUiState.Ready)?.contactId) },
@@ -470,12 +461,7 @@ internal fun CardViewContent(
                     onSwipeLeft = onSwipeLeft,
                     onSwipeRight = onSwipeRight,
                     onOpenContact = onOpenContact,
-                    onOpenLogConnection = { contactId -> logSheetFor = contactId },
-                    // CARD-09: no hints while the sheet or the list menu
-                    // covers the card; closing either starts the 4 seconds again.
-                    hintsActive = logSheetFor == null && !listMenuOpen,
-                    moveHints = moveHints,
-                    pinnedHints = pinnedHints
+                    onOpenLogConnection = { contactId -> logSheetFor = contactId }
                 )
             }
             OrbitSnackbarHost(
@@ -622,10 +608,7 @@ private fun ReadyCard(
     onSwipeLeft: (contactId: Long) -> Unit,
     onSwipeRight: (contactId: Long) -> Unit,
     onOpenContact: (contactId: Long) -> Unit,
-    onOpenLogConnection: (contactId: Long) -> Unit,
-    hintsActive: Boolean,
-    moveHints: suspend (contactId: Long) -> CardMoveHints?,
-    pinnedHints: CardMoveHints?
+    onOpenLogConnection: (contactId: Long) -> Unit
 ) {
     val contactId = state.contactId
     val contact = state.contact
@@ -634,19 +617,12 @@ private fun ReadyCard(
     // Masked like the face and app bar: "Call Contact" under the curtain.
     val maskedName = stringResource(R.string.components_curtain_contact)
     val firstName = (if (curtain) maskedName else contact.name).substringBefore(' ')
-    // CARD-09: the idle clock for this person, and the touch watcher that
-    // hides the hints and restarts it. A previewed card has no clock.
-    val (hints, touchWatcher) = rememberSwipeHints(
-        contactId = contactId,
-        active = hintsActive && pinnedHints == null,
-        fetch = moveHints
-    )
 
     // CARD-06: in landscape on a phone (short and wide) the card and its
     // actions sit side by side. Stacked, the card face got about 120dp of
     // height and showed only the top of the avatar (rubric gate G3, found by
     // rendering at w740dp-h360dp). Portrait is unchanged.
-    BoxWithConstraints(modifier = Modifier.fillMaxSize().then(touchWatcher)) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val sideBySide = maxWidth > maxHeight && maxHeight < LANDSCAPE_MAX_HEIGHT
         val frame: @Composable (Modifier) -> Unit = { frameModifier ->
             CardSwipeFrame(
@@ -657,10 +633,7 @@ private fun ReadyCard(
                 onSwipeRight = { onSwipeRight(contactId) },
                 modifier = frameModifier
                     .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x3),
-                ghostOverlay = { offsetFraction ->
-                    GhostHints(offsetFraction)
-                    SwipeHintsOverlay(state = hints, pinned = pinnedHints)
-                }
+                ghostOverlay = { offsetFraction -> GhostHints(offsetFraction) }
             ) {
                 // Crossfade keyed on contactId: the outgoing face fades while the
                 // incoming face fades in, so card advancement reads as one quiet
@@ -713,7 +686,6 @@ private fun ReadyCard(
                             contact = face.contact,
                             listContext = face.listContext,
                             nowHour = face.nowHour,
-                            isAheadOfToday = face.isAheadOfToday,
                             whyNowLine = face.whyNowLine,
                             lastNote = face.recentNotes.firstOrNull()
                         )
@@ -916,7 +888,6 @@ internal fun ContactCardFace(
     contact: Contact,
     listContext: String,
     nowHour: Int,
-    isAheadOfToday: Boolean,
     whyNowLine: UiText?,
     lastNote: NoteRow? = null
 ) {
@@ -964,18 +935,10 @@ internal fun ContactCardFace(
                     Spacer(Modifier.height(OrbitTheme.spacing.x6 + OrbitTheme.spacing.x3))
                 }
                 Avatar(name = shownName, size = 104.dp, photoUri = if (curtain) null else contact.photoUri)
+                // Nothing over the name (CARD-04). An eyebrow said "Up now" or
+                // "Coming up" here from 2026-05-08 (the tide marker) until the
+                // owner removed it on 2026-10-08.
                 Spacer(Modifier.height(OrbitTheme.spacing.x3))
-                // Tide marker (2026-05-08): small framing line above the contact
-                // name. "Up now" when the engine's nextDueAt has arrived; "Coming
-                // up" past the waterline. A fact about the rhythm, never a
-                // deadline: it read "Due today" / "Not due yet", and "due" is the
-                // deadline framing voice.md retired with HOME-6.
-                Text(
-                    text = stringResource(if (isAheadOfToday) R.string.card_not_due_yet else R.string.card_due_today),
-                    style = OrbitTheme.type.eyebrow,
-                    color = OrbitTheme.colors.fgMuted
-                )
-                Spacer(Modifier.height(OrbitTheme.spacing.x1))
                 Text(
                     text = shownName,
                     style = OrbitTheme.type.contactName,
@@ -1016,9 +979,9 @@ internal fun ContactCardFace(
                     )
                 }
                 Spacer(Modifier.height(OrbitTheme.spacing.x4))
-                // The pattern panel needs real signal — below the connected-call
+                // The pattern panel needs real signal: below the connected-call
                 // floor the heat array stays all-zero and we show a neutral line
-                // instead of a false "Rarely answers now" chip (2026-06-09 fix).
+                // instead of an all-zero strip (2026-06-09 fix).
                 if (contact.heat.any { it > 0f }) {
                     UsuallyAnswersCard(contact, nowHour)
                 } else {
@@ -1102,15 +1065,11 @@ private fun UsuallyAnswersCard(contact: Contact, nowHour: Int) {
             )
         }
         Spacer(Modifier.height(OrbitTheme.spacing.x2))
+        // The strip ends the panel (CARD-04). A chip under it graded this hour
+        // ("Good time to call", "Sometimes answers now", "Rarely answers
+        // now") from the strip's own value at the current hour until the
+        // owner removed it on 2026-10-08.
         HeatStrip(heat = contact.heat, nowHour = nowHour)
-        Spacer(Modifier.height(OrbitTheme.spacing.x2))
-        val peak = contact.heat.getOrNull(nowHour) ?: 0f
-        val (tone, label) = when {
-            peak >= 0.6f -> ChipTone.Sage to R.string.card_answer_good
-            peak >= 0.3f -> ChipTone.Amber to R.string.card_answer_sometimes
-            else -> ChipTone.Stone to R.string.card_answer_rarely
-        }
-        OrbitChip(label = stringResource(label), tone = tone)
     }
 }
 
@@ -1265,25 +1224,12 @@ private val previewState: CardViewUiState = CardViewUiState.Ready(
     )
 )
 
-private val previewStateAhead: CardViewUiState = CardViewUiState.Ready(
-    contactId = 1L,
-    contact = previewContact,
-    listContext = "Inner orbit",
-    queueSize = 5,
-    recentNotes = emptyList(),
-    nowHour = 19,
-    isAheadOfToday = true,
-    whyNowLine = UiText.res(R.string.card_why_yesterday)
-)
-
 @Composable
 private fun PreviewContent(
     state: CardViewUiState,
-    callLogDenied: Boolean = false,
-    pinnedHints: CardMoveHints? = null
+    callLogDenied: Boolean = false
 ) {
     CardViewContent(
-        pinnedHints = pinnedHints,
         state = state,
         listId = "inner-orbit",
         callLogDenied = callLogDenied,
@@ -1311,23 +1257,6 @@ private fun CardViewContentPreview() {
     }
 }
 
-// CARD-09: the idle hints at full strength at the card's top corners, as they
-// show after four untouched seconds. Rendered at 100% and 200% text, in both
-// modes; the gallery's landscape and curtain runs render it too.
-private val previewHints = CardMoveHints(
-    later = UiText.res(R.string.card_hint_later_when, UiText.res(R.string.card_hint_on_day, "Thursday")),
-    sooner = UiText.res(R.string.card_hint_sooner_when, UiText.res(R.string.card_hint_tomorrow)),
-)
-
-@PreviewLightDark
-@Preview(name = "200%", fontScale = 2f)
-@Composable
-private fun CardViewContentHintsPreview() {
-    OrbitTheme {
-        PreviewContent(state = previewState, pinnedHints = previewHints)
-    }
-}
-
 // Gate G3: a 40-character name and list name, at 100% and 200% text.
 @PreviewLightDark
 @Preview(name = "200%", fontScale = 2f)
@@ -1340,14 +1269,6 @@ private fun CardViewContentLongNamesPreview() {
                 listContext = "Old friends from the climbing gym crew",
             )
         )
-    }
-}
-
-@PreviewLightDark
-@Composable
-private fun CardViewContentAheadOfTodayPreview() {
-    OrbitTheme {
-        PreviewContent(state = previewStateAhead)
     }
 }
 
