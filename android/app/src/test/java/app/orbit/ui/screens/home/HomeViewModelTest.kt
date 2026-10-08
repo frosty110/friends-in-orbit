@@ -399,9 +399,10 @@ class HomeViewModelTest {
     }
 
     // `ListTileState` carries a `type: ListType` field so the Home card can
-    // show the smart-list glyph and leave "Add people" out of the menu for
-    // SMART lists only (LIST-07). The projection lives in HomeFeed; the type
-    // must round-trip through the VM unchanged.
+    // leave "Add people" out of the menu for SMART lists only (LIST-07). The
+    // smart-list glyph it also drew went on 2026-10-08 (rules.md Design 9).
+    // The projection lives in HomeFeed; the type must round-trip through the
+    // VM unchanged.
     @Test
     fun `list type propagates from feed to VM uiState`() = runTest {
         val setup = fixture(
