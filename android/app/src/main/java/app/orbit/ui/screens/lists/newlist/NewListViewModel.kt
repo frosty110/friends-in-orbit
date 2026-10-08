@@ -165,8 +165,15 @@ class NewListViewModel @Inject constructor(
         savedStateHandle[KEY_NAME] = text
     }
 
-    /** How often's wheel settled at [hours]. From here on the template no longer sets it. */
+    /**
+     * How often's wheel settled at [hours]. From here on the template no
+     * longer sets it. Refused while Create's write is in flight, as every
+     * entry change is: the write has already read the interval, so a change
+     * then would not be the list that is made (the screen holds the wheel
+     * still too).
+     */
     fun onIntervalCommit(hours: Int) {
+        if (creating.value) return
         savedStateHandle[KEY_INTERVAL] = hours
     }
 
@@ -207,8 +214,14 @@ class NewListViewModel @Inject constructor(
         savedStateHandle[KEY_PEOPLE] = contactIds.distinct().toLongArray()
     }
 
-    /** "Remove {name} from list" on the People step. */
+    /**
+     * "Remove {name} from list" on the People step. Refused while Create's
+     * write is in flight: the write has already read who is chosen, so the
+     * person would leave the screen and still be on the list (the screen
+     * disables the control too). Until 2026-10-08 it was not refused.
+     */
     fun removePerson(contactId: Long) {
+        if (creating.value) return
         savedStateHandle[KEY_PEOPLE] = chosenIds.filterNot { it == contactId }.toLongArray()
     }
 

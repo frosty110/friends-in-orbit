@@ -60,6 +60,7 @@ import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.home.HomeSnackbarEvent
+import app.orbit.ui.theme.LocalReducedMotion
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.theme.orbitCardShadow
 import app.orbit.ui.util.UiText
@@ -106,7 +107,8 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
  * are no lists) opens New list, the step-by-step flow, through
  * [onCreateList]. It is a screen of its own, not a sheet here, so Home opens
  * it too and Create returns to whichever screen opened it, with "Created
- * {name}." and the new list in place.
+ * {name}." and the new list in place, scrolled into view here (see
+ * ReadyContent).
  *
  * BULK-05 wiring: each active list row carries a trailing "Add people" "+"
  * affordance whose tap routes via [onAddContacts] → `Routes.pickContacts(listId)`.
@@ -339,6 +341,34 @@ private fun ReadyContent(
     var pendingRenameId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingRenameName by rememberSaveable { mutableStateOf("") }
     val lazyListState = rememberLazyListState()
+    // LIST-28: a list that was not here before (New list's Create, or any
+    // list made while this screen waited under another) is brought into
+    // view. It lands last among the active lists (LIST-02), and the list
+    // comes back at the scroll position it was left at, so with more lists
+    // than fit, "the new list in place" was below the fold with nothing to
+    // say so. The screen gets no id back from New list (the flow only pops),
+    // so it compares: the ids it has shown, active and archived, are kept
+    // saveable beside the scroll position and come back with it. A list
+    // restored from the archive was shown before, so it does not count, and
+    // the first lists the screen sees are the baseline, not news. A Lists
+    // screen that the older `lists?openCreate=true` covered before its lists
+    // loaded has no baseline, and stays where it is.
+    var shownListIds by rememberSaveable { mutableStateOf<LongArray?>(null) }
+    val listIds = remember(state.active, state.archived) {
+        (state.active.map { it.id } + state.archived.map { it.id }).toSet()
+    }
+    val activeIds = state.active.map { it.id }
+    val reducedMotion = LocalReducedMotion.current
+    LaunchedEffect(listIds) {
+        val before = shownListIds
+        shownListIds = listIds.toLongArray()
+        if (before == null) return@LaunchedEffect
+        val position = activeIds.indexOfLast { it !in before }
+        if (position < 0) return@LaunchedEffect
+        // The spacer is the column's first item, so the rows start at 1.
+        val index = position + 1
+        if (reducedMotion) lazyListState.scrollToItem(index) else lazyListState.animateScrollToItem(index)
+    }
     val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
         // The header / archived rows carry composite key prefixes ("archived-header",
         // "footer", or "archived:<id>") — only active-row drags reach this body

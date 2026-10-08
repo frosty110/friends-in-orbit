@@ -30,6 +30,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
@@ -52,6 +53,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
@@ -111,6 +113,11 @@ import kotlinx.coroutines.launch
  * value (List settings for a list with no rhythm yet, LIST-30). Then choosing
  * it, by a tap or by coming to rest on it, commits it too: otherwise the one
  * value a person could not pick would be the one it opened on.
+ *
+ * [enabled] false holds the row where it is: no drag, tap, key or TalkBack
+ * adjust moves it, TalkBack hears it as disabled, and it dims as a disabled
+ * [OrbitButton] does (New list's How often while Create's write is in
+ * flight, LIST-28).
  */
 @Composable
 fun OrbitWheelPicker(
@@ -123,6 +130,7 @@ fun OrbitWheelPicker(
     modifier: Modifier = Modifier,
     caption: @Composable (Int) -> String? = { null },
     valueIsSet: Boolean = true,
+    enabled: Boolean = true,
 ) {
     require(!range.isEmpty()) { "OrbitWheelPicker needs at least one value" }
     val count = range.last - range.first + 1
@@ -214,9 +222,10 @@ fun OrbitWheelPicker(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = OrbitTheme.spacing.tapMin)
-            .focusable(interactionSource = interaction)
+            .alpha(if (enabled) 1f else 0.4f)
+            .focusable(enabled = enabled, interactionSource = interaction)
             .onKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                if (!enabled || event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (event.key) {
                     Key.DirectionLeft, Key.Minus, Key.NumPadSubtract -> { select(centredValue - 1); true }
                     Key.DirectionRight, Key.Plus, Key.NumPadAdd -> { select(centredValue + 1); true }
@@ -232,9 +241,13 @@ fun OrbitWheelPicker(
                     // One stop per value, so TalkBack's adjust moves exactly one.
                     steps = (count - 2).coerceAtLeast(0),
                 )
-                setProgress { target ->
-                    select(target.roundToInt())
-                    true
+                if (enabled) {
+                    setProgress { target ->
+                        select(target.roundToInt())
+                        true
+                    }
+                } else {
+                    disabled()
                 }
             },
     ) {
@@ -245,6 +258,7 @@ fun OrbitWheelPicker(
         LazyRow(
             state = state,
             flingBehavior = fling,
+            userScrollEnabled = enabled,
             contentPadding = PaddingValues(horizontal = sidePadding),
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -287,6 +301,7 @@ fun OrbitWheelPicker(
                         .width(itemWidth)
                         .heightIn(min = OrbitTheme.spacing.tapMin)
                         .clickable(
+                            enabled = enabled,
                             interactionSource = null,
                             indication = null,
                             onClick = { select(v) },
