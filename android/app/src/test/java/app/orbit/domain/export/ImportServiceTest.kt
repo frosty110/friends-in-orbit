@@ -111,6 +111,8 @@ class ImportServiceTest {
         activeHoursEnd = LocalTime.of(21, 30),
         notificationsEnabled = true,
         dueCount = 0,
+        // Weekdays at 6pm: the round trip must carry it (envelope v3).
+        nudgeScheduleJson = WEEKDAYS_AT_SIX_JSON,
     )
 
     private val membershipSam = ListMembershipEntity(
@@ -231,15 +233,16 @@ class ImportServiceTest {
         assertEquals(Instant.ofEpochMilli(50_000L), riley.ignoredAt)
 
         // Lists: dueCount recomputed (both memberships due: one past, one
-        // null). The 9am to 9:30pm window is folded into the nudge times
-        // (LIST-25): the default 10am is inside it, so the list keeps nudging at
-        // 10am, now with no window behind it.
+        // null). The schedule comes back (envelope v3; until 2026-10-08 a
+        // restore dropped every list to the default), and the 9am to 9:30pm
+        // window is folded into it (LIST-25): 6pm is inside, so the list keeps
+        // nudging on weekdays at 6pm, now with no window behind it.
         val list = db.listDao().get(1L)
         assertEquals("Inner orbit", list?.name)
         assertEquals(1L, list?.ruleTemplateId)
         assertEquals(null, list?.activeHoursStart)
         assertEquals(null, list?.activeHoursEnd)
-        assertEquals(NudgeSchedule.DEFAULT, NudgeSchedule.fromStoredJson(list?.nudgeScheduleJson))
+        assertEquals(WEEKDAYS_AT_SIX, NudgeSchedule.fromStoredJson(list?.nudgeScheduleJson))
         assertEquals(2, list?.dueCount)
 
         // Memberships — skipCount + nextDueAt preserved.
@@ -302,6 +305,32 @@ class ImportServiceTest {
         assertEquals(null, untouched.nudgeScheduleJson)
     }
 
+    @Test
+    fun `a backup's own schedule is kept, and a window is folded into it rather than into the default`() {
+        // Envelope v3 carries each list's schedule. Without a window it comes
+        // back exactly as exported; with one (a list exported before the fold),
+        // the window narrows the list's own times, as MIGRATION_13_14 does.
+        val noWindow = ListExport(
+            id = 2L, name = "Weekdays", sortOrder = 1, isArchived = false, type = "STATIC",
+            notificationsEnabled = true, nudgeScheduleJson = WEEKDAYS_AT_SIX_JSON,
+        )
+        val morningsWindow = noWindow.copy(
+            id = 3L, name = "Mornings", sortOrder = 2,
+            activeHoursStartSecondOfDay = 7 * 3600, activeHoursEndSecondOfDay = 12 * 3600,
+        )
+        val payload = envelopeFixture().copy(lists = listOf(noWindow, morningsWindow)).toPayload(Instant.ofEpochMilli(0L))
+
+        val (kept, folded) = payload.lists
+        assertEquals(WEEKDAYS_AT_SIX_JSON, kept.nudgeScheduleJson)
+        // 6pm is outside 7am to noon, so the window's start stands in, on the
+        // list's own weekdays (folding the default would have said every day).
+        assertEquals(
+            NudgeSchedule(WEEKDAYS_AT_SIX.days, listOf(LocalTime.of(7, 0))),
+            NudgeSchedule.fromStoredJson(folded.nudgeScheduleJson),
+        )
+        assertEquals(null, folded.activeHoursStart)
+    }
+
     // ─── Refusals ─────────────────────────────────────────────────────────
 
     @Test
@@ -355,5 +384,13 @@ class ImportServiceTest {
         assertEquals(1L, phone.contactId)
         assertEquals("+15551234567", phone.normalizedPhone)
         assertEquals(true, phone.isPrimary)
+    }
+
+    private companion object {
+        val WEEKDAYS_AT_SIX = NudgeSchedule(
+            days = setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY),
+            times = listOf(LocalTime.of(18, 0)),
+        )
+        val WEEKDAYS_AT_SIX_JSON: String = JsonProvider.json.encodeToString(NudgeSchedule.serializer(), WEEKDAYS_AT_SIX)
     }
 }

@@ -80,7 +80,9 @@ Under each card, a small 7-day graph of the list's connection rhythm: one bar pe
 
 Same mission filter as `HOME-7`: if seeing the split ever produces guilt rather than a nudge to pick up the phone, the rim comes out and the sheet stays.
 
-### `HOME-9` · One tap to a call · **Shipped 2026-10-05 (`a961e2b`)**
+### `HOME-9` · One tap to a call · **Shipped 2026-10-05 (`a961e2b`), removed 2026-10-08**
+*Removed 2026-10-08 at the owner's word ("No need for this icon"): the Next up row has no control of its own again, and the card's tap opens the deck, where Call is. Spec: `features/home/README.md`, "Calling from Home" (HOME-9, amended). What follows is the entry as shipped.*
+
 Home used to take three taps to reach a call: open the list, find the person, call. The "Next up" row now ends in a quiet, labelled phone button ("Call Kai") that opens the dialer for that person; the rest of the card still opens the list's deck. It replaced a chevron that only repeated that the card was tappable. Muted, not accent: rules.md Design 6 allows a quiet dial per person row, and the card keeps the screen's accent budget for the post-call banner's "Add a note" and the empty state's "Create your first list". Masked under the privacy curtain ("Call Someone"). The same pass gave Lists its own icon, stacked the name block and "Next up" at large text and on narrow cards so nothing clips, and made every day column a 48dp target on a 360dp phone. Spec: `features/home/README.md`, "One tap to a call".
 
 ### `HOME-10` · An honest error state · **Shipped 2026-10-05 (`49565af`)**

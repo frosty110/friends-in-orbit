@@ -103,6 +103,15 @@ class FoldActiveWindowTest {
     }
 
     @Test
+    fun a_window_that_starts_where_it_ends_folds_to_no_time() {
+        // 9am to 9am let nothing through: the scheduler added 9am, and the gate,
+        // asked a moment after the slot, held it every day. The list never
+        // nudged, so it folds to no time and stays silent ("No time set").
+        val folded = NudgeSchedule(weekdays, listOf(t(10), t(9))).fold(t(9) to t(9))
+        assertEquals(NudgeSchedule(weekdays, emptyList()), folded)
+    }
+
+    @Test
     fun spans_midnight_only_when_the_end_is_before_the_start() {
         assertTrue(spansMidnight(nights.first, nights.second))
         assertTrue(spansMidnight(t(22), t(2)))
@@ -121,7 +130,7 @@ class FoldActiveWindowTest {
             NudgeSchedule(days = setOf(DayOfWeek.SUNDAY), times = listOf(t(7))),
             NudgeSchedule(days = everyDay, times = listOf(t(17), t(21))),
         )
-        val windows = listOf(mornings, afternoons, evenings, nights, t(9) to t(17), t(22) to t(2))
+        val windows = listOf(mornings, afternoons, evenings, nights, t(9) to t(17), t(22) to t(2), t(9) to t(9))
         schedules.forEach { schedule ->
             windows.forEach { (start, end) ->
                 val posted = NudgeScheduler.effectiveSchedule(schedule, start, end).times

@@ -140,6 +140,7 @@ private fun ListEntity.toExport(): ListExport = ListExport(
     activeHoursEndSecondOfDay = activeHoursEnd?.toSecondOfDay(),
     notificationsEnabled = notificationsEnabled,
     ruleParamsOverrideJson = ruleParamsOverrideJson,
+    nudgeScheduleJson = nudgeScheduleJson,
 )
 
 private fun ContactEntity.toExport(): ContactExport = ContactExport(

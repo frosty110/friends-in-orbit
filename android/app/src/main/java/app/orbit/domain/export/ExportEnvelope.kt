@@ -14,7 +14,12 @@ import kotlinx.serialization.Serializable
  * 9→10) so multi-number reconciliation survives a restore. The field
  * defaults to empty, so v1 envelopes decode unchanged; [ImportService]
  * re-derives primary phone rows when the block is absent and the
- * reconciler self-heals secondary numbers on the next ingest. Bump
+ * reconciler self-heals secondary numbers on the next ingest. `version = 3`
+ * (2026-10-08) adds each list's nudge schedule, [ListExport.nudgeScheduleJson]:
+ * before it a restore dropped every list's nudge days and times to the default,
+ * and since LIST-25 folded each list's old time of day into those times, it
+ * would also have dropped that. Defaulted to null, so v1 and v2 envelopes decode
+ * unchanged. Bump
  * [CURRENT_VERSION] on any future field change; additive defaulted fields
  * preserve back-compat (paired with
  * `JsonProvider.json { ignoreUnknownKeys = true }`).
@@ -28,7 +33,7 @@ import kotlinx.serialization.Serializable
  *   - ListEntity:        id, name, sortOrder, isArchived, type,
  *                        smartRuleJson, ruleTemplateId, activeHoursStart,
  *                        activeHoursEnd, notificationsEnabled,
- *                        ruleParamsOverrideJson, dueCount.
+ *                        ruleParamsOverrideJson, dueCount, nudgeScheduleJson.
  *   - ContactEntity:     id, phoneContactId, phoneNumber, normalizedPhone,
  *                        displayName, photoUri, firstSeenByAppAt, isIgnored,
  *                        isOrphaned, pausedUntil, ruleOverrideJson,
@@ -60,7 +65,7 @@ data class ExportEnvelope(
          * Highest envelope version this build can WRITE and READ.
          * [app.orbit.domain.export.ImportService] refuses anything newer.
          */
-        const val CURRENT_VERSION: Int = 2
+        const val CURRENT_VERSION: Int = 3
     }
 }
 
@@ -77,6 +82,8 @@ data class ListExport(
     val activeHoursEndSecondOfDay: Int? = null,   // LocalTime.toSecondOfDay()
     val notificationsEnabled: Boolean,
     val ruleParamsOverrideJson: String? = null,
+    // Envelope v3: the list's NudgeSchedule as stored (null = the default).
+    val nudgeScheduleJson: String? = null,
 )
 
 @Serializable

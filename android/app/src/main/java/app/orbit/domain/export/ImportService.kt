@@ -236,15 +236,16 @@ internal fun ExportEnvelope.toPayload(now: Instant): ImportPayload {
 }
 
 /**
- * A backup's list as a row. The envelope carries no nudge schedule, so an
- * imported list nudges on [NudgeSchedule.DEFAULT], as it always has.
+ * A backup's list as a row, its nudge schedule included (envelope v3). A v1 or
+ * v2 backup carries none, so such a list nudges on [NudgeSchedule.DEFAULT].
  *
  * LIST-25: a backup made before 2026-10-08 can carry an active-hours window
  * (Time of day). Nothing shows or edits one any more, so it is folded into
  * the list's times exactly as [app.orbit.data.db.MIGRATION_13_14] folds a
- * stored one ([foldActiveWindow]: an Evenings list nudges at 5pm and says
- * so), and the row keeps no window. A backup without one stays as it was,
- * schedule column null.
+ * stored one: the backup's schedule read as the chain reads it, then
+ * [foldActiveWindow] (an Evenings list on the default nudges at 5pm and says
+ * so), and the row keeps no window. Without a window the schedule is kept
+ * exactly as exported, null included.
  */
 private fun ListExport.toEntity(dueCount: Int): ListEntity {
     val start = activeHoursStartSecondOfDay?.let { LocalTime.ofSecondOfDay(it.toLong()) }
@@ -252,10 +253,10 @@ private fun ListExport.toEntity(dueCount: Int): ListEntity {
     val foldedSchedule = if (start != null && end != null) {
         JsonProvider.json.encodeToString(
             NudgeSchedule.serializer(),
-            NudgeSchedule.DEFAULT.foldActiveWindow(start, end),
+            NudgeSchedule.fromStoredJson(nudgeScheduleJson).foldActiveWindow(start, end),
         )
     } else {
-        null
+        nudgeScheduleJson
     }
     return ListEntity(
         id = id,

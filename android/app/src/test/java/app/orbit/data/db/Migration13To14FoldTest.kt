@@ -133,6 +133,16 @@ class Migration13To14FoldTest {
     }
 
     @Test
+    fun a_window_that_starts_where_it_ends_stays_silent() = runTest {
+        // Such a window let no nudge through, so the list keeps none.
+        val id = seed("Nine to nine", t(9), t(9), NudgeSchedule.DEFAULT_JSON)
+
+        migrate()
+
+        assertEquals(NudgeSchedule(DayOfWeek.entries.toSet(), emptyList()), scheduleOf(id))
+    }
+
+    @Test
     fun nudges_off_stay_off() = runTest {
         val noTimes = encode(NudgeSchedule(weekdays, emptyList()))
         val id = seed("No time", t(17), t(21), noTimes)

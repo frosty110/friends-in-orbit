@@ -817,10 +817,22 @@ class CardViewViewModelInteractionTest {
     @Test
     fun `CARD-02 - a move for someone the card no longer shows says They`() = runTest {
         // The name is read from the card as the move starts; when the deck
-        // has already moved off the person (id 9 here), there is no name to
-        // give, and the sentence is the nameless one, not a blank.
+        // has already moved off the person, there is no name to give, and the
+        // sentence is the nameless one, not a blank. Kai (id 9) is a real
+        // member behind Sarah, so the move really writes: the test pins the
+        // nameless wording of a move that happened, not a success message for
+        // a write that did nothing (rules.md Code 3).
         val setup = fixture()
-        setup.seedSarahReady()
+        setup.contactRepo.seed(
+            listOf(contactFixture(id = 1L, displayName = "Sarah Connor"), contactFixture(id = 9L, displayName = "Kai Reyes")),
+        )
+        setup.listRepo.seed(listOf(listFixture(id = 1L, ruleTemplateId = 1L)))
+        setup.listRepo.seedMemberships(
+            listOf(
+                membershipFixture(contactId = 1L, listId = 1L, nextDueAt = null),
+                membershipFixture(contactId = 9L, listId = 1L, nextDueAt = T0.plus(Duration.ofDays(10))),
+            ),
+        )
         setup.vm.uiState.test(timeout = 2.seconds) {
             awaitItem()
             setup.vm.messages.test(timeout = 2.seconds) {
@@ -839,6 +851,9 @@ class CardViewViewModelInteractionTest {
             }
             cancelAndIgnoreRemainingEvents()
         }
+        // Both moves landed on Kai's row.
+        assertEquals(9L, setup.listRepo.incrementSkipCalls.single().contactId)
+        assertEquals(9L, setup.listRepo.updateNextDueAtCalls.single().contactId)
     }
 
     /**

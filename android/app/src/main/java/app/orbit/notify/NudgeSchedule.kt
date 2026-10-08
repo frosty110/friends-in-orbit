@@ -217,6 +217,10 @@ fun isInActiveWindow(time: LocalTime, start: LocalTime, end: LocalTime): Boolean
  * - With none inside, the scheduler added the window's start (D-09) and that
  *   was the one nudge, so the start becomes the only time.
  * - No window (either end null), or no times (nudges off): unchanged.
+ * - A window that starts where it ends (the older start and end pickers
+ *   allowed it) let nothing through: every slot, its own start included, was
+ *   held back by the gate. It folds to no time at all, so the list stays as
+ *   silent as it was, and When to nudge says "No time set".
  *
  * Days are never touched: the window never changed them. Folding a schedule
  * with no days still folds its times, so the list nudges as before if days
@@ -225,6 +229,7 @@ fun isInActiveWindow(time: LocalTime, start: LocalTime, end: LocalTime): Boolean
  */
 fun NudgeSchedule.foldActiveWindow(start: LocalTime?, end: LocalTime?): NudgeSchedule {
     if (start == null || end == null || times.isEmpty()) return this
+    if (start == end) return copy(times = emptyList())
     val inside = times.filter { isInActiveWindow(it, start, end) }.distinct().sorted()
     return copy(times = inside.ifEmpty { listOf(start) })
 }

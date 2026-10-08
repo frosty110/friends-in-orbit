@@ -226,8 +226,9 @@ inside When to nudge's time picker, which sets a time and nothing else.
 
 ## A third pass, 2026-10-08: trims
 
-The owner went over the republished prototype again and left eight short
-comments, seven of them "we don't need this". Each was built in the app first.
+The owner went over the republished prototype again and left nine short
+comments, most of them "we don't need this". Each was built in the app first,
+except how far Later and Sooner move someone, which waits on the owner.
 
 | Where | Comment | Decision | IDs |
 |---|---|---|---|
