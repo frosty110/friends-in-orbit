@@ -6,8 +6,10 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -121,6 +123,49 @@ class ListsManagerScreenTest {
         compose.onNodeWithContentDescription("List settings for Drifted").performClick()
 
         compose.runOnIdle { assertEquals(listOf("settings:9"), fired) }
+    }
+
+    // LIST-07, amended 2026-10-08 (the owner, on the chip: "We don't need this
+    // badge"). A smart list's row says what it is by its rule line, which
+    // TalkBack reads with the name; the "Smart list" chip is gone. Fails with
+    // the chip back: its text is found.
+    @Test
+    fun a_smart_lists_row_names_its_rule_and_carries_no_chip() {
+        compose.setContent {
+            OrbitTheme {
+                ListsManagerContent(
+                    state = ListsManagerUiState.Ready(
+                        active = listOf(
+                            ListTileState(
+                                id = 3L,
+                                name = "Recently added, not called",
+                                memberCount = 4,
+                                type = ListType.SMART,
+                                ruleSummary = UiText.plural(R.plurals.lists_rule_summary_recently_added, 30, 30),
+                            ),
+                        ),
+                        archived = emptyList(),
+                        archivedExpanded = false,
+                    ),
+                    snackbarHostState = SnackbarHostState(),
+                    onBack = {},
+                    onOpenList = {},
+                    onOpenListSettings = {},
+                    onAddContacts = {},
+                    onCreate = {},
+                    onMove = { _, _ -> },
+                    onArchive = {},
+                    onDelete = {},
+                    onRename = { _, _ -> },
+                    onRestore = {},
+                    onToggleNudges = {},
+                    onToggleArchived = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Recently added · 30 days").assertIsDisplayed()
+        compose.onAllNodesWithText("Smart list", useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test

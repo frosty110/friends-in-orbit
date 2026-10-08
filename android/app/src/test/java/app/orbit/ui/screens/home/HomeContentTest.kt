@@ -33,6 +33,7 @@ import app.orbit.ui.util.formatDayHeader
 import app.orbit.ui.util.formatDuration
 import java.time.LocalDate
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -44,9 +45,10 @@ import org.robolectric.annotation.Config
  * reads the tree runs on the JVM and gates every push).
  *
  * Pinned here because each regressed silently before 2026-10-06: the menu
- * had no order test on Home, the call button's label and its curtain mask had
- * none, and a day column announced its one-letter weekday ("T") instead of
- * the day.
+ * had no order test on Home, and a day column announced its one-letter
+ * weekday ("T") instead of the day. Since 2026-10-08 it also pins the card's
+ * zones (HOME-5: the name row holds the name and the count, Next up is a row
+ * of its own) and that Next up has no call button (HOME-9).
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [33], application = Application::class, qualifiers = "w411dp-h891dp-xxhdpi")
@@ -86,7 +88,7 @@ class HomeContentTest {
         lists = listOf(
             ListTileState(
                 id = 1L, name = "Inner orbit", dueCount = 0, type = ListType.STATIC, memberCount = 3,
-                nextUp = NextUp(1L, "Kai Mensah", null, UiText.res(R.string.home_why_never), phone = "+1 555 0100"),
+                nextUp = NextUp(1L, "Kai Mensah", null, UiText.res(R.string.home_why_never)),
                 rhythm = rhythm,
             ),
             ListTileState(
@@ -98,6 +100,7 @@ class HomeContentTest {
     )
 
     private val weeksOpened = mutableListOf<Long>()
+    private val listsOpened = mutableListOf<String>()
 
     private fun setHome(curtain: Boolean = false) {
         compose.setContent {
@@ -106,7 +109,7 @@ class HomeContentTest {
                     HomeContent(
                         state = state,
                         today = today,
-                        onOpenList = {},
+                        onOpenList = { listsOpened += it },
                         onOpenSearch = {},
                         onOpenSettings = {},
                         onOpenLists = {},
@@ -124,7 +127,7 @@ class HomeContentTest {
     @Test
     fun long_press_opens_the_menu_in_the_pinned_order() {
         setHome()
-        // Long-press the name block, away from the call button and the day
+        // Long-press the name row, away from "See your week" and the day
         // columns, which are tap targets of their own.
         compose.onNodeWithText("Inner orbit").performTouchInput {
             longClick(Offset(width * 0.2f, height * 0.08f))
@@ -139,22 +142,40 @@ class HomeContentTest {
         assertEquals(expected, byPosition)
     }
 
+    // HOME-9, amended 2026-10-08 (the owner: "No need for this icon"). Until
+    // then the Next up row ended in a "Call Kai" button; now the row has no
+    // control, and a tap on it is the card's tap, which opens the deck. Fails
+    // with the button back: its "Call Kai" node is found.
     @Test
-    fun the_call_button_names_the_person_by_first_name() {
+    fun next_up_has_no_call_button_and_its_tap_opens_the_deck() {
         setHome()
-        compose.onNodeWithContentDescription(context.getString(R.string.home_next_up_call, "Kai"))
-            .assertHasClickAction()
+        compose.onAllNodesWithContentDescription("Call Kai", useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodes(hasClickAction() and hasContentDescription("Call", substring = true), useUnmergedTree = true)
+            .assertCountEquals(0)
+
+        compose.onNodeWithText("Kai", useUnmergedTree = true).performClick()
+
+        assertEquals(listOf("1"), listsOpened)
     }
 
-    // PRIV-03: a label is as public as text, so the button's name masks too.
+    // HOME-5, amended 2026-10-08 (the owner: "The name can be it's own row
+    // with it's own background ... And compact"). The name and the count share
+    // one line across the top, the count after the name, and Next up is a row
+    // of its own under them. Until then the name sat over the count in a
+    // column beside Next up, so on this 411dp window the count was under the
+    // name and Next up beside it: both checks below failed.
     @Test
-    fun under_the_curtain_the_call_button_says_Someone() {
-        setHome(curtain = true)
-        val someone = context.getString(R.string.components_curtain_someone)
-        compose.onNodeWithContentDescription(context.getString(R.string.home_next_up_call, someone))
-            .assertHasClickAction()
-        compose.onAllNodesWithContentDescription(context.getString(R.string.home_next_up_call, "Kai"))
-            .assertCountEquals(0)
+    fun the_name_row_holds_the_name_and_the_count_on_one_line_above_next_up() {
+        setHome()
+        fun bounds(text: String) =
+            compose.onNodeWithText(text, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val name = bounds("Inner orbit")
+        val count = bounds(context.resources.getQuantityString(R.plurals.home_member_count, 3, 3))
+        val nextUp = bounds(context.getString(R.string.home_next_up_eyebrow))
+
+        assertTrue(count.left >= name.right, "the count comes after the name: $name, $count")
+        assertTrue(count.top < name.bottom && name.top < count.bottom, "on the same line: $name, $count")
+        assertTrue(nextUp.top >= maxOf(name.bottom, count.bottom), "Next up is a row below: $nextUp")
     }
 
     // PRIV-03: the open menu's Archive line is text like any other, so the
@@ -242,13 +263,14 @@ class HomeContentTest {
         compose.onAllNodesWithText(context.getString(R.string.home_rhythm_see_whole_week)).assertCountEquals(0)
     }
 
-    // The glyph is decorative; the card says "Smart list" for it (LIST-07).
+    // The glyph is decorative; the card says "Smart list" for it (LIST-07),
+    // with Home's own label since the Lists screen dropped its chip.
     @Test
     fun a_smart_list_card_says_so() {
         setHome()
         compose.onNodeWithText("Late night")
-            .assert(hasContentDescription(context.getString(R.string.lists_row_smart_chip)))
+            .assert(hasContentDescription(context.getString(R.string.home_tile_smart_list)))
         compose.onNodeWithText("Inner orbit")
-            .assert(!hasContentDescription(context.getString(R.string.lists_row_smart_chip)))
+            .assert(!hasContentDescription(context.getString(R.string.home_tile_smart_list)))
     }
 }

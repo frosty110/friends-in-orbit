@@ -111,11 +111,11 @@
 
     <!-- "Why now" line under the name: when you last spoke, as a fact, never blame ("N days
          since" is the shame framing voice.md never says). Home's words for the same gap
-         (home_why_today, home_why_ago), with a full stop. -->
-    <string name="card_why_today">You spoke today.</string>
-    <string name="card_why_yesterday">You spoke yesterday.</string>
+         (home_why_today, home_why_ago), with a full stop. Short on purpose, with no "You". -->
+    <string name="card_why_today">Spoke today.</string>
+    <string name="card_why_yesterday">Spoke yesterday.</string>
     <!-- %1$s: how long ago, for example "3 weeks ago". -->
-    <string name="card_why_ago">You spoke %1$s.</string>
+    <string name="card_why_ago">Spoke %1$s.</string>
     <!-- Joins the line above with the rhythm line below it. -->
     <string name="card_why_two_lines" translatable="false">%1$s\n%2$s</string>
 

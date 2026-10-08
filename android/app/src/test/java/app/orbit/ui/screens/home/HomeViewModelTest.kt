@@ -441,28 +441,27 @@ class HomeViewModelTest {
     }
 
     // ============================================================================
-    // HOME-3 / HOME-9, "Next up" hydration: the VM turns the feed's raw head
-    // of queue into the card's person, with the warm why line and the number
-    // the call button dials.
+    // HOME-3, "Next up" hydration: the VM turns the feed's raw head of queue
+    // into the card's person, with the warm why line. No number since
+    // 2026-10-08: the row's call button went (HOME-9).
     // ============================================================================
 
-    private fun enrichmentFor(lastCalledAt: Instant?, phone: String? = "+1 555 0100") = mapOf(
+    private fun enrichmentFor(lastCalledAt: Instant?) = mapOf(
         1L to ListEnrichment(
             nextUp = NextUpRaw(
                 contactId = 7L,
                 name = "Kai Mensah",
                 photoUri = "content://photo/7",
                 lastCalledAt = lastCalledAt,
-                phone = phone,
             ),
             rhythm = emptyList(),
         ),
     )
 
-    private suspend fun nextUpFor(lastCalledAt: Instant?, phone: String? = "+1 555 0100"): NextUp {
+    private suspend fun nextUpFor(lastCalledAt: Instant?): NextUp {
         val setup = fixture(
             initialTiles = listOf(tile(1L, "Inner orbit")),
-            initialEnrichment = enrichmentFor(lastCalledAt, phone),
+            initialEnrichment = enrichmentFor(lastCalledAt),
         )
         var nextUp: NextUp? = null
         setup.vm.uiState.test(timeout = 2.seconds) {
@@ -474,25 +473,17 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `next up carries the person and the number the call button dials`() = runTest {
+    fun `next up carries the person`() = runTest {
         val nextUp = nextUpFor(lastCalledAt = null)
         assertEquals(7L, nextUp.contactId)
         assertEquals("Kai Mensah", nextUp.name)
         assertEquals("content://photo/7", nextUp.photoUri)
-        assertEquals("+1 555 0100", nextUp.phone)
-    }
-
-    // HOME-9: no number, no button. A blank string from the address book is
-    // "no number", not a number to dial.
-    @Test
-    fun `a blank phone hides the call button`() = runTest {
-        assertNull(nextUpFor(lastCalledAt = null, phone = "   ").phone)
-        assertNull(nextUpFor(lastCalledAt = null, phone = null).phone)
     }
 
     // HOME-3: the why line is recency as context, never shame (voice.md), in
     // the app's one "ago" wording (WhyLineVoiceTest holds every bucket of it
-    // to the never-say list). TestClock's now is 2026-01-01T12:00Z.
+    // to the never-say list), with no "You" since 2026-10-08. TestClock's now
+    // is 2026-01-01T12:00Z.
     @Test
     fun `the why line reads never, today, yesterday or how long ago you spoke`() = runTest {
         val now = TestClock().now()
@@ -501,8 +492,8 @@ class HomeViewModelTest {
         assertEquals(UiText.res(R.string.home_why_yesterday), nextUpFor(lastCalledAt = now.minus(Duration.ofDays(1))).why)
         val threeWeeks = nextUpFor(lastCalledAt = now.minus(Duration.ofDays(21))).why
         assertEquals(UiText.res(R.string.home_why_ago, formatAgo(21)), threeWeeks)
-        assertEquals("You spoke 3 weeks ago", threeWeeks.asString(context))
-        assertEquals("You haven't spoken yet", UiText.res(R.string.home_why_never).asString(context))
+        assertEquals("Spoke 3 weeks ago", threeWeeks.asString(context))
+        assertEquals("No calls yet", UiText.res(R.string.home_why_never).asString(context))
     }
 
     // ============================================================================

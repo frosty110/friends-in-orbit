@@ -24,6 +24,9 @@
     <!-- Screen-reader hints for a list card: tap opens the list, long-press opens its menu. -->
     <string name="home_tile_open_list">Open list</string>
     <string name="home_tile_quick_actions">Quick actions</string>
+    <!-- Screen-reader name of the small shuffle icon beside the name of a list that fills
+         itself from a rule (a smart list). -->
+    <string name="home_tile_smart_list">Smart list</string>
 
     <!-- A list card's long-press menu. -->
     <string name="home_menu_add_people">Add people</string>
@@ -53,15 +56,16 @@
     <string name="home_next_up_eyebrow">Next up</string>
     <!-- The list has people but nobody to suggest right now. Calm, never "caught up". -->
     <string name="home_next_up_quiet">All quiet for now</string>
-    <!-- Screen-reader name of the call button. %1$s: the person's first name. -->
-    <string name="home_next_up_call">Call %1$s</string>
 
-    <!-- The line under the next person's name: warm context, never blame. Sentence case (voice.md); it read as a typo starting lowercase on its own line. -->
-    <string name="home_why_never">You haven\'t spoken yet</string>
-    <string name="home_why_today">You spoke today</string>
-    <string name="home_why_yesterday">You spoke yesterday</string>
+    <!-- The line under the next person's name: when you last spoke, warm context, never
+         blame. Short on purpose, with no "You" (the card's line, card_why_*, says the same
+         with a full stop). Sentence case (voice.md); it read as a typo starting lowercase
+         on its own line. -->
+    <string name="home_why_never">No calls yet</string>
+    <string name="home_why_today">Spoke today</string>
+    <string name="home_why_yesterday">Spoke yesterday</string>
     <!-- %1$s: how long ago, for example "3 weeks ago". -->
-    <string name="home_why_ago">You spoke %1$s</string>
+    <string name="home_why_ago">Spoke %1$s</string>
 
     <!-- The 7-day rhythm strip on each card. Its header line is a button that opens the
          Week screen for the list, with the key to the bar outlines beside it. -->

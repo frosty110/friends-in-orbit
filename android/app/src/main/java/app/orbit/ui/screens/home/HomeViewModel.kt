@@ -220,8 +220,7 @@ class HomeViewModel @Inject constructor(
                 contactId = raw.contactId,
                 name = raw.name,
                 photoUri = raw.photoUri,
-                why = homeRecencyWhy(raw.lastCalledAt, now),
-                phone = raw.phone?.takeIf { it.isNotBlank() }
+                why = homeRecencyWhy(raw.lastCalledAt, now)
             )
         },
         rhythm = e?.rhythm ?: emptyList()
@@ -358,10 +357,12 @@ class HomeViewModel @Inject constructor(
 /**
  * Warm, neutral recency line for the Next-up person (HOME-3): context, not
  * shame ("you haven't called X in N days" is forbidden; voice.md). A null
- * last-call reads as a gentle "You haven't spoken yet"; then "You spoke
- * today", "You spoke yesterday", "You spoke 3 weeks ago", with [formatAgo]'s
- * one wording as the argument so Home and the card never word the same gap
- * two ways. Until 2026-10-06 the span filled "%1$s since you last spoke",
+ * last-call reads as a plain "No calls yet"; then "Spoke today", "Spoke
+ * yesterday", "Spoke 3 weeks ago", with [formatAgo]'s one wording as the
+ * argument so Home and the card never word the same gap two ways. No "You"
+ * since 2026-10-08, on Home and the card alike: the owner asked for fewer
+ * words ("You spoke ..." and "You haven't spoken yet" until then).
+ * Until 2026-10-06 the span filled "%1$s since you last spoke",
  * which read "3 days since you last spoke" for the most common gaps: the
  * framing voice.md never says and `VoiceRules` forbids ("days since"), hidden
  * from the string audit because the span arrived as an argument. Top-level,
