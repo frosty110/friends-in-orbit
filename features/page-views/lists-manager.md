@@ -4,7 +4,7 @@
 **Group:** Lists
 **Status:** active
 **Last reviewed:** 2026-10-08
-**Spec:** [orbit-lists](../orbit-lists/README.md): LIST-20, LIST-22, LIST-23, LIST-28, LIST-30, BULK-05; PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
+**Spec:** [orbit-lists](../orbit-lists/README.md): LIST-07 (defined 2026-10-08), LIST-20, LIST-22, LIST-23, LIST-28, LIST-30, BULK-05; PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
 
@@ -16,7 +16,7 @@
 ## What the user sees
 
 - App bar: Back and "Lists"
-- One row per list, in Home's order: a drag handle ("Reorder list"), the name, a "Smart list" chip where the list fills itself, a second line: a regular list's rhythm as its interval, whatever rule it runs ("Every 14 days"; "Every 3 days" for a Late night list and "Every day" for Energize, LIST-30); a smart list's rule, not its interval ("Recently added · 30 days", "Never called"); or "Couldn't read this list's rhythm" when the stored rhythm cannot be decoded (the deck fails on the same data), a count badge (left out at zero), "+" ("Add people to {list}"; regular lists only) and "More actions for {list}"
+- One row per list, in Home's order: a drag handle ("Reorder list"), the name, a second line: a regular list's rhythm as its interval, whatever rule it runs ("Every 14 days"; "Every 3 days" for a Late night list and "Every day" for Energize, LIST-30); a smart list's rule, not its interval ("Recently added · 30 days", "Never called"), which is what tells a list that fills itself apart, on screen and to TalkBack (LIST-07; until 2026-10-08 a "Smart list" chip also said so); or "Couldn't read this list's rhythm" when the stored rhythm cannot be decoded (the deck fails on the same data), a count badge (left out at zero), "+" ("Add people to {list}"; regular lists only) and "More actions for {list}"
 - A foot note: "Drag to reorder. Lists higher up show first on home."
 - "Archived (2)", which expands to the archived lists, each with "Restore", a delete control ("Delete {list}") and a settings control ("List settings for {list}")
 - A floating "New list" button when lists exist (the one accent; LIST-20), centred in the body when there are none
@@ -50,6 +50,6 @@
 
 - `ListsManagerViewModelTest` (archive, restore, delete with undo, reorder, the nudge toggle, the failure path, the rhythm line for every rule type and its unreadable case), `RuleParamsResolutionTest` (the resolver shared with List settings)
 - `ListRowMenuOrderTest` (menu order, and the same pause and resume words as Home)
-- `ListsManagerScreenTest` (a row tap, "List settings" and "New list" go to different places; "New list" is handed to the caller, which opens New list; a new list is scrolled into view, and the lists first shown and a restored one are not)
+- `ListsManagerScreenTest` (a row tap, "List settings" and "New list" go to different places; "New list" is handed to the caller, which opens New list; a new list is scrolled into view, and the lists first shown and a restored one are not; added 2026-10-08: a smart list's row shows its rule and no "Smart list" chip)
 - `OrbitNavHostTest` (a row tap opens the deck and "List settings" opens List settings, LIST-23; "New list" opens New list and leaving it returns here, and `lists?openCreate=true` opens it once, LIST-28)
 - Gallery previews: `ListsManagerContentPreview`, `ListsManagerReadyPreview`, `ListRowPreviewLightStatic`, `ListRowPreviewDarkSmart`, `ArchivedListRowPreviewLight`, `RenameListDialogLightPreview`, `DeleteListDialogLightPreview`, the Loading, Error and archived-expanded previews, with the curtain pass

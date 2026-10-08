@@ -7,7 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -89,10 +88,10 @@ import app.orbit.ui.components.PhIcon
 import app.orbit.ui.screens.lists.DeleteListDialog
 import app.orbit.ui.theme.LocalReducedMotion
 import app.orbit.ui.theme.OrbitTheme
+import app.orbit.ui.theme.OrbitTones
 import app.orbit.ui.theme.orbitCardShadow
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.asString
-import app.orbit.ui.util.dialPhoneNumber
 import app.orbit.ui.util.formatDayHeader
 import app.orbit.ui.util.formatDuration
 import app.orbit.ui.util.formatAgo
@@ -111,12 +110,13 @@ import java.util.Locale
  * **Redesign (HOME-3/5/6/7/9):**
  *   - HOME-6: no "due / N ready / caught up" framing. The header is a calm date,
  *     never a count or a completion state.
- *   - HOME-5: full-width, single-column tonal cards — a tinted header band over a
- *     lighter graph wash, both shades of the list's own [OrbitTones] colour.
+ *   - HOME-5: full-width, single-column tonal cards in three zones: a compact
+ *     name row on the band, then Next up and the strip on the lighter wash,
+ *     both shades of the list's own [OrbitTones] colour.
  *   - HOME-3: each card shows "Next up" — the head of that list's queue (reused
  *     from `SurfaceNextUseCase` via `HomeFeed.enrichment`) — with a warm recency
- *     line. The card taps through to Card View; the row's one other target is
- *     HOME-9's quiet, labelled call button ("Call Kai"), which opens the dialer.
+ *     line. The row has no target of its own: a tap anywhere on the card opens
+ *     Card View, where Call is (HOME-9, amended 2026-10-08: its call button went).
  *   - HOME-7: a 7-day rhythm strip per card, bars scaled relative to the list's
  *     own busiest day (125% headroom), coloured per person.
  *   - PRIV-03: list and contact names mask under the privacy curtain.
@@ -226,7 +226,6 @@ fun HomeScreen(
         today = today,
         onRetry = vm::onRetry,
         snackbarHostState = snackbarHostState,
-        onCallNextUp = { phone -> context.dialPhoneNumber(phone) },
         onOpenList = onOpenList,
         onOpenSearch = onOpenSearch,
         onOpenSettings = onOpenSettings,
@@ -268,7 +267,6 @@ internal fun HomeContent(
     onOpenLists: () -> Unit,
     onCreateList: () -> Unit,
     onRetry: () -> Unit = {},
-    onCallNextUp: (phone: String) -> Unit = {},
     // Long-press quick-actions — Long listId so the renderer can bind per tile.
     onAddPeople: (Long) -> Unit = {},
     onToggleMute: (listId: Long, currentlyEnabled: Boolean) -> Unit = { _, _ -> },
@@ -456,7 +454,6 @@ internal fun HomeContent(
                             onArchive = { onArchive(tile.id) },
                             onDelete = { pendingDeleteId = tile.id },
                             onOpenContact = onOpenContact,
-                            onCallNextUp = onCallNextUp,
                             onOpenWeek = { onOpenWeek(tile.id) },
                         )
                         }
@@ -503,7 +500,6 @@ private fun ListTile(
     onArchive: () -> Unit = {},
     onDelete: () -> Unit = {},
     onOpenContact: (contactId: Long) -> Unit = {},
-    onCallNextUp: (phone: String) -> Unit = {},
     onOpenWeek: () -> Unit = {},
 ) {
     val curtain = LocalPrivacyCurtain.current
@@ -525,10 +521,11 @@ private fun ListTile(
             .orbitCardShadow(shape = OrbitTheme.shapes.lg, isDark = isDark)
             .clip(OrbitTheme.shapes.lg)
             .background(tone.wash)
-            // Tap routes to Card View; long-press opens the manage-this-list
-            // quick-actions menu. The card carries two smaller targets of its
-            // own, HOME-9's call button and HOME-8's day columns, each with
-            // its own label.
+            // Tap routes to Card View, where Call is; long-press opens the
+            // manage-this-list quick-actions menu. The card carries two
+            // smaller targets of its own, HOME-13's "See your week" and
+            // HOME-8's day columns, each with its own label. Next up has none
+            // since 2026-10-08 (HOME-9): its call button went.
             .combinedClickable(
                 onClick = onClick,
                 onClickLabel = stringResource(R.string.home_tile_open_list),
@@ -561,85 +558,31 @@ private fun ListTile(
         )
 
         Column(Modifier.fillMaxWidth()) {
-            // Zone 1: tinted header band, list name beside Next up. At large
-            // font scales the two stack instead: side by side, the name sat in
-            // a fixed 118dp column and clipped at 200% (rubric gate G3).
-            val largeText = LocalDensity.current.fontScale > 1.3f
-            val nameBlock: @Composable (Modifier) -> Unit = { blockModifier ->
-                Column(blockModifier) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = displayName,
-                            style = OrbitTheme.type.listTile.copy(color = tone.nameFg),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        // LIST-07 — smart-list type cue. Type isn't a name, so it
-                        // stays visible under the privacy curtain. PhIcon is
-                        // decorative by design, so the meaning is said here:
-                        // Lists Manager exposes the same fact as a "Smart list"
-                        // chip, and TalkBack had no way to tell the two list
-                        // kinds apart on Home (WCAG 1.1.1).
-                        if (tile.type == ListType.SMART) {
-                            val smartLabel = stringResource(R.string.lists_row_smart_chip)
-                            Spacer(Modifier.width(OrbitTheme.spacing.x1))
-                            PhIcon(
-                                name = "shuffle-angular",
-                                size = 13.dp,
-                                tint = tone.nameFg,
-                                modifier = Modifier.semantics { contentDescription = smartLabel },
-                            )
-                        }
-                    }
-                    // Full strength, not faded: a 72% alpha member count fell
-                    // under 4.5:1 on the tinted band.
-                    Text(
-                        text = memberLabel(tile.memberCount),
-                        style = OrbitTheme.type.meta.copy(color = tone.nameFg),
-                        modifier = Modifier.padding(top = OrbitTheme.spacing.x1),
-                    )
-                }
-            }
-            val nextUpRow: @Composable (Modifier) -> Unit = { rowModifier ->
-                NextUpRow(
-                    nextUp = tile.nextUp,
-                    curtain = curtain,
-                    onCall = onCallNextUp,
-                    modifier = rowModifier,
-                )
-            }
-            // Also stacked on a narrow card: on a 360dp phone, side by side
-            // left "Next up" about 54dp for its text, so "3 weeks since you
-            // last spoke" truncated to "3 week..." (found rendering at w360dp).
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val stacked = largeText || maxWidth < NARROW_CARD
-                if (stacked) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(tone.band)
-                            .padding(OrbitTheme.spacing.x4),
-                        verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x3),
-                    ) {
-                        nameBlock(Modifier.fillMaxWidth())
-                        nextUpRow(Modifier.fillMaxWidth())
-                    }
-                } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(tone.band)
-                            .padding(OrbitTheme.spacing.x4),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        nameBlock(Modifier.width(NAME_COLUMN_WIDTH))
-                        Spacer(Modifier.width(OrbitTheme.spacing.x3))
-                        nextUpRow(Modifier.weight(1f))
-                    }
-                }
-            }
-            // Zone 2 — lighter wash under the 7-day rhythm.
+            // HOME-5, three zones (2026-10-08). Zone 1: the name row, the
+            // list's name and size on one compact line on the band. Until
+            // then the band held the name block beside Next up, in a fixed
+            // 118dp column that had to stack at large text or on a narrow
+            // card; the owner asked for the name as its own compact row.
+            ListNameRow(
+                name = displayName,
+                memberLabel = memberLabel(tile.memberCount),
+                isSmart = tile.type == ListType.SMART,
+                tone = tone,
+            )
+            // Zone 2: Next up, a row of its own on the lighter wash, full
+            // width at every text size, so the why line keeps its words.
+            NextUpRow(
+                nextUp = tile.nextUp,
+                curtain = curtain,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = OrbitTheme.spacing.x4,
+                        end = OrbitTheme.spacing.x4,
+                        top = OrbitTheme.spacing.x3,
+                    ),
+            )
+            // Zone 3: the 7-day rhythm, on the same wash.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -764,12 +707,88 @@ internal fun homeTileMenuActions(
     )
 }
 
-/** HOME-3 — the recommendation half of the header band. */
+/**
+ * HOME-5: the card's first zone, the list's name and its size on one compact
+ * line across the top of the card, on the band in the band's name colour, so
+ * each card keeps its own colours (the owner, 2026-10-08: "The name can be its
+ * own row with its own background ... And compact").
+ *
+ * The name comes first and gives way: it ellipsizes, and the count never
+ * does. A Row measures its unweighted children first, so the count and the
+ * glyph take what they need and the name gets the rest. At large text the
+ * name may take a second line rather than shrink to a few letters (rules.md
+ * Design 2). The count is the band's name colour at full strength, not faded:
+ * a 72% alpha count fell under 4.5:1 on the band, and ThemeContrastTest holds
+ * nameFg to 4.5:1 on every card's band. Not a target of its own: a tap here is
+ * the card's tap.
+ */
+@Composable
+private fun ListNameRow(
+    name: String,
+    memberLabel: String,
+    isSmart: Boolean,
+    tone: OrbitTones.ListTone,
+) {
+    val largeText = LocalDensity.current.fontScale > 1.3f
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tone.band)
+            .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x2),
+    ) {
+        // The name and the glyph share the room the count leaves, so the
+        // glyph stays beside the name however short it is.
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            Text(
+                text = name,
+                style = OrbitTheme.type.listTile.copy(color = tone.nameFg),
+                maxLines = if (largeText) 2 else 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            // LIST-07: the smart-list cue. Type isn't a name, so it stays
+            // visible under the privacy curtain. PhIcon is decorative by
+            // design, so the meaning is said here: without it TalkBack had no
+            // way to tell the two list kinds apart on Home (WCAG 1.1.1).
+            // Home's own label since the Lists screen dropped its "Smart
+            // list" chip (2026-10-08).
+            if (isSmart) {
+                val smartLabel = stringResource(R.string.home_tile_smart_list)
+                Spacer(Modifier.width(OrbitTheme.spacing.x1))
+                PhIcon(
+                    name = "shuffle-angular",
+                    size = 13.dp,
+                    tint = tone.nameFg,
+                    modifier = Modifier.semantics { contentDescription = smartLabel },
+                )
+            }
+        }
+        // Quiet while the count is still hydrating (null reads as ""), rather
+        // than a wrong "No one yet".
+        if (memberLabel.isNotEmpty()) {
+            Spacer(Modifier.width(OrbitTheme.spacing.x3))
+            Text(
+                text = memberLabel,
+                style = OrbitTheme.type.meta.copy(color = tone.nameFg),
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+    }
+}
+
+/**
+ * HOME-3: the recommendation, the card's second zone. No control of its own
+ * (HOME-9, amended 2026-10-08): the call button that ended the row went at the
+ * owner's word ("No need for this icon"), and with it the chevron shown for a
+ * person with no number, so every row ends the same way. A tap on the row is
+ * the card's tap, which opens the deck, where Call is.
+ */
 @Composable
 private fun NextUpRow(
     nextUp: NextUp?,
     curtain: Boolean,
-    onCall: (phone: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
@@ -808,22 +827,6 @@ private fun NextUpRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-        Spacer(Modifier.width(OrbitTheme.spacing.x2))
-        // HOME-9: one deliberate tap from Home to a call. A labelled, muted
-        // phone button (rules.md §Design 6 allows a quiet dial per person row);
-        // the rest of the card still opens the list's deck. It replaces the
-        // chevron, which only repeated "this card is tappable".
-        val phone = nextUp.phone
-        if (phone != null) {
-            OrbitIconButton(
-                icon = "phone-call",
-                onClick = { onCall(phone) },
-                tint = OrbitTheme.colors.fgMuted,
-                contentDescription = stringResource(R.string.home_next_up_call, firstName),
-            )
-        } else {
-            PhIcon(name = "caret-right", size = 20.dp, tint = OrbitTheme.colors.fgSubtle)
         }
     }
 }
@@ -1221,12 +1224,6 @@ private val RHYTHM_BAR_AREA: Dp = 48.dp
 private val RHYTHM_BAR_WIDTH: Dp = 26.dp
 private const val RHYTHM_HEADROOM: Float = 1.25f
 
-// The name block's column when it sits beside Next up: the prototype's
-// `flex: 0 0 118px` (vision/00-home/prototype). Wide enough for a two-line
-// list name at 100%, and the layout stacks instead above 130% text or on a
-// card narrower than NARROW_CARD, so it never has to grow.
-private val NAME_COLUMN_WIDTH: Dp = 118.dp
-
 // HOME-8: the bar's outer corner, shared with the legend swatch so the key and
 // the mark are literally the same object. The rim and ring widths live with
 // [directionMark] because the day sheet's avatar rings use them too.
@@ -1283,13 +1280,13 @@ private val previewState: HomeUiState = HomeUiState.Ready(
             id = 1L, name = "Inner orbit", dueCount = 3, type = ListType.STATIC, memberCount = 12,
             nextUp = NextUp(
                 1L, "Kai", null,
-                UiText.res(R.string.home_why_ago, formatAgo(21)), phone = "+1 555 0100",
+                UiText.res(R.string.home_why_ago, formatAgo(21)),
             ),
             rhythm = previewRhythm(0),
         ),
         ListTileState(
             id = 2L, name = "Late night", dueCount = 0, type = ListType.SMART, memberCount = 5,
-            nextUp = NextUp(2L, "Mara", null, UiText.res(R.string.home_why_never), phone = "+1 555 0101"),
+            nextUp = NextUp(2L, "Mara", null, UiText.res(R.string.home_why_never)),
             rhythm = previewRhythm(8),
         ),
     ),
@@ -1324,7 +1321,7 @@ private fun HomeContentLongNamesPreview() {
                         id = 1L, name = "Old friends from the climbing gym crew", dueCount = 12, type = ListType.STATIC, memberCount = 48,
                         nextUp = NextUp(
                             1L, "Bartholomew Montgomery-Featherstonehaugh", null,
-                            UiText.res(R.string.home_why_ago, formatAgo(21)), phone = "+1 555 0100",
+                            UiText.res(R.string.home_why_ago, formatAgo(21)),
                         ),
                         rhythm = previewRhythm(0),
                     ),
@@ -1383,7 +1380,7 @@ private fun HomeContentBusyDaysPreview() {
                         id = 1L, name = "Family", dueCount = 1, type = ListType.STATIC, memberCount = 5,
                         nextUp = NextUp(
                             1L, "Kai", null,
-                            UiText.res(R.string.home_why_ago, formatAgo(3)), phone = "+1 555 0100",
+                            UiText.res(R.string.home_why_ago, formatAgo(3)),
                         ),
                         rhythm = previewBusyRhythm(),
                     ),
@@ -1480,6 +1477,3 @@ private fun HomeContentErrorPreview() {
 
 /** HOME-14: the stack's key in Home's list; tile keys are list ids (Longs), so it cannot collide. */
 private const val NOTES_WAITING_KEY = "notes-waiting"
-
-/** Below this card width the list header stacks name over Next up. */
-private val NARROW_CARD = 360.dp

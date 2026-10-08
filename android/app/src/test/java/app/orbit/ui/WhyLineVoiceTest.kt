@@ -26,6 +26,12 @@ import org.robolectric.annotation.Config
  * for one gap in each of the formatter's buckets (days, weeks, months, years)
  * plus today and yesterday, so an argument can no longer carry a forbidden
  * word past the audit.
+ *
+ * It also pins the words themselves, which Home and the card share: "Spoke
+ * 3 weeks ago" on Home, "Spoke 3 weeks ago." on the card, and "No calls yet"
+ * on Home for someone never called. No "You" since 2026-10-08 (the owner:
+ * "Let's reduce the wordage by removing the 'you'"); until then both lines
+ * began "You spoke" and Home's never line was "You haven't spoken yet".
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = Application::class)
@@ -68,14 +74,27 @@ class WhyLineVoiceTest {
     }
 
     @Test
-    fun `both lines say when you spoke, in the app's one ago wording`() {
-        assertEquals("You spoke today.", cardWhySince(0).text())
-        assertEquals("You spoke yesterday.", cardWhySince(1).text())
-        assertEquals("You spoke 3 days ago.", cardWhySince(3).text())
-        assertEquals("You spoke 3 weeks ago.", cardWhySince(21).text())
-        assertEquals("You spoke today", homeRecencyWhy(now, now).text())
-        assertEquals("You spoke 3 days ago", homeRecencyWhy(now.minus(days(3)), now).text())
-        assertEquals("You spoke 3 weeks ago", homeRecencyWhy(now.minus(days(21)), now).text())
-        assertEquals("You haven't spoken yet", homeRecencyWhy(null, now).text())
+    fun `both lines say when you last spoke without You, in the app's one ago wording`() {
+        assertEquals("Spoke today.", cardWhySince(0).text())
+        assertEquals("Spoke yesterday.", cardWhySince(1).text())
+        assertEquals("Spoke 3 days ago.", cardWhySince(3).text())
+        assertEquals("Spoke 3 weeks ago.", cardWhySince(21).text())
+        assertEquals("Spoke today", homeRecencyWhy(now, now).text())
+        assertEquals("Spoke yesterday", homeRecencyWhy(now.minus(days(1)), now).text())
+        assertEquals("Spoke 3 days ago", homeRecencyWhy(now.minus(days(3)), now).text())
+        assertEquals("Spoke 3 weeks ago", homeRecencyWhy(now.minus(days(21)), now).text())
+        assertEquals("No calls yet", homeRecencyWhy(null, now).text())
+    }
+
+    // The two lines are one wording: Home's is the card's without the full
+    // stop, for every gap, so neither can drift back to "You spoke" alone.
+    @Test
+    fun `Home's line is the card's without the full stop, for every gap`() {
+        gaps.forEach { gap ->
+            val card = cardWhySince(gap).text()
+            val home = homeRecencyWhy(now.minus(days(gap)), now).text()
+            assertEquals(card, "$home.", "for $gap days")
+            assertTrue(!home.startsWith("You"), "no You on Home for $gap days: \"$home\"")
+        }
     }
 }

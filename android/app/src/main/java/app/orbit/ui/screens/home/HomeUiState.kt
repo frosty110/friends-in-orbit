@@ -100,7 +100,8 @@ data class ListTileState(
  * queue, with a warm, neutral [why] line (recency context, never shame framing).
  * [why] is [UiText] (resolved in the composable) so it can be translated.
  * [photoUri] is the contact's photo when present; the renderer falls back to
- * initials.
+ * initials. No phone number: the row's call button went on 2026-10-08
+ * (HOME-9), and nothing else on Home dials.
  */
 @Immutable
 data class NextUp(
@@ -108,8 +109,6 @@ data class NextUp(
     val name: String,
     val photoUri: String?,
     val why: UiText,
-    // HOME-9: dialed by the Next-up row's Call button; null hides the button.
-    val phone: String? = null,
 )
 
 /**

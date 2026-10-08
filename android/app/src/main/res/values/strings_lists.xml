@@ -57,8 +57,6 @@
 
     <!-- A row in the Lists manager. -->
     <string name="lists_row_reorder">Reorder list</string>
-    <!-- Chip on a list that fills itself from a rule. -->
-    <string name="lists_row_smart_chip">Smart list</string>
     <!-- %1$s: the list's name. -->
     <string name="lists_row_add_people">Add people to %1$s</string>
     <string name="lists_row_more_actions">More actions for %1$s</string>
@@ -103,8 +101,8 @@
 
     <!-- Step 1, Start with: one choice among the tiles below. -->
     <string name="lists_new_start_heading">How do you want to start?</string>
-    <!-- The small label over the one template whose people come from a rule: the name the
-         Lists screen's chip gives such a list (lists_row_smart_chip). -->
+    <!-- The small label over the one template whose people come from a rule: the name
+         TalkBack gives such a list on Home (home_tile_smart_list). -->
     <string name="lists_new_smart_label">Smart list</string>
 
     <!-- Step 2, the list's name. -->
