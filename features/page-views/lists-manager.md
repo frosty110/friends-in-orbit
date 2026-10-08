@@ -27,7 +27,7 @@
 - Drag the handle to reorder; the order is Home's order
 - "More actions for {list}", in order: "Rename" (a dialog, "Rename list", with "Save" and "Cancel"; the name is masked under the curtain), "List settings", "Pause nudges" (or "Resume nudges" while they are paused; "Nudges paused." / "Nudges on."), "Move up", "Move down", then after a divider "Archive" with the line "Hides {list} from home. You can restore it.": "List archived." with Undo
 - "+": opens the Add people picker for that list
-- "New list" opens New list, step by step (LIST-28): how to start, the name, how often, the people, then "Create list". Create returns here with "Created {name}." and the new list last in the order, scrolled into view. Until 2026-10-07 it opened a create sheet here, and Create opened the new list's List settings
+- "New list" opens New list, step by step (LIST-28): how to start, the name, how often, the people, then "Create list". Create returns here with "Created {name}." and the new list last in the order, scrolled into view (not when the older `lists?openCreate=true` link opened New list before this screen had loaded its lists, since it cannot then tell the new list from the old). Until 2026-10-07 it opened a create sheet here, and Create opened the new list's List settings
 - Archived lists: "Restore" ("List restored."); the delete control asks "Delete this list?" / "This removes the list. People stay in your contacts." with "Delete" and "Keep", then "List deleted." with Undo, the delete held until the snackbar goes; the settings control opens List settings
 - A change that could not be saved says "Couldn't save your change" and shows no success message
 

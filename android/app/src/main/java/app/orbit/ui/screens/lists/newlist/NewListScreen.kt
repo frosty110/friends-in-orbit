@@ -590,9 +590,10 @@ private fun NewListPeopleCurtainPreview() {
     )
 }
 
-// Create's write in flight: nothing is pressable until it lands or fails,
-// the close control and the People section's Add people and remove controls
-// included.
+// Create's write in flight: nothing that changes the list can be pressed
+// until it lands or fails, the close control and the People section's Add
+// people and remove controls included ("Show all" stays live: it only shows
+// more).
 @PreviewLightDark
 @Composable
 private fun NewListCreatingPreview() {

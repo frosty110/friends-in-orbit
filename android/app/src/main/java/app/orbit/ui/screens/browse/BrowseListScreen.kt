@@ -148,7 +148,9 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
  * MOVE-07  : Snackbar undo backed by [UndoStack]; the bar is disabled while a
  *            write is in flight, so a second tap cannot replace the Undo. A
  *            newer snackbar replaces the one on screen, and each Undo hands
- *            back its own change's token, so it reverts only that change.
+ *            back its own change's token, so it reverts only that change on
+ *            this screen. The app-level picker snackbar shares the one-deep
+ *            stack with no token (see BrowseViewModel.onUndo), a known gap.
  * PRIV-03:   app-bar title + row primary names obey `LocalPrivacyCurtain.current`;
  *            [OrbitSearchField] masks what is typed.
  *

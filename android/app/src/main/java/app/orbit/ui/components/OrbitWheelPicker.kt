@@ -172,14 +172,27 @@ fun OrbitWheelPicker(
             }
     }
 
-    // Commit when a drag or fling comes to rest.
+    // Held still mid-fling (New list's Create starts its write while the row
+    // is still coasting): stop the motion and go back to [value], so the row
+    // shows what is being written rather than coming to rest on a number
+    // nobody will save.
+    val latestEnabled by rememberUpdatedState(enabled)
+    LaunchedEffect(enabled) {
+        if (!enabled && state.isScrollInProgress) {
+            state.stopScroll()
+            state.scrollToItem(indexOf(value))
+            latestOnChange(value.coerceIn(range))
+        }
+    }
+
+    // Commit when a drag or fling comes to rest, unless the row was held.
     LaunchedEffect(state) {
         snapshotFlowOf { state.isScrollInProgress }
             .distinctUntilChanged()
             .filter { inProgress -> !inProgress }
             .collect {
                 val settled = range.first + centredIndex
-                if (settled != lastCommitted) {
+                if (latestEnabled && settled != lastCommitted) {
                     lastCommitted = settled
                     latestOnCommit(settled)
                 }
