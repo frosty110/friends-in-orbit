@@ -76,6 +76,7 @@ internal fun ListConfigBody(
     snackbarHostState: SnackbarHostState,
     // Non-null on the production path only: onboarding has its own
     // "Continue" in [OnboardingScaffold] and must not grow a second exit.
+    // List settings passes null while its title is being renamed (LIST-26).
     onDone: (() -> Unit)? = null,
     // Onboarding's name field only; production renames from its title.
     onNameChange: (String) -> Unit = {},
@@ -282,7 +283,13 @@ private fun ColumnScope.ListConfigBodySections(
         // at creation: the toggle above turns it off; retiming lives in settings.
         // ADR 0009 — user-owned reminders, default-on, never a surprise.
         if (isOnboarding && state.notificationsEnabled) {
-            OnboardingNudgeSummary(schedule = state.nudgeSchedule)
+            // LIST-25: with the time of day, so the line says when the nudge
+            // really comes (the scheduler's answer), not the stored 10am.
+            OnboardingNudgeSummary(
+                schedule = state.nudgeSchedule,
+                activeHoursStart = state.activeHoursStart,
+                activeHoursEnd = state.activeHoursEnd,
+            )
         }
     }
 
@@ -293,6 +300,8 @@ private fun ColumnScope.ListConfigBodySections(
         SettingGroup(title = stringResource(R.string.lists_section_when_to_nudge)) {
             NudgeScheduleSection(
                 schedule = state.nudgeSchedule,
+                activeHoursStart = state.activeHoursStart,
+                activeHoursEnd = state.activeHoursEnd,
                 notificationsEnabled = state.notificationsEnabled,
                 onScheduleChange = onNudgeScheduleChange
             )

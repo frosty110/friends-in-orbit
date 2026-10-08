@@ -296,6 +296,19 @@
     <string name="lists_nudge_times_many">%1$s, and %2$s</string>
     <string name="lists_nudge_summary_no_days">No days selected: nudges off</string>
     <string name="lists_nudge_summary_no_time">No time set: tap “Add time”</string>
+    <!-- Under the plan line, when some of the list's own nudge times fall outside its time
+         of day (LIST-25) and another still comes. %1$s: those times, joined as the plan
+         joins them ("10am", "10am and 2pm"); the count is how many. -->
+    <plurals name="lists_nudge_outside_skipped">
+        <item quantity="one">%1$s is outside this list\'s time of day, so no nudge comes then.</item>
+        <item quantity="other">%1$s are outside this list\'s time of day, so no nudges come then.</item>
+    </plurals>
+    <!-- As above, when none of them is inside it, so the nudge comes when the time of day
+         starts. %1$s: those times, %2$s: the start ("5pm"). -->
+    <plurals name="lists_nudge_outside_moved">
+        <item quantity="one">%1$s is outside this list\'s time of day, so the nudge comes at %2$s instead.</item>
+        <item quantity="other">%1$s are outside this list\'s time of day, so the nudge comes at %2$s instead.</item>
+    </plurals>
     <!-- Shown while this list's nudges are paused. -->
     <string name="lists_nudge_paused_badge">Nudges paused</string>
 

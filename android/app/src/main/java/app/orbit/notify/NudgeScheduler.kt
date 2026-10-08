@@ -61,6 +61,45 @@ open class NudgeScheduler @Inject constructor(
 
         /** Minimum enqueue delay — prevents zero-delay loops during tests. */
         private const val MIN_DELAY_MS = 1_000L
+
+        /**
+         * Resolves D-09 at the scheduling level: the schedule the chain actually runs.
+         *
+         * Returns [explicit] unchanged unless every chosen time falls outside the
+         * list's active-hours window, in which case the fire-time gate would suppress
+         * them all forever. Then, and only then, the window start is added as a slot
+         * on the list's own days, so the list can post at least once on each of them.
+         *
+         * Deliberately unchanged:
+         * - **No window** (either end null): the gate only applies when both ends are
+         *   set, so every chosen time can already post.
+         * - **Nudges off** (no days or no times): the user emptied the schedule. A
+         *   slot injected here is what kept "No days selected - nudges off" nudging.
+         * - **A chosen time inside the window**: it can post, and an extra slot would
+         *   be a second nudge per day the user never asked for (onboarding promises
+         *   one).
+         *
+         * On the companion and public, not an instance member, because what the
+         * screens say about a list's nudge is read from it too (LIST-25): List
+         * settings' "When to nudge" line and Make your first list's summary
+         * (`nudgePlan` in NudgeScheduleSection.kt). Until 2026-10-08 it was an
+         * internal instance member and the screens printed the stored schedule, so
+         * an Evenings list read "Every day at 10am" while its nudge came at 5pm.
+         * Pure: no Context and no WorkManager, so [NudgeSchedulerEffectiveSlotsTest]
+         * calls it on the JVM directly.
+         */
+        fun effectiveSchedule(
+            explicit: NudgeSchedule,
+            activeHoursStart: LocalTime?,
+            activeHoursEnd: LocalTime?
+        ): NudgeSchedule {
+            if (activeHoursStart == null || activeHoursEnd == null) return explicit
+            if (explicit.days.isEmpty() || explicit.times.isEmpty()) return explicit
+            if (explicit.times.any { isInActiveWindow(it, activeHoursStart, activeHoursEnd) }) {
+                return explicit
+            }
+            return explicit.copy(times = (explicit.times + activeHoursStart).distinct())
+        }
     }
 
     // ─── Public scheduling surface ────────────────────────────────────────────
@@ -159,47 +198,5 @@ open class NudgeScheduler @Inject constructor(
             ?: NudgeSchedule.DEFAULT
 
         schedule(list.id, nudgeSchedule, list.activeHoursStart, list.activeHoursEnd)
-    }
-
-    // ─── effectiveSchedule (internal — exercised by NudgeSchedulerEffectiveSlotsTest) ──
-
-    /**
-     * Resolves D-09 at the scheduling level: the schedule the chain actually runs.
-     *
-     * Returns [explicit] unchanged unless every chosen time falls outside the
-     * list's active-hours window, in which case the fire-time gate would suppress
-     * them all forever. Then, and only then, the window start is added as a slot
-     * on the list's own days, so the list can post at least once on each of them.
-     *
-     * Deliberately unchanged:
-     * - **No window** (either end null): the gate only applies when both ends are
-     *   set, so every chosen time can already post.
-     * - **Nudges off** (no days or no times): the user emptied the schedule. A
-     *   slot injected here is what kept "No days selected - nudges off" nudging.
-     * - **A chosen time inside the window**: it can post, and an extra slot would
-     *   be a second nudge per day the user never asked for (onboarding promises
-     *   one).
-     *
-     * Declared `internal` (not `private`) so [NudgeSchedulerEffectiveSlotsTest] in
-     * the JVM test source set can exercise it directly without reflection.
-     */
-    internal fun effectiveSchedule(
-        explicit: NudgeSchedule,
-        activeHoursStart: LocalTime?,
-        activeHoursEnd: LocalTime?
-    ): NudgeSchedule {
-        if (activeHoursStart == null || activeHoursEnd == null) return explicit
-        if (explicit.days.isEmpty() || explicit.times.isEmpty()) return explicit
-        if (explicit.times.any {
-                isInActiveWindow(
-                    it,
-                    activeHoursStart,
-                    activeHoursEnd
-                )
-            }
-        ) {
-            return explicit
-        }
-        return explicit.copy(times = (explicit.times + activeHoursStart).distinct())
     }
 }
