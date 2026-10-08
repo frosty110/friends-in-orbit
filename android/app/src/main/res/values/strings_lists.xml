@@ -204,8 +204,6 @@
         <item quantity="one">%1$d day</item>
         <item quantity="other">%1$d days</item>
     </plurals>
-    <!-- %1$d: a percentage. -->
-    <string name="lists_smart_percent">%1$d%%</string>
     <!-- Screen-reader value of the percentage slider; the same slider serves lists_smart_top
          and lists_smart_bottom, so it names neither direction. -->
     <string name="lists_smart_percent_a11y">%1$d percent of the people you call</string>
