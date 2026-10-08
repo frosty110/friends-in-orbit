@@ -13,6 +13,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.orbit.R
@@ -36,7 +37,9 @@ import org.robolectric.annotation.Config
  * BROWSE-07's when labels and groups, BROWSE-08's handle ("Reorder {name}",
  * "Reorder" under the curtain) and TalkBack's "Move up" / "Move down" with
  * what each one asks for, none of it on paused or ignored rows or while
- * selecting, and BROWSE-09's mark, scrolled into view.
+ * selecting, a drag by the handle and a failed drop put back, a newer
+ * drop's snackbar replacing the one on screen with an Undo bound to its own
+ * drop (MOVE-07), and BROWSE-09's mark, scrolled into view.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [33], application = Application::class, qualifiers = "w411dp-h891dp")
@@ -89,18 +92,22 @@ class BrowseSequenceContentTest {
     private fun show(
         state: BrowseUiState.Ready,
         curtain: Boolean = false,
-        snackbarEvents: SharedFlow<SnackbarEvent> = MutableSharedFlow()
+        snackbarEvents: SharedFlow<SnackbarEvent> = MutableSharedFlow(),
+        onUndo: (Long) -> Unit = {}
     ) {
         compose.setContent {
             CompositionLocalProvider(LocalPrivacyCurtain provides curtain) {
                 BrowsePreviewHost(
                     state,
                     onReorder = { id, after, name -> reorders += Triple(id, after, name) },
-                    snackbarEvents = snackbarEvents
+                    snackbarEvents = snackbarEvents,
+                    onUndo = onUndo
                 )
             }
         }
     }
+
+    private fun frames(n: Int) = repeat(n) { compose.mainClock.advanceTimeByFrame() }
 
     /** The TalkBack actions on the row TalkBack focuses for [name], in order. */
     private fun actionsOn(name: String): List<String> =
@@ -193,6 +200,41 @@ class BrowseSequenceContentTest {
         answers.tryEmit(SnackbarEvent(UiText.res(R.string.components_snackbar_save_failed)))
         compose.waitForIdle()
         assertTrue(top("Avery Quinn") < top("Jordan Lee"))
+    }
+
+    @Test
+    fun a_newer_drop_replaces_the_snackbar_on_screen_and_its_undo_hands_back_its_own_token() {
+        // Regression (browse-1): a plain collect kept "Moved Jordan earlier"
+        // up for its whole duration with "Moved Avery later" queued behind
+        // it, while the ViewModel held only Avery's inverse, so the Undo on
+        // screen ran Avery's. The newest snackbar now replaces the one on
+        // screen, and its Undo hands back its own drop's token.
+        val answers = MutableSharedFlow<SnackbarEvent>(extraBufferCapacity = 2)
+        val undone = mutableListOf<Long>()
+        show(sequence, snackbarEvents = answers, onUndo = { undone += it })
+        compose.waitForIdle()
+        // Hold the clock, so a snackbar is still up when read.
+        compose.mainClock.autoAdvance = false
+
+        answers.tryEmit(
+            SnackbarEvent.undoable(UiText.res(R.string.browse_snackbar_moved_earlier, "Jordan"))
+                .copy(actionPayload = 1L)
+        )
+        frames(30)
+        compose.onNodeWithText("Moved Jordan earlier").assertExists()
+
+        answers.tryEmit(
+            SnackbarEvent.undoable(UiText.res(R.string.browse_snackbar_moved_later, "Avery"))
+                .copy(actionPayload = 2L)
+        )
+        frames(30)
+        compose.onNodeWithText("Moved Jordan earlier").assertDoesNotExist()
+        compose.onNodeWithText("Moved Avery later").assertExists()
+
+        compose.onNodeWithText("Undo").performClick()
+        frames(30)
+        assertEquals(listOf(2L), undone, "the Undo on screen is the newer drop's, once")
+        compose.onNodeWithText("Moved Avery later").assertDoesNotExist()
     }
 
     @Test
