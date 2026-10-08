@@ -447,7 +447,7 @@ class ContactDetailViewModelTest {
     }
 
     // ============================================================================
-    // CONTACT-03 + LIST-24: the inherited rhythm is described by its interval,
+    // CONTACT-03 + LIST-30: the inherited rhythm is described by its interval,
     // never named. Until 2026-10-07 the sentence read "Follows the late night
     // rhythm from Late night." and the editor offered the three rhythm names.
     // ============================================================================

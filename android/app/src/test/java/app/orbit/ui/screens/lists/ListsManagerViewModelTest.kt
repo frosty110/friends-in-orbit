@@ -326,7 +326,7 @@ class ListsManagerViewModelTest {
         val blank = listFixture(id = 12L, ruleTemplateId = 1L, ruleParamsOverrideJson = null)
         assertEquals("Every 2 days", singleTileSubtitle(blank, seededTemplates))
 
-        // LIST-24: every rule type reads as its interval. Late night's base is
+        // LIST-30: every rule type reads as its interval. Late night's base is
         // 72 hours and Energize's 24; the row said "Late night rhythm" and
         // "Energize rhythm" until 2026-10-07, names List settings no longer
         // shows. One day is "Every day", not "Every 1 day".

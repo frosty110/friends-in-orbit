@@ -763,7 +763,7 @@ const initials = (name) => name.split(/\s+/).slice(0, 2).map((w) => w[0]).join('
 const L = {
   touch:  { name: 'In touch', template: 'Keep in touch', interval: 2, tone: 'A',
             queue: ['kai', 'luma', 'owen', 'rhea', 'alex', 'priya', 'jamie', 'sarah', 'nia', 'theo'], other: ['marcus', 'mia'], paused: ['marcus'], ignored: ['mia'] },
-  // LIST-24: a Late night list's real base interval is 3 days, and that is what every screen says.
+  // LIST-30: a Late night list's real base interval is 3 days, and that is what every screen says.
   late:   { name: 'Late night', template: 'Late night', interval: 3, tone: 'B', queue: ['dana', 'jamie', 'nia', 'theo'], other: [] },
   recent: { name: 'Recently added, not called', smart: true, rule: 'Recently added · 30 days', interval: 2, tone: 'A', queue: ['ama', 'leo'], other: [], preview: ['ama', 'leo'] },
 };
@@ -1393,7 +1393,7 @@ ACT.allPreview = () => { D.preview = D.preview.size === PREVIEW_ORDER.length ? n
 ACT.acceptPreview = () => { D.flName = 'In touch'; D.flMembers = PREVIEW_ORDER.filter((x) => D.preview.has(x)); };
 ACT.startBlank = () => { D.flName = ''; D.flMembers = []; };
 
-// LIST-24: "How often", the one rhythm control, for every list (HowOftenSlider). One sentence
+// LIST-30: "How often", the one rhythm control, for every list (HowOftenSlider). One sentence
 // over the slider, the interval as its argument; one day has its own sentence.
 function intervalBlock(days, actArg = '') {
   const pct = ((days - 1) / 59) * 100;
@@ -1431,7 +1431,7 @@ screen({
   id: 'S07', group: 'onboarding', name: 'Make your first list', route: 'onboard/first-list/{listId}',
   spec: 'features/page-views/onboarding-first-list.md', code: 'ui/screens/onboarding/OnboardingFirstListScreen.kt',
   purpose: 'Leave onboarding with one real list: a name and at least 3 people.',
-  owes: ['Name the list and pick at least 3 people', 'The same controls as List settings: How often (LIST-24), Time of day (LIST-25), Nudges, and People with "Add people" in its header (LIST-27); only the name is its own field here', 'Finish, or add another list', 'Clear gating until name and 3 people are in'],
+  owes: ['Name the list and pick at least 3 people', 'The same controls as List settings: How often (LIST-30), Time of day (LIST-25), Nudges, and People with "Add people" in its header (LIST-27); only the name is its own field here', 'Finish, or add another list', 'Clear gating until name and 3 people are in'],
   drift: 'There is no back arrow; system back returns to the sync screen, whose Continue now comes straight back to this same list (fixed 2026-10-05, B6). "Removed {name}" with Undo now shows (B8).',
   states: [['default', 'From the suggestions'], ['blank', 'Started blank (gated)']],
   to: [['S32', 'Add people (People header)'], ['S08', 'Done'], ['S07', 'Add another list']],
@@ -2289,7 +2289,7 @@ screen({
   id: 'S20', group: 'people', name: 'Contact detail', route: 'contact/{contactId}',
   spec: 'features/page-views/contact-detail.md', code: 'ui/screens/contact/ContactDetailScreen.kt',
   purpose: 'The full picture of one person, and the place to act and remember.',
-  owes: ['Photo, name, number, and which lists they are on', 'Stats: Last call, Total calls, Average length, Longest gap, Usually; "Not enough calls yet" where history is thin', 'Recent call history, with Logged and Attempted rows', 'Add and read notes; some entry points jump straight to the note field', 'Log a connection, or an attempt ("Couldn\'t reach them"), in the sheet the card uses too (CARD-10): "Logged." or "Attempt logged."', 'Custom schedule, for someone on two or more lists: "Comes up every 2 days, like the rest of In touch." with "Set a schedule for this person"; once set, List settings\' How often slider ("Aim for every 2 days", "Aim for every day" at one day) and "Reset to default", with no rhythm to choose (CONTACT-03, LIST-24)', 'Pause for a while (1 week, 1 month, until you unpause), or Unpause', 'Ignore, or add to more lists', 'Re-link if the phone contact was deleted'],
+  owes: ['Photo, name, number, and which lists they are on', 'Stats: Last call, Total calls, Average length, Longest gap, Usually; "Not enough calls yet" where history is thin', 'Recent call history, with Logged and Attempted rows', 'Add and read notes; some entry points jump straight to the note field', 'Log a connection, or an attempt ("Couldn\'t reach them"), in the sheet the card uses too (CARD-10): "Logged." or "Attempt logged."', 'Custom schedule, for someone on two or more lists: "Comes up every 2 days, like the rest of In touch." with "Set a schedule for this person"; once set, List settings\' How often slider ("Aim for every 2 days", "Aim for every day" at one day) and "Reset to default", with no rhythm to choose (CONTACT-03, LIST-30)', 'Pause for a while (1 week, 1 month, until you unpause), or Unpause', 'Ignore, or add to more lists', 'Re-link if the phone contact was deleted'],
   drift: 'An ignored person shows an "Ignored" line under the number from this round\'s contact-detail pass (2026-10-05); at the render this prototype was read from they looked no different here.',
   states: [['default', 'Ready'], ['note', 'Note field focused'], ['menu', 'More actions', 'overlay'], ['log', 'Log a connection', 'overlay'], ['pause', 'Pause for how long?', 'overlay'], ['paused', 'Paused indefinitely'], ['pmenu', 'More actions while paused', 'overlay'], ['unpaused', 'Pause just ended'], ['override', 'Custom schedule open'], ['retro', 'Opened from a call'], ['orphaned', 'Deleted from the phone']],
   to: [['S53', 'Call, or tap the number'], ['S21', 'Add to lists'], ['S42', 'More: View all calls'], ['S32', 'Orphaned: Re-link']],
@@ -2308,7 +2308,7 @@ screen({
     const noteFocus = st === 'note';
     const notes = (NOTES[pid] || []).map(([w, t]) => `<div style="background:var(--surface);border-radius:14px;padding:12px;margin-top:8px" data-lp="noteedit"><div class="meta">${w}</div><div class="body">${t}</div></div>`).join('') || '<div class="meta" style="margin-top:8px">No notes yet.</div>';
     const multi = lists.length >= 2;
-    // CONTACT-03, one interval since LIST-24 (RuleOverrideSection): before a schedule is set, how
+    // CONTACT-03, one interval since LIST-30 (RuleOverrideSection): before a schedule is set, how
     // often they come up on their first list; once set, List settings' How often slider and
     // Reset to default, with no rhythm to choose.
     const own = L[lists[0]] ? lists[0] : 'touch';
@@ -2556,7 +2556,7 @@ screen({
   id: 'S30', group: 'lists', name: 'Lists', route: 'lists',
   spec: 'features/page-views/lists-manager.md', code: 'ui/screens/lists/ListsManagerScreen.kt',
   purpose: 'Shape your lists: order them, archive them, start new ones.',
-  owes: ['Every list, reorderable by drag (order is Home order)', 'Tap a list to open its cards, as on Home (LIST-23)', 'Per list: name, its rhythm as an interval ("Every 14 days", "Every 3 days" for Late night, "Every day"; never a rhythm\'s name, LIST-24) or its rule, member count, + to add people', 'Row menu: Rename, List settings, Move up or down, then Archive', 'One New list control, floating with lists and centred without (LIST-20); it opens New list, step by step, which returns here with "Created {name}." and the new list last (LIST-28)', 'Archived lists to restore, delete (with Undo), or configure', 'Undo archive'],
+  owes: ['Every list, reorderable by drag (order is Home order)', 'Tap a list to open its cards, as on Home (LIST-23)', 'Per list: name, its rhythm as an interval ("Every 14 days", "Every 3 days" for Late night, "Every day"; never a rhythm\'s name, LIST-30) or its rule, member count, + to add people', 'Row menu: Rename, List settings, Move up or down, then Archive', 'One New list control, floating with lists and centred without (LIST-20); it opens New list, step by step, which returns here with "Created {name}." and the new list last (LIST-28)', 'Archived lists to restore, delete (with Undo), or configure', 'Undo archive'],
   drift: null,
   states: [['default', 'Lists'], ['rowmenu', 'Row menu', 'overlay'], ['rename', 'Rename list', 'overlay'], ['archived', 'Archived open'], ['delete', 'Delete this list?', 'overlay'], ['empty', 'No lists yet']],
   to: [['S11', 'Tap a list'], ['S33', 'New list'], ['S31', 'Menu: List settings'], ['S32', '+ on a static list'], ['S10', 'Back']],
@@ -2569,7 +2569,7 @@ screen({
       return view({ bar, center: true, body: `<div class="center-t" style="padding:0 36px 120px;display:flex;flex-direction:column;gap:12px;align-items:center"><div class="h2">No lists yet</div><div class="body muted">Add a list to start grouping the people you want to stay in touch with.</div><button class="btn primary sm" ${A.go('S33')}>${ic('plus')}New list</button></div>` });
     }
     // A regular list carries its rhythm where a smart list carries its rule (LISTS-3). Since
-    // LIST-24 the rhythm is said as its interval whatever engine runs it, never "Late night rhythm".
+    // LIST-30 the rhythm is said as its interval whatever engine runs it, never "Late night rhythm".
     const rhythmLine = (lid) => L[lid].smart ? L[lid].rule : everyLine(D.intervals[lid]);
     const rows = shownLists().map((lid) => {
       const l = L[lid]; const n = members(lid).length;
@@ -2613,7 +2613,7 @@ screen({
   id: 'S31', group: 'lists', name: 'List settings', route: 'lists/{listId}/config',
   spec: 'features/page-views/list-config.md', code: 'ui/screens/lists/ListConfigScreen.kt',
   purpose: 'Define a list\'s rhythm, its time of day and its people in plain terms; changes save as you go.',
-  owes: ['The name is the title: tap it or the pencil to rename, in a field with Cancel and "Save list name"; a blank name keeps the old one (LIST-26)', '"How often" for every list, smart lists too: "Aim for every 14 days"; a Late night list shows its real 3 days, and moving the slider makes it an ordinary list (LIST-24)', '"Time of day": Any time, Mornings, Afternoons, Evenings or Nights, or "Custom: 9am to 5pm" for a window set before, with one line on what it does (LIST-25)', 'Nudges on or off, with the days and times they come', 'People: the count with "Add people" beside it (LIST-27); remove with undo', 'Smart lists: edit the rule, or make it a regular list', 'Changes save as you go; Done is the only accent on the screen (LIST-21)'],
+  owes: ['The name is the title: tap it or the pencil to rename, in a field with Cancel and "Save list name"; a blank name keeps the old one (LIST-26)', '"How often" for every list, smart lists too: "Aim for every 14 days"; a Late night list shows its real 3 days, and moving the slider makes it an ordinary list (LIST-30)', '"Time of day": Any time, Mornings, Afternoons, Evenings or Nights, or "Custom: 9am to 5pm" for a window set before, with one line on what it does (LIST-25)', 'Nudges on or off, with the days and times they come', 'People: the count with "Add people" beside it (LIST-27); remove with undo', 'Smart lists: edit the rule, or make it a regular list', 'Changes save as you go; Done is the only accent on the screen (LIST-21)'],
   drift: null,
   states: [['default', 'Regular list'], ['rename', 'Renaming from the title'], ['latenight', 'A Late night list (every 3 days)'], ['evenings', 'Time of day: Evenings'], ['custom', 'Time of day: Custom (set before)'], ['time', 'Time picker', 'overlay'], ['smart', 'Smart list'], ['convert', 'Make this a regular list?', 'overlay']],
   to: [['S32', 'Add people (People header)'], ['S30', 'Done, or back']],

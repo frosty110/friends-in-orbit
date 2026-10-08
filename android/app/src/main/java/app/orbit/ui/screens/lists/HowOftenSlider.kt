@@ -27,7 +27,7 @@ import app.orbit.ui.util.UiText
 import app.orbit.ui.util.asString
 
 /**
- * LIST-24: "How often", the one rhythm control, for every list: Keep in touch,
+ * LIST-30: "How often", the one rhythm control, for every list: Keep in touch,
  * Late night, Energize and smart lists alike. It shows [intervalHours] as whole
  * days ("Aim for every 3 days" for a Late night list, whose base is 72h) and
  * hands back the chosen interval in hours. What a commit does to the list is

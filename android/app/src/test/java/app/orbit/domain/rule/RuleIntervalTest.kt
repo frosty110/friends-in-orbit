@@ -4,7 +4,7 @@ import kotlin.test.assertEquals
 import org.junit.Test
 
 /**
- * LIST-24: every list's rhythm is one number, its base interval, and moving
+ * LIST-30: every list's rhythm is one number, its base interval, and moving
  * "How often" makes the list Keep in touch at the chosen interval through
  * `withIntervalHours`. Pinned here so the screens (List settings, the Lists
  * row) cannot decide either part for themselves.

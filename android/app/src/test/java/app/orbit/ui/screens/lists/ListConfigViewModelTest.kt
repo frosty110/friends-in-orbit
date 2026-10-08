@@ -119,7 +119,7 @@ private class ConfigThrowingListRepository(
  * Behavioral tests for the rewritten [ListConfigViewModel] covering the
  * save-on-change setters plus the override-JSON round-trip:
  *  1. setRuleTemplate resolves RuleKind → seeded row id
- *  2. setIntervalHours: How often for every rule type (LIST-24)
+ *  2. setIntervalHours: How often for every rule type (LIST-30)
  *  3. setTimeOfDay: each part writes its window, a custom one is left alone
  *     (LIST-25)
  *  4. [setNotificationsEnabled_flips_boolean]
@@ -358,7 +358,7 @@ class ListConfigViewModelTest {
     }
 
     // ────────────────────────────────────────────────────────────────────────
-    // Test 2, LIST-24 + LIST-04: How often, one control for every list.
+    // Test 2, LIST-30 + LIST-04: How often, one control for every list.
     // A Late night or Energize list shows its real base interval; moving the
     // slider on either makes it Keep in touch at that interval, through
     // withIntervalHours, with the Keep in touch template.

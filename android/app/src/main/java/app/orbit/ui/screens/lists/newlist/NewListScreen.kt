@@ -325,7 +325,7 @@ private fun NameStep(
 }
 
 /**
- * How often: the slider List settings uses ([HowOftenSlider], LIST-24),
+ * How often: the slider List settings uses ([HowOftenSlider], LIST-30),
  * starting at the template's rhythm (every 2 days for "Start from blank" and
  * the list that fills itself), on a card as it sits in List settings.
  */

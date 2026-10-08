@@ -276,7 +276,7 @@ class ListConfigViewModel @Inject constructor(
      * update` round trip; two overlapping setter taps on different columns no
      * longer clobber one another.
      *
-     * One caller since LIST-24 took the rhythm choice off List settings: Make
+     * One caller since LIST-30 took the rhythm choice off List settings: Make
      * your first list gives its new list Keep in touch on first read (the list
      * arrives with no template, and a list with no template surfaces no one).
      * Moving How often goes through [setIntervalHours] instead.
@@ -318,7 +318,7 @@ class ListConfigViewModel @Inject constructor(
     }
 
     /**
-     * LIST-24 + LIST-04: How often, for every list. Writes the per-list
+     * LIST-30 + LIST-04: How often, for every list. Writes the per-list
      * override as Keep in touch at [hours], built by the domain's
      * [toKeepInTouchEvery] through `withIntervalHours` (the one honest entry
      * point: both cooldown bounds move together), and gives the list the Keep

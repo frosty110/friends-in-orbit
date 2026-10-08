@@ -31,7 +31,7 @@ import javax.inject.Inject
  *    included (LIST-02), read inside the transaction.
  *  - **Rhythm**: the Keep in touch template with parameters for the interval
  *    the How often step ended on, built by [toKeepInTouchEvery], the same
- *    helper List settings' slider writes through (LIST-24). Never
+ *    helper List settings' slider writes through (LIST-30). Never
  *    `cooldownMinHours` alone (the rule engine README's "Interval honesty").
  *    The template is resolved before the transaction: it is seeded, read-only
  *    data, and a missing one is a broken install, refused loudly rather than

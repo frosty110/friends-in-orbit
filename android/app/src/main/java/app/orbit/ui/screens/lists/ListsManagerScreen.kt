@@ -593,7 +593,7 @@ private val previewReady = ListsManagerUiState.Ready(
             name = "People who ground me",
             memberCount = 4,
             type = ListType.STATIC,
-            // A Late night list's row reads its interval (LIST-24).
+            // A Late night list's row reads its interval (LIST-30).
             ruleSummary = UiText.plural(R.plurals.lists_interval_every_days, 3, 3),
             notificationsEnabled = false,
         ),

@@ -38,7 +38,7 @@ sealed interface ListConfigUiState {
      *
      * Two values are derived once, at construction (ARCH-02), so the body and
      * the tests read the same answer: [intervalHours], the base interval How
-     * often shows for every rule type (LIST-24: 72h for Late night, 24h for
+     * often shows for every rule type (LIST-30: 72h for Late night, 24h for
      * Energize), and [timeOfDay], the stored window read back as a part of the
      * day or a custom window (LIST-25). Both are body properties, so they stay
      * out of the constructor and out of `equals`: they follow from the fields.

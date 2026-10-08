@@ -141,7 +141,7 @@ fun OnboardingFirstListScreen(
     // the Room write re-emits with ruleKind set, so the effect self-quiesces.
     // Kind-based: the VM resolves the seeded row via
     // RuleTemplateRepository.getByKind (no hardcoded seed id). The picker is
-    // gone (LIST-24), but a list with no template still surfaces no one, and
+    // gone (LIST-30), but a list with no template still surfaces no one, and
     // How often reads the template's interval, so the seed stays.
     LaunchedEffect(ready?.id, ready?.ruleKind) {
         if (ready != null && ready.type == ListType.STATIC && ready.ruleKind == null) {
@@ -207,7 +207,7 @@ fun OnboardingFirstListScreen(
             isOnboarding = true,
             snackbarHostState = snackbarHostState,
             onNameChange = vm::setName,
-            // LIST-24 / LIST-25: the same How often and Time of day as List
+            // LIST-30 / LIST-25: the same How often and Time of day as List
             // settings; the rhythm choice went from both screens at once.
             onIntervalChange = vm::setIntervalHours,
             onTimeOfDayChange = vm::setTimeOfDay,

@@ -37,7 +37,7 @@
 
     <!-- Second line under a regular list's name on Lists: its rhythm, as its interval
          ("Every 14 days", "Every day": lists_interval_every_days and lists_interval_every_day,
-         below) whichever rhythm it runs (LIST-24). Shown instead when its stored rule cannot
+         below) whichever rhythm it runs (LIST-30). Shown instead when its stored rule cannot
          be decoded; the deck fails on the same data. -->
     <string name="lists_rhythm_unreadable">Couldn\'t read this list\'s rhythm</string>
 

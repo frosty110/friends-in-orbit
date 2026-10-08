@@ -4,7 +4,7 @@
 **Group:** Lists
 **Status:** active
 **Last reviewed:** 2026-10-07
-**Spec:** [orbit-lists](../orbit-lists/README.md): LIST-28 (the step-by-step flow), LIST-29 (the templates), LIST-24 (How often), LIST-27 (the People section); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
+**Spec:** [orbit-lists](../orbit-lists/README.md): LIST-28 (the step-by-step flow), LIST-29 (the templates), LIST-30 (How often), LIST-27 (the People section); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
 

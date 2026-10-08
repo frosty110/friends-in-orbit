@@ -47,7 +47,7 @@ import app.orbit.ui.util.asString
  *
  * **Override branch (`hasOverride == true`):** List settings' own "How
  * often" control ([HowOftenSlider]) and a Ghost "Reset to default" that
- * clears `Contact.ruleOverrideJson`. Since 2026-10-07 (LIST-24) there is no
+ * clears `Contact.ruleOverrideJson`. Since 2026-10-07 (LIST-30) there is no
  * rhythm choice here either: Keep in touch, Late night and Energize are one
  * calculation with different starting numbers, so a person's schedule is one
  * number too. A Late night or Energize override set before then shows its

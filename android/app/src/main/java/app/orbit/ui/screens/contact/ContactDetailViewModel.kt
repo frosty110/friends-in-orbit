@@ -458,7 +458,7 @@ class ContactDetailViewModel @Inject constructor(
      *   3. No override: (how often the primary list brings people up, null).
      *      The list's own override or template, resolved the way List
      *      settings resolves it ([resolveRuleParams]), described by its
-     *      interval ("every 14 days", LIST-24: no rhythm names), or null when
+     *      interval ("every 14 days", LIST-30: no rhythm names), or null when
      *      the list has no readable rhythm.
      */
     private fun deriveOverrideDisplay(

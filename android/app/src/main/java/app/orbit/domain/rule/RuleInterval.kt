@@ -1,7 +1,7 @@
 package app.orbit.domain.rule
 
 /*
- * LIST-24: one "How often" control for every list.
+ * LIST-30: one "How often" control for every list.
  *
  * Keep in touch, Late night and Energize are one algorithm with different
  * numbers (LateNightEngine and EnergizeEngine say so: their bodies are

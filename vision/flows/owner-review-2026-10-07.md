@@ -19,7 +19,7 @@ implements them.
 | 6 | Card view menu, "Browse people" | Expected the order people come up in, with the current person first | Browse is the sequence | BROWSE-07, BROWSE-09 |
 | 7 | Browse, title | It is the sequenced list; let me sort it, knowing it is not permanent | Drag to reorder the sequence | BROWSE-08 |
 | 8 | List settings, Name | Edit the name at the title instead of a separate field? | Rename from the title | LIST-26 |
-| 9 | List settings, "Cadence" | Redundant with the slider below | One "How often" control | LIST-24 |
+| 9 | List settings, "Cadence" | Redundant with the slider below | One "How often" control | LIST-30 |
 | 10 | List settings, "Always active" | Confusing; say which part of the day instead | Time-of-day choice | LIST-25 |
 | 11 | List settings, "11 people" | Expected an Add people button there | Add people at the People header | LIST-27 |
 | 12 | Home, post-call banner | A notification if possible; several unnoted calls stacked, each closable; cleaner | Notes waiting stack, and a post-call notification | NOTE-05, NOTIF-16, HOME-14 |
@@ -112,7 +112,7 @@ The list's name is the screen's title. Tapping it, or the pencil beside it,
 turns the title into a text field with Save and Cancel; a blank name keeps the
 old one. The separate Name section goes away.
 
-### 9. One "How often" control (LIST-24)
+### 9. One "How often" control (LIST-30)
 
 The owner is right that the rhythm choice repeats the slider. Under the hood,
 Keep in touch, Late night and Energize are the same calculation with different

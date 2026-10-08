@@ -39,7 +39,7 @@ import app.orbit.ui.theme.OrbitTheme
  * ONB-20 — production-and-onboarding body for List Configuration.
  *
  * Hosts the onboarding-only name field (see the `isOnboarding` gate), How
- * often (LIST-24), Time of day (LIST-25), Nudges, the nudge schedule, the
+ * often (LIST-30), Time of day (LIST-25), Nudges, the nudge schedule, the
  * optional Smart-rule editor, the People section (LIST-27) and the
  * convert-to-static action. The chrome (OrbitScreen + OrbitAppBar) lives in
  * the caller: production [ListConfigScreen] for the standard nav, whose
@@ -79,7 +79,7 @@ internal fun ListConfigBody(
     onDone: (() -> Unit)? = null,
     // Onboarding's name field only; production renames from its title.
     onNameChange: (String) -> Unit = {},
-    // LIST-24: hours, from How often. The ViewModel decides what a move does
+    // LIST-30: hours, from How often. The ViewModel decides what a move does
     // to the list (setIntervalHours); the body only reports the number.
     onIntervalChange: (Int) -> Unit,
     onTimeOfDayChange: (DayPart) -> Unit,
@@ -222,7 +222,7 @@ private fun ColumnScope.ListConfigBodySections(
         }
     }
 
-    // LIST-24: one control for the rhythm, for every list. The rhythm choice
+    // LIST-30: one control for the rhythm, for every list. The rhythm choice
     // (Keep in touch, Late night, Energize) that sat above it is gone: the
     // three are one calculation with different numbers, so a Late night or
     // Energize list shows its real base interval here (every 3 days, every
@@ -349,4 +349,4 @@ private fun ColumnScope.ListConfigBodySections(
 // `templateIdForKindLocal` (the hardcoded 1L/2L/3L kind → seed id map) is gone:
 // the picker hands the RuleKind straight to the VM, which resolves the row via
 // RuleTemplateRepository.getByKind. The rhythm picker itself left this body
-// with LIST-24, and the interval slider moved to HowOftenSlider.kt.
+// with LIST-30, and the interval slider moved to HowOftenSlider.kt.

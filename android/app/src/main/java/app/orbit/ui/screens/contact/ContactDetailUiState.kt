@@ -32,7 +32,7 @@ import app.orbit.ui.util.UiText
  *     the LazyColumn item on this flag for cleaner recomposition.
  *   - `inheritedRhythm`: how often the primary list brings people up, as it
  *     sits mid-sentence ("every 14 days") in "Comes up {X}, like the rest of
- *     {Y}." (LIST-24: a rhythm is described by its interval, never named).
+ *     {Y}." (LIST-30: a rhythm is described by its interval, never named).
  *     Null with an override stored (the section shows the editor, never the
  *     sentence) and when the list's rhythm cannot be read (the sentence then
  *     names the list alone). Until 2026-10-07 it held the rhythm's name

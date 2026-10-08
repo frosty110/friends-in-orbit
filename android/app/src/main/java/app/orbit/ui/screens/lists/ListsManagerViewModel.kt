@@ -407,7 +407,7 @@ class ListsManagerViewModel @Inject constructor(
 
     /**
      * A regular list's rhythm as its row subtitle, as its interval whichever
-     * rule it runs (LIST-24): "Every 14 days" for Keep in touch, "Every 3
+     * rule it runs (LIST-30): "Every 14 days" for Keep in touch, "Every 3
      * days" for Late night, "Every day" for Energize, in the words How often
      * uses ([howOftenEveryLabel]). Until 2026-10-07 the last two read "Late
      * night rhythm" and "Energize rhythm", names List settings no longer

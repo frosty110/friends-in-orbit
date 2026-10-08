@@ -39,7 +39,7 @@ class RuleOverrideSectionTest {
         assertEquals(base.shortCallThresholdSeconds, tuned.shortCallThresholdSeconds)
     }
 
-    // LIST-24: the per-person schedule has no rhythm choice either. An
+    // LIST-30: the per-person schedule has no rhythm choice either. An
     // override stored as Late night (possible before 2026-10-07) becomes Keep
     // in touch at the chosen interval when its slider moves.
     @Test

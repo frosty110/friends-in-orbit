@@ -4,7 +4,7 @@
 **Group:** Onboarding
 **Status:** active
 **Last reviewed:** 2026-10-07
-**Spec:** [onboarding](../onboarding/README.md): the first-list gate, mid-flow resume, ONB-23; [orbit-lists](../orbit-lists/README.md) for the controls (LIST-24, LIST-25, LIST-27); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
+**Spec:** [onboarding](../onboarding/README.md): the first-list gate, mid-flow resume, ONB-23; [orbit-lists](../orbit-lists/README.md) for the controls (LIST-25, LIST-27, LIST-30); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
 
@@ -19,7 +19,7 @@
 
 - App bar: "4 of 4", no back arrow (a first list is required to finish)
 - A helper line while Done is not yet available: "Add a name and pick at least 3 people to finish." (or, without contacts access, "You can add people once Orbit can see your contacts. Grant access any time in Settings.", and with no name either, "Give your list a name to finish. You can add people once Orbit can see your contacts.")
-- The same controls as List settings, with two differences: the name is an editable field at the top ("Name"; List settings renames from its title instead), and the nudge days and time show as a read-only summary ("Weekdays at 10am") with "Change the days or time any time in this list's settings." Sections: Name, How often (the one rhythm control; the rhythm choice went with LIST-24), Time of day ("Any time", "Mornings", "Afternoons", "Evenings", "Nights"; LIST-25), Nudges, People (the count with "Add people" on its right; LIST-27)
+- The same controls as List settings, with two differences: the name is an editable field at the top ("Name"; List settings renames from its title instead), and the nudge days and time show as a read-only summary ("Weekdays at 10am") with "Change the days or time any time in this list's settings." Sections: Name, How often (the one rhythm control; the rhythm choice went with LIST-30), Time of day ("Any time", "Mornings", "Afternoons", "Evenings", "Nights"; LIST-25), Nudges, People (the count with "Add people" on its right; LIST-27)
 - "Done", the one accent element, and "Add another list"
 
 ## Actions and menus

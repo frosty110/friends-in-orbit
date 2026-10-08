@@ -138,7 +138,7 @@
     <string name="contact_schedule_follows_list">Follows the rhythm of %1$s.</string>
     <string name="contact_schedule_follows_its_list">Follows the rhythm of their list.</string>
     <!-- How often, as it sits mid-sentence above. Every list is described by its interval
-         (LIST-24), so the rhythm's old names (keep in touch, late night, energize) are gone. -->
+         (LIST-30), so the rhythm's old names (keep in touch, late night, energize) are gone. -->
     <string name="contact_rhythm_every_day">every day</string>
     <plurals name="contact_rhythm_every_days">
         <item quantity="one">every %d day</item>

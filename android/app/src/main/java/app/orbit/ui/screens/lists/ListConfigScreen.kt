@@ -91,7 +91,7 @@ import java.time.LocalTime
  * each with Undo, so this screen only edits. The one explicit save is the
  * title's rename (LIST-26), which has its own "Save list name".
  *
- * Sections, top to bottom: How often (every list, LIST-24) → Time of day
+ * Sections, top to bottom: How often (every list, LIST-30) → Time of day
  * (LIST-25) → Nudges → When to nudge → Smart rule (smart lists) → People
  * (with Add people in its header for regular lists, LIST-27) → Make this a
  * regular list (smart lists) → Done.
@@ -578,7 +578,7 @@ private fun ListConfigScreenStaticReadyLightPreview() {
     ListConfigPreviewHost(previewReady())
 }
 
-// LIST-24: a Late night list now shows How often at its real base, "Aim for
+// LIST-30: a Late night list now shows How often at its real base, "Aim for
 // every 3 days", where it used to say it had nothing to set; and Mornings
 // selected under Time of day.
 @PreviewLightDark
@@ -596,7 +596,7 @@ private fun ListConfigScreenStaticLateNightPreview() {
     )
 }
 
-// A smart list has How often too (LIST-24): "Recently added, not called" is
+// A smart list has How often too (LIST-30): "Recently added, not called" is
 // created with Keep in touch.
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "ListConfigScreen, smart list, dark", showBackground = true)
 @Composable

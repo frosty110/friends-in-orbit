@@ -29,7 +29,7 @@ import org.robolectric.annotation.Config
  * its selected state (WCAG 4.1.2) and not "Family, button". Until 2026-10-06
  * they were plain clickables whose only selection cue was drawn: a tint.
  * (This test also covered the rhythm rows, Keep in touch, Late night and
- * Energize, until LIST-24 removed the last of them on 2026-10-07.)
+ * Energize, until LIST-30 removed the last of them on 2026-10-07.)
  * The gallery's a11y audit checks labels and 48dp, not roles, so this test
  * reads the semantics tree directly.
  */

@@ -29,7 +29,7 @@ import app.orbit.domain.smart.SmartListRule
  * slider on the next step reaches 60 days for anyone who wants that rhythm.
  *
  * Every list New list makes runs Keep in touch at the interval the How often
- * step ends on (LIST-24: one control, one calculation), so a template carries
+ * step ends on (LIST-30: one control, one calculation), so a template carries
  * a starting interval, not a rule kind. `CreateListTemplateCatalogTest` pins
  * the order, the intervals, the smart rule and that Mentors is gone.
  *

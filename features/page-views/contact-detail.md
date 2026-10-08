@@ -24,7 +24,7 @@
 - "Call" and "Log a connection"
 - "On these lists": a chip per list, or "Not on any list yet"; "Add to lists"
 - "Stats": "Last call", "Total calls", "Average length", "Longest gap" and "Usually" (the part of the day you talk: "Mornings", "Evenings") with an info tip; a stat without enough history says "Not enough calls yet" (CONTACT-02)
-- "Custom schedule", only for someone on two or more lists: "Comes up every 14 days, like the rest of {list}." ("Follows the rhythm of {list}." when the list's rhythm cannot be read) with "Set a schedule for this person"; once set, List settings' "How often" slider ("Aim for every 14 days", "Aim for every day" at one day) and "Reset to default" (CONTACT-03; no rhythm choice since LIST-24)
+- "Custom schedule", only for someone on two or more lists: "Comes up every 14 days, like the rest of {list}." ("Follows the rhythm of {list}." when the list's rhythm cannot be read) with "Set a schedule for this person"; once set, List settings' "How often" slider ("Aim for every 14 days", "Aim for every day" at one day) and "Reset to default" (CONTACT-03; no rhythm choice since LIST-30)
 - "Notes": a field ("Add a note") with "Add", then every note, newest first, with when it was written (NOTE-01)
 - "Recent calls": each with an icon for its kind, its length (or "Logged" / "Attempted"), and how long ago; "View all calls" in the overflow for the rest
 - The one accent element: "Call" (rules.md Design 6)
