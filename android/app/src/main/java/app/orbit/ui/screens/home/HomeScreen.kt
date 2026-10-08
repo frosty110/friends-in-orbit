@@ -30,6 +30,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -57,6 +59,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -870,8 +873,11 @@ private fun RhythmStrip(
     val spokenLabels = (0..6).map { offset ->
         rhythmDayLabel(index = offset, size = 7, today = today)
     }
-    val totals = rhythm.map { day -> day.calls.sumOf { it.durationSeconds } }
-    val scaleMax = ((totals.maxOrNull() ?: 0).coerceAtLeast(1)) * RHYTHM_HEADROOM
+    // Every bar's height and mark, laid out for the whole strip at once so the
+    // busiest day sets the scale and each day is fitted to its column.
+    val bars = remember(rhythm) {
+        rhythmBars(rhythm.map { day -> day.calls.map { it.durationSeconds } })
+    }
 
     Column(Modifier.fillMaxWidth()) {
         // A flow, not a row: at large text the legend moves under the button
@@ -908,7 +914,7 @@ private fun RhythmStrip(
                     glyph = glyphs.getOrElse(idx) { "" },
                     spokenLabel = spokenLabels.getOrElse(idx) { "" },
                     isToday = idx == rhythm.lastIndex,
-                    scaleMax = scaleMax,
+                    bars = bars[idx],
                     onClick = { onDayClick(idx) },
                     modifier = Modifier.weight(1f),
                 )
@@ -964,7 +970,7 @@ private fun DayColumn(
     glyph: String,
     spokenLabel: String,
     isToday: Boolean,
-    scaleMax: Float,
+    bars: List<RhythmBar>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1019,34 +1025,42 @@ private fun DayColumn(
                         .background(OrbitTheme.colors.line),
                 )
             } else {
-                // Per-bar floor. The mark wants 14dp: 3dp of rim and 1.5dp of
-                // ring top and bottom leave 5dp of person colour, about the
-                // least that still reads as a hue. But a busy day has to stay
-                // inside the 48dp strip, so the floor yields to an even split
-                // of whatever height the gaps leave over, and below the floor
-                // the rim and ring shrink with the bar so the fill never
-                // vanishes (chrome).
-                val n = day.calls.size
-                val budget = RHYTHM_BAR_AREA.value - RHYTHM_BAR_GAP.value * (n - 1)
-                val minBar = (budget / n).coerceIn(4f, RHYTHM_BAR_MIN.value)
-                Column(verticalArrangement = Arrangement.spacedBy(RHYTHM_BAR_GAP)) {
-                    day.calls.forEach { call ->
-                        val frac = (call.durationSeconds / scaleMax).coerceIn(0f, 1f)
-                        val h = (frac * RHYTHM_BAR_AREA.value).coerceAtLeast(minBar).dp
-                        val chrome = (h / RHYTHM_BAR_MIN).coerceAtMost(1f)
-                        Box(
-                            Modifier
-                                .height(h)
-                                .width(RHYTHM_BAR_WIDTH)
-                                .directionMark(
-                                    rim = directionColor(call.direction),
-                                    separator = OrbitTheme.colors.directionSeparator,
-                                    corner = RHYTHM_BAR_CORNER,
-                                    rimWidth = DIRECTION_RIM * chrome,
-                                    separatorWidth = DIRECTION_SEPARATOR * chrome,
-                                )
-                                .background(OrbitTheme.tones.rhythmBarForId(call.contactId)),
-                        )
+                // The heights and marks come from [rhythmBars], already fitted
+                // to this column; each bar is placed at its own edges. Not a
+                // Column of bars: a Column measures each child against what
+                // the ones above it left, so a short call under a long one was
+                // squeezed to its rim and ring, or to nothing, while the mark
+                // was still drawn for the height it asked for.
+                Layout(
+                    content = {
+                        day.calls.forEachIndexed { i, call ->
+                            Box(
+                                Modifier
+                                    .directionMark(
+                                        rim = directionColor(call.direction),
+                                        separator = OrbitTheme.colors.directionSeparator,
+                                        corner = RHYTHM_BAR_CORNER,
+                                        rimWidth = bars[i].rim.dp,
+                                        separatorWidth = bars[i].ring.dp,
+                                    )
+                                    .background(OrbitTheme.tones.rhythmBarForId(call.contactId)),
+                            )
+                        }
+                    },
+                    modifier = Modifier.size(width = RHYTHM_BAR_WIDTH, height = RHYTHM_BAR_AREA),
+                ) { measurables, constraints ->
+                    // Each edge is rounded to a pixel once, so the bars and
+                    // gaps add up to the column exactly; rounding each height
+                    // instead could overrun it by a pixel or two.
+                    val edges = bars.map { bar ->
+                        bar.top.dp.roundToPx() to (bar.top + bar.height).dp.roundToPx()
+                    }
+                    val placeables = measurables.mapIndexed { i, measurable ->
+                        val (top, bottom) = edges[i]
+                        measurable.measure(Constraints.fixed(constraints.maxWidth, (bottom - top).coerceAtLeast(0)))
+                    }
+                    layout(constraints.maxWidth, constraints.maxHeight) {
+                        placeables.forEachIndexed { i, placeable -> placeable.place(0, edges[i].first) }
                     }
                 }
             }
@@ -1129,6 +1143,80 @@ private fun CreateListTile(label: String, onClick: () -> Unit) {
     }
 }
 
+/**
+ * One call's bar on the rhythm strip, in dp: how far down its day's 48dp
+ * column it starts ([top]), how tall it is, and the [rim] and [ring] its
+ * [directionMark] draws.
+ */
+@Immutable
+internal data class RhythmBar(val top: Float, val height: Float, val rim: Float, val ring: Float)
+
+/**
+ * HOME-7: the strip's bars, one list per day and one bar per call in the
+ * day's order, from each call's length in seconds ([days]).
+ *
+ * The scale is the list's busiest day with 25% headroom ([RHYTHM_HEADROOM]),
+ * so its calls would stack to 38.4dp. Each bar is at least the floor
+ * ([RHYTHM_BAR_MIN], 14dp: the 3dp rim and 1.5dp ring top and bottom leave
+ * 5dp of the person's colour), or an even split of the column on a day of
+ * four or more calls, where the floors would not fit. A day whose bars fit
+ * is drawn as they are.
+ *
+ * A day whose bars would not fit is fitted here, not left to the layout.
+ * Until 2026-10-08 the floor was added on top of a long bar's own height and
+ * a Column stacked the bars, giving each only what the ones above it left: on
+ * the busiest day a 5-minute call after a 40-minute one got 10.9dp, 1.9dp of
+ * it colour, and with 30, 3 and 3 minutes the third bar got nothing. Now each
+ * bar keeps a least height (the floor, or on a day of three or more calls the
+ * column split one more way than it has calls, so there is always height left
+ * to tell a long call from a short one), and what is left is shared in
+ * proportion to how much more each bar wanted. The column is exactly full, no
+ * call loses its bar, and a longer call is never drawn shorter than a shorter
+ * one on the same day.
+ *
+ * The mark is scaled from the height drawn, not the height wanted: the full
+ * rim and ring down to [RHYTHM_MARK_LEAST] (11dp, which still leaves 2dp of
+ * colour), then in proportion, so the fill never vanishes. With the headroom,
+ * a day of up to three calls keeps the full mark on every bar; only a busier
+ * day thins it. The gaps take at most half the column, so however many calls
+ * a day has, each keeps some height.
+ */
+internal fun rhythmBars(days: List<List<Int>>): List<List<RhythmBar>> {
+    val busiest = days.maxOfOrNull { day -> day.sumOf { it.toLong() } } ?: 0L
+    val scaleMax = busiest.coerceAtLeast(1L) * RHYTHM_HEADROOM
+    return days.map { day -> rhythmDayBars(day, scaleMax) }
+}
+
+private fun rhythmDayBars(seconds: List<Int>, scaleMax: Float): List<RhythmBar> {
+    val n = seconds.size
+    if (n == 0) return emptyList()
+    val area = RHYTHM_BAR_AREA.value
+    val gap = if (n == 1) 0f else minOf(RHYTHM_BAR_GAP.value, area / 2f / (n - 1))
+    val budget = area - gap * (n - 1)
+    val floor = minOf(RHYTHM_BAR_MIN.value, budget / n)
+    val wanted = seconds.map { s -> maxOf(floor, (s / scaleMax).coerceIn(0f, 1f) * area) }
+    val heights = if (wanted.sum() <= budget) {
+        wanted
+    } else {
+        val least = minOf(floor, budget / (n + 1))
+        val room = budget - least * n
+        val excess = wanted.sum() - least * n
+        wanted.map { w -> least + (w - least) * room / excess }
+    }
+    var top = (area - heights.sum() - gap * (n - 1)).coerceAtLeast(0f)
+    return heights.map { h ->
+        val mark = (h / RHYTHM_MARK_LEAST.value).coerceAtMost(1f)
+        val bar = RhythmBar(
+            top = top,
+            height = h,
+            rim = DIRECTION_RIM.value * mark,
+            ring = DIRECTION_SEPARATOR.value * mark,
+        )
+        top += h + gap
+        bar
+    }
+}
+
 private val RHYTHM_BAR_AREA: Dp = 48.dp
 private val RHYTHM_BAR_WIDTH: Dp = 26.dp
 private const val RHYTHM_HEADROOM: Float = 1.25f
@@ -1145,6 +1233,11 @@ private val NAME_COLUMN_WIDTH: Dp = 118.dp
 private val RHYTHM_BAR_CORNER: Dp = 6.dp
 private val RHYTHM_BAR_GAP: Dp = 3.dp
 private val RHYTHM_BAR_MIN: Dp = 14.dp
+
+// The least bar that still holds the whole mark: the rim and ring top and
+// bottom (9dp) and 2dp of the person's colour. A shorter bar, which only a day
+// of four or more calls draws, scales the rim and ring down with it.
+private val RHYTHM_MARK_LEAST: Dp = (DIRECTION_RIM + DIRECTION_SEPARATOR) * 2 + 2.dp
 
 // ---- Previews ----
 
@@ -1234,6 +1327,65 @@ private fun HomeContentLongNamesPreview() {
                             UiText.res(R.string.home_why_ago, formatAgo(21)), phone = "+1 555 0100",
                         ),
                         rhythm = previewRhythm(0),
+                    ),
+                ),
+            ),
+            onOpenList = {},
+            onOpenSearch = {},
+            onOpenSettings = {},
+            onOpenLists = {},
+            onCreateList = {},
+        )
+    }
+}
+
+// HOME-7: the days that once squeezed a bar. The busiest day is a 40-minute
+// call then a 5-minute one; another day is 30, 3 and 3 minutes; another has
+// five calls. Every call keeps a bar with colour in it, and the long ones
+// stand taller.
+private fun previewBusyRhythm(): List<RhythmDay> = listOf(
+    RhythmDay(
+        listOf(
+            previewCall(21L, 1L, 40, CallDirection.OUTGOING),
+            previewCall(22L, 2L, 5, CallDirection.INCOMING),
+        ),
+    ),
+    RhythmDay(emptyList()),
+    RhythmDay(
+        listOf(
+            previewCall(23L, 3L, 30, CallDirection.INCOMING),
+            previewCall(24L, 1L, 3, CallDirection.OUTGOING),
+            previewCall(25L, 2L, 3, CallDirection.INCOMING),
+        ),
+    ),
+    RhythmDay(listOf(previewCall(26L, 4L, 9, CallDirection.OUTGOING))),
+    RhythmDay(
+        listOf(
+            previewCall(27L, 1L, 4, CallDirection.OUTGOING),
+            previewCall(28L, 2L, 12, CallDirection.INCOMING),
+            previewCall(29L, 3L, 3, CallDirection.OUTGOING),
+            previewCall(30L, 4L, 6, CallDirection.INCOMING),
+            previewCall(31L, 5L, 5, CallDirection.OUTGOING),
+        ),
+    ),
+    RhythmDay(emptyList()),
+    RhythmDay(listOf(previewCall(32L, 5L, 14, CallDirection.INCOMING))),
+)
+
+@PreviewLightDark
+@Composable
+private fun HomeContentBusyDaysPreview() {
+    OrbitTheme {
+        HomeContent(
+            state = HomeUiState.Ready(
+                lists = listOf(
+                    ListTileState(
+                        id = 1L, name = "Family", dueCount = 1, type = ListType.STATIC, memberCount = 5,
+                        nextUp = NextUp(
+                            1L, "Kai", null,
+                            UiText.res(R.string.home_why_ago, formatAgo(3)), phone = "+1 555 0100",
+                        ),
+                        rhythm = previewBusyRhythm(),
                     ),
                 ),
             ),
