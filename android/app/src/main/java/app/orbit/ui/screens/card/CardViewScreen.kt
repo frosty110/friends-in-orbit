@@ -13,7 +13,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -47,7 +46,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -82,7 +80,6 @@ import app.orbit.ui.components.LogConnectionSheet
 import app.orbit.ui.components.OrbitAppBar
 import app.orbit.ui.components.OrbitButton
 import app.orbit.ui.components.OrbitButtonVariant
-import app.orbit.ui.components.OrbitChip
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitInlineNotice
@@ -105,7 +102,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlin.math.abs
 
 // Card View: drag to defer/surface, tap Call to dial.
 // 2026-06-09 card-loop revision: hydrated stats + heat, swipe undo snackbars,
@@ -633,7 +629,11 @@ private fun ReadyCard(
                 onSwipeRight = { onSwipeRight(contactId) },
                 modifier = frameModifier
                     .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x3),
-                ghostOverlay = { offsetFraction -> GhostHints(offsetFraction) }
+                // No ghostOverlay: the "Later" / "Sooner" chips that faded in
+                // as the card was dragged (I-01) went on 2026-10-08 at the
+                // owner's word ("We don't need this badge", on the Sooner chip).
+                // The card moving with the finger, and the labelled buttons,
+                // already say which way it goes (CARD-02).
             ) {
                 // Crossfade keyed on contactId: the outgoing face fades while the
                 // incoming face fades in, so card advancement reads as one quiet
@@ -792,44 +792,6 @@ private fun ReadyCard(
                 frame(Modifier.fillMaxWidth().weight(1f))
                 actions()
             }
-        }
-    }
-}
-
-/**
- * I-01 — offset-fading hint chips. `offsetFraction` runs in [-1f, 1f]:
- *   -1f → full Later commit (left chip at full opacity)
- *    0f → at rest (both chips invisible)
- *   +1f → full Sooner commit (right chip at full opacity)
- */
-@Composable
-private fun BoxScope.GhostHints(offsetFraction: Float) {
-    val absFrac = abs(offsetFraction).coerceAtMost(1f)
-    if (absFrac <= 0.01f) return
-
-    if (offsetFraction > 0f) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = OrbitTheme.spacing.x5)
-                .alpha(absFrac)
-                .clip(OrbitTheme.shapes.full)
-                .background(OrbitTheme.colors.swipeGhostSooner.copy(alpha = absFrac * 0.18f))
-                .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x1)
-        ) {
-            OrbitChip(label = stringResource(R.string.card_sooner), tone = ChipTone.Sage)
-        }
-    } else {
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = OrbitTheme.spacing.x5)
-                .alpha(absFrac)
-                .clip(OrbitTheme.shapes.full)
-                .background(OrbitTheme.colors.swipeGhostDefer.copy(alpha = absFrac * 0.18f))
-                .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x1)
-        ) {
-            OrbitChip(label = stringResource(R.string.card_later), tone = ChipTone.Stone)
         }
     }
 }
