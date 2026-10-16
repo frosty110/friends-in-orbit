@@ -19,12 +19,16 @@ import app.orbit.ui.util.UiText
  * group without reordering it.
  *
  * `whenLabels` says when each person in the sequence comes up ("Up now",
- * "Tomorrow", "Thursday", "In 2 weeks"); `untilLabels` when each paused
- * person's pause ends ("Until 12 Oct", "Until you unpause"). `onYourCardId`
- * is the row marked "On your card" (BROWSE-09): the person the card showed
- * when Browse was opened from it, or, once the sequence's head has changed
- * since (a drag here, a call), the new head, which is who the card shows now.
- * Null when Browse was not opened from a person on the card.
+ * "Tomorrow", "Thursday", "In 2 weeks"), except on the card's person's row,
+ * where it says "On your card" in that place (BROWSE-09; the ViewModel is the
+ * label's one owner, and the screen draws whatever this map holds). Until
+ * 2026-10-08 that was a Stone chip over the name and the row kept its when
+ * word; the chip went with rules.md Design 9. `untilLabels` says when each
+ * paused person's pause ends ("Until 12 Oct", "Until you unpause").
+ * `onYourCardId` is that row, which the screen scrolls into view: the person
+ * the card showed when Browse was opened from it, or, once the sequence's head
+ * has changed since (a drag here, a call), the new head, which is who the card
+ * shows now. Null when Browse was not opened from a person on the card.
  *
  * `searchQuery` is echoed back so
  * the TextField rendering doesn't need a second `collectAsState()` on the VM's
@@ -39,17 +43,15 @@ import app.orbit.ui.util.UiText
  * "Never called" claim would be dishonest without READ_CALL_LOG). Wired to the
  * real permission check via [BrowseViewModel.onCallLogPermissionChanged].
  *
- * `dueIds` / `rowStatus` carry per-row orientation keyed by
- * the UI contact id ("c-<entityId>"):
- *   - `dueIds`: rows that are worth a call now; BrowseRow renders the quiet
- *     accent due dot (features/browse/README.md). For a row in the sequence
- *     that is exactly the rows whose when reads "Up now", so the dot and the
- *     words never disagree (BROWSE-07); a row outside it keeps the older test
- *     (membership `nextDueAt` null or past, not paused or ignored).
- *   - `rowStatus` — paused/ignored rows get a muted treatment + status word.
- * Both live on Ready (not only on [Contact]) because [Contact.equals] compares
- * `id` alone — flags riding the Contact copy would not survive StateFlow
- * deduplication.
+ * `rowStatus` carries each paused or ignored row's status, keyed by the UI
+ * contact id ("c-<entityId>"): it puts the row under the "Paused" or "Ignored"
+ * heading and mutes its name. It lives on Ready (not only on [Contact])
+ * because [Contact.equals] compares `id` alone, so flags riding the Contact
+ * copy would not survive StateFlow deduplication. Until 2026-10-08 it also put
+ * the word "Paused" or "Ignored" beside the name, and `dueIds` beside it
+ * marked who was worth a call now with an accent dot; both were badges
+ * (rules.md Design 9). The headings name the groups, a paused row's second
+ * line says until when, and "Up now" says who is ready.
  *
  * `Empty` = list has zero members.
  * `FilteredEmpty` = the list has members but the active filter chips exclude
@@ -103,20 +105,19 @@ sealed interface BrowseUiState {
         val isMultiSelect: Boolean = false,
         val selectedIds: Set<Long> = emptySet(),
         val isCommitting: Boolean = false,
-        // Per-row orientation, keyed by UI contact id ("c-<id>").
-        val dueIds: Set<String> = emptySet(),
+        // Paused and ignored rows, keyed by UI contact id ("c-<id>"): their group and muted name.
         val rowStatus: Map<String, BrowseRowStatus> = emptyMap(),
         // Sequence positions (BROWSE-07). Key = UI-domain `Contact.id` String (`"c-$entityId"`),
         // value = 1-based place in the WHOLE sequence, so a filtered view still shows true numbers.
         // Only people in the sequence appear; paused, ignored and unplaceable members are absent,
-        // which is how the screen knows a row is not in the sequence. Independent of
-        // dueIds/rowStatus: a row can be in the sequence (position N) AND up now (dot) at once.
+        // which is how the screen knows a row is not in the sequence.
         val queuePositions: Map<String, Int> = emptyMap(),
-        // BROWSE-07: when each person in the sequence comes up, and when a paused person's pause
-        // ends; keyed like the maps above. Text, not times, so the screen formats nothing.
+        // BROWSE-07: when each person in the sequence comes up ("On your card" on the card's
+        // person, BROWSE-09), and when a paused person's pause ends; keyed like the maps above.
+        // Text, not times, so the screen formats nothing.
         val whenLabels: Map<String, UiText> = emptyMap(),
         val untilLabels: Map<String, UiText> = emptyMap(),
-        // BROWSE-09: the row marked "On your card", or null.
+        // BROWSE-09: the card's person's row, scrolled into view, or null.
         val onYourCardId: String? = null,
     ) : BrowseUiState
 
@@ -130,8 +131,9 @@ sealed interface BrowseUiState {
 }
 
 /**
- * Row-level lifecycle status surfaced in Browse. Ignored wins
- * over Paused when both apply (an ignored contact is invisible to surfacing
+ * Row-level lifecycle status surfaced in Browse: which of the last two groups
+ * a row sits in, under its heading, with a muted name. Ignored wins over
+ * Paused when both apply (an ignored contact is invisible to surfacing
  * regardless of its pause window).
  */
 enum class BrowseRowStatus { Paused, Ignored }

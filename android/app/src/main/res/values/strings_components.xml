@@ -143,9 +143,6 @@
 
     <!-- A person row in Browse and Search. %1$s: the person's first name. -->
     <string name="components_browse_row_call">Call %1$s</string>
-    <!-- Screen-reader words for the small dot that marks someone worth a call now. Not "Due":
-         the app says nothing that reads as a deadline (voice.md). -->
-    <string name="components_browse_row_due">Worth a call now</string>
     <string name="components_browse_row_never_called">Never called</string>
     <!-- %1$s: how long ago, for example "3 days ago". -->
     <string name="components_browse_row_last_call">Last call: %1$s</string>

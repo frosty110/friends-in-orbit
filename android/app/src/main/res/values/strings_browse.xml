@@ -49,11 +49,12 @@
     <string name="browse_when_on_day">%1$s</string>
     <!-- %1$s: a span, for example "2 weeks", so "In 2 weeks". -->
     <string name="browse_when_in_span">In %1$s</string>
-    <!-- When a paused person's pause ends, on their row under the word "Paused". %1$s: a short
-         date, for example "12 Oct". -->
+    <!-- When a paused person's pause ends, at the start of their row's second line, under the
+         "Paused" heading. %1$s: a short date, for example "12 Oct". -->
     <string name="browse_row_until">Until %1$s</string>
     <string name="browse_row_until_unpause">Until you unpause</string>
-    <!-- Over the name of the person the card is showing, when Browse is opened from the card. -->
+    <!-- At the start of the second line of the person the card is showing, in place of when they
+         come up, when Browse is opened from the card: "On your card · Last call: 3 days ago". -->
     <string name="browse_row_on_your_card">On your card</string>
     <!-- The drag handle on a row in the order, and its screen-reader actions. %1$s: the person's
          name. Under the privacy curtain the handle says "Reorder" alone. "Move up" and "Move
@@ -79,11 +80,9 @@
     <string name="browse_filters_need_calls_title">These filters need your call history</string>
     <string name="browse_filters_need_calls_body">Orbit can\'t see your calls, so it can\'t tell who you\'ve called. You can turn call log access on in Settings.</string>
 
-    <!-- A person row: screen-reader actions and the word beside a paused or ignored name. -->
+    <!-- A person row: screen-reader actions. -->
     <string name="browse_row_quick_actions">Quick actions</string>
     <string name="browse_row_open_details">Open details</string>
-    <string name="browse_row_paused">Paused</string>
-    <string name="browse_row_ignored">Ignored</string>
 
     <!-- Long-press menu on a person. -->
     <string name="browse_menu_call">Call</string>

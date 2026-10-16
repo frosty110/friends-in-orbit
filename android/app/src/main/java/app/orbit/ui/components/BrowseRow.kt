@@ -5,21 +5,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -31,7 +27,6 @@ import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import app.orbit.R
-import app.orbit.data.ChipTone
 import app.orbit.data.Contact
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
@@ -42,27 +37,33 @@ import app.orbit.ui.util.asString
  *
  * Visual contract (BROWSE-01 + queue-order merge):
  *   - Position-number column (24dp min-width) → Avatar (44dp) → Column(name h3 +
- *     #19 due-dot/status word + meta last-call) → trailing phone icon
+ *     meta line) → trailing phone icon
  *   - Position number renders blank when [queuePosition] is null (GlobalSearch
  *     consumers + Browse's "Other members" section); default preserves the legacy
  *     call site. The queue head ([isHead]) reads in fg, the rest in fgMuted.
  *     It was accent until 2026-10-05; with the due dots that put two kinds of
- *     accent element on Browse (rules.md §Design 5). The due dot is now the
- *     screen's one accent element: it marks who is ready, which is what Browse
- *     is for.
- *   - The position column is independent of the #19 due-dot — a row can show a
- *     queue position AND a due dot at once.
+ *     accent element on Browse (rules.md §Design 5).
  *   - Row min-height = 48dp (tap target floor — rules.md §Design 3)
  *   - Hairline divider via parent (BrowseListScreen draws between rows)
  *
- * 2026-06-09 #19 — orientation additions (all default-valued so the Global
- * Search call site is untouched):
- *   - [due] renders the spec'd quiet due dot next to the name
- *     (features/browse/README.md:23,34 — accent token, dot not badge).
- *   - [statusLabel] ("Paused" / "Ignored") renders a small muted status word
- *     after the name and mutes the name itself.
- *   - [showCallMeta] = false suppresses the last-call line entirely — when
- *     READ_CALL_LOG is denied, "Never called" would be a false claim.
+ * No badges (rules.md Design 9, 2026-10-08, the owner's "We should just omit
+ * badges in general"). Nothing sits beside or over the name; what a row needs
+ * to say is said on its second line:
+ *   - The quiet accent dot after the name (`due`, "Worth a call now" to
+ *     TalkBack, from 2026-06-09 #19) is gone with nothing in its place: on a
+ *     row in Browse's order "Up now" on the second line says it, and someone
+ *     outside the order is not someone the card brings up. That leaves Browse
+ *     with no accent element, which Design 5 allows: the accent is spent on the
+ *     one thing you most want tapped, and the dot was never tappable.
+ *   - The word "Paused" or "Ignored" after the name (`statusLabel`, #19) is
+ *     gone: those rows sit under Browse's "Paused" and "Ignored" headings, and
+ *     a paused row's second line says until when. [muted] keeps the quieter
+ *     name it came with.
+ *   - "On your card" was a Stone chip over the name (`marker`, BROWSE-09,
+ *     2026-10-07); it is [whenLabel] now, below.
+ *
+ * [showCallMeta] = false suppresses the last-call line entirely: when
+ * READ_CALL_LOG is denied, "Never called" would be a false claim.
  *
  * Curtain (PRIV-03 / CORE-08): contact name reads "Contact" when
  * [LocalPrivacyCurtain] `.current` is true.
@@ -87,20 +88,20 @@ import app.orbit.ui.util.asString
  *     one. The cell replaces the 20dp inset and the 24dp number column
  *     rather than adding to them, so the name loses 4dp, not 48, at 200%.
  *   - [whenLabel] opens the second line: "Up now · Last call: 3 days ago"
- *     (BROWSE-07), or "Until 12 Oct" on a paused row; alone when the call
- *     line is hidden.
- *   - [marker] sits over the name as a quiet chip: "On your card" (BROWSE-09).
- *     Stone, not the accent: the due dot stays the screen's one accent.
+ *     (BROWSE-07), "Until 12 Oct" on a paused row, or "On your card · Last
+ *     call: 3 days ago" on the card's person's row (BROWSE-09; Browse's
+ *     ViewModel puts it there in place of the when word); alone when the call
+ *     line is hidden. In the row's merged node, so TalkBack reads it with the
+ *     name.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BrowseRow(
     contact: Contact,
     onTap: (() -> Unit)?,
     onDial: () -> Unit,
     modifier: Modifier = Modifier,
-    due: Boolean = contact.due,
-    statusLabel: String? = null,
+    // A paused or ignored row's quieter name (Browse's last two groups).
+    muted: Boolean = false,
     showCallMeta: Boolean = true,
     queuePosition: Int? = null, // null → render blank 24dp column (GlobalSearch + "Other members" rows)
     isHead: Boolean = false, // queue head (position 1) → fg (not muted) on the position number
@@ -110,7 +111,6 @@ fun BrowseRow(
     // callers are unchanged.
     showDial: Boolean = true,
     whenLabel: String? = null,
-    marker: String? = null,
     leadingCell: Boolean = false,
     dragHandle: Modifier? = null,
     dragHandleLabel: String? = null,
@@ -128,7 +128,6 @@ fun BrowseRow(
     // Shared with Card view's face, so TalkBack hears one phrase for one
     // destination (voice.md glossary, one word for one idea).
     val openDetailsLabel = stringResource(R.string.components_action_open_details)
-    val dueDescription = stringResource(R.string.components_browse_row_due)
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -197,56 +196,18 @@ fun BrowseRow(
         }
         Avatar(name = displayName, size = 44.dp, photoUri = if (curtain) null else contact.photoUri)
         Column(modifier = Modifier.weight(1f)) {
-            if (marker != null) {
-                OrbitChip(
-                    label = marker,
-                    tone = ChipTone.Stone,
-                    modifier = Modifier.padding(bottom = OrbitTheme.spacing.x1)
-                )
-            }
-            // The name line. The dot sits in the name's own row, which measures
-            // it first and lets the name wrap by word in what is left; the
-            // status word flows onto the next line when there is no room
-            // beside them. In one plain Row (until 2026-10-07) a long name at
-            // 200% squeezed the dot to nothing and broke "Paused" letter by
-            // letter (rubric gate G3).
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
-                itemVerticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2)
-                ) {
-                    Text(
-                        text = displayName,
-                        // Paused/ignored rows read muted — visually distinct without
-                        // shouting (#19).
-                        color = if (statusLabel != null) OrbitTheme.colors.fgMuted else OrbitTheme.colors.fg,
-                        style = OrbitTheme.type.h3,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (due && statusLabel == null) {
-                        // Quiet due dot (accent token per features/browse/README.md:34).
-                        // TalkBack hears "Worth a call now", not "Due": the app
-                        // retired deadline words with HOME-6 (voice.md).
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(OrbitTheme.shapes.full)
-                                .background(OrbitTheme.colors.accent)
-                                .semantics { contentDescription = dueDescription }
-                        )
-                    }
-                }
-                if (statusLabel != null) {
-                    Text(
-                        text = statusLabel,
-                        style = OrbitTheme.type.meta,
-                        color = OrbitTheme.colors.fgSubtle
-                    )
-                }
-            }
+            // The name, alone on its line with the column's whole width, so it
+            // wraps by word at 200%. Until 2026-10-08 it shared a FlowRow with
+            // the due dot and the "Paused" word, which kept a long name from
+            // squeezing the dot away or breaking "Paused" letter by letter
+            // (rubric gate G3); both went with rules.md Design 9.
+            Text(
+                text = displayName,
+                // Paused and ignored rows read muted: visually distinct without
+                // shouting (#19).
+                color = if (muted) OrbitTheme.colors.fgMuted else OrbitTheme.colors.fg,
+                style = OrbitTheme.type.h3
+            )
             val lastCallText = if (showCallMeta) {
                 val lastCalled = contact.lastCalledLabel
                 if (lastCalled == null) {
@@ -272,8 +233,8 @@ fun BrowseRow(
         }
         // Trailing phone icon: a separate tap target ≥48dp. Muted, not accent:
         // it repeats on every row, and an accent icon per row spent the
-        // screen's one accent element N times (rules.md Design 5). The row's
-        // accent is reserved for the due dot.
+        // screen's one accent element N times (rules.md Design 5). The row
+        // spends no accent at all since the due dot went (rules.md Design 9).
         if (showDial) {
             Box(
                 modifier = Modifier
@@ -313,7 +274,8 @@ private fun QueuePositionText(position: Int?, isHead: Boolean) {
     )
 }
 
-// 2026-06-09 #19 — preview fixtures for the new due / status / no-meta states.
+// Preview fixtures: Browse's sequence rows, a muted (paused) row, and a row
+// without call times.
 private fun previewContact(name: String, lastCalled: UiText?) = Contact(
     id = "preview-$name",
     name = name,
@@ -337,17 +299,17 @@ private fun previewContact(name: String, lastCalled: UiText?) = Contact(
 private fun BrowseRowPreview() {
     OrbitTheme {
         Column(modifier = Modifier.background(OrbitTheme.colors.bg)) {
-            // Browse's sequence row: the grip and number cell, when, and the
-            // card's mark. The label masks under the curtain as Browse's does.
+            // Browse's sequence row: the grip and number cell, on the card's
+            // person, whose second line opens with "On your card" in place of
+            // the when word (BROWSE-09). The handle masks under the curtain as
+            // Browse's does.
             BrowseRow(
                 contact = previewContact("Mei Tanaka", UiText.plural(R.plurals.time_ago_days, 4, 4)),
                 onTap = null,
                 onDial = {},
-                due = true,
                 queuePosition = 1,
                 isHead = true,
-                whenLabel = stringResource(R.string.browse_when_up_now),
-                marker = stringResource(R.string.browse_row_on_your_card),
+                whenLabel = stringResource(R.string.browse_row_on_your_card),
                 leadingCell = true,
                 dragHandle = Modifier,
                 dragHandleLabel = if (LocalPrivacyCurtain.current) {
@@ -360,15 +322,16 @@ private fun BrowseRowPreview() {
                 contact = previewContact("Avery Quinn", UiText.plural(R.plurals.time_ago_days, 3, 3)),
                 onTap = {},
                 onDial = {},
-                due = true,
-                queuePosition = 1,
-                isHead = true
+                queuePosition = 2,
+                whenLabel = stringResource(R.string.browse_when_up_now)
             )
+            // A paused row: the name muted, until when on its second line.
             BrowseRow(
                 contact = previewContact("Sam Patel", UiText.plural(R.plurals.time_ago_months, 2, 2)),
                 onTap = {},
                 onDial = {},
-                statusLabel = stringResource(R.string.browse_row_paused)
+                muted = true,
+                whenLabel = stringResource(R.string.browse_row_until, "12 Oct")
             )
             BrowseRow(
                 contact = previewContact("Jordan Lee", null),
