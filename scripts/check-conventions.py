@@ -13,7 +13,9 @@ ratchet over pre-existing debt, so the build goes red only if the debt grows.
                                             `color =` outside ui/theme/ (rules.md Design 4)
   G. No badges                    (hard)  : no badge component, Material badge,
                                             badge-named function or launcher badge
-                                            in app code (rules.md Design 9)
+                                            in app code, and no notification
+                                            channel left to Android's default dot
+                                            (rules.md Design 9, NOTIF-17)
   D. Undocumented requirement IDs (ratchet) — count may fall, never rise
 
 Usage:
@@ -88,6 +90,13 @@ BADGE_PATTERNS = [
     (re.compile(r"setShowBadge\(\s*true|\.setNumber\(|setBadgeIconType\(|ShortcutBadger"),
      "launcher badge"),
 ]
+
+# The launcher dot needs no call to come back: Android shows it for any channel
+# that does not say otherwise, so a channel built without `setShowBadge(false)`
+# matches nothing above (NOTIF-17). Counted per file, each channel built needs
+# its own `setShowBadge(false)`.
+CHANNEL_BUILT = re.compile(r"\bNotificationChannel\s*\(|\bNotificationChannelCompat\.Builder\s*\(")
+CHANNEL_NO_DOT = re.compile(r"setShowBadge\(\s*false\s*\)")
 
 # A Kotlin char literal: 'a', '\n', a '\u' escape, and the '"' that must not open a string.
 CHAR_LITERAL = re.compile(r"'(?:\\u[0-9a-fA-F]{4}|\\.|[^'\\\n])'")
@@ -349,6 +358,14 @@ def check_no_badges() -> list[str]:
                         f"rules.md Design 9 allows no badges: {line.strip()[:70]}"
                     )
                     break
+        code = "\n".join(code_lines)
+        built = len(CHANNEL_BUILT.findall(code))
+        if built > len(CHANNEL_NO_DOT.findall(code)):
+            failures.append(
+                f"{rel(path)}: builds {built} notification channel(s) with fewer "
+                f"`setShowBadge(false)` calls, and Android's default puts a dot on "
+                f"Orbit's icon (rules.md Design 9, NOTIF-17)"
+            )
     return failures
 
 

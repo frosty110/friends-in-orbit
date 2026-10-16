@@ -26,8 +26,11 @@ import app.orbit.ui.util.UiText
  *   and the lock-screen [POST_CALL_PUBLIC_TITLE]
  *
  * ### Channel strings (D-16)
- * - [CHANNEL_LABEL_LIST_PROMPTS] / [CHANNEL_DESC_LIST_PROMPTS]: orbit.list_prompt channel
- * - [CHANNEL_LABEL_AFTER_CALL] / [CHANNEL_DESC_AFTER_CALL]: orbit.after_call channel
+ * - [CHANNEL_LABEL_LIST_PROMPTS] / [CHANNEL_DESC_LIST_PROMPTS]: orbit.list_prompt.v2 channel
+ * - [CHANNEL_LABEL_AFTER_CALL] / [CHANNEL_DESC_AFTER_CALL]: orbit.after_call.v2 channel
+ *
+ * The IDs moved to `.v2` on 2026-10-08 so the channels carry no dot on
+ * Orbit's icon (NOTIF-17); the names and descriptions did not change.
  *
  * The nudge schedule editor's words (List settings: "Add time", the summary
  * line, the paused badge) used to live here too; they are List settings copy
@@ -105,10 +108,10 @@ object NotificationCopy {
     // Channel labels + descriptions (D-16)
     // -------------------------------------------------------------------------
 
-    /** Channel label shown in Android system notification settings (orbit.list_prompt). */
+    /** Channel label shown in Android system notification settings (orbit.list_prompt.v2). */
     val CHANNEL_LABEL_LIST_PROMPTS: UiText = UiText.res(R.string.notify_channel_list_nudges)
 
-    /** Channel description shown in Android system notification settings (orbit.list_prompt). */
+    /** Channel description shown in Android system notification settings (orbit.list_prompt.v2). */
     val CHANNEL_DESC_LIST_PROMPTS: UiText = UiText.res(R.string.notify_channel_list_nudges_description)
 
     // -------------------------------------------------------------------------
