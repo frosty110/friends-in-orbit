@@ -20,7 +20,7 @@
 - **Stats**: *Last call · Total calls · Average length · Longest gap · Usually* (with an info tip). A stat without enough history says **Not enough calls yet** in words, never a dash (CONTACT-3).
 - **Add to lists** opens the list picker.
 - **Notes**: an "Add a note" field; each note has a "More" menu (Edit, Delete with Undo) as well as the long-press and swipe; the timestamp switches between "11 days ago" and the date. Note bodies read "Note hidden" under the curtain.
-- **Recent calls**: direction icons, durations and relative times; "Logged" and "Attempted" rows for connections you recorded by hand.
+- **Recent calls**: each call's kind in words, then how long ago: "Outgoing · 12 min" or "Incoming · 12 min" for a phone call, "Logged" and "Attempted" for connections you recorded by hand. Since 2026-10-08 no icon leads a row: a direction icon was the only visible sign of who called whom until the owner chose words in its place (rules.md Design 9, no badges).
 - For someone on two or more lists, a **Custom schedule** section: "Follows the keep in touch rhythm from Inner orbit." with "Set a schedule for this person".
 - States: a hero-shaped placeholder while loading; "This person isn't in Orbit anymore" with Go back; "Couldn't load this person" with Try again (CONTACT-08). A deleted phone contact shows the orphan banner with Re-link and Archive.
 

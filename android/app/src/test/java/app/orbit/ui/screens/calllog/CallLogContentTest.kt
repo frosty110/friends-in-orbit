@@ -6,6 +6,9 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -13,9 +16,12 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.orbit.R
 import app.orbit.ui.components.LocalPrivacyCurtain
+import app.orbit.ui.theme.OrbitSpacing
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatDuration
+import kotlin.math.abs
+import kotlin.test.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -36,7 +42,13 @@ import org.robolectric.annotation.Config
  *    and "Ignored" as the first segment of the second line. Until then the
  *    name carried "(ignored)", a tag on the title (rules.md Design 9). The
  *    row is still greyed, but grey alone would leave colour as the only
- *    signal, so the word stays.
+ *    signal, so the word stays;
+ *  - no glyph names a row's kind (rules.md Design 9, the owner's choice of
+ *    2026-10-08): everyone's log ends the second line with the kind's word
+ *    and the row with the time alone, and one person's log starts each row
+ *    with what happened. A direction icon is decorative (`PhIcon` gives it
+ *    no description), so it has no node to look for; these tests read where
+ *    it sat from the layout instead, and each fails with the icon back.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [33], application = Application::class)
@@ -139,27 +151,100 @@ class CallLogContentTest {
             .assertCountEquals(0)
     }
 
-    private fun ready(isIgnored: Boolean = false, durationMinutes: Int? = null): CallLogUiState = CallLogUiState.Ready(
-        sections = listOf(
-            CallLogDaySection(
-                epochDay = 20_500L,
-                label = UiText.res(R.string.time_day_today),
-                rows = listOf(
-                    CallLogRow(
-                        callEventId = 1L,
-                        contactId = 1L,
-                        name = "Jordan Lee",
-                        phone = "+15550001",
-                        photoUri = null,
-                        listName = "Inner orbit",
-                        durationLabel = durationMinutes?.let { formatDuration(it * 60) },
-                        directionIconName = "phone-outgoing",
-                        timeLabel = "4:30pm",
-                        isIgnored = isIgnored,
-                        kind = CallLogKind.Outgoing,
+    // ─── No glyph for the kind (rules.md Design 9, 2026-10-08) ─────────────
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp")
+    fun everyones_rows_say_their_kind_in_words_and_end_in_the_time_alone() {
+        show(
+            CallLogUiState.Ready(
+                sections = listOf(
+                    section(
+                        row(1L, "Jordan Lee", CallLogKind.Outgoing, durationMinutes = 12, timeLabel = "4:30pm"),
+                        row(2L, "Sam Okafor", CallLogKind.Incoming, durationMinutes = 12, timeLabel = "3:10pm"),
+                        row(3L, "Priya Anand", CallLogKind.Logged, durationMinutes = null, timeLabel = "1:05pm"),
+                        row(4L, "Avery Quinn", CallLogKind.Attempted, durationMinutes = null, timeLabel = "9:40am"),
                     ),
                 ),
             ),
+        )
+        mapOf(
+            "Jordan Lee" to ("from Inner orbit · 12 min · Outgoing" to "4:30pm"),
+            "Sam Okafor" to ("from Inner orbit · 12 min · Incoming" to "3:10pm"),
+            "Priya Anand" to ("from Inner orbit · Logged" to "1:05pm"),
+            "Avery Quinn" to ("from Inner orbit · Attempted" to "9:40am"),
+        ).forEach { (name, expected) ->
+            val (line, time) = expected
+            compose.onNodeWithText(line, useUnmergedTree = true).assertIsDisplayed()
+            val rowBounds = compose.onNode(hasClickAction() and hasText(name)).getBoundsInRoot()
+            val timeBounds = compose.onNodeWithText(time, useUnmergedTree = true).getBoundsInRoot()
+            val more = compose.onNodeWithContentDescription("More actions for $name").getBoundsInRoot()
+            // The time is the only thing in its slot, so the row centres it.
+            // With the 18dp icon back above it, it sat 11dp below the middle.
+            val offCentre = ((timeBounds.top + timeBounds.bottom) - (rowBounds.top + rowBounds.bottom)) / 2
+            assertTrue(abs(offCentre.value) < 1f, "$name's time is alone at the row's end, $offCentre off centre")
+            assertTrue(timeBounds.right <= more.left, "$name's time is still at the row's end, before its menu button")
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp")
+    fun one_persons_rows_start_with_what_happened_where_the_glyph_was() {
+        show(
+            CallLogUiState.Ready(
+                sections = listOf(
+                    section(
+                        row(1L, "Jordan Lee", CallLogKind.Outgoing, durationMinutes = 12, timeLabel = "4:30pm"),
+                        row(2L, "Jordan Lee", CallLogKind.Incoming, durationMinutes = 12, timeLabel = "3:10pm"),
+                        row(3L, "Jordan Lee", CallLogKind.Logged, durationMinutes = null, timeLabel = "1:05pm"),
+                        row(4L, "Jordan Lee", CallLogKind.Attempted, durationMinutes = null, timeLabel = "9:40am"),
+                    ),
+                ),
+                scope = CallLogScope.Person(contactId = 1L, name = "Jordan Lee"),
+            ),
+        )
+        val rowStart = OrbitSpacing().x4
+        listOf("You called", "Jordan called", "You logged a connection", "You tried to reach them").forEach { title ->
+            val rowBounds = compose.onNode(hasClickAction() and hasText(title)).getBoundsInRoot()
+            val titleBounds = compose.onNodeWithText(title, useUnmergedTree = true)
+                .assertIsDisplayed()
+                .getBoundsInRoot()
+            // The row's own start padding, where the day headers start too.
+            // With the 44dp circle back in the face's slot it started 72dp in.
+            val inset = titleBounds.left - rowBounds.left
+            assertTrue(abs((inset - rowStart).value) < 0.5f, "\"$title\" starts the row, $inset in")
+        }
+    }
+
+    private fun section(vararg rows: CallLogRow) = CallLogDaySection(
+        epochDay = 20_500L,
+        label = UiText.res(R.string.time_day_today),
+        rows = rows.toList(),
+    )
+
+    private fun row(
+        id: Long,
+        name: String,
+        kind: CallLogKind,
+        durationMinutes: Int?,
+        timeLabel: String = "4:30pm",
+        isIgnored: Boolean = false,
+    ) = CallLogRow(
+        callEventId = id,
+        contactId = id,
+        name = name,
+        phone = "+1555000$id",
+        photoUri = null,
+        listName = "Inner orbit",
+        durationLabel = durationMinutes?.let { formatDuration(it * 60) },
+        timeLabel = timeLabel,
+        isIgnored = isIgnored,
+        kind = kind,
+    )
+
+    private fun ready(isIgnored: Boolean = false, durationMinutes: Int? = null): CallLogUiState = CallLogUiState.Ready(
+        sections = listOf(
+            section(row(1L, "Jordan Lee", CallLogKind.Outgoing, durationMinutes, isIgnored = isIgnored)),
         ),
     )
 }
