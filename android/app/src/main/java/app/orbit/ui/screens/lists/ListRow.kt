@@ -26,7 +26,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import app.orbit.R
 import app.orbit.data.entity.ListType
-import app.orbit.ui.components.CountBadge
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitMenuAction
@@ -40,19 +39,24 @@ import app.orbit.ui.util.asString
  * Reorderable list-row composable for Lists Manager.
  *
  * Layout:
- *   ⠿  name + ruleSummary?     [N]   +   ...
- *   |                                    |
- *   |                                    +-- overflow ([listRowMenuActions])
+ *   ⠿  name                       +   ...
+ *   |  rhythm or rule · count         |
+ *   |                                 +-- overflow ([listRowMenuActions])
  *   +-- drag handle (own touch region)
  *
- * The second line is the list's rhythm as its interval ("Every 14 days",
- * "Every 3 days" for a Late night list, "Every day"; LIST-30) or, for a smart
- * list, its rule ("Recently added · 30 days"); the ViewModel decides which.
- * That line is what tells a smart list apart, to the eye and to TalkBack
- * alike (LIST-07): the row is one merged node, so TalkBack reads the rule
- * with the name. The "Smart list" chip that also said so went on 2026-10-08
- * (the owner: "We don't need this badge"), and with it the large-text branch
- * that stacked the chip under the name. [onConfigure] is the menu's
+ * The second line ([listRowMeta]) is the list's rhythm as its interval
+ * ("Every 14 days", "Every 3 days" for a Late night list, "Every day";
+ * LIST-30) or, for a smart list, its rule ("Recently added · 30 days"), the
+ * ViewModel deciding which, then how many people are on the list ("Every 14
+ * days · 12 people", "No one yet" at zero). That line is what tells a smart
+ * list apart, to the eye and to TalkBack alike (LIST-07): the row is one
+ * merged node, so TalkBack reads the name and then the line once. The
+ * "Smart list" chip that also said so went on 2026-10-08 (the owner: "We
+ * don't need this badge"), and with it the large-text branch that stacked
+ * the chip under the name. The count was a bare number in an accent pill
+ * after the name until the same day, when the owner said "We should just
+ * omit badges in general" (rules.md Design 9); the pill was also a second
+ * accent beside New list (Design 5). [onConfigure] is the menu's
  * "List settings" and opens List settings, while [onClick] on the row opens
  * the list's deck (LIST-23): two destinations, so the screen wires them to
  * two callbacks.
@@ -116,17 +120,12 @@ fun ListRow(
                 text = shownName,
                 style = OrbitTheme.type.body.copy(color = OrbitTheme.colors.fg),
             )
-            if (tile.ruleSummary != null) {
-                Text(
-                    text = tile.ruleSummary.asString(),
-                    style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
-                    modifier = Modifier.padding(top = OrbitTheme.spacing.x1 / 2),
-                )
-            }
-        }
-        if (tile.memberCount > 0) {
-            Spacer(Modifier.width(OrbitTheme.spacing.x2))
-            CountBadge(count = tile.memberCount)
+            // Always shown: with no rhythm to say, the count is the line.
+            Text(
+                text = listRowMeta(tile.ruleSummary, tile.memberCount).asString(),
+                style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
+                modifier = Modifier.padding(top = OrbitTheme.spacing.x1 / 2),
+            )
         }
         Spacer(Modifier.width(OrbitTheme.spacing.x2))
         // BULK-05 — "Add contacts" entry. Trailing "+" affordance on
@@ -177,6 +176,34 @@ fun ListRow(
                 ),
             )
         }
+    }
+}
+
+/**
+ * The row's second line: what the list does, then who is on it, in words
+ * (rules.md Design 9: a fact the user needs goes on a line the screen
+ * already has, not in a pill).
+ *
+ * | [summary] | Result |
+ * |---|---|
+ * | a rhythm or rule | "Every 14 days · 12 people", "Recently added · 30 days · 1 person", "Every 7 days · No one yet" |
+ * | none (a regular list with no rhythm yet, or a smart rule that does not decode) | "12 people", "No one yet" |
+ * | [ListRowSummary.Unreadable] | "Couldn't read this list's rhythm", alone |
+ *
+ * "No one yet" is what Home's card says of an empty list, so the two screens
+ * agree; the pill said nothing at zero. The count is never joined to the
+ * error, where it would read as part of what could not be read.
+ */
+internal fun listRowMeta(summary: ListRowSummary?, memberCount: Int): UiText {
+    val people = if (memberCount > 0) {
+        UiText.plural(R.plurals.lists_members_count, memberCount, memberCount)
+    } else {
+        UiText.res(R.string.lists_row_members_none)
+    }
+    return when (summary) {
+        null -> people
+        is ListRowSummary.Readable -> UiText.res(R.string.lists_row_meta, summary.text, people)
+        ListRowSummary.Unreadable -> summary.text
     }
 }
 
@@ -235,7 +262,7 @@ private fun ListRowPreviewLightStatic() {
                 name = "Inner orbit",
                 memberCount = 12,
                 type = ListType.STATIC,
-                ruleSummary = UiText.plural(R.plurals.lists_interval_every_days, 7, 7),
+                ruleSummary = ListRowSummary.Readable(UiText.plural(R.plurals.lists_interval_every_days, 7, 7)),
             ),
             isDragging = false,
             onClick = {},
@@ -259,7 +286,7 @@ private fun ListRowPreviewDarkSmart() {
                 name = "Recently added, not called",
                 memberCount = 0,
                 type = ListType.SMART,
-                ruleSummary = UiText.plural(R.plurals.lists_rule_summary_recently_added, 30, 30),
+                ruleSummary = ListRowSummary.Readable(UiText.plural(R.plurals.lists_rule_summary_recently_added, 30, 30)),
                 notificationsEnabled = false,
             ),
             isDragging = false,

@@ -14,7 +14,7 @@
 
 - A **Search** title and a 48dp search pill ("Search people") with one clear control.
 - Before you type: **Find someone**, "Search everyone in your contacts by name or number." The matcher is the one the picker uses (`ContactSearch`: names with accents folded, or phone digits), so a half-remembered number works here too.
-- Results: face, name, the last call ("Last call: 3 days ago", "Never called"), the lists they are on as chips or **Not on any list**, a muted dial (rules.md Design 6), and **Add to lists** ("Add to list" in the render; one word from this round), which opens the list picker.
+- Results: face, name, the last call ("Last call: 3 days ago", "Never called"), the lists they are on in one muted line, **On Inner orbit, Late night** (the Add people picker's line; "On 2 lists" under the privacy curtain), or **Not on any list**, a muted dial (rules.md Design 6), and **Add to lists** ("Add to list" in the render; one word from this round), which opens the list picker. The render still shows the lists as chips: on 2026-10-08 they became that line under rules.md Design 9 (no badges).
 - Honest states (BROWSE-06): a skeleton while contacts load, "Nothing matches" only when the query really has no hits, "Couldn't search right now" with Try again.
 
 Functional and tidy. The one remaining gap is the empty screen before you type.
@@ -30,4 +30,4 @@ Before you type, the screen says "Find someone" and nothing more. That is prime 
 The contact picker matched on name *or* number; search matched name only. Both now use the shared `ContactSearch` matcher, so "search" means the same thing everywhere.
 
 ### `SEARCH-3` · A touch more context per result · **Shipped 2026-10-05 (`f2918f8`)**
-Each row carries the one fact that makes it actionable: the last call, and the lists the person is on (or "Not on any list"), so you can act straight from search without a detour into Contact Detail. One line each; the results stay scannable.
+Each row carries the one fact that makes it actionable: the last call, and the lists the person is on (or "Not on any list"), so you can act straight from search without a detour into Contact Detail. One line each; the results stay scannable. Since 2026-10-08 the lists are said in words ("On Inner orbit, Late night"), the same line the Add people picker uses, rather than as chips (rules.md Design 9).

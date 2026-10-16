@@ -186,7 +186,7 @@ Each dimension lists why it matters for Orbit, what a **4** requires (the **must
 - **Must:** gate G2 passes.
 - **Must:** TalkBack completes every core journey with no unlabelled control and a sensible reading order; the card deck works fully through accessibility actions.
 - Body text reaches WCAG AAA contrast (7:1) in both themes; secondary text at least 4.5:1.
-- Colour is never the only signal (due dots, permission states).
+- Colour is never the only signal (permission states).
 - 200% font scale keeps names whole and layouts usable; Switch Access reaches everything.
 
 **Test:** Accessibility Scanner on every screen; TalkBack and Switch Access recordings; a font-scale matrix.

@@ -33,7 +33,9 @@ import org.junit.Test
 /**
  * Behavioral tests for [GlobalSearchViewModel] — quality push 2026-06-09
  * (#16 ranked matching via [app.orbit.domain.search.ContactSearch], #20
- * membership chips from existing repository observers).
+ * the lists each result is on, from existing repository observers; the
+ * screen says them in one line of words since 2026-10-08, rules.md Design 9,
+ * pinned by GlobalSearchContentTest).
  *
  * Pattern mirrors [BrowseViewModelTest]: pure JVM, fakes from
  * `app.orbit.domain.FakeRepositories`, turbine over the `uiState` StateFlow,
@@ -78,7 +80,7 @@ class GlobalSearchViewModelTest {
     }
 
     // ========================================================================
-    // #20 — membership chips
+    // #20: the lists each result is on
     // ========================================================================
 
     @Test
@@ -107,7 +109,7 @@ class GlobalSearchViewModelTest {
         s.vm.uiState.test(timeout = 2.seconds) {
             val ready = awaitReadyWhere(this) { it.results.size == 2 }
             val byName = ready.results.associateBy { it.contact.name }
-            // Chip order follows the user's list sortOrder (observeActive is ASC).
+            // The lists line follows the user's list sortOrder (observeActive is ASC).
             assertEquals(listOf("In touch", "Late night"), byName.getValue("Maya Ahmed").lists)
             assertEquals(emptyList(), byName.getValue("Maya Brooks").lists)
             cancelAndIgnoreRemainingEvents()
@@ -115,7 +117,7 @@ class GlobalSearchViewModelTest {
     }
 
     @Test
-    fun `archived list memberships are not surfaced as chips`() = runTest {
+    fun `archived list memberships are not named on the lists line`() = runTest {
         val s = makeVm()
         s.contactRepo.seed(listOf(contactFixture(id = 1L, displayName = "Maya")))
         s.listRepo.seed(

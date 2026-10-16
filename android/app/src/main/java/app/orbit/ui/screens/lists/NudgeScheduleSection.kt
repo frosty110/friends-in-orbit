@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,8 +52,14 @@ import java.util.Locale
  *    days and times above as one sentence. They are the whole answer to when
  *    the nudge comes (LIST-25): the list's time of day, a window that could
  *    hold a chosen time back, was retired on 2026-10-08 and folded into these
- *    times, so there is nothing left for the line to explain.
- *  - 1d: "Nudges paused" badge when notificationsEnabled = false (D-04).
+ *    times, so there is nothing left for the line to explain. While Send
+ *    nudges is off ([notificationsEnabled] false) no nudge comes, so the line
+ *    says "Nudges paused" instead of a schedule that is not running; the days
+ *    and times stay above it, kept for when nudges come back on. Until
+ *    2026-10-08 the line kept the schedule and a "Nudges paused" pill sat
+ *    under it; the owner said "We should just omit badges in general"
+ *    (rules.md Design 9), and the line alone would then have promised a nudge
+ *    the switch, in the group above, had turned off.
  *
  * Copy lives in strings_lists.xml (`lists_nudge_*`); it used to be constants
  * on NotificationCopy, some with em dashes.
@@ -139,12 +144,7 @@ internal fun NudgeScheduleSection(
         }
 
         // ── 1c. Schedule summary ─────────────────────────────────────────────
-        ScheduleSummaryLine(schedule = effective)
-
-        // ── 1d. Muted badge ───────────────────────────────────────────────────
-        if (!notificationsEnabled) {
-            MutedBadge()
-        }
+        ScheduleSummaryLine(schedule = effective, notificationsEnabled = notificationsEnabled)
     }
 
     // ── TimePicker dialogs ────────────────────────────────────────────────────
@@ -323,8 +323,17 @@ private fun TimeChipRow(
 }
 
 @Composable
-private fun ScheduleSummaryLine(schedule: NudgeSchedule) {
+private fun ScheduleSummaryLine(schedule: NudgeSchedule, notificationsEnabled: Boolean) {
     when {
+        // First: paused, no day or time below brings a nudge, so the line
+        // says why there is none, in its own off-case style (rules.md Design
+        // 9: the words on a line the screen already has, not a pill).
+        !notificationsEnabled -> {
+            Text(
+                text = stringResource(R.string.lists_nudge_summary_paused),
+                style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
+            )
+        }
         schedule.days.isEmpty() -> {
             Text(
                 text = stringResource(R.string.lists_nudge_summary_no_days),
@@ -386,31 +395,6 @@ internal fun OnboardingNudgeSummary(schedule: NudgeSchedule?) {
         Text(
             text = stringResource(R.string.lists_nudge_onboarding_hint),
             style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
-        )
-    }
-}
-
-@Composable
-private fun MutedBadge() {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .clip(OrbitTheme.shapes.full)
-            .background(OrbitTheme.colors.accentTint)
-            .padding(
-                horizontal = OrbitTheme.spacing.x3,
-                vertical = OrbitTheme.spacing.x1,
-            ),
-    ) {
-        PhIcon(
-            name = "speaker-slash",
-            size = OrbitTheme.spacing.x4,
-            tint = OrbitTheme.colors.fg,
-        )
-        Spacer(Modifier.width(OrbitTheme.spacing.x1))
-        Text(
-            text = stringResource(R.string.lists_nudge_paused_badge),
-            style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fg),
         )
     }
 }
@@ -504,9 +488,9 @@ private fun NudgeScheduleSectionLightPreview() {
     }
 }
 
-@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "NudgeScheduleSection — dark, muted badge, two times", showBackground = true)
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, name = "NudgeScheduleSection: dark, nudges paused, two times", showBackground = true)
 @Composable
-private fun NudgeScheduleSectionDarkMutedPreview() {
+private fun NudgeScheduleSectionDarkPausedPreview() {
     OrbitTheme(darkTheme = true) {
         NudgeScheduleSection(
             schedule = NudgeSchedule(

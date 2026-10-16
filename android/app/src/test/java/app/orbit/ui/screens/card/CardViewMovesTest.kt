@@ -60,7 +60,6 @@ class CardViewMovesTest {
         avgLengthLabel = null,
         pickupRateLabel = "",
         totalCalls = 0,
-        due = true,
         listIds = listOf("1"),
         bestWindowLabel = null,
         heat = FloatArray(24),

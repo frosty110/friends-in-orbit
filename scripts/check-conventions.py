@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Enforce the documentation and code conventions in features/_foundations/rules.md.
 
-Six checks. Five are hard gates that pass today and must keep passing; the
-sixth is a ratchet over pre-existing debt, so the build goes red only if the
-debt grows.
+Seven checks. Six are hard gates that must always pass; the seventh is a
+ratchet over pre-existing debt, so the build goes red only if the debt grows.
 
   A. rules.md citations resolve   (hard)  — `rules.md §Design 3` names a real rule
   B. PII-free layers              (hard)  — no logging in ui/domain/data/nav
@@ -12,6 +11,9 @@ debt grows.
                                             PAGE_VIEWS.md declares, once each, in order
   F. Green text reads positiveText (hard) : `colors.positive` is never passed as a
                                             `color =` outside ui/theme/ (rules.md Design 4)
+  G. No badges                    (hard)  : no badge component, Material badge,
+                                            badge-named function or launcher badge
+                                            in app code (rules.md Design 9)
   D. Undocumented requirement IDs (ratchet) — count may fall, never rise
 
 Usage:
@@ -54,7 +56,9 @@ CITE_NEAR_RULES = re.compile(
 )
 CITE_SECTION = re.compile(r"§\s*(Design|Code)\s+(\d+)", re.IGNORECASE)
 
-RULE_DEF = re.compile(r"^\*\*(Design|Code)\s+(\d+)\s+—", re.MULTILINE)
+# A rule heading is `**Design 9: No badges.**`; older ones put a dash after the
+# number, and both forms define the rule.
+RULE_DEF = re.compile(r"^\*\*(Design|Code)\s+(\d+)(?:\s+\u2014|:)", re.MULTILINE)
 ARCH_DEF = re.compile(r"^\*\*(ARCH-\d+)\s+—", re.MULTILINE)
 
 REQUIREMENT_ID = re.compile(r"\b([A-Z][A-Z0-9]{2,9})-(\d{2})\b")
@@ -67,6 +71,26 @@ MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 # `colors.positive` handed to one outside the theme layer is the smell. (A
 # `positive` background on a badge is fine and is not matched.)
 POSITIVE_AS_TEXT_COLOUR = re.compile(r"\bcolor\s*=\s*(?:OrbitTheme\.)?colors\.positive\b(?!Text)")
+
+# rules.md Design 9: no badges. Nothing tags a row, card, title, avatar or icon
+# with a small marker, so the app keeps no badge component to reach for. Each
+# pattern is one way a badge comes back: the app's own retired components (and
+# `ChipTone`, which only colours them), Material's badge, a composable named for
+# one, and the launcher icon's count. `OrbitFilterChip` is a control, which
+# Design 9 allows, and `\bOrbitChip\b` does not match it. Pattern order decides
+# which description a line gets when it matches more than one.
+BADGE_PATTERNS = [
+    (re.compile(r"\b(?:OrbitChip|ListContextChip|CountBadge|MutedBadge|ChipTone|BadgedBox)\b"),
+     "badge component"),
+    (re.compile(r"\bBadge\s*\("), "Material badge"),
+    # A receiver or type parameters (`fun Modifier.statusBadge(`) still name a badge.
+    (re.compile(r"\bfun\s+(?:<[^>]*>\s*)?(?:[\w.]+\.)?\w*Badge\w*\s*\("), "badge-named function"),
+    (re.compile(r"setShowBadge\(\s*true|\.setNumber\(|setBadgeIconType\(|ShortcutBadger"),
+     "launcher badge"),
+]
+
+# A Kotlin char literal: 'a', '\n', a '\u' escape, and the '"' that must not open a string.
+CHAR_LITERAL = re.compile(r"'(?:\\u[0-9a-fA-F]{4}|\\.|[^'\\\n])'")
 
 
 def kotlin_files() -> list[Path]:
@@ -223,6 +247,111 @@ def check_positive_text_colour() -> list[str]:
     return failures
 
 
+# ── G. No badges ───────────────────────────────────────────────────────────────
+
+def kotlin_code_lines(text: str) -> tuple[list[str], bool]:
+    """Return the file's lines with their comments removed, and whether it scanned cleanly.
+
+    B and F skip a line that starts with a comment marker. G needs more, because
+    the retired components are named in comments that stay true after they go:
+    a trailing note on a code line (Type.kt's `val badge: TextStyle, // ...
+    CountBadge ...`) and a block comment's inner lines are not code either. So
+    this reads the file as Kotlin does: `//` to the end of the line, `/* */`
+    nested, neither inside a string or char literal, and a raw string may span
+    lines. The list keeps one entry per source line, so line numbers hold.
+
+    A file that ends inside a block comment or a raw string returns False: G
+    then fails on that file rather than pass code it could not read (rules.md
+    Code 3). String templates are not parsed; a quote inside `${...}` pairs off
+    on its own line, which is enough for names and calls.
+    """
+    lines: list[str] = []
+    buf: list[str] = []
+    depth = 0       # block-comment nesting
+    raw = False     # inside a """raw string"""
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "\n":
+            lines.append("".join(buf))
+            buf = []
+            i += 1
+        elif depth:
+            if text.startswith("/*", i):
+                depth += 1
+                i += 2
+            elif text.startswith("*/", i):
+                depth -= 1
+                i += 2
+            else:
+                i += 1
+        elif raw:
+            if text.startswith('"""', i):
+                # Quotes before the closing three belong to the string (`""""`).
+                j = i
+                while j < n and text[j] == '"':
+                    j += 1
+                buf.append(text[i:j])
+                raw = False
+                i = j
+            else:
+                buf.append(ch)
+                i += 1
+        elif text.startswith("//", i):
+            end = text.find("\n", i)
+            i = n if end == -1 else end
+        elif text.startswith("/*", i):
+            depth = 1
+            i += 2
+        elif text.startswith('"""', i):
+            buf.append('"""')
+            raw = True
+            i += 3
+        elif ch == '"':
+            # An ordinary string ends at its closing quote or, malformed, at the line's end.
+            j = i + 1
+            while j < n and text[j] not in '"\n':
+                j += 2 if text[j] == "\\" and j + 1 < n and text[j + 1] != "\n" else 1
+            if j < n and text[j] == '"':
+                j += 1
+            buf.append(text[i:j])
+            i = j
+        else:
+            m = CHAR_LITERAL.match(text, i)
+            if m:
+                buf.append(m.group(0))
+                i = m.end()
+            else:
+                buf.append(ch)
+                i += 1
+    lines.append("".join(buf))
+    return lines, depth == 0 and not raw
+
+
+def check_no_badges() -> list[str]:
+    failures = []
+    base = ROOT / "android" / "app" / "src" / "main" / "java" / "app" / "orbit"
+    for path in sorted(base.rglob("*.kt")):
+        raw_lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        code_lines, clean = kotlin_code_lines("\n".join(raw_lines))
+        if not clean:
+            failures.append(
+                f"{rel(path)}: ends inside a block comment or a raw string, so the badge "
+                f"check (rules.md Design 9) cannot tell code from comment here"
+            )
+            continue
+        for lineno, (code, line) in enumerate(zip(code_lines, raw_lines), 1):
+            for pattern, what in BADGE_PATTERNS:
+                m = pattern.search(code)
+                if m:
+                    failures.append(
+                        f"{rel(path)}:{lineno}: {what} `{m.group(0).strip()}`; "
+                        f"rules.md Design 9 allows no badges: {line.strip()[:70]}"
+                    )
+                    break
+    return failures
+
+
 # ── D. Undocumented requirement IDs (ratchet) ──────────────────────────────────
 
 def collect_requirement_ids() -> tuple[set[str], set[str]]:
@@ -305,6 +434,7 @@ def main() -> int:
         ("markdown links resolve", check_doc_links()),
         ("page views follow the schema", check_page_views()),
         ("green text reads positiveText (Design 4)", check_positive_text_colour()),
+        ("no badges (Design 9)", check_no_badges()),
     ]
 
     failed = False

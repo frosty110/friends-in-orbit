@@ -55,6 +55,15 @@
     <string name="lists_rule_summary_rarely_called">Rarely called · bottom %1$d%%</string>
     <string name="lists_rule_summary_never_called">Never called</string>
 
+    <!-- The whole second line under a list's name on Lists: what the list does, then who is
+         on it. %1$s: its rhythm or rule, above ("Every 14 days", "Recently added · 30 days").
+         %2$s: lists_members_count ("12 people") or lists_row_members_none.
+         "Every 14 days · 12 people". Never joined to lists_rhythm_unreadable, which shows alone. -->
+    <string name="lists_row_meta">%1$s · %2$s</string>
+    <!-- The same line's count for a list with nobody on it, and the whole line when the list has
+         no rhythm to say. The words Home's card uses for an empty list. -->
+    <string name="lists_row_members_none">No one yet</string>
+
     <!-- A row in the Lists manager. -->
     <string name="lists_row_reorder">Reorder list</string>
     <!-- %1$s: the list's name. -->
@@ -101,8 +110,10 @@
 
     <!-- Step 1, Start with: one choice among the tiles below. -->
     <string name="lists_new_start_heading">How do you want to start?</string>
-    <!-- The small label over the one template whose people come from a rule: the name
-         TalkBack gives such a list on Home (home_tile_smart_list). -->
+    <!-- The small label over the one template whose people come from a rule. It is a
+         section heading, not a badge: since 2026-10-08 (rules.md Design 9) Home marks
+         no smart list, and this, the Lists row's rule and List settings' "Smart rule"
+         are where the kind is named. -->
     <string name="lists_new_smart_label">Smart list</string>
 
     <!-- Step 2, the list's name. -->
@@ -245,6 +256,7 @@
     <string name="lists_smart_no_params">Nothing to set. This list shows everyone you have never called.</string>
 
     <!-- Members preview. -->
+    <!-- The count over a list's people, and the end of its Lists row's line (lists_row_meta). -->
     <plurals name="lists_members_count">
         <item quantity="one">%1$d person</item>
         <item quantity="other">%1$d people</item>
@@ -292,8 +304,9 @@
     <string name="lists_nudge_times_many">%1$s, and %2$s</string>
     <string name="lists_nudge_summary_no_days">No days selected: nudges off</string>
     <string name="lists_nudge_summary_no_time">No time set: tap “Add time”</string>
-    <!-- Shown while this list's nudges are paused. -->
-    <string name="lists_nudge_paused_badge">Nudges paused</string>
+    <!-- The schedule's line while Send nudges is off, in place of the days and times, which
+         stay set above it for when nudges come back on. -->
+    <string name="lists_nudge_summary_paused">Nudges paused</string>
 
     <!-- Confirms the time picker (a nudge time). -->
     <string name="lists_hours_ok">OK</string>

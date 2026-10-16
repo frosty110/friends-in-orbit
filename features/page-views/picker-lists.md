@@ -3,7 +3,7 @@
 **Route:** `pick/lists?contactId={contactId}`
 **Group:** People
 **Status:** active
-**Last reviewed:** 2026-10-07
+**Last reviewed:** 2026-10-08
 **Spec:** [orbit-lists](../orbit-lists/README.md): BULK-06, PICK-06, PICK-09; PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
@@ -16,7 +16,7 @@
 ## What the user sees
 
 - App bar: Back, and "Add {name} to lists" ("Add to lists" under the curtain)
-- One row per regular list, with a checkbox (a smart list fills itself from its rule, so it is not offered as a row); a list the person is already on says "Already added" and cannot be picked
+- One row per regular list, with a checkbox (a smart list fills itself from its rule, so it is not offered as a row); a list the person is already on says "Already added" on a second line under its name, in muted meta text, and cannot be picked (TalkBack: "Inner orbit, Already added, checkbox, disabled"). Until 2026-10-08 the words sat in a small filled tag beside the checkbox; a tag on a row is a badge (rules.md Design 9)
 - A bar docked under the list once anything is selected: "2 selected", "Clear", and "Add" (TalkBack hears "Add to 2 lists"; the one accent; PICK-06)
 
 ## Actions and menus
@@ -41,5 +41,6 @@
 ## Tests that pin it
 
 - `ListPickerViewModelTest` (membership flags, a member list cannot be added again and undo never removes it, counts from what was written, the save-failed path, create inline, not found, Error and recovery)
+- `ListPickerRowTest` (added 2026-10-08: a member list reads "Inner orbit", then "Already added", as one disabled, unchecked checkbox a tap does not pick; any other list has no second line and can be picked)
 - `PickerCommitSnackbarHostViewModelTest`
 - Gallery previews: `ListPickerReadyPreviewLight`, `ListPickerReadyPreviewDark`, `ListPickerContentPreview`, `CreateListNameDialogPreview`, the Loading, not-found, Error and no-lists previews added this round, with the curtain pass

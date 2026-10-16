@@ -68,7 +68,9 @@ import app.orbit.ui.theme.OrbitTheme
  *   - AppBar: "Add to lists" (or "Add {contactName} to lists" once loaded)
  *   - LazyColumn of [ListPickerUiState.ListRow] (name + [OrbitCheckbox];
  *     the row is the checkbox for TalkBack); a list the person is already on
- *     says "Already added" and is disabled, so it cannot be picked
+ *     says "Already added" on a second line under its name and is disabled,
+ *     so it cannot be picked. Until 2026-10-08 the words sat in a small
+ *     filled tag beside the checkbox, a badge (rules.md Design 9)
  *   - The shared [BatchCounter] docked under the list (PICK-06) with the CTA
  *     "Add" (TalkBack: "Add to N list[s]"); it was a floating card that
  *     covered the last row until 2026-10-06
@@ -77,7 +79,8 @@ import app.orbit.ui.theme.OrbitTheme
  *     (identical to the forward picker)
  *   - No filter chips, no search — list count is small
  *   - Privacy curtain: the person's name leaves the title and list names read
- *     "List" (ListContextChip's word), as everywhere else (2026-10-05)
+ *     "List" (PRIV-03, components_curtain_list), as everywhere else
+ *     (2026-10-05)
  *   - States: while loading, the shared [OrbitListSkeleton] (never a blank
  *     page); a failed read shows Retry (PICK-09); no lists yet offers to make
  *     one; a missing person says so with Go back; every message is the shared
@@ -261,8 +264,15 @@ private fun ReadyContent(
     }
 }
 
+/**
+ * One list in the picker: its name, and for a list the person is already on,
+ * "Already added" as a second line under it (meta, `fgMuted`), then the mark.
+ * Until 2026-10-08 the words sat in a small filled tag between the name and
+ * the mark; a tag on a row is a badge (rules.md Design 9), so they became a
+ * line of their own. `internal` so ListPickerRowTest renders it alone.
+ */
 @Composable
-private fun ListPickerRow(
+internal fun ListPickerRow(
     name: String,
     isSelected: Boolean,
     isMember: Boolean,
@@ -294,28 +304,25 @@ private fun ListPickerRow(
                 vertical = OrbitTheme.spacing.x3,
             ),
     ) {
-        Text(
-            // List names are masked under the privacy curtain (ListContextChip).
-            text = if (curtain) stringResource(R.string.components_curtain_list) else name,
-            style = OrbitTheme.type.body,
-            color = OrbitTheme.colors.fg,
-            modifier = Modifier.weight(1f),
-        )
-        if (isMember) {
-            // "added" read as "just added" as easily as "already in" (vision
-            // PICK-1), and was lowercase.
+        // The name, then the second line, in this order in the tree, so the
+        // merged row reads "Inner orbit, Already added" before its role.
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = stringResource(R.string.picker_lists_already_added),
-                style = OrbitTheme.type.meta,
-                color = OrbitTheme.colors.fgMuted,
-                modifier = Modifier
-                    .clip(OrbitTheme.shapes.sm)
-                    .background(OrbitTheme.colors.bgSubtle)
-                    .padding(
-                        horizontal = OrbitTheme.spacing.x2,
-                        vertical = OrbitTheme.spacing.x1,
-                    ),
+                // List names are masked under the privacy curtain (PRIV-03,
+                // components_curtain_list).
+                text = if (curtain) stringResource(R.string.components_curtain_list) else name,
+                style = OrbitTheme.type.body,
+                color = OrbitTheme.colors.fg,
             )
+            if (isMember) {
+                // "added" read as "just added" as easily as "already in" (vision
+                // PICK-1), and was lowercase.
+                Text(
+                    text = stringResource(R.string.picker_lists_already_added),
+                    style = OrbitTheme.type.meta,
+                    color = OrbitTheme.colors.fgMuted,
+                )
+            }
         }
         OrbitCheckbox(checked = isSelected)
     }

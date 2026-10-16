@@ -616,9 +616,10 @@ private fun DayColumn(
  * One call: its touch target ([modifier], at least 48dp tall) holding the
  * drawn block, which is only as tall as the call (above the floor). Fill is
  * the person, rim is the direction, the strip's own [directionMark]. A block
- * long enough shows the first name, on a surface chip so it reads in every
- * theme: text straight on a person's colour fell to about 4:1 for some hues.
- * Never under the curtain (PRIV-03).
+ * long enough shows the first name, on a small name label (a surface fill) so
+ * it reads in every theme: text straight on a person's colour fell to about
+ * 4:1 for some hues (rules.md Design 4). It names who, so it is not a badge
+ * (rules.md Design 9). Never under the curtain (PRIV-03).
  */
 @Composable
 private fun CallBlock(
@@ -653,7 +654,7 @@ private fun CallBlock(
     }
 }
 
-/** The first name on a chip, placed only when the whole chip fits the block. */
+/** The first name on a small name label, placed only when the whole label fits the block. */
 @Composable
 private fun BlockName(firstName: String) {
     val inset = OrbitTheme.spacing.hair

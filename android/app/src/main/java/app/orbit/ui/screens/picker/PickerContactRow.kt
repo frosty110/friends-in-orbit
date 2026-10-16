@@ -41,6 +41,7 @@ import app.orbit.ui.components.OrbitDropdownMenu
 import app.orbit.ui.components.OrbitIconButton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitMenuTone
+import app.orbit.ui.components.onListsLine
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.asString
 import app.orbit.ui.util.formatRelative
@@ -70,12 +71,18 @@ import java.time.Instant
  *       same words Browse and Search use
  *     - both absent    → "—" in fgSubtle (covered by callCount == 0 branch since
  *                         lastCallAt is null when callCount == 0)
- *   Line 2 (memberships, optional):
+ *     - an ignored row (eye toggle on) → "Ignored · " first, through one
+ *       format resource: "Ignored · Last called 3 days ago · 4 calls",
+ *       "Ignored · Never called" (2026-10-08, rules.md Design 9: until then
+ *       the word sat alone in the checkbox's slot, a tag on the row)
+ *   Line 2 (memberships, optional): the shared [onListsLine], the line
+ *   Search's results say too
  *     - listNames.size in 1..3   → "On A, B"
  *     - listNames.size > 3       → "On A, B, C and N more"
  *     - empty                    → omit line entirely (no "On none")
  *     - under the privacy curtain → "On 2 lists": list names are masked
- *       everywhere (ListContextChip) and showed here until 2026-10-05.
+ *       everywhere (PRIV-03, components_curtain_list) and showed here until
+ *       2026-10-05.
  *
  * The zero-count phrasing ("0 calls") is forbidden everywhere in source.
  *
@@ -95,9 +102,11 @@ import java.time.Instant
  * number?" and "hide this spam caller" are the jobs users arrive at the picker
  * with.
  *
- * Ignored rows (visible only behind the "Show ignored" filter entry) render
- * muted with an "Ignored" tag in place of the checkbox and are NOT selectable —
- * tapping one opens the same menu, so the row never dead-ends. [onIgnore] /
+ * Ignored rows (visible only while the eye toggle shows them, PICK-08) render
+ * muted, say "Ignored" at the start of their call line, leave the checkbox's
+ * slot empty and are NOT selectable: tapping one opens the same menu, so the
+ * row never dead-ends. The word is the signal; the muted name alone would
+ * leave colour as the only one. [onIgnore] /
  * [onUnignore] / [onOpenInPhone] default to null so non-curation callers keep
  * the plain tap-to-select row.
  */
@@ -125,27 +134,22 @@ fun PickerContactRow(
     val hasMenu = ignoreAction != null || onOpenInPhone != null
     var menuExpanded by remember { mutableStateOf(false) }
 
-    val callLine: String = if (contact.callCount == 0 || contact.lastCallAt == null) {
+    val calls: String = if (contact.callCount == 0 || contact.lastCallAt == null) {
         stringResource(R.string.picker_row_never_called)
     } else {
         val rel = formatRelative(contact.lastCallAt).asString()
         pluralStringResource(R.plurals.picker_row_last_called, contact.callCount, rel, contact.callCount)
     }
-
-    val membershipLine: String? = when {
-        contact.listNames.isEmpty() -> null
-        curtain -> pluralStringResource(
-            R.plurals.picker_row_on_lists_count,
-            contact.listNames.size,
-            contact.listNames.size,
-        )
-        contact.listNames.size <= 3 -> stringResource(R.string.picker_row_on_lists, contact.listNames.joinToString(", "))
-        else -> {
-            val head = contact.listNames.take(3).joinToString(", ")
-            val rest = contact.listNames.size - 3
-            pluralStringResource(R.plurals.picker_row_on_lists_more, rest, head, rest)
-        }
+    // The ignored state is said in words on a line the row already has
+    // (rules.md Design 9), never as a tag beside the name or the mark.
+    val callLine: String = if (contact.isIgnored) {
+        stringResource(R.string.picker_row_ignored_meta, calls)
+    } else {
+        calls
     }
+
+    // One definition with Search's results; it reads the curtain itself.
+    val membershipLine: String? = onListsLine(contact.listNames)
 
     val rowBackground = if (isSelected) OrbitTheme.colors.accentTint else Color.Transparent
     // Ignored rows read as parked, not gone — muted name, no checkbox.
@@ -213,13 +217,9 @@ fun PickerContactRow(
                 }
             }
 
-            if (contact.isIgnored) {
-                Text(
-                    text = stringResource(R.string.picker_row_ignored),
-                    style = OrbitTheme.type.meta,
-                    color = OrbitTheme.colors.fgSubtle,
-                )
-            } else {
+            // An ignored row cannot be selected, so it carries no mark; its
+            // call line says "Ignored" instead (PICK-08).
+            if (!contact.isIgnored) {
                 OrbitCheckbox(checked = isSelected)
             }
 

@@ -1002,7 +1002,11 @@ class BrowseViewModelTest {
     }
 
     @Test
-    fun `due paused and ignored orientation surfaces on Ready`() = runTest {
+    fun `paused and ignored people carry their group, and an active one carries none`() = runTest {
+        // rules.md Design 9 (2026-10-08): the status only places a row under
+        // the "Paused" or "Ignored" heading and mutes its name; no word beside
+        // the name and no due dot ride on it any more (the `dueIds` set this
+        // test asserted is gone). A paused row still says until when.
         // TestClock default now — makeVm constructs TestClock() with this instant.
         val now = Instant.parse("2026-01-01T12:00:00Z")
         val (vm, contactRepo, listRepo) = makeVm()
@@ -1016,8 +1020,8 @@ class BrowseViewModelTest {
         )
         listRepo.seedMemberships(
             listOf(
-                // Past nextDueAt → due; future → not due. Paused/ignored rows
-                // carry a past nextDueAt too but must NOT read as due.
+                // Past and future stored times alike: a stored time no longer
+                // marks anyone. Paused and ignored rows carry a past one too.
                 membershipFixture(
                     contactId = 1L,
                     listId = 1L,
@@ -1042,10 +1046,12 @@ class BrowseViewModelTest {
         )
         vm.uiState.test(timeout = 2.seconds) {
             val ready = awaitReadyWhere(this) { it.contacts.size == 4 }
-            assertEquals(setOf("c-1"), ready.dueIds)
-            assertEquals(BrowseRowStatus.Paused, ready.rowStatus["c-3"])
-            assertEquals(BrowseRowStatus.Ignored, ready.rowStatus["c-4"])
-            assertNull(ready.rowStatus["c-1"], "active row carries no status word")
+            assertEquals(
+                mapOf("c-3" to BrowseRowStatus.Paused, "c-4" to BrowseRowStatus.Ignored),
+                ready.rowStatus,
+                "only the paused and the ignored carry a status"
+            )
+            assertEquals(setOf("c-3"), ready.untilLabels.keys, "the paused row says until when")
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -1317,8 +1323,8 @@ class BrowseViewModelTest {
                 ready.untilLabels["c-8"]
             )
             assertEquals(UiText.res(R.string.browse_row_until_unpause), ready.untilLabels["c-7"])
-            // The dot and "Up now" are one fact.
-            assertEquals(setOf("c-1", "c-2"), ready.dueIds)
+            // Who is ready is said in words ("Up now" above), with no dot
+            // beside it since 2026-10-08 (rules.md Design 9).
             assertEquals(BrowseRowStatus.Paused, ready.rowStatus["c-8"])
             assertEquals(BrowseRowStatus.Ignored, ready.rowStatus["c-10"])
             assertNull(ready.onYourCardId, "not opened from the card")
@@ -1412,33 +1418,62 @@ class BrowseViewModelTest {
         }
     }
 
+    // BROWSE-09: "On your card" opens the card's person's second line in place
+    // of their when word, from the ViewModel, its one owner. It was a chip
+    // over the name, beside a row that kept its when word, until 2026-10-08
+    // (rules.md Design 9).
+    private val onYourCard = UiText.res(R.string.browse_row_on_your_card)
+
     @Test
-    fun `opened from the card, its person is marked, and the mark follows the head after a drop`() = runTest {
+    fun `opened from the card, its person's second line opens with On your card, and the words follow the head after a drop`() = runTest {
         val s = sequenceVm(focus = "1")
         s.seedThree()
 
         s.vm.uiState.test(timeout = 2.seconds) {
-            val opened = awaitReadyWhere(this) { it.contacts.size == 3 }
+            val opened = awaitReadyWhere(this) { it.contacts.size == 3 && it.queuePositions.size == 3 }
             assertEquals("c-1", opened.contacts.first().id, "the card's person is first")
             assertEquals("c-1", opened.onYourCardId)
+            assertEquals(onYourCard, opened.whenLabels["c-1"], "in place of the head's \"Up now\"")
+            assertEquals(UiText.res(R.string.browse_when_up_now), opened.whenLabels["c-2"])
+            assertEquals(UiText.res(R.string.browse_when_tomorrow), opened.whenLabels["c-3"])
+            assertEquals(1, opened.whenLabels.values.count { it == onYourCard }, "one row says it")
 
             s.vm.onReorder(3L, null, "Cy Twombly")
             val moved = awaitReadyWhere(this) { it.contacts.first().id == "c-3" }
             assertEquals("c-3", moved.onYourCardId, "the card shows the new head now")
+            assertEquals(onYourCard, moved.whenLabels["c-3"], "the words move to the new head")
+            assertEquals(UiText.res(R.string.browse_when_up_now), moved.whenLabels["c-1"], "the old head says when again")
+            assertEquals(1, moved.whenLabels.values.count { it == onYourCard })
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `a card person who is not first is marked where they are`() = runTest {
+    fun `a card person who is not first says On your card where they are, and the first row says when`() = runTest {
         // The deck moved between the card's read and Browse's (a call landed).
         val s = sequenceVm(focus = "2")
         s.seedThree()
 
         s.vm.uiState.test(timeout = 2.seconds) {
-            val ready = awaitReadyWhere(this) { it.contacts.size == 3 }
+            val ready = awaitReadyWhere(this) { it.contacts.size == 3 && it.queuePositions.size == 3 }
             assertEquals("c-1", ready.contacts.first().id)
             assertEquals("c-2", ready.onYourCardId)
+            assertEquals(onYourCard, ready.whenLabels["c-2"])
+            assertEquals(UiText.res(R.string.browse_when_up_now), ready.whenLabels["c-1"])
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `opened any other way, no row says On your card`() = runTest {
+        val s = sequenceVm()
+        s.seedThree()
+
+        s.vm.uiState.test(timeout = 2.seconds) {
+            val ready = awaitReadyWhere(this) { it.contacts.size == 3 && it.queuePositions.size == 3 }
+            assertNull(ready.onYourCardId)
+            assertEquals(UiText.res(R.string.browse_when_up_now), ready.whenLabels["c-1"])
+            assertFalse(onYourCard in ready.whenLabels.values)
             cancelAndIgnoreRemainingEvents()
         }
     }
