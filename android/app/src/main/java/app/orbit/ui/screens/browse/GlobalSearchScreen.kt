@@ -576,7 +576,6 @@ private fun previewHit(id: Long, name: String, lastCalled: UiText?, lists: List<
         avgLengthLabel = null,
         pickupRateLabel = "",
         totalCalls = 0,
-        due = false,
         listIds = emptyList(),
         bestWindowLabel = null,
         heat = FloatArray(24) { 0f },

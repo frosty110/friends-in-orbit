@@ -53,7 +53,6 @@ class CardViewScreenTest {
         avgLengthLabel = formatDuration(14 * 60),
         pickupRateLabel = "",
         totalCalls = 12,
-        due = true,
         listIds = listOf("1"),
         bestWindowLabel = null,
         heat = FloatArray(24),

@@ -627,9 +627,10 @@ private fun ReadyCard(
                 onSwipeRight = { onSwipeRight(contactId) },
                 modifier = frameModifier
                     .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x3),
-                // No ghostOverlay: the "Later" / "Sooner" chips that faded in
-                // as the card was dragged (I-01) went on 2026-10-08 at the
-                // owner's word ("We don't need this badge", on the Sooner chip).
+                // Nothing rides along with a drag: the "Later" / "Sooner"
+                // chips that faded in as the card was dragged (I-01) went on
+                // 2026-10-08 at the owner's word ("We don't need this badge",
+                // on the Sooner chip; rules.md Design 9).
                 // The card moving with the finger, and the labelled buttons,
                 // already say which way it goes (CARD-02).
             ) {
@@ -856,8 +857,8 @@ internal fun ContactCardFace(
     // (rubric gate G3, found by rendering at w360dp). Vertical scroll is
     // cross-axis to CardSwipeFrame's horizontal drag, so swiping is unaffected.
     // PRIV-03: the face renders contact.name, so it masks it like every other
-    // surface does; the app bar above already reads "Contact" under the curtain,
-    // and a real name (or real initials) on the card below it was the leak.
+    // surface does; the app bar above already masks the list as "List" under the
+    // curtain, and a real name (or real initials) on the card below it was the leak.
     val curtain = LocalPrivacyCurtain.current
     val shownName = if (curtain) stringResource(R.string.components_curtain_contact) else contact.name
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -1141,7 +1142,6 @@ private val previewContact: Contact = Contact(
     avgLengthLabel = formatDuration(14 * 60),
     pickupRateLabel = "",
     totalCalls = 12,
-    due = true,
     listIds = listOf("inner-orbit"),
     bestWindowLabel = UiText.res(R.string.time_daypart_evenings),
     heat = FloatArray(24) { h -> if (h in 18..21) 1f - (21 - h) * 0.2f else 0f },

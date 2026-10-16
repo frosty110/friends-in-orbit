@@ -23,7 +23,7 @@ import java.time.ZoneId
  * overlays that pre-date this helper.
  *
  * `bestWindowLabel` and `heat` are overlaid via [withCallPatterns] (Card View).
- * Fields that remain placeholders (`history`, `notes`, `patternNote`, `due`,
+ * Fields that remain placeholders (`history`, `notes`, `patternNote`,
  * `listIds`) are filled either by the screen's other state branches (e.g.
  * ContactDetail composes `recentCalls` and `notes` separately) or deferred
  * until a consumer needs the full hydrated shape.
@@ -36,7 +36,6 @@ fun ContactEntity.toUiContact(): Contact = Contact(
     avgLengthLabel = null,
     pickupRateLabel = "",
     totalCalls = 0,
-    due = false,
     listIds = emptyList(),
     bestWindowLabel = null,
     heat = FloatArray(24) { 0f },

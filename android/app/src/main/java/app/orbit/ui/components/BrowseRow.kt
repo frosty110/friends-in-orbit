@@ -284,7 +284,6 @@ private fun previewContact(name: String, lastCalled: UiText?) = Contact(
     avgLengthLabel = null,
     pickupRateLabel = "",
     totalCalls = 0,
-    due = false,
     listIds = emptyList(),
     bestWindowLabel = null,
     heat = FloatArray(24) { 0f },

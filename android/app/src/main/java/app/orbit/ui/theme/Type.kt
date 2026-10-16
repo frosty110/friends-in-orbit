@@ -37,8 +37,8 @@ data class OrbitTypography(
     val meta: TextStyle,        // --fs-meta 14sp — timestamps
     val listTile: TextStyle,    // --fs-list-tile 17sp Medium — Home list-tile primary (MT-01)
     val statValue: TextStyle,   // --fs-stat-value 14sp SemiBold — Card View stat rows (MT-02)
-    val micro: TextStyle,       // --fs-micro 12sp — badges (legacy alias; CountBadge uses .badge)
-    val badge: TextStyle,       // 13sp Medium — CountBadge count text (THEME-02b promotion)
+    val micro: TextStyle,       // --fs-micro 12sp: small print
+    val label: TextStyle,       // --fs-label 13sp Medium, tabular: Material's labelMedium (THEME-02b; was `badge` until CountBadge went, 2026-10-08, rules.md Design 9)
     val eyebrow: TextStyle,        // micro + caps + tracking — section labels
     val timelineAxis: TextStyle,   // L2: 12sp Normal — HeatStrip hour axis labels (a11y floor)
     val skipAffordance: TextStyle, // L2: 14sp Normal: Card View's quiet "View details" link (named for the Skip link it used to dress)
@@ -105,7 +105,7 @@ internal val OrbitType = OrbitTypography(
         lineHeight = 1.3.em,
         letterSpacing = 0.01.em,
     ),
-    badge = TextStyle(
+    label = TextStyle(
         fontFamily = OrbitFont,
         fontSize = 13.sp,
         fontWeight = FontWeight.Medium,

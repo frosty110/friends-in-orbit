@@ -6,8 +6,8 @@ object Routes {
     const val Card = "card/{listId}"
 
     // BROWSE-09: `focus` is an optional query arg, the id of the person on the
-    // card when its menu's "Browse people" opened Browse; Browse marks that row
-    // "On your card" and scrolls to it. "Browse this list" (All quiet, nobody
+    // card when its menu's "Browse people" opened Browse; that row's second line
+    // opens with "On your card", and Browse scrolls to it. "Browse this list" (All quiet, nobody
     // on the card) leaves it out, so `browse/3` still matches. Build it with
     // [browse].
     const val Browse = "browse/{listId}?focus={focus}"

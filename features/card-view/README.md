@@ -67,7 +67,7 @@ As a user, I see one person at a time with just enough context to decide whether
 
 Each ticked box says how it was verified: *render* (the preview gallery), *test* (a JVM test that fails without it), or *reasoned* (read in the code, not run). Unticked boxes need a device.
 
-- [x] The card moves with the finger from touch slop, and nothing else appears while it is dragged (reasoned: `CardSwipeFrame` with no `ghostOverlay`). Until 2026-10-08 "Later" and "Sooner" chips (`GhostHints`, I-01) faded in from the first few dp of travel; they went at the owner's word ("We don't need this badge", on the Sooner chip), since the moving card and the labelled buttons already say which way it goes.
+- [x] The card moves with the finger from touch slop, and nothing else appears while it is dragged (reasoned: `CardSwipeFrame` has no overlay slot since 2026-10-08, rules.md Design 9). Until 2026-10-08 "Later" and "Sooner" chips (`GhostHints`, I-01) faded in from the first few dp of travel; they went at the owner's word ("We don't need this badge", on the Sooner chip), since the moving card and the labelled buttons already say which way it goes.
 - [ ] Commit threshold forgiving enough for one-handed use on a 6.5" phone (not verified: needs a device).
 - [x] Tilt max about 8 degrees; commit and snap-back on `springCardCommit`; no bouncy overshoot > 5% (reasoned: `Motion.kt`, `CardSwipeFrame`).
 - [x] Haptic fires at commit, not at threshold entry (reasoned: `CardSwipeFrame` performs it on `snapshotFlow { settledValue }`).

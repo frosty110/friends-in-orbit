@@ -1335,7 +1335,6 @@ internal val previewContact: Contact = Contact(
     avgLengthLabel = formatDuration(14 * 60),
     pickupRateLabel = "82%",
     totalCalls = 12,
-    due = false,
     listIds = listOf("inner-orbit"),
     bestWindowLabel = UiText.res(R.string.time_daypart_evenings),
     heat = FloatArray(24) { 0f },

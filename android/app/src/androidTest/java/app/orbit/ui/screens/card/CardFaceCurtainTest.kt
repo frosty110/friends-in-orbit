@@ -34,7 +34,6 @@ class CardFaceCurtainTest {
         avgLengthLabel = formatDuration(14 * 60),
         pickupRateLabel = "",
         totalCalls = 12,
-        due = true,
         listIds = listOf("1"),
         bestWindowLabel = UiText.res(R.string.time_daypart_evenings),
         heat = FloatArray(24),

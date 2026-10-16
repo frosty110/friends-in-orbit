@@ -34,8 +34,7 @@ import kotlinx.serialization.json.Json
  *
  * H6 fix — uses [ListRepository.updateNextDueAt] so a "sooner" (negative skip)
  * never bumps `skipCount`. The previous reuse of `incrementSkipCount` polluted
- * downstream consumers (badges, dampening, analytics) that read `skipCount`
- * semantically.
+ * what reads `skipCount` semantically (the rule engines' skip penalty).
  */
 class SurfaceSoonerUseCase @Inject constructor(
     private val txRunner: TransactionRunner,

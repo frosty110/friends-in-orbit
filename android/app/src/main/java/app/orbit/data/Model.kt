@@ -14,9 +14,6 @@ import app.orbit.ui.util.UiText
 // RuleTemplateEntity rows and lists are ListEntity rows.
 
 @Immutable
-enum class ChipTone { Terracotta, Sage, Amber, Brick, Stone }
-
-@Immutable
 enum class CallDirection { Outgoing, Incoming }
 
 @Immutable
@@ -41,7 +38,6 @@ data class Contact(
     val avgLengthLabel: UiText?, // "14 min"; null when no call was measured
     val pickupRateLabel: String, // "82%"
     val totalCalls: Int,
-    val due: Boolean,
     val listIds: List<String>,
     val bestWindowLabel: UiText?, // "Evenings"; null until there is enough history
     val heat: FloatArray, // 24 hourly pickup rates 0..1
