@@ -117,19 +117,12 @@
         <item quantity="one">Last called %1$s · %2$d call</item>
         <item quantity="other">Last called %1$s · %2$d calls</item>
     </plurals>
-    <!-- The lists this person is on. %1$s: up to three list names, joined by commas. -->
-    <string name="picker_row_on_lists">On %1$s</string>
-    <!-- %1$s: three list names, %2$d: how many more. -->
-    <plurals name="picker_row_on_lists_more">
-        <item quantity="one">On %1$s and %2$d more</item>
-        <item quantity="other">On %1$s and %2$d more</item>
-    </plurals>
-    <!-- Under the privacy curtain, which hides list names. %1$d: how many lists. -->
-    <plurals name="picker_row_on_lists_count">
-        <item quantity="one">On %1$d list</item>
-        <item quantity="other">On %1$d lists</item>
-    </plurals>
-    <string name="picker_row_ignored">Ignored</string>
+    <!-- The lists this person is on ("On Inner orbit, Late night") are the shared
+         components_on_lists line, the words Search's results use too. -->
+    <!-- With the eye toggle on, an ignored person's call line says so first: "Ignored ·
+         Last called 3 days ago · 4 calls", "Ignored · Never called". %1$s: the call line
+         above (picker_row_last_called or picker_row_never_called). -->
+    <string name="picker_row_ignored_meta">Ignored · %1$s</string>
     <!-- TalkBack's name for the long-press on a row: the glossary's one word for that
          gesture on Home, Browse, Call history and here (voice.md). -->
     <string name="picker_row_more_actions">Quick actions</string>
@@ -183,7 +176,7 @@
     <string name="picker_lists_empty_title">No lists yet</string>
     <string name="picker_lists_empty_body">Make one here and add this person in one more tap.</string>
     <string name="picker_lists_new_list">New list</string>
-    <!-- On a list the person is already on; the row cannot be picked. -->
+    <!-- Under the name of a list the person is already on; the row cannot be picked. -->
     <string name="picker_lists_already_added">Already added</string>
     <plurals name="picker_lists_commit">
         <item quantity="one">Add to %1$d list</item>

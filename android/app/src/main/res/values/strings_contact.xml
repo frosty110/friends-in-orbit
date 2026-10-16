@@ -46,6 +46,12 @@
     <!-- Section headings. -->
     <string name="contact_section_lists">On these lists</string>
     <string name="contact_not_on_any_list">Not on any list yet</string>
+    <!-- Under "On these lists" while the privacy curtain hides list names; uncovered,
+         the line is the lists' own names, joined by commas. %1$d: how many lists. -->
+    <plurals name="contact_lists_count">
+        <item quantity="one">%1$d list</item>
+        <item quantity="other">%1$d lists</item>
+    </plurals>
     <string name="contact_section_stats">Stats</string>
     <string name="contact_section_recent_calls">Recent calls</string>
     <string name="contact_no_calls">No calls yet.</string>

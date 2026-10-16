@@ -64,7 +64,7 @@ import kotlin.math.abs
  *     rather than leaving a hole where the card was.
  *
  * Shared invariants carried over from SwipeableCard: `state.offset` is read
- * only in `graphicsLayer` / the ghost-overlay run-block (never composition),
+ * only in `graphicsLayer` (never composition),
  * anchors register via `onSizeChanged`, haptic fires exactly once per commit
  * off `snapshotFlow { settledValue }`, and the a11y custom actions mirror the
  * two gestures.
@@ -105,7 +105,6 @@ internal fun CardSwipeFrame(
     onSwipeLeft: () -> Unit,
     onSwipeRight: () -> Unit,
     modifier: Modifier = Modifier,
-    ghostOverlay: @Composable BoxScope.(offsetFraction: Float) -> Unit = {},
     content: @Composable BoxScope.() -> Unit,
 ) {
     val density = LocalDensity.current
@@ -217,17 +216,6 @@ internal fun CardSwipeFrame(
                 .anchoredDraggable(state, Orientation.Horizontal),
             content = content,
         )
-        // Ghost-hint overlay slot — sits OUTSIDE the rotated/translated card
-        // so chips stay anchored to the screen edges. Non-composition offset
-        // read (primitive Float local), same as SwipeableCard.
-        val offsetFraction = run {
-            val raw = state.offset
-            val safeRaw = if (raw.isNaN()) 0f else raw
-            val anchorPx = state.anchors.positionOf(CardAnchor.Right)
-            val divisor = if (anchorPx.isFinite() && anchorPx > 0f) anchorPx else 1f
-            (safeRaw / divisor).coerceIn(-1f, 1f)
-        }
-        ghostOverlay(offsetFraction)
     }
 }
 

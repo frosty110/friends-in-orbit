@@ -11,6 +11,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -39,7 +40,9 @@ import org.robolectric.annotation.Config
  * what each one asks for, none of it on paused or ignored rows or while
  * selecting, a drag by the handle and a failed drop put back, a newer
  * drop's snackbar replacing the one on screen with an Undo bound to its own
- * drop (MOVE-07), and BROWSE-09's mark, scrolled into view.
+ * drop (MOVE-07), and BROWSE-09's "On your card", scrolled into view. Since
+ * 2026-10-08 (rules.md Design 9) also what is no longer there: no word beside
+ * a paused or ignored name, no due dot, and no "On your card" chip.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [33], application = Application::class, qualifiers = "w411dp-h891dp")
@@ -55,7 +58,6 @@ class BrowseSequenceContentTest {
         avgLengthLabel = null,
         pickupRateLabel = "",
         totalCalls = 0,
-        due = false,
         listIds = emptyList(),
         bestWindowLabel = null,
         heat = FloatArray(24) { 0f },
@@ -75,7 +77,6 @@ class BrowseSequenceContentTest {
         searchQuery = "",
         activeFilters = emptySet(),
         callLogPermissionDenied = false,
-        dueIds = setOf("c-1"),
         rowStatus = mapOf("c-4" to BrowseRowStatus.Paused, "c-5" to BrowseRowStatus.Ignored),
         queuePositions = mapOf("c-1" to 1, "c-2" to 2, "c-3" to 3),
         whenLabels = mapOf(
@@ -83,8 +84,7 @@ class BrowseSequenceContentTest {
             "c-2" to UiText.res(R.string.browse_when_tomorrow),
             "c-3" to UiText.res(R.string.browse_when_in_span, formatSpan(14))
         ),
-        untilLabels = mapOf("c-4" to UiText.res(R.string.browse_row_until_unpause)),
-        onYourCardId = "c-1"
+        untilLabels = mapOf("c-4" to UiText.res(R.string.browse_row_until_unpause))
     )
 
     private val reorders = mutableListOf<Triple<Long, Long?, String>>()
@@ -133,10 +133,17 @@ class BrowseSequenceContentTest {
             "Drag to change who comes up next. A call, Later or Sooner moves people again."
         )
             .assertIsDisplayed()
-        // The headings; "Paused" and "Ignored" are also the rows' own words.
+        // The headings, and only the headings: since 2026-10-08 no word sits
+        // beside a paused or ignored name (rules.md Design 9). The heading
+        // says which group a row is in, and a paused row's second line says
+        // until when.
         compose.onNode(hasText("Paused") and isHeading()).assertIsDisplayed()
+        compose.onAllNodesWithText("Paused", useUnmergedTree = true).assertCountEquals(1)
         compose.onNodeWithText("Until you unpause · Never called").assertIsDisplayed()
         compose.onNode(hasText("Ignored") and isHeading()).assertIsDisplayed()
+        compose.onAllNodesWithText("Ignored", useUnmergedTree = true).assertCountEquals(1)
+        // And no dot: "Up now" on the second line says who is ready.
+        compose.onAllNodesWithContentDescription("Worth a call now", useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test
@@ -262,25 +269,45 @@ class BrowseSequenceContentTest {
         compose.onNodeWithText("Avery Quinn").assertDoesNotExist()
     }
 
-    @Test
-    fun the_cards_person_is_marked_and_scrolled_into_view() {
-        // Thirty people; the card shows the twenty-fifth (the deck moved
-        // between the card's read and this one), far below the first screen.
+    /**
+     * Thirty people; the card shows the twenty-fifth (the deck moved between
+     * the card's read and this one), far below the first screen. Its when
+     * word is "On your card", as the ViewModel hands it (BROWSE-09).
+     */
+    private fun cardPersonFar(callLogDenied: Boolean = false): BrowseUiState.Ready {
         val people = (1L..30L).map { person(it, "Person $it") }
         val tomorrow = UiText.res(R.string.browse_when_tomorrow)
-        show(
-            sequence.copy(
-                contacts = people,
-                rowStatus = emptyMap(),
-                dueIds = emptySet(),
-                queuePositions = people.withIndex().associate { (i, c) -> c.id to i + 1 },
-                whenLabels = people.associate { it.id to tomorrow },
-                untilLabels = emptyMap(),
-                onYourCardId = "c-25"
-            )
+        return sequence.copy(
+            contacts = people,
+            callLogPermissionDenied = callLogDenied,
+            rowStatus = emptyMap(),
+            queuePositions = people.withIndex().associate { (i, c) -> c.id to i + 1 },
+            whenLabels = people.associate { it.id to tomorrow } +
+                ("c-25" to UiText.res(R.string.browse_row_on_your_card)),
+            untilLabels = emptyMap(),
+            onYourCardId = "c-25"
         )
+    }
 
-        compose.onNodeWithText("On your card").assertIsDisplayed()
+    @Test
+    fun the_cards_person_says_on_your_card_on_its_second_line_and_is_scrolled_into_view() {
+        show(cardPersonFar())
+
         compose.onNodeWithText("Person 25").assertIsDisplayed()
+        // Words on the row's second line, in place of when, and in the row's
+        // merged node, so TalkBack reads them with the name.
+        compose.onNodeWithText("On your card · Never called").assertIsDisplayed()
+        compose.onNode(hasText("Person 25") and hasText("On your card · Never called")).assertIsDisplayed()
+        // No separate "On your card" node: the Stone chip over the name went
+        // on 2026-10-08 (rules.md Design 9).
+        compose.onAllNodesWithText("On your card", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun with_call_times_hidden_the_cards_person_says_on_your_card_alone() {
+        show(cardPersonFar(callLogDenied = true))
+
+        compose.onNode(hasText("Person 25") and hasText("On your card")).assertIsDisplayed()
+        compose.onAllNodesWithText("On your card · Never called", useUnmergedTree = true).assertCountEquals(0)
     }
 }

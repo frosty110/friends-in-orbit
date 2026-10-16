@@ -2,17 +2,20 @@
 function BrowseListScreen({ listName = 'Inner orbit', onBack, onOpenContact }) {
   const [q, setQ] = React.useState('');
   const contacts = [
-    { name: 'Sarah Chen',   last: '11 days ago', due: true },
-    { name: 'Jamie Torres', last: '3 days ago',  due: false },
-    { name: 'Marcus Reed',  last: '18 days ago', due: true },
-    { name: 'Priya Anand',  last: '6 days ago',  due: false },
-    { name: 'Alex Kim',     last: '2 days ago',  due: false },
-    { name: 'Dana Walsh',   last: '24 days ago', due: true },
-    { name: 'Owen Brooks',  last: '8 days ago',  due: false },
-    { name: 'Nia Ferreira', last: '1 day ago',   due: false },
-    { name: 'Theo Park',    last: '14 days ago', due: true },
-    { name: 'Luma Reyes',   last: '5 days ago',  due: false },
+    { name: 'Sarah Chen',   last: '11 days ago', upNow: true },
+    { name: 'Jamie Torres', last: '3 days ago',  upNow: false },
+    { name: 'Marcus Reed',  last: '18 days ago', upNow: true },
+    { name: 'Priya Anand',  last: '6 days ago',  upNow: false },
+    { name: 'Alex Kim',     last: '2 days ago',  upNow: false },
+    { name: 'Dana Walsh',   last: '24 days ago', upNow: true },
+    { name: 'Owen Brooks',  last: '8 days ago',  upNow: false },
+    { name: 'Nia Ferreira', last: '1 day ago',   upNow: false },
+    { name: 'Theo Park',    last: '14 days ago', upNow: true },
+    { name: 'Luma Reyes',   last: '5 days ago',  upNow: false },
   ];
+  // Who is up now is said in words at the start of the second line ("Up now · ..."), as
+  // the app's Browse rows say it. The accent dot that marked them at the row's end went
+  // with rules.md Design 9 on 2026-10-08, and voice.md never says "due".
   const filtered = contacts.filter(c => c.name.toLowerCase().includes(q.toLowerCase()));
 
   return (
@@ -57,10 +60,9 @@ function BrowseListScreen({ listName = 'Inner orbit', onBack, onOpenContact }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 500, color: 'var(--fg)' }}>{c.name}</div>
               <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'var(--fg-muted)', marginTop: 2 }}>
-                Last called {c.last}
+                {c.upNow ? 'Up now · ' : ''}Last called {c.last}
               </div>
             </div>
-            {c.due && <div style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--accent)' }} />}
             <Icon name="caret-right" size={16} color="var(--fg-subtle)" />
           </button>
         ))}

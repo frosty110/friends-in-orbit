@@ -118,8 +118,8 @@ This design system was built from the written product brief provided in-chat (pr
 **Shape language.** Soft but structural.
 - 16px radius for cards (primary container)
 - 12px for buttons
-- 8px for small elements (badges, chips)
-- 999px (full) only for avatars and count pills
+- 8px for small elements
+- 999px (full) only for avatars and controls (filter chips, switches, the search field). A label never takes the pill: a chip shape is always a control, and nothing tags a row with a status or a count (rules.md Design 9, 2026-10-08)
 
 Never fully pill-shaped buttons; never sharp corners. Rounded corners are consistent, not varied for decoration.
 

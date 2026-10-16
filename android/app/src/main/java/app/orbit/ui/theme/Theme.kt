@@ -176,7 +176,7 @@ private val MaterialTypography: Typography = Typography().let { base ->
         bodyMedium = OrbitType.meta,
         bodySmall = OrbitType.micro,
         labelLarge = OrbitType.button,
-        labelMedium = OrbitType.badge,
+        labelMedium = OrbitType.label,
         labelSmall = OrbitType.micro,
     )
 }

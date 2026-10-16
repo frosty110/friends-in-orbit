@@ -24,9 +24,6 @@
     <!-- Screen-reader hints for a list card: tap opens the list, long-press opens its menu. -->
     <string name="home_tile_open_list">Open list</string>
     <string name="home_tile_quick_actions">Quick actions</string>
-    <!-- Screen-reader name of the small shuffle icon beside the name of a list that fills
-         itself from a rule (a smart list). -->
-    <string name="home_tile_smart_list">Smart list</string>
 
     <!-- A list card's long-press menu. -->
     <string name="home_menu_add_people">Add people</string>

@@ -626,8 +626,9 @@ private fun ListConfigContentPreview() {
     ListConfigPreviewHost(previewReady())
 }
 
-// Send nudges off: When to nudge keeps its days and times and says
-// "Nudges paused" under them.
+// Send nudges off: When to nudge keeps its days and times, and the line
+// under them says "Nudges paused" in place of the schedule (no pill since
+// 2026-10-08, rules.md Design 9).
 @PreviewLightDark
 @Composable
 private fun ListConfigNudgesPausedPreview() {

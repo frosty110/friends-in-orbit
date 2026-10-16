@@ -278,8 +278,10 @@ internal fun ListsManagerContent(
             }
 
             // FAB anchored bottom-end; UI-SPEC §"Component Inventory", terracotta
-            // accent. Only with lists on screen: the empty state has its own
-            // centred button, and two accents there broke rules.md §Design 5.
+            // accent, the screen's one (rules.md §Design 5; each row's count
+            // was an accent pill until 2026-10-08, Design 9). Only with lists
+            // on screen: the empty state has its own centred button, and two
+            // accents there broke Design 5.
             if (state is ListsManagerUiState.Ready) {
                 ExtendedFloatingActionButton(
                     onClick = onCreate,
@@ -616,7 +618,7 @@ private val previewReady = ListsManagerUiState.Ready(
             name = "Inner orbit",
             memberCount = 12,
             type = ListType.STATIC,
-            ruleSummary = UiText.plural(R.plurals.lists_interval_every_days, 7, 7),
+            ruleSummary = ListRowSummary.Readable(UiText.plural(R.plurals.lists_interval_every_days, 7, 7)),
         ),
         ListTileState(
             id = 2L,
@@ -624,15 +626,16 @@ private val previewReady = ListsManagerUiState.Ready(
             memberCount = 4,
             type = ListType.STATIC,
             // A Late night list's row reads its interval (LIST-30).
-            ruleSummary = UiText.plural(R.plurals.lists_interval_every_days, 3, 3),
+            ruleSummary = ListRowSummary.Readable(UiText.plural(R.plurals.lists_interval_every_days, 3, 3)),
             notificationsEnabled = false,
         ),
         ListTileState(
             id = 3L,
             name = "Recently added, not called",
+            // Zero: the row's line ends "No one yet" (rules.md Design 9).
             memberCount = 0,
             type = ListType.SMART,
-            ruleSummary = UiText.plural(R.plurals.lists_rule_summary_recently_added, 30, 30),
+            ruleSummary = ListRowSummary.Readable(UiText.plural(R.plurals.lists_rule_summary_recently_added, 30, 30)),
         ),
     ),
     archived = listOf(
@@ -641,7 +644,7 @@ private val previewReady = ListsManagerUiState.Ready(
             name = "Drifted",
             memberCount = 3,
             type = ListType.STATIC,
-            ruleSummary = UiText.plural(R.plurals.lists_interval_every_days, 30, 30),
+            ruleSummary = ListRowSummary.Readable(UiText.plural(R.plurals.lists_interval_every_days, 30, 30)),
         ),
     ),
     archivedExpanded = true,

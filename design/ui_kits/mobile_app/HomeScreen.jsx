@@ -1,13 +1,16 @@
 // Home / Mood Picker — grid of list tiles
 function HomeScreen({ onOpenList, onOpenSettings }) {
   const lists = [
-    { id: 'surprise', name: 'Surprise me', subtitle: 'Pick for me', due: null, surprise: true },
-    { id: 'inner',    name: 'Inner orbit', subtitle: '12 people · round robin',       due: 3, tone: 'terracotta' },
-    { id: 'outer',    name: 'Outer orbit', subtitle: '34 people · spaced repetition', due: 5, tone: 'sage' },
-    { id: 'family',   name: 'Family',      subtitle: '8 people · recency',            due: 1, tone: 'amber' },
-    { id: 'latenight',name: 'Late night',  subtitle: '6 people · active 9p\u201311p',  due: 2, tone: 'stone' },
-    { id: 'quiet',    name: 'Mentors',     subtitle: '4 people · monthly',            due: 0, tone: 'terracotta' },
+    { id: 'surprise', name: 'Surprise me', subtitle: 'Pick for me', surprise: true },
+    { id: 'inner',    name: 'Inner orbit', subtitle: '12 people · round robin',       tone: 'terracotta' },
+    { id: 'outer',    name: 'Outer orbit', subtitle: '34 people · spaced repetition', tone: 'sage' },
+    { id: 'family',   name: 'Family',      subtitle: '8 people · recency',            tone: 'amber' },
+    { id: 'latenight',name: 'Late night',  subtitle: '6 people · active 9p\u201311p',  tone: 'stone' },
+    { id: 'quiet',    name: 'Mentors',     subtitle: '4 people · monthly',            tone: 'terracotta' },
   ];
+  // No due-count badge on a tile (rules.md Design 9, 2026-10-08). The count needs no words
+  // in its place: Home retired due counts and "due" language (HOME-6), and the app's card
+  // names who is next up instead.
 
   return (
     <Screen>
@@ -42,15 +45,12 @@ function HomeScreen({ onOpenList, onOpenSettings }) {
               gridColumn: l.surprise ? '1 / -1' : 'auto',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: l.surprise ? 'rgba(255,255,255,.18)' : 'var(--accent-tint)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Icon name={l.surprise ? 'shuffle' : 'users'} size={18} color={l.surprise ? '#fff' : 'var(--accent-press)'} />
-              </div>
-              {l.due != null && l.due > 0 && <CountBadge count={l.due} />}
+            <div style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: l.surprise ? 'rgba(255,255,255,.18)' : 'var(--accent-tint)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Icon name={l.surprise ? 'shuffle' : 'users'} size={18} color={l.surprise ? '#fff' : 'var(--accent-press)'} />
             </div>
             <div>
               <div style={{ fontFamily: 'Inter', fontSize: 17, fontWeight: 600, letterSpacing: '-0.005em' }}>

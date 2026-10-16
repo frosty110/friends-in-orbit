@@ -82,10 +82,10 @@ import kotlinx.coroutines.sync.withLock
  * SurfaceQueueUseCase; ADR 0006 puts that composition in the feed singleton,
  * not the VM), each with when they come up; then anyone the rule cannot
  * place, alphabetically; then the paused people, soonest back first, with
- * when; then the ignored ones. Opened from the card, the card's person is
- * marked (BROWSE-09). A drag writes new times through
- * [ReorderSequenceUseCase] (BROWSE-08) and shows the dropped order at once
- * (see [pendingMove]).
+ * when; then the ignored ones. Opened from the card, the card's person's row
+ * says "On your card" in place of when (BROWSE-09). A drag writes new times
+ * through [ReorderSequenceUseCase] (BROWSE-08) and shows the dropped order at
+ * once (see [pendingMove]).
  *
  * Filter logic (per the BROWSE-02 chip-composition rule):
  *   - Search × chip = AND (search narrows the chip-filtered set).
@@ -145,8 +145,8 @@ class BrowseViewModel @Inject constructor(
     // BROWSE-09: the sequence's head the first time this screen had data.
     // While it is still the head, the card shows the person it passed
     // ([focusContactId]); once the head changes (a drag here, a call), the
-    // card will show the new head, so the mark follows it. Written once, from
-    // the state pipeline, which runs on one coroutine.
+    // card will show the new head, so "On your card" follows it. Written
+    // once, from the state pipeline, which runs on one coroutine.
     private var headWhenOpened: Long? = null
 
     // Zone for the shared relative-time formatter (CallLogViewModel
@@ -769,7 +769,7 @@ class BrowseViewModel @Inject constructor(
         // rule cannot place (archived, or a list with no rule) by name; the
         // paused, soonest back first ("until you unpause" is the far-future
         // sentinel, so it sorts last); the ignored by name. Ignored wins over
-        // paused, as on the row's word.
+        // paused, as in the row's group below.
         val sequenceIds = sequence.map { it.contact.id }
         val inSequence = sequenceIds.toSet()
         val contactById = contactsHere.associateBy { it.id }
@@ -818,8 +818,7 @@ class BrowseViewModel @Inject constructor(
         return when {
             afterSearch.isNotEmpty() -> {
                 val timeById: Map<Long, Instant> = sequence.associate { it.contact.id to it.nextDueAt }
-                val membershipByContact = memberships.associateBy { it.contactId }
-                val dueIds = mutableSetOf<String>()
+                val onYourCardId = cardPersonRow(sequenceIds.firstOrNull(), memberIds)
                 val rowStatus = mutableMapOf<String, BrowseRowStatus>()
                 val whenLabels = mutableMapOf<String, UiText>()
                 val untilLabels = mutableMapOf<String, UiText>()
@@ -834,24 +833,25 @@ class BrowseViewModel @Inject constructor(
                     if (status != null) rowStatus[uiId] = status
                     val time = timeById[entity.id]
                     when {
-                        time != null -> {
-                            whenLabels[uiId] = whenLabel(time, now)
-                            // The dot and "Up now" are one fact (BROWSE-07): a
-                            // never-scheduled person whose rule puts them in the
-                            // future said "worth a call now" beside "Thursday".
-                            if (status == null && !time.isAfter(now)) dueIds += uiId
+                        // BROWSE-09: the card's person says "On your card" in
+                        // place of when, here and nowhere else (one owner, as
+                        // for every when word). Only a row in the sequence has
+                        // a when word to give up, and the card shows no one
+                        // outside it. It was a chip over the name until
+                        // 2026-10-08 (rules.md Design 9).
+                        time != null -> whenLabels[uiId] = if (uiId == onYourCardId) {
+                            UiText.res(R.string.browse_row_on_your_card)
+                        } else {
+                            whenLabel(time, now)
                         }
                         status == BrowseRowStatus.Paused && pausedUntil != null ->
                             untilLabels[uiId] = untilLabel(pausedUntil)
-                        // Outside the sequence and not paused or ignored: the
-                        // persisted time, null or past (recomputeDueCountForList's
-                        // rule), as before the sequence.
-                        status == null -> {
-                            val nextDueAt = membershipByContact[entity.id]?.nextDueAt
-                            if (nextDueAt == null || !nextDueAt.isAfter(now)) dueIds += uiId
-                        }
                     }
                 }
+                // No "worth a call now" set (`dueIds`, the due dot's) since
+                // 2026-10-08 (rules.md Design 9): on a row in the sequence
+                // "Up now" says it, and the rows outside it are people the
+                // card does not bring up.
                 BrowseUiState.Ready(
                     contacts = afterSearch.map { entity ->
                         entity.toUiContact().withLastCallLabel(lastCallByContact[entity.id], now)
@@ -859,12 +859,11 @@ class BrowseViewModel @Inject constructor(
                     searchQuery = q,
                     activeFilters = filters,
                     callLogPermissionDenied = callLogDenied,
-                    dueIds = dueIds,
                     rowStatus = rowStatus,
                     queuePositions = sequenceIds.withIndex().associate { (idx, id) -> "c-$id" to idx + 1 },
                     whenLabels = whenLabels,
                     untilLabels = untilLabels,
-                    onYourCardId = cardPersonRow(sequenceIds.firstOrNull(), memberIds)
+                    onYourCardId = onYourCardId
                 )
             }
             q.isNotEmpty() -> BrowseUiState.NoMatches(q)
@@ -877,11 +876,12 @@ class BrowseViewModel @Inject constructor(
     }
 
     /**
-     * BROWSE-09: the row marked "On your card". Opened from the card's menu,
-     * that is the person the card passed, wherever the order puts them (the
-     * head almost always; see [headWhenOpened]); once the head has changed
-     * since, the card will show the new head, so that row is marked. Opened
-     * any other way, no row is.
+     * BROWSE-09: the row whose second line opens with "On your card", and
+     * which the screen scrolls into view. Opened from the card's menu, that is
+     * the person the card passed, wherever the order puts them (the head
+     * almost always; see [headWhenOpened]); once the head has changed since,
+     * the card will show the new head, so the words move to that row. Opened
+     * any other way, no row says them.
      */
     private fun cardPersonRow(head: Long?, memberIds: Set<Long>): String? {
         val focus = focusContactId ?: return null
@@ -913,7 +913,7 @@ class BrowseViewModel @Inject constructor(
         }
     }
 
-    /** When a pause ends, under the row's "Paused": Contact detail's status line, as a label. */
+    /** When a pause ends, on a row under the "Paused" heading: Contact detail's status line, as a label. */
     private fun untilLabel(pausedUntil: Instant): UiText =
         if (PauseContactUseCase.isIndefinite(pausedUntil)) {
             UiText.res(R.string.browse_row_until_unpause)

@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -32,64 +31,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewFontScale
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import app.orbit.data.ChipTone
 import app.orbit.ui.theme.OrbitPressIndication
 import app.orbit.ui.theme.OrbitTheme
-
-private data class ToneTriple(val bg: Color, val fg: Color, val dot: Color)
-
-@Composable
-private fun toneTriple(tone: ChipTone): ToneTriple {
-    val chip = OrbitTheme.tones.chip
-    val t = when (tone) {
-        ChipTone.Terracotta -> chip.terracotta
-        ChipTone.Sage -> chip.sage
-        ChipTone.Amber -> chip.amber
-        ChipTone.Brick -> chip.brick
-        ChipTone.Stone -> chip.stone
-    }
-    return ToneTriple(t.bg, t.fg, t.dot)
-}
-
-/**
- * A read-only label chip: a list name, a status. Not a control,
- * so it carries no tap target; anything the user can toggle is an
- * [OrbitFilterChip].
- */
-@Composable
-fun OrbitChip(
-    label: String,
-    tone: ChipTone = ChipTone.Terracotta,
-    modifier: Modifier = Modifier,
-) {
-    val (bg, fg, dot) = toneTriple(tone)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
-        modifier = modifier
-            .clip(OrbitTheme.shapes.full)
-            .background(bg)
-            // 10dp sits between the 8 and 12 spacing steps; it is the chip's
-            // own optical inset from the design kit's Chip primitive, not
-            // screen spacing, so it stays local to this component.
-            .padding(horizontal = OrbitTheme.spacing.x3, vertical = OrbitTheme.spacing.x1),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(dot),
-        )
-        Text(
-            text = label,
-            style = OrbitTheme.type.micro.copy(
-                color = fg,
-                letterSpacing = 0.02.em,
-            ),
-        )
-    }
-}
 
 /**
  * Orbit's one selectable chip, for every filter, single choice and chip-shaped
@@ -98,8 +41,10 @@ fun OrbitChip(
  *
  * Before 2026-10-05 the app drew filter chips four ways (Material
  * `FilterChip` with three different colour overrides, and a Browse-only pill
- * built from the display [OrbitChip]), and the Material ones looked stock
- * (rubric D4). This is the replacement; the display [OrbitChip] is unchanged.
+ * built from the display chip), and the Material ones looked stock
+ * (rubric D4). This is the replacement. The display chip, a read-only label,
+ * went on 2026-10-08 (rules.md Design 9): a chip shape is a control here, and
+ * this is the only chip left.
  *
  * - **Selected** fills with `accentTint`, the cluster tier, never `accent`
  *   (rules.md §Design 5), and shows a check, so colour is never the only
@@ -229,7 +174,6 @@ private fun OrbitFilterChipPreview() {
                 OrbitFilterChip(label = "On a list", selected = false, onClick = {}, role = Role.Button, trailingIcon = "caret-down")
                 OrbitFilterChip(label = "Starred", selected = false, enabled = false, onClick = {})
             }
-            OrbitChip(label = "Inner orbit", tone = ChipTone.Stone)
         }
     }
 }

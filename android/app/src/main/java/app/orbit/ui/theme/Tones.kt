@@ -1,7 +1,8 @@
 // android/app/src/main/java/app/orbit/ui/theme/Tones.kt
 //
-// Tonal families — avatar palettes, the 7-day rhythm bars, list-chip tones, the
-// Home card A/B treatments, and the Card View heat ramp.
+// Tonal families: avatar palettes, the 7-day rhythm bars, the Home card A/B
+// treatments, and the Card View heat ramp. (List-chip tones went with the
+// display chip on 2026-10-08, rules.md Design 9.)
 //
 // THEMING (2026-06-22): these were five hardcoded warm `object`s
 // (OrbitChipTones / OrbitAvatarTones / OrbitHeatRamp / OrbitListTones /
@@ -26,12 +27,11 @@ import androidx.compose.ui.graphics.lerp
  * The full set of tonal treatments for one theme in one mode (light or dark).
  *
  * Authored per theme as a list of five [ToneTriple] "personality hues"; the
- * avatar palettes, rhythm bars, list chips, and heat ramp all derive from those
+ * avatar palettes, rhythm bars and heat ramp all derive from those
  * plus the theme's accent. See [deriveOrbitTones].
  */
 @Immutable
 data class OrbitTones(
-    val chip: ChipTones,
     /** (bg, fg) avatar background/initials pairs, indexed by a name hash. */
     val avatarPalettes: List<Pair<Color, Color>>,
     /** Saturated per-person rhythm-strip bar colors. */
@@ -43,17 +43,6 @@ data class OrbitTones(
 ) {
     @Immutable
     data class ToneTriple(val bg: Color, val fg: Color, val dot: Color)
-
-    /** The five named chip slots. Names are historical (data.ChipTone); the
-     *  colors are whatever the active theme assigns to each slot. */
-    @Immutable
-    data class ChipTones(
-        val terracotta: ToneTriple,
-        val sage: ToneTriple,
-        val amber: ToneTriple,
-        val brick: ToneTriple,
-        val stone: ToneTriple,
-    )
 
     @Immutable
     data class ListTone(val band: Color, val wash: Color, val nameFg: Color)
@@ -117,13 +106,6 @@ internal fun deriveOrbitTones(
     require(toneTriples.size == 5) { "OrbitTones needs exactly 5 personality hues" }
     val ease = listOf(0.06f, 0.18f, 0.33f, 0.49f, 0.65f, 0.82f, 1.0f)
     return OrbitTones(
-        chip = OrbitTones.ChipTones(
-            terracotta = toneTriples[0],
-            sage = toneTriples[1],
-            amber = toneTriples[2],
-            brick = toneTriples[3],
-            stone = toneTriples[4],
-        ),
         avatarPalettes = toneTriples.map { it.bg to it.fg },
         rhythmBars = toneTriples.map { it.dot },
         heatRamp = ease.map { t -> lerp(heatLow, accentDeep, t) },
