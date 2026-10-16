@@ -93,7 +93,9 @@ class OrbitApp : Application(), Configuration.Provider, ImageLoaderFactory {
         }
 
         // Notification channels must be registered before the first notify()
-        // call; safe every launch (creating an existing channel is a no-op).
+        // call; safe every launch (creating an existing channel is a no-op). On
+        // the first launch after NOTIF-17 it also moves each user's settings
+        // from the old channel IDs to the new ones, which have no launcher dot.
         OrbitNotifications.ensureChannels(applicationContext)
 
         // Start the CallLog observer, and arm the call-log trigger that wakes

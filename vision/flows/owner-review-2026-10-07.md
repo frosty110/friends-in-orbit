@@ -242,3 +242,58 @@ except how far Later and Sooner move someone, which waits on the owner.
 | Lists, "Smart list" chip | "We don't need this badge" | Gone; the row's second line names the rule | LIST-07 |
 | Add people, "Show ignored" | "Just have a toggle icon for ignored vs not. We don't require accompanying text." | An eye toggle, icon only, "Show ignored people" to TalkBack, on or off | PICK-08 |
 
+
+## Badges, 2026-10-08: "We should just omit badges in general"
+
+After the third pass had removed three badges one at a time (the Lists "Smart
+list" chip, the card's "Sooner" chip, its "Good time to call" chip), the owner
+said: "We should just omit badges in general." That is now a rule,
+[rules.md Design 9](../../features/_foundations/rules.md): nothing tags a row,
+card, title, avatar, icon or the app icon with a small marker of status,
+category, count or recommendation. A fact the user needs is said in words on a
+line the screen already has; a fact the screen already says is left out. A chip
+shape is for a control only. Three searches (the app, the prototype, the specs)
+found 152 candidates; each was settled as below.
+
+| Where | Was | Now | IDs |
+|---|---|---|---|
+| Card view | The list's name as a chip on the card | Gone; the app bar names the list ("List" under the curtain) | CARD-06 |
+| Browse | An accent dot, "Worth a call now" | Gone; "Up now" on the second line says it. Browse has no accent element | BROWSE-07 |
+| Browse | "Paused" / "Ignored" beside the name | Gone; the rows sit under the "Paused" and "Ignored" headings, names muted | BROWSE-07 |
+| Browse, opened from the card | An "On your card" chip | "On your card · Last call: 3 days ago" | BROWSE-09 |
+| Home | A shuffle glyph on a smart list's name | Gone; the Lists row and List settings name the rule | HOME-5, LIST-07 |
+| Lists | An accent count pill, "12" | "Every 14 days · 12 people" ("No one yet" at zero); New list is the screen's one accent again | LIST-07 |
+| List settings | A "Nudges paused" pill | The When to nudge line reads "Nudges paused" | LIST-25 |
+| Search | A chip per list | "On Inner orbit, Late night", the Add people picker's line, now one shared function | BROWSE-03, PICK-04 |
+| Contact detail | A chip per list | "Inner orbit, Late night" under "On these lists" ("2 lists" under the curtain) | CONTACT-01 |
+| Add to lists | A grey "Already added" tag | "Already added" as the row's second line | BULK-06 |
+| Add people, ignored shown | "Ignored" in the checkbox's place | "Ignored · Never called", no checkbox | PICK-08 |
+| Call history | "Jordan Pike (ignored)" | The plain name, greyed, and "Ignored · from Inner orbit · 12 min · Outgoing" | IGNORE-09 |
+
+Not badges, so they stay: words and controls (Home's "4 people", "Archived (3)",
+step counters, filter chips and their counts, Settings' "Allowed" and "3
+ignored", Contact detail's "Ignored" and "Paused until 12 Oct" line, "Up now"),
+marks that carry data (the rhythm strip and the day sheet's avatar rims, the
+heat strip's now outline, Browse's queue numbers, the Week screen's name labels),
+the notification's app icon, the onboarding permission card's check, and the
+Done screen's Later / Sooner captions.
+
+So they cannot come back: the badge components are deleted (the read-only
+`OrbitChip`, `ListContextChip`, `CountBadge`, `ChipTone`), check G in
+`scripts/check-conventions.py` fails a build that brings one back, and the
+design kit and preview cards no longer teach them.
+
+Two were the owner's call, asked the same day:
+
+- **The call-direction icons** on Call history rows, Contact detail's recent
+  calls and the day sheet: "Remove them". Call history and the day sheet already
+  said the direction in words. Contact detail's rows now read "Outgoing · 12 min"
+  / "Incoming · 12 min" (CONTACT-09, HOME-8).
+- **The launcher icon's dot** while a nudge waits: "Turn it off". Android lets an
+  app turn the dot off only when it creates a channel, so both channels move to
+  new IDs (`orbit.list_prompt.v2`, `orbit.after_call.v2`) created without it.
+  Each person's settings move with them: importance (a channel turned off stays
+  off), sound, vibration and lights. Lockscreen visibility and Do Not Disturb
+  bypass cannot be set by an app, so those two reset (NOTIF-17). That is more
+  than the owner was told when asked ("a custom sound or vibration resets
+  once"): only those two reset.

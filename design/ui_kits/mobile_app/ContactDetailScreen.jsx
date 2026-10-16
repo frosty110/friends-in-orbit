@@ -65,7 +65,7 @@ function ContactDetailScreen({ name = 'Sarah Chen', onBack, onCall }) {
               display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px',
               borderTop: i === 0 ? 'none' : '1px solid var(--line-soft)',
             }}>
-              <Icon name={h.dir === 'out' ? 'phone-outgoing' : 'phone-incoming'} size={18} color="var(--fg-muted)" />
+              {/* No direction icon: the words say which way (rules.md Design 9, 2026-10-08). */}
               <div style={{ flex: 1, fontFamily: 'Inter', fontSize: 15, color: 'var(--fg)' }}>
                 {h.dir === 'out' ? 'You called' : 'They called'}
               </div>

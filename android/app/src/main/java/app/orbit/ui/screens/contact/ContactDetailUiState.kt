@@ -125,7 +125,7 @@ sealed interface ContactDetailUiState {
         // Attempt surface — parallel-indexed with [recentCalls]:
         // `recentCallIsAttempt[i]` is true when `recentCalls[i]` was a reach-out
         // that didn't connect (CallSource.ATTEMPT — voicemail / no answer); the
-        // row renders "Attempted" + a phone-slash icon.
+        // row reads "Attempted", in words with no icon (rules.md Design 9).
         val recentCallIsAttempt: List<Boolean> = emptyList()
     ) : ContactDetailUiState
 

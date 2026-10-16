@@ -3435,7 +3435,7 @@ screen({
 /* ════════ Outside the app ════════ */
 function lockClock() { return `<div class="sys-fg" style="text-align:center;padding-top:72px"><div style="font-size:84px;font-weight:300;line-height:1;letter-spacing:-0.03em">9:41</div><div style="font-size:17px;margin-top:6px;opacity:.9">Sunday 4 October</div></div>`; }
 screen({
-  id: 'S50', group: 'outside', name: 'List nudge notification', route: 'notification: orbit.list_prompt', chrome: false,
+  id: 'S50', group: 'outside', name: 'List nudge notification', route: 'notification: orbit.list_prompt.v2', chrome: false,
   spec: 'features/notifications/README.md', code: 'notify/ListPromptWorker.kt',
   purpose: 'Bring the list\'s suggestion to you, once per list per slot: a scheduled reminder the user owns (ADR 0009). The only other notification Orbit sends is the one after a call (S54).',
   owes: ['One quiet nudge per list per slot, by default at 10am; never a count, never shame', 'The list\'s next person by first name, with their face and a Call action (NOTIF-14); a name is never repeated two nudges running (NOTIF-15)', 'On a locked phone that hides sensitive content: "Someone is ready when you are." and nothing else (NOTIF-13)', 'Tap to land on that list\'s card'],
@@ -3558,7 +3558,7 @@ ACT.endCall = (pid) => {
 };
 
 screen({
-  id: 'S54', group: 'outside', name: 'Notification after a call', route: 'notification: orbit.after_call', chrome: false,
+  id: 'S54', group: 'outside', name: 'Notification after a call', route: 'notification: orbit.after_call.v2', chrome: false,
   spec: ['features/notifications/README.md', 'features/page-views/post-call-note.md'], code: ['notify/PostCallNotification.kt', 'nav/OrbitNavHost.kt'],
   purpose: 'When a call worth a note ends while Orbit is closed, ask once how it went, and open the page for writing about it (NOTIF-16).',
   owes: ['After a call of a minute or more with someone on a list, only while Orbit is not on screen: "How was your call with Kai?" / "Add a note while it\'s fresh." (NOTIF-16)', 'No face and no action: the note is the only thing to do, and it is the tap', 'On a locked phone that hides sensitive content: "How was your call?", with no name', 'Its own channel, "After a call", so it can be turned off without the nudges; it is never called a nudge', 'Withdrawn as soon as the note page for that person opens, however it was reached; gone too once a note is saved or the call is dismissed on Home', 'A tap opens the page over Home when Orbit was closed, and over the screen that was showing when it was open, often the card that placed the call; the card, coming back at the same moment, finds that page and opens no second one (NOTE-04)'],
