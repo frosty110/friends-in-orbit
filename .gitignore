@@ -34,3 +34,7 @@ node_modules/
 
 # Agent worktrees created by Claude Code sessions (local only)
 .claude/worktrees/
+
+# Python bytecode from scripts/check-conventions.py
+__pycache__/
+*.pyc
