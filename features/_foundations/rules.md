@@ -1,7 +1,7 @@
 # Rules
 
 **Status:** active
-**Last reviewed:** 2026-10-08 (Design 9 added: no badges, at the owner's word "We should just omit badges in general")
+**Last reviewed:** 2026-10-08 (Design 9 added: no badges, at the owner's word "We should just omit badges in general"; later that day the app icon joined it, with no launcher dot or number, NOTIF-17)
 **Canonical for:** the numbered engineering rules cited from source comments
 
 ---
@@ -90,10 +90,11 @@ Navigation's 700ms default. When the user has turned animations off
 transition and decorative animation becomes an instant change (WCAG 2.3.3).
 Press feedback is the theme's quiet overlay (`OrbitPressIndication`), not ripple.
 
-**Design 9: No badges.** Nothing tags a row, card, title, avatar or icon with a
-small marker of status, category, count or recommendation: no read-only chip or
-pill, no count bubble, no status dot, no corner tag, and no glyph whose only job
-is to name a category. If the user needs the fact, say it in words on a line
+**Design 9: No badges.** Nothing tags a row, card, title, avatar, icon or the app
+icon with a small marker of status, category, count or recommendation: no
+read-only chip or pill, no count bubble, no status dot, no corner tag, no
+launcher dot or number (NOTIF-17), and no glyph whose only job is to name a
+category. If the user needs the fact, say it in words on a line
 the screen already has ("Ignored · Never called", "Every 14 days · 12 people").
 If the screen already says it (the app bar, a heading, a control's state),
 leave it out. A chip shape is for a control only (`OrbitFilterChip`).
