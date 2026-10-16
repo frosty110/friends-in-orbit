@@ -133,11 +133,13 @@ data class CallLogDaySection(
 
 /**
  * Render-ready row for [CallLogScreen]. All formatters (wall-clock time,
- * duration label, direction icon) are pre-computed on the VM so the
+ * duration label, the event's kind) are pre-computed on the VM so the
  * composable never touches `Instant` or the JVM clock — see the B3 invariant.
  * The words are resources: [durationLabel] is [UiText], and the screen words
  * the direction from [kind] and "from {list}" from [listName]
- * (strings_calllog.xml).
+ * (strings_calllog.xml). The kind is said only in those words: until
+ * 2026-10-08 the row also carried an icon name for a direction glyph, which
+ * went at the owner's choice (rules.md Design 9).
  *
  * `listName` is the contact's most-recent [ListMembership] (max `addedAt`),
  * shown as "from {listName}"; when the contact has zero memberships
@@ -166,7 +168,6 @@ data class CallLogRow(
     val photoUri: String?,
     val listName: String,               // "" when no membership
     val durationLabel: UiText?,         // null for manual and attempted events (subtitle skips it)
-    val directionIconName: String,      // "phone-outgoing" / "phone-incoming" / "check-circle" (manual) / "phone-slash" (attempted)
     val timeLabel: String,              // "4:30pm"
     val isIgnored: Boolean,
     // What happened, for the one-person log (LOG-04), where every row is the

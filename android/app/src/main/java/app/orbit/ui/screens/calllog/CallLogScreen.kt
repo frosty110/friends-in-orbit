@@ -20,13 +20,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,7 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -63,7 +60,6 @@ import app.orbit.ui.components.OrbitListSkeleton
 import app.orbit.ui.components.OrbitMenuAction
 import app.orbit.ui.components.OrbitScreen
 import app.orbit.ui.components.OrbitScreenMessage
-import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
@@ -79,13 +75,21 @@ import app.orbit.ui.util.formatDuration
  *     "View all calls" it shows that person's calls under "Calls with Sam",
  *     and back returns to them. Rows then lead with what happened ("You
  *     called", "Sam called") instead of repeating the same name and face on
- *     every row.
+ *     every row, from the row's start: nothing stands in the face's place.
  *   - **Sticky calendar-day headers** — "Today", "Yesterday", then
  *     "Wednesday 3 June"-style day groups (LOCAL calendar days, grouped by
  *     the VM), as [SectionLabel] headings so TalkBack can jump between days.
- *   - **Wall-clock time per row** — "4:30pm" in the trailing column, beside
- *     the direction icon; duration stays in the subtitle. The day itself is
- *     carried by the section header.
+ *   - **Wall-clock time per row**: "4:30pm" at the row's end; duration
+ *     stays in the subtitle. The day itself is carried by the section header.
+ *   - **The kind in words, and no glyph for it.** Everyone's log ends a row's
+ *     second line with "Outgoing", "Incoming", "Logged" or "Attempted"; one
+ *     person's log titles the row "You called", "Sam called", "You logged a
+ *     connection" or "You tried to reach them". Until 2026-10-08 an 18dp
+ *     direction icon sat above the time in everyone's log, and a 44dp circle
+ *     holding one took the face's slot in one person's. Both only named what
+ *     the words already say, so they went at the owner's choice ("Call
+ *     history and the day sheet already say the direction in words"; rules.md
+ *     Design 9, no badges).
  *   - **Direction filter row**: All / Incoming / Outgoing as
  *     [OrbitFilterChip]s with radio semantics, in a scrolling row so a label
  *     is never broken mid-word at 200% font scale ("Outgoin g" before).
@@ -473,20 +477,14 @@ private fun CallLogRowComposable(
                 ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(modifier = Modifier.alpha(avatarAlpha)) {
-                if (onePerson) {
-                    // Same person on every row: the leading slot shows what
-                    // happened, in the avatar's footprint so rows line up.
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(RowAvatarSize)
-                            .clip(CircleShape)
-                            .background(OrbitTheme.colors.bgSubtle),
-                    ) {
-                        PhIcon(name = row.directionIconName, size = 20.dp, tint = OrbitTheme.colors.fgMuted)
-                    }
-                } else {
+            // Everyone's log leads with the face. One person's log leads with
+            // its title, at the row's start padding like the day headers above
+            // it: every row is the same person, so a face would only repeat.
+            // Until 2026-10-08 a circle holding a direction icon sat in the
+            // face's slot there, naming what the title says (rules.md
+            // Design 9).
+            if (!onePerson) {
+                Box(modifier = Modifier.alpha(avatarAlpha)) {
                     // The curtain masks the avatar inputs exactly as
                     // it masks the text: no photo, and initials derived from the
                     // same masked "Contact" literal (BrowseRow idiom). Real
@@ -497,8 +495,8 @@ private fun CallLogRowComposable(
                         photoUri = if (curtain) null else row.photoUri,
                     )
                 }
+                Spacer(Modifier.width(OrbitTheme.spacing.x3))
             }
-            Spacer(Modifier.width(OrbitTheme.spacing.x3))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = if (onePerson) row.kind.personTitle(firstName(personName.orEmpty())) else displayName,
@@ -534,23 +532,13 @@ private fun CallLogRowComposable(
                 }
             }
             Spacer(Modifier.width(OrbitTheme.spacing.x2))
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                if (!onePerson) {
-                    PhIcon(
-                        name = row.directionIconName,
-                        size = 18.dp,
-                        tint = subtitleColor,
-                    )
-                    Spacer(Modifier.size(OrbitTheme.spacing.x1))
-                }
-                Text(
-                    text = row.timeLabel,
-                    style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
-                )
-            }
+            // The time alone at the row's end. The direction icon that sat
+            // above it until 2026-10-08 named the kind the second line ends
+            // with in words (rules.md Design 9).
+            Text(
+                text = row.timeLabel,
+                style = OrbitTheme.type.micro.copy(color = OrbitTheme.colors.fgSubtle),
+            )
             // The visible way into the row menu (the picker row's precedent).
             // Long-press still opens it, but a long-press-only action is one
             // most people never find. Muted: maintenance, not the screen's
@@ -616,12 +604,6 @@ private fun previewRow(
     photoUri = null,
     listName = listName,
     durationLabel = durationMinutes?.let { formatDuration(it * 60) },
-    directionIconName = when (kind) {
-        CallLogKind.Outgoing -> "phone-outgoing"
-        CallLogKind.Incoming -> "phone-incoming"
-        CallLogKind.Logged -> "check-circle"
-        CallLogKind.Attempted -> "phone-slash"
-    },
     timeLabel = timeLabel,
     isIgnored = isIgnored,
     kind = kind,

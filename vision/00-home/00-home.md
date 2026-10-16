@@ -69,7 +69,7 @@ Under each card, a small 7-day graph of the list's connection rhythm: one bar pe
 ### `HOME-8` · The rhythm strip answers "who?" and "which way?" · **Shipped 2026-07-31**
 `HOME-7` shipped as anonymous marks: a bar told you *that* a call happened and roughly how long, but not *who*. That is the half of the strip this doc asked for ("a memory of **who** you connected with this week"). `HOME-8` closes it.
 
-**Tap a day: who you spoke to.** A bottom sheet lists that day's calls: face, name, direction, duration, time; each row taps through to the person. The strip stays the glance; the sheet is where names live, so the card surface gains no numbers.
+**Tap a day: who you spoke to.** A bottom sheet lists that day's calls: face, name, direction, duration, time; each row taps through to the person. The direction is in words ("You called · 14 min · 4:30pm") and on the face's rim; a phone icon that also ended each row went on 2026-10-08 at the owner's choice (rules.md Design 9, no badges). The strip stays the glance; the sheet is where names live, so the card surface gains no numbers.
 
 **A direction rim on each bar.** Bar *fill* is the person (unchanged); a 3dp *rim* is the direction, pink for calls you made, teal for calls you received, with a thin near-black ring between rim and fill so the rim never melts into the person colour. Two channels, so neither reads as the other. The hues are semantic, not per-theme (`OrbitColors.directionOutgoing` / `directionIncoming`): a theme-derived direction colour would collide with Cool's blue and Plum's violet accents and vanish exactly where the cue is needed.
 

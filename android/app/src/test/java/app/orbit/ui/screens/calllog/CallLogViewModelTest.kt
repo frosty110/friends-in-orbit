@@ -254,8 +254,11 @@ class CallLogViewModelTest {
         }
     }
 
+    // The kind is all a row carries about what happened: the screen says it in
+    // words. Until 2026-10-08 each row also carried the name of a direction
+    // icon, which went at the owner's choice (rules.md Design 9).
     @Test
-    fun `kinds map to their icon, and only real calls carry a duration`() = runVmTest {
+    fun `sources and directions map to their kind, and only real calls carry a duration`() = runVmTest {
         val vm = vm(
             events = listOf(
                 callEventFixture(
@@ -280,19 +283,15 @@ class CallLogViewModelTest {
             val rows = awaitReady().rows().associateBy { it.callEventId }
 
             assertEquals(CallLogKind.Outgoing, rows.getValue(1L).kind)
-            assertEquals("phone-outgoing", rows.getValue(1L).directionIconName)
             assertEquals(UiText.plural(R.plurals.time_duration_minutes, 5, 5), rows.getValue(1L).durationLabel)
 
             assertEquals(CallLogKind.Incoming, rows.getValue(2L).kind)
-            assertEquals("phone-incoming", rows.getValue(2L).directionIconName)
             assertEquals(UiText.plural(R.plurals.time_duration_minutes, 1, 1), rows.getValue(2L).durationLabel)
 
             assertEquals(CallLogKind.Logged, rows.getValue(3L).kind)
-            assertEquals("check-circle", rows.getValue(3L).directionIconName)
             assertNull(rows.getValue(3L).durationLabel, "a logged connection has no length to show")
 
             assertEquals(CallLogKind.Attempted, rows.getValue(4L).kind)
-            assertEquals("phone-slash", rows.getValue(4L).directionIconName)
             assertNull(rows.getValue(4L).durationLabel, "an attempt has no length to show")
             cancelAndIgnoreRemainingEvents()
         }

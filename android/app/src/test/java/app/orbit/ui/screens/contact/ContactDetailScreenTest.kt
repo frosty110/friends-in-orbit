@@ -7,6 +7,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollToKeyAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -43,6 +44,11 @@ import org.robolectric.annotation.Config
  * TalkBack announces the screen either way. Until 2026-10-06 the two
  * person-less states set no pane title at all, and the app bar has no title
  * here to fall back on.
+ *
+ * The Recent calls tests (2026-10-08, rules.md Design 9) pin that a call row
+ * says its kind in words and draws no icon for it: "Outgoing · 12 min",
+ * "Incoming · 12 min", "Logged", "Attempted", the same under the curtain, and
+ * no description carrying the direction a second time.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [33], application = Application::class)
@@ -62,7 +68,7 @@ class ContactDetailScreenTest {
         return entries to (1..count).map { 100L + it }
     }
 
-    private fun scrollTo(key: String) {
+    private fun scrollTo(key: Any) {
         compose.onNode(hasScrollToKeyAction()).performScrollToKey(key)
     }
 
@@ -87,13 +93,89 @@ class ContactDetailScreenTest {
         compose.onNodeWithText("Add note to this call").assertIsDisplayed()
     }
 
+    // Recent calls, amended 2026-10-08 at the owner's choice (rules.md
+    // Design 9): no icon leads a row. A phone call's first line says its kind
+    // and length in words, "Outgoing · 12 min" / "Incoming · 12 min", and a
+    // logged connection and an attempt keep "Logged" and "Attempted". The
+    // icon is decorative and has no node, but its semantics box gave TalkBack
+    // "You called" / "Avery called" where no text said it; with the box back
+    // the description checks fail, and with the icon alone back the first
+    // line no longer reads "Outgoing · 12 min".
+
+    private val everyKind: ContactDetailUiState.Ready = previewState.copy(
+        recentCalls = listOf(
+            CallEntry(
+                direction = CallDirection.Outgoing,
+                relativeWhen = UiText.plural(R.plurals.time_ago_days, 3, 3),
+                lengthLabel = formatDuration(12 * 60)
+            ),
+            CallEntry(
+                direction = CallDirection.Incoming,
+                relativeWhen = UiText.plural(R.plurals.time_ago_days, 5, 5),
+                lengthLabel = formatDuration(12 * 60)
+            ),
+            // Both writers give a logged connection and an attempt direction
+            // OUTGOING and no length (formatDuration(0) reads "0s").
+            CallEntry(
+                direction = CallDirection.Outgoing,
+                relativeWhen = UiText.plural(R.plurals.time_ago_days, 7, 7),
+                lengthLabel = formatDuration(0)
+            ),
+            CallEntry(
+                direction = CallDirection.Outgoing,
+                relativeWhen = UiText.plural(R.plurals.time_ago_days, 9, 9),
+                lengthLabel = formatDuration(0)
+            )
+        ),
+        recentCallEventIds = listOf(101L, 102L, 103L, 104L),
+        recentCallIsManual = listOf(false, false, true, false),
+        recentCallIsAttempt = listOf(false, false, false, true)
+    )
+
+    /** Scrolls each call row into view in turn and checks it reads [lines], first line then second. */
+    private fun assertCallRowsRead(vararg lines: Pair<String, String>) {
+        everyKind.recentCallEventIds.zip(lines).forEach { (id, line) ->
+            scrollTo(id)
+            compose.onNodeWithText(line.first, useUnmergedTree = true).assertIsDisplayed()
+            compose.onNodeWithText(line.second, useUnmergedTree = true).assertIsDisplayed()
+        }
+    }
+
     @Test
-    fun call_direction_is_in_words_for_the_screen_reader() {
-        // The fixture has one outgoing and one incoming call.
-        compose.setContent { ContactDetailPreviewHost(previewState) }
-        scrollTo(ContactDetailItemKey.RECENT_CALLS)
-        compose.onNodeWithContentDescription("You called", useUnmergedTree = true).assertExists()
-        compose.onNodeWithContentDescription("Avery called", useUnmergedTree = true).assertExists()
+    fun a_call_row_says_its_kind_in_words_with_no_icon_for_it() {
+        compose.setContent { ContactDetailPreviewHost(everyKind) }
+        assertCallRowsRead(
+            "Outgoing · 12 min" to "3 days ago",
+            "Incoming · 12 min" to "5 days ago",
+            "Logged" to "7 days ago",
+            "Attempted" to "9 days ago"
+        )
+        // A logged connection and an attempt have no length to show.
+        compose.onAllNodesWithText("0s", substring = true, useUnmergedTree = true).assertCountEquals(0)
+        // The direction is said once, in the visible text: no description
+        // carries it, and the old TalkBack-only words are gone.
+        listOf("You called", "Avery called", "Outgoing", "Incoming", "Logged", "Attempted").forEach { words ->
+            compose.onAllNodes(hasContentDescription(words, substring = true), useUnmergedTree = true)
+                .assertCountEquals(0)
+        }
+        compose.onAllNodesWithText("You called", substring = true, useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Avery called", substring = true, useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun under_the_curtain_a_call_row_reads_the_same() {
+        // No name is in a call row, so the curtain has nothing to change in it.
+        compose.setContent {
+            CompositionLocalProvider(LocalPrivacyCurtain provides true) {
+                ContactDetailPreviewHost(everyKind)
+            }
+        }
+        assertCallRowsRead(
+            "Outgoing · 12 min" to "3 days ago",
+            "Incoming · 12 min" to "5 days ago",
+            "Logged" to "7 days ago",
+            "Attempted" to "9 days ago"
+        )
     }
 
     @Test

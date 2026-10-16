@@ -19,8 +19,9 @@
 - Filter chips "All", "Incoming", "Outgoing", one always chosen; the row scrolls sideways rather than breaking a label at large text
 - When call log access is off but calls were recorded earlier, a notice above them: "Orbit can't see new calls, so some may be missing here." with "Open settings"
 - Rows grouped under sticky day headers: "Today", "Yesterday", then "Wednesday 3 June"
-- Each row: face, name (greyed, with a half-faded face, for someone you ignore, whose second line then starts with "Ignored · ": "Ignored · from Inner orbit · 12 min · Outgoing"; until 2026-10-08 the name read "Avery Quinn (ignored)", a tag on the title, rules.md Design 9), "from {list}" (their newest list that isn't archived; LIST-24), the length, an icon and word for its kind ("Outgoing", "Incoming", "Logged" for a connection you logged by hand, "Attempted" for a call that did not connect; the last two show no length), the time ("4:30pm"), and a "More actions for {name}" button
-- In one person's log the rows say what happened instead: "You called", "{Name} called", "You logged a connection", "You tried to reach them"
+- Each row: face, name (greyed, with a half-faded face, for someone you ignore, whose second line then starts with "Ignored · ": "Ignored · from Inner orbit · 12 min · Outgoing"; until 2026-10-08 the name read "Avery Quinn (ignored)", a tag on the title, rules.md Design 9), "from {list}" (their newest list that isn't archived; LIST-24), the length, and a word for its kind ("Outgoing", "Incoming", "Logged" for a connection you logged by hand, "Attempted" for a call that did not connect; the last two show no length), then at the row's end the time ("4:30pm") and a "More actions for {name}" button
+- In one person's log the rows say what happened instead, starting the row where the face would be: "You called", "{Name} called", "You logged a connection", "You tried to reach them", with the length beneath
+- A row says its kind in words: Outgoing, Incoming, Logged or Attempted in everyone's log, and You called, {name} called, You logged a connection or You tried to reach them in one person's. No icon names it: until 2026-10-08 a direction icon sat above the time in everyone's log, and a circle holding one took the face's place in one person's; both went at the owner's choice (rules.md Design 9, no badges)
 - A footer, "Show 200 more" (n is how many come next), until everything is shown
 - No control on the page is in the accent; the denied state's "Open settings" and the error's Try again carry their own
 
@@ -54,7 +55,7 @@
 
 - `CallLogViewModelTest` (an archived list is never the "from {list}"; day grouping, one-person mode, the Logged and Attempted kinds with no length, the filters, ignored rows, denied and unknown permission, Error and recovery, paging)
 - `CallLogRowMenuTest` (added this round: "Call again", "Open details", neither destructive)
-- `CallLogContentTest` (the pane title in every state and the row button's name; added 2026-10-08: an ignored row's name is plain and its second line starts "Ignored · ", under the curtain too, and nobody else's row says it)
+- `CallLogContentTest` (the pane title in every state and the row button's name; added 2026-10-08: an ignored row's name is plain and its second line starts "Ignored · ", under the curtain too, and nobody else's row says it; every kind's word ends its row's second line with the time alone at the row's end, and one person's rows start with what happened, so no glyph is left for the kind)
 - `CallEventDaoLogTest`
 - `OrbitNavHostTest` (added this round: "Open settings" pops back when Call history came from Settings and pushes Settings otherwise, LOG-05; "View all calls" and back return to the same person, LOG-04)
 - Gallery previews: `CallLogContentPreview`, `CallLogPersonPreview`, `CallLogLoadingPreview`, `CallLogEmptyPreview`, `CallLogPermissionDeniedPreview`, `CallLogDeniedWithHistoryPreview`, `CallLogErrorPreview`, the filtered-empty, ignored-row and one-person-error previews added this round, with the curtain pass

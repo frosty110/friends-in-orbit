@@ -29,7 +29,7 @@
 ## Actions and menus
 
 - Tap a card, its Next up row included: opens that list's Card view
-- Tap a day with calls ("See this day"): a sheet headed "Today", "Yesterday" or "Wednesday 3 June", a summary line ("You called 2 · They called 1"), then one row per call: face, name, "You called" or "They called", the length and the time ("You called · 14 min · 4:30pm"). A row opens that person. Someone who has since left the list reads "Someone". At the foot, "See the whole week" closes the sheet and opens the list's Week screen on this week (HOME-13)
+- Tap a day with calls ("See this day"): a sheet headed "Today", "Yesterday" or "Wednesday 3 June", a summary line ("You called 2 · They called 1"), then one row per call: face (its rim in the call's direction colour), name, "You called" or "They called", the length and the time ("You called · 14 min · 4:30pm"), and nothing after them (a phone icon ended each row until 2026-10-08; it went at the owner's choice, rules.md Design 9). A row opens that person. Someone who has since left the list reads "Someone". At the foot, "See the whole week" closes the sheet and opens the list's Week screen on this week (HOME-13)
 - "See your week" on a card's strip: opens that list's Week screen on this week, the seven days the strip shows (HOME-13)
 - Long-press a card (a haptic; TalkBack: "Quick actions") for the list menu, in order:
   - "Add people": opens the Add people picker for this list. Not offered on smart lists, whose people come from their rule
