@@ -28,9 +28,10 @@ function ContactDetailScreen({ name = 'Sarah Chen', onBack, onCall }) {
           <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'var(--fg-muted)', marginTop: 4 }}>
             +1 (415) 555‑0182
           </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            <Chip tone="terracotta">Inner orbit</Chip>
-            <Chip tone="amber">Family</Chip>
+          {/* The lists she is on, in words, not chips (rules.md Design 9, 2026-10-08), joined
+              as the app's lists line joins them. */}
+          <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'var(--fg-muted)', marginTop: 4 }}>
+            On Inner orbit, Family
           </div>
         </div>
 

@@ -217,14 +217,10 @@ function OnboardingBulkAddScreen({ onBack, onContinue, listName = 'Inner orbit' 
                   <Avatar name={c.name} size={40} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontFamily: 'Inter', fontSize: 16, color: 'var(--fg)' }}>{c.name}</div>
-                    <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      {c.labels.map(l => (
-                        <span key={l} style={{
-                          fontSize: 11, padding: '2px 7px', borderRadius: 999,
-                          background: 'var(--bg-subtle)', color: 'var(--fg-muted)', fontWeight: 500,
-                        }}>{l}</span>
-                      ))}
-                      <span>{c.hint}</span>
+                    {/* The person's phone groups lead the hint line in words, not as pills
+                        (rules.md Design 9, 2026-10-08): "Close Friends, College · Last called 2d ago". */}
+                    <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'var(--fg-muted)', marginTop: 2 }}>
+                      {[c.labels.join(', '), c.hint].filter(Boolean).join(' · ')}
                     </div>
                   </div>
                   <div style={{
