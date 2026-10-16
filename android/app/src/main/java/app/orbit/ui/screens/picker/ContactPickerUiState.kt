@@ -188,11 +188,11 @@ data class ContactPickerUiState(
     }
 
     /**
-     * Per-chip badge counts and the ignored tally, computed in a
+     * Per-chip filter counts and the ignored tally, computed in a
      * SINGLE pass over [allContacts] at construction. Replaces six independent
      * O(n) [countFor] walks per recomposition. Semantics (Pitfall 4):
      * each count respects search + ignored-default exclusion but IGNORES other
-     * active filters, so toggling chip A never changes chip B's badge.
+     * active filters, so toggling chip A never changes chip B's count.
      */
     private val derivedCounts: PickerDerivedCounts = run {
         var commonly = 0
@@ -234,7 +234,7 @@ data class ContactPickerUiState(
         )
     }
 
-    /** Pre-computed badge counts for the six stateless filters. */
+    /** Pre-computed filter counts for the six stateless filters. */
     val filterCounts: Map<PickerFilter, Int> = derivedCounts.filterCounts
 
     /**
@@ -497,12 +497,14 @@ data class PickerListSummary(
 /**
  * Pitfall 4 mitigation — chip-count semantics.
  *
- * The chip's badge shows: "count of contacts that WOULD match if THIS chip
- * were the only active filter, RESPECTING the current search query and
- * ignored-default exclusion."
+ * A chip's filter count (said in an applied chip's own label, "Rarely called
+ * · 7", and greying a chip at zero) is: "count of contacts that WOULD match
+ * if THIS chip were the only active filter, RESPECTING the current search
+ * query and ignored-default exclusion." The chips are controls, so the count
+ * is part of what they say, not a badge (rules.md Design 9).
  *
  * Critically, this count IGNORES other active filters. Toggling chip A
- * MUST NOT change chip B's badge — otherwise the user can't tell whether
+ * MUST NOT change chip B's count: otherwise the user can't tell whether
  * activating B will broaden or narrow the set, and chips become
  * interdependent in a way the UI cannot signal.
  *

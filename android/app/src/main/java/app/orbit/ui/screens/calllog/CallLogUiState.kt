@@ -152,8 +152,10 @@ data class CallLogDaySection(
  * repeat a relative date.
  *
  * `isIgnored` carries [ContactEntity.isIgnored] forward so the row can
- * grey itself per IGNORE-09: 50% avatar opacity, fgSubtle name, and the
- * trailing " (ignored)" suffix on the display name.
+ * grey itself per IGNORE-09: 50% avatar opacity, fgSubtle name, and
+ * "Ignored" as the first segment of the subtitle ("Ignored · from Inner
+ * orbit · 12 min · Outgoing"). The name carried an "(ignored)" suffix until
+ * 2026-10-08 (rules.md Design 9).
  */
 @Immutable
 data class CallLogRow(

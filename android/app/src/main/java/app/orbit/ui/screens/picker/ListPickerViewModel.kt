@@ -58,10 +58,11 @@ import kotlinx.coroutines.launch
  *     here would be removed on the next reconcile with no message; ListRow
  *     hides "+" on smart lists for the same reason. A smart id that still
  *     reaches the commit is refused loudly (rules.md Code 3).
- *   - Lists the contact already belongs to stay in the row set, tagged
- *     "Already added", but cannot be picked: the row is disabled, the toggle
- *     refuses the id once the rows are known, the state drops a restored id,
- *     and the commit snapshots the memberships and writes only the rest.
+ *   - Lists the contact already belongs to stay in the row set, saying
+ *     "Already added" under the list's name, but cannot be picked: the row
+ *     is disabled, the toggle refuses the id once the rows are known, the
+ *     state drops a restored id, and the commit snapshots the memberships
+ *     and writes only the rest.
  *     Until 2026-10-06 the DAO's `OnConflictStrategy.IGNORE` was relied on
  *     for idempotence: it made the insert a no-op, but the snackbar still
  *     counted the list and Undo's removeAll deleted the membership the

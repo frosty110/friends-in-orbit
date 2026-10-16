@@ -5,13 +5,17 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.orbit.R
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
+import app.orbit.ui.util.formatDuration
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -27,7 +31,12 @@ import org.robolectric.annotation.Config
  *    before its first emission, the case Retry exists for), so TalkBack
  *    announced no screen at all;
  *  - the row's "More actions for {name}" button, named for the person it acts
- *    on and masked under the privacy curtain like every other name (PRIV-03).
+ *    on and masked under the privacy curtain like every other name (PRIV-03);
+ *  - an ignored person's row (IGNORE-09, amended 2026-10-08): the name plain,
+ *    and "Ignored" as the first segment of the second line. Until then the
+ *    name carried "(ignored)", a tag on the title (rules.md Design 9). The
+ *    row is still greyed, but grey alone would leave colour as the only
+ *    signal, so the word stays.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [33], application = Application::class)
@@ -105,7 +114,32 @@ class CallLogContentTest {
         }).assertCountEquals(0)
     }
 
-    private fun ready(): CallLogUiState = CallLogUiState.Ready(
+    @Test
+    fun an_ignored_row_keeps_the_name_plain_and_says_ignored_first_on_its_second_line() {
+        show(ready(isIgnored = true, durationMinutes = 12))
+        compose.onNodeWithText("Jordan Lee", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Ignored · from Inner orbit · 12 min · Outgoing", useUnmergedTree = true)
+            .assertIsDisplayed()
+        compose.onAllNodesWithText("(ignored)", substring = true, useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun under_the_curtain_an_ignored_row_still_says_ignored_and_names_no_list() {
+        show(ready(isIgnored = true, durationMinutes = 12), curtain = true)
+        compose.onNodeWithText("Contact", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Ignored · 12 min · Outgoing", useUnmergedTree = true).assertIsDisplayed()
+        compose.onAllNodesWithText("Inner orbit", substring = true, useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun a_row_for_someone_not_ignored_does_not_say_ignored() {
+        show(ready(durationMinutes = 12))
+        compose.onNodeWithText("from Inner orbit · 12 min · Outgoing", useUnmergedTree = true).assertIsDisplayed()
+        compose.onAllNodesWithText("Ignored", substring = true, ignoreCase = true, useUnmergedTree = true)
+            .assertCountEquals(0)
+    }
+
+    private fun ready(isIgnored: Boolean = false, durationMinutes: Int? = null): CallLogUiState = CallLogUiState.Ready(
         sections = listOf(
             CallLogDaySection(
                 epochDay = 20_500L,
@@ -118,10 +152,10 @@ class CallLogContentTest {
                         phone = "+15550001",
                         photoUri = null,
                         listName = "Inner orbit",
-                        durationLabel = null,
+                        durationLabel = durationMinutes?.let { formatDuration(it * 60) },
                         directionIconName = "phone-outgoing",
                         timeLabel = "4:30pm",
-                        isIgnored = false,
+                        isIgnored = isIgnored,
                         kind = CallLogKind.Outgoing,
                     ),
                 ),

@@ -234,7 +234,7 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
         //   NewListStartWith, since LIST-28 replaced the create sheet; its
         //   later steps hold the user's own words and are audited);
         // - components that take an already-masked label, or the curtain as a
-        //   parameter, from their screen (the screens are checked): Chip;
+        //   parameter, from their screen (the screens are checked):
         //   RhythmDaySheet (whose previews pass curtain = false on purpose;
         //   Home passes the real value); UnpauseBanner and RuleOverrideSection
         //   (Contact detail passes the curtain and a masked list name; its own
@@ -243,7 +243,7 @@ class PreviewGalleryTest(private val preview: ComposablePreview<AndroidPreviewIn
         //   reads the curtain itself, so it is audited, not exempt.
         private val CURTAIN_EXEMPT = setOf(
             "SmartRuleEditor", "NewListStartWith",
-            "Chip", "RhythmDaySheet", "UnpauseBanner", "RuleOverrideSection",
+            "RhythmDaySheet", "UnpauseBanner", "RuleOverrideSection",
         )
         private val qualifiers: String? = System.getProperty("orbit.screenshots.qualifiers")?.takeIf { it.isNotBlank() }
         private const val TAP_MIN_DP = 48f

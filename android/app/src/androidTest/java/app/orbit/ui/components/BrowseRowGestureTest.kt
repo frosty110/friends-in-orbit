@@ -56,7 +56,6 @@ class BrowseRowGestureTest {
         avgLengthLabel = null,
         pickupRateLabel = "",
         totalCalls = 0,
-        due = false,
         listIds = emptyList(),
         bestWindowLabel = null,
         heat = FloatArray(24),

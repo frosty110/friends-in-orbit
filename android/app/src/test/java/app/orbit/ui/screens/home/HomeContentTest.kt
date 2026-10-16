@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertAll
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasNoClickAction
@@ -48,7 +49,8 @@ import org.robolectric.annotation.Config
  * had no order test on Home, and a day column announced its one-letter
  * weekday ("T") instead of the day. Since 2026-10-08 it also pins the card's
  * zones (HOME-5: the name row holds the name and the count, Next up is a row
- * of its own) and that Next up has no call button (HOME-9).
+ * of its own), that Next up has no call button (HOME-9), and that no card
+ * marks a smart list (rules.md Design 9).
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [33], application = Application::class, qualifiers = "w411dp-h891dp-xxhdpi")
@@ -263,14 +265,29 @@ class HomeContentTest {
         compose.onAllNodesWithText(context.getString(R.string.home_rhythm_see_whole_week)).assertCountEquals(0)
     }
 
-    // The glyph is decorative; the card says "Smart list" for it (LIST-07),
-    // with Home's own label since the Lists screen dropped its chip.
+    // HOME-5 and LIST-07, amended 2026-10-08 (rules.md Design 9, no badges).
+    // Until then a smart list's name row ended in a shuffle glyph that
+    // TalkBack read as "Smart list"; it went with the Lists screen's "Smart
+    // list" chip, at the owner's word ("We don't need this badge"). Neither
+    // card is marked, on screen or to TalkBack, and the smart list's card
+    // keeps its name and its count in words. Fails with the glyph back: its
+    // "Smart list" description is found on the Late night card.
     @Test
-    fun a_smart_list_card_says_so() {
+    fun no_card_marks_a_smart_list_and_its_name_and_count_still_show() {
         setHome()
+        compose.onAllNodesWithContentDescription("Smart list", substring = true, useUnmergedTree = true)
+            .assertCountEquals(0)
+        compose.onAllNodesWithText("Smart list", substring = true, useUnmergedTree = true)
+            .assertCountEquals(0)
         compose.onNodeWithText("Late night")
-            .assert(hasContentDescription(context.getString(R.string.home_tile_smart_list)))
+            .assert(!hasContentDescription("Smart list", substring = true))
         compose.onNodeWithText("Inner orbit")
-            .assert(!hasContentDescription(context.getString(R.string.home_tile_smart_list)))
+            .assert(!hasContentDescription("Smart list", substring = true))
+
+        compose.onNodeWithText("Late night", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText(
+            context.resources.getQuantityString(R.plurals.home_member_count, 5, 5),
+            useUnmergedTree = true,
+        ).assertIsDisplayed()
     }
 }

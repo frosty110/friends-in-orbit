@@ -50,8 +50,9 @@
     <string name="calllog_direction_incoming">Incoming</string>
     <string name="calllog_direction_logged">Logged</string>
     <string name="calllog_direction_attempted">Attempted</string>
-    <!-- A person the user has ignored still shows, greyed. %1$s: the name. -->
-    <string name="calllog_name_ignored">%1$s (ignored)</string>
+    <!-- A person the user has ignored still shows, greyed, with this word first in the
+         subtitle: "Ignored · from Inner orbit · 12 min · Outgoing". -->
+    <string name="calllog_ignored">Ignored</string>
 
     <!-- In one person's log every row is them, so rows say what happened.
          %1$s: the person's first name. -->

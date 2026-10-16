@@ -114,15 +114,20 @@ import app.orbit.ui.util.formatDuration
  *
  * IGNORE-09 (greyed-state contract):
  *   - avatar 50% opacity
- *   - name in fgSubtle (vs fg)
- *   - " (ignored)" suffix on display name
+ *   - name in fgSubtle (vs fg), and nothing added to it
+ *   - "Ignored" as the first segment of the second line, in everyone's log:
+ *     "Ignored · from Inner orbit · 12 min · Outgoing". Until 2026-10-08 the
+ *     name carried an "(ignored)" suffix, a tag on the title (rules.md
+ *     Design 9). Greying alone would leave colour as the only signal, so the
+ *     word stays.
  *   - subtitle text in fgSubtle (vs fgMuted)
  *   - row remains tappable (opens ContactDetail; greyed != inert)
  *
  * Privacy curtain (PRIV-03 carry-forward): when [LocalPrivacyCurtain] is true
  * the display name (rows and title) renders as the literal "Contact", the
  * avatar drops its photo, and the "from {list}" context is left out, since
- * list names are masked everywhere else too (ListContextChip).
+ * list names are masked everywhere else too (PRIV-03,
+ * components_curtain_list).
  *
  * Copy lives in strings_calllog.xml (UX rubric 3.4); day headings and
  * durations arrive as [app.orbit.ui.util.UiText] from the VM.
@@ -432,8 +437,9 @@ private fun CallLogRowComposable(
     onCallAgain: () -> Unit,
 ) {
     val curtain = LocalPrivacyCurtain.current
-    val baseName = if (curtain) stringResource(R.string.components_curtain_contact) else row.name
-    val nameWithSuffix = if (row.isIgnored) stringResource(R.string.calllog_name_ignored, baseName) else baseName
+    // The name alone, ignored or not: an ignored person's row says so on its
+    // second line instead (IGNORE-09, rules.md Design 9).
+    val displayName = if (curtain) stringResource(R.string.components_curtain_contact) else row.name
     val openDetailsLabel = stringResource(R.string.components_action_open_details)
     val nameColor = if (row.isIgnored) OrbitTheme.colors.fgSubtle else OrbitTheme.colors.fg
     val subtitleColor = if (row.isIgnored) OrbitTheme.colors.fgSubtle else OrbitTheme.colors.fgMuted
@@ -486,7 +492,7 @@ private fun CallLogRowComposable(
                     // same masked "Contact" literal (BrowseRow idiom). Real
                     // initials/photos under a masked name would leak who this is.
                     Avatar(
-                        name = baseName,
+                        name = displayName,
                         size = RowAvatarSize,
                         photoUri = if (curtain) null else row.photoUri,
                     )
@@ -495,7 +501,7 @@ private fun CallLogRowComposable(
             Spacer(Modifier.width(OrbitTheme.spacing.x3))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (onePerson) row.kind.personTitle(firstName(personName.orEmpty())) else nameWithSuffix,
+                    text = if (onePerson) row.kind.personTitle(firstName(personName.orEmpty())) else displayName,
                     style = OrbitTheme.type.body.copy(color = nameColor),
                 )
                 val fromList = if (row.listName.isNotBlank()) {
@@ -505,9 +511,15 @@ private fun CallLogRowComposable(
                 }
                 val duration = row.durationLabel?.asString()
                 val directionWord = stringResource(row.kind.directionWord())
+                val ignoredWord = stringResource(R.string.calllog_ignored)
                 val subtitle = buildList {
-                    // List names are masked under the curtain (ListContextChip),
-                    // and in the one-person log every row would repeat it.
+                    // IGNORE-09: the word leads the line, in everyone's log
+                    // (the one-person log titles rows by what happened, never
+                    // by the name, and never carried it). The name stays plain.
+                    if (!onePerson && row.isIgnored) add(ignoredWord)
+                    // List names are masked under the curtain (PRIV-03,
+                    // components_curtain_list), and in the one-person log
+                    // every row would repeat it.
                     if (!onePerson && !curtain && fromList != null) add(fromList)
                     // None for manual events (user-logged connections): their
                     // subtitle reads "Logged" via the direction word instead.
@@ -549,7 +561,7 @@ private fun CallLogRowComposable(
                 icon = "dots-three-vertical",
                 onClick = { menuOpen = true },
                 tint = OrbitTheme.colors.fgMuted,
-                contentDescription = stringResource(R.string.calllog_more_actions_for, baseName),
+                contentDescription = stringResource(R.string.calllog_more_actions_for, displayName),
             )
         }
         OrbitDropdownMenu(
@@ -628,8 +640,9 @@ private val previewSections: List<CallLogDaySection> = listOf(
         epochDay = 20_499L,
         label = UiText.res(R.string.time_day_yesterday),
         rows = listOf(
-            // Someone the user ignores: greyed, "(ignored)", still a row
-            // (IGNORE-09), so the gallery renders that state too.
+            // Someone the user ignores: greyed, "Ignored · " leading the
+            // second line, still a row (IGNORE-09), so the gallery renders
+            // that state too.
             previewRow(2L, "Jordan Lee", "", 3, CallLogKind.Incoming, "8:05pm", isIgnored = true),
             previewRow(7L, "Priya Anand", "Inner orbit", null, CallLogKind.Attempted, "6:40pm"),
         ),

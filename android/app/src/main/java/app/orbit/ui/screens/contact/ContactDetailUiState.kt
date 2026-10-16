@@ -12,7 +12,7 @@ import app.orbit.ui.util.UiText
  *
  * Extends the original read-only scaffold with `Orphaned`, `listsOn`,
  * `recentCalls`, and `longestGapLabel` so the screen can render the read-only
- * detail surface (photo + hero + chip row + 5-row stats panel + history).
+ * detail surface (photo + hero + lists line + 5-row stats panel + history).
  *
  * The Notes section (NOTE-01) is surfaced via `Ready.notes`, which carries
  * [NoteRow] entries with VM-pre-formatted `relativeTimestamp` +

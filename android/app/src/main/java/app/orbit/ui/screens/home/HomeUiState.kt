@@ -60,11 +60,11 @@ sealed interface HomeUiState {
  * Home tile grid. Populates `id` + `name` from the entity; `dueCount`
  * hydrates from the nextDueAt projection.
  *
- * LIST-07 — `type` carries `ListType.SMART` or `ListType.STATIC` so the
- * renderer can show a "shuffle-angular" glyph beside the name of a smart list
- * (announced as "Smart list") and leave "Add people" out of its menu.
- * Privacy invariant: the glyph stays visible under the privacy curtain
- * because type isn't a name.
+ * LIST-07: `type` carries `ListType.SMART` or `ListType.STATIC` so the
+ * card's long-press menu can leave "Add people" out on a smart list, whose
+ * members come from its rule. Nothing on the card draws it: a shuffle glyph
+ * beside a smart list's name (announced as "Smart list") went on 2026-10-08
+ * (rules.md Design 9, no badges; HOME-5).
  */
 @Immutable
 data class ListTileState(

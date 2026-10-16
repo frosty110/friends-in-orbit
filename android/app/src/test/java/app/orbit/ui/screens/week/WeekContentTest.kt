@@ -182,7 +182,7 @@ class WeekContentTest {
         assertEquals(1L, opened)
     }
 
-    // The chip is placed only when it fits: Sam's 52 minutes have room, Kai's
+    // The name label is placed only when it fits: Sam's 52 minutes have room, Kai's
     // 14 and 3 minutes do not, so his name is never drawn half in a block.
     @Test
     fun a_long_block_shows_the_first_name_and_a_short_one_does_not() {

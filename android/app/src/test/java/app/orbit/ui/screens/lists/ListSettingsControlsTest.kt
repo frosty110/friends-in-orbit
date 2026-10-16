@@ -5,6 +5,9 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -43,7 +46,8 @@ import org.robolectric.annotation.Config
  * roles or placement):
  *  - LIST-25: a list's nudge timing is set in "When to nudge" alone (no Time
  *    of day group, in List settings or Make your first list), and the line
- *    under it says the days and times as they are.
+ *    under it says the days and times as they are, or "Nudges paused" while
+ *    Send nudges is off (no pill since 2026-10-08, rules.md Design 9).
  *  - LIST-26: the title is a "Rename list, {name}" button that becomes a
  *    field with labelled 48dp "Save list name" and "Cancel"; Save and the
  *    keyboard's Done save, a blank name keeps the old one, Cancel and Back
@@ -259,6 +263,49 @@ class ListSettingsControlsTest {
 
         compose.onNodeWithText("Every day at 10am and 6pm").assertExists()
         compose.onAllNodes(hasText("outside this list", substring = true)).assertCountEquals(0)
+    }
+
+    // LIST-25, amended 2026-10-08 (rules.md Design 9). With Send nudges off
+    // no nudge comes, so the line says "Nudges paused" in place of the
+    // schedule; until then it kept "Every day at 10am" with a "Nudges paused"
+    // pill under it. Fails with the pill back ("Nudges paused" found twice)
+    // or with the line still stating the schedule while paused.
+    @Test
+    fun while_nudges_are_off_the_line_says_nudges_paused_and_not_the_schedule() {
+        var nudgesOn by mutableStateOf(false)
+        var schedule by mutableStateOf(app.orbit.notify.NudgeSchedule.DEFAULT)
+        compose.setContent {
+            OrbitTheme {
+                NudgeScheduleSection(
+                    schedule = schedule,
+                    notificationsEnabled = nudgesOn,
+                    onScheduleChange = {},
+                )
+            }
+        }
+
+        compose.onAllNodes(hasText("Nudges paused")).assertCountEquals(1)
+        compose.onAllNodes(hasText("Every day at 10am")).assertCountEquals(0)
+        // The days and times stay set above the line, for when nudges return.
+        compose.onNodeWithText("10am").assertExists()
+
+        nudgesOn = true
+        compose.onNodeWithText("Every day at 10am").assertExists()
+        compose.onAllNodes(hasText("Nudges paused")).assertCountEquals(0)
+
+        // Paused wins over the line's other off case: no day selected.
+        nudgesOn = false
+        schedule = app.orbit.notify.NudgeSchedule(days = emptySet(), times = listOf(LocalTime.of(10, 0)))
+        compose.onAllNodes(hasText("Nudges paused")).assertCountEquals(1)
+        compose.onAllNodes(hasText("No days selected: nudges off")).assertCountEquals(0)
+    }
+
+    @Test
+    fun list_settings_with_nudges_off_says_nudges_paused_once() {
+        setScreen(state = ready().copy(notificationsEnabled = false))
+
+        compose.onAllNodes(hasText("Nudges paused")).assertCountEquals(1)
+        compose.onAllNodes(hasText("Every day at 10am")).assertCountEquals(0)
     }
 
     @Test

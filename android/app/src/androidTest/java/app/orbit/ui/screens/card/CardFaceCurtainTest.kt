@@ -34,7 +34,6 @@ class CardFaceCurtainTest {
         avgLengthLabel = formatDuration(14 * 60),
         pickupRateLabel = "",
         totalCalls = 12,
-        due = true,
         listIds = listOf("1"),
         bestWindowLabel = UiText.res(R.string.time_daypart_evenings),
         heat = FloatArray(24),
@@ -49,7 +48,6 @@ class CardFaceCurtainTest {
                 CompositionLocalProvider(LocalPrivacyCurtain provides curtain) {
                     ContactCardFace(
                         contact = contact,
-                        listContext = "Inner orbit",
                         nowHour = 19,
                         whyNowLine = UiText.res(R.string.card_why_ago, formatAgo(11)),
                     )
