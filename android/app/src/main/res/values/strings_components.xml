@@ -106,6 +106,20 @@
     <string name="components_curtain_list">List</string>
     <string name="components_curtain_someone">Someone</string>
 
+    <!-- The lists a person is on, in words, under their name in the Add people picker and
+         in Search's results. %1$s: up to three list names, joined by commas. -->
+    <string name="components_on_lists">On %1$s</string>
+    <!-- Past three lists. %1$s: the first three list names, %2$d: how many more. -->
+    <plurals name="components_on_lists_more">
+        <item quantity="one">On %1$s and %2$d more</item>
+        <item quantity="other">On %1$s and %2$d more</item>
+    </plurals>
+    <!-- Under the privacy curtain, which hides list names. %1$d: how many lists. -->
+    <plurals name="components_on_lists_count">
+        <item quantity="one">On %1$d list</item>
+        <item quantity="other">On %1$d lists</item>
+    </plurals>
+
     <!-- Home's calls waiting for a note: a call of a minute or more in the last day with
          someone on a list, with nothing written about them since. One shows as a card; two
          or more stack like a pile of cards that opens into one row per call.
@@ -143,14 +157,12 @@
 
     <!-- A person row in Browse and Search. %1$s: the person's first name. -->
     <string name="components_browse_row_call">Call %1$s</string>
-    <!-- Screen-reader words for the small dot that marks someone worth a call now. Not "Due":
-         the app says nothing that reads as a deadline (voice.md). -->
-    <string name="components_browse_row_due">Worth a call now</string>
     <string name="components_browse_row_never_called">Never called</string>
     <!-- %1$s: how long ago, for example "3 days ago". -->
     <string name="components_browse_row_last_call">Last call: %1$s</string>
     <!-- Browse's second line: when the person comes up, then their last call, as two facts on
-         one line. %1$s: "Up now", "Thursday", "In 2 weeks" or "Until 12 Oct". %2$s: "Last call:
+         one line. %1$s: "Up now", "On your card" (the card's person, opened from the card),
+         "Thursday", "In 2 weeks" or "Until 12 Oct". %2$s: "Last call:
          3 days ago" or "Never called". -->
     <string name="components_browse_row_when_meta">%1$s · %2$s</string>
 

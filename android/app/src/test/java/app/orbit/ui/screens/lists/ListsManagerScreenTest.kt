@@ -6,8 +6,12 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -40,6 +44,8 @@ import org.robolectric.annotation.Config
  * its own since 2026-10-07; where that flow returns is OrbitNavHostTest's.
  * A list that was not there before (Create's new list, last in the order) is
  * scrolled into view; the lists first shown and a restored one are not news.
+ * Each row says its member count in words at the end of its second line
+ * (rules.md Design 9, 2026-10-08), never after the unreadable-rhythm error.
  *
  * Runs on the JVM under Robolectric: it reads the semantics tree and fires
  * click actions, which needs no emulator (development-cycle.md, Verify).
@@ -57,7 +63,7 @@ class ListsManagerScreenTest {
                 name = "Inner orbit",
                 memberCount = 3,
                 type = ListType.STATIC,
-                ruleSummary = UiText.plural(R.plurals.lists_interval_every_days, 7, 7),
+                ruleSummary = ListRowSummary.Readable(UiText.plural(R.plurals.lists_interval_every_days, 7, 7)),
             ),
         ),
         archived = listOf(
@@ -125,25 +131,12 @@ class ListsManagerScreenTest {
         compose.runOnIdle { assertEquals(listOf("settings:9"), fired) }
     }
 
-    // LIST-07, amended 2026-10-08 (the owner, on the chip: "We don't need this
-    // badge"). A smart list's row says what it is by its rule line, which
-    // TalkBack reads with the name; the "Smart list" chip is gone. Fails with
-    // the chip back: its text is found.
-    @Test
-    fun a_smart_lists_row_names_its_rule_and_carries_no_chip() {
+    private fun setRows(vararg rows: ListTileState) {
         compose.setContent {
             OrbitTheme {
                 ListsManagerContent(
                     state = ListsManagerUiState.Ready(
-                        active = listOf(
-                            ListTileState(
-                                id = 3L,
-                                name = "Recently added, not called",
-                                memberCount = 4,
-                                type = ListType.SMART,
-                                ruleSummary = UiText.plural(R.plurals.lists_rule_summary_recently_added, 30, 30),
-                            ),
-                        ),
+                        active = rows.toList(),
                         archived = emptyList(),
                         archivedExpanded = false,
                     ),
@@ -163,9 +156,108 @@ class ListsManagerScreenTest {
                 )
             }
         }
+    }
 
-        compose.onNodeWithText("Recently added · 30 days").assertIsDisplayed()
+    private fun row(
+        id: Long,
+        name: String,
+        memberCount: Int,
+        summary: ListRowSummary?,
+        type: ListType = ListType.STATIC,
+    ) = ListTileState(id = id, name = name, memberCount = memberCount, type = type, ruleSummary = summary)
+
+    private fun every(days: Int) =
+        ListRowSummary.Readable(UiText.plural(R.plurals.lists_interval_every_days, days, days))
+
+    /** The text TalkBack reads for the row named [name]: the row is one merged, clickable node. */
+    private fun rowTexts(name: String): List<String> =
+        compose.onNode(hasText(name) and hasClickAction()).fetchSemanticsNode()
+            .config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text }
+
+    // LIST-07, amended 2026-10-08 (the owner, on the chip: "We don't need this
+    // badge"). A smart list's row says what it is by its rule line, which
+    // TalkBack reads with the name; the "Smart list" chip is gone. Fails with
+    // the chip back: its text is found. The same day the count joined that
+    // line in words (rules.md Design 9), so the line ends with the people.
+    @Test
+    fun a_smart_lists_row_names_its_rule_and_carries_no_chip() {
+        setRows(
+            row(
+                id = 3L,
+                name = "Recently added, not called",
+                memberCount = 4,
+                type = ListType.SMART,
+                summary = ListRowSummary.Readable(UiText.plural(R.plurals.lists_rule_summary_recently_added, 30, 30)),
+            ),
+        )
+
+        compose.onNodeWithText("Recently added · 30 days · 4\u00A0people").assertIsDisplayed()
         compose.onAllNodesWithText("Smart list", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    // ── Design 9: the member count is said in words, not in a pill ─────────
+
+    // Until 2026-10-08 the count was a bare number in an accent pill after
+    // the name, also a second accent beside New list (Design 5). Fails with
+    // the pill back: its bare "12" is found, and TalkBack hears it after the
+    // line.
+    @Test
+    fun the_count_ends_the_rhythm_line_and_no_pill_shows_it() {
+        setRows(row(id = 1L, name = "Inner orbit", memberCount = 12, summary = every(14)))
+
+        compose.onNodeWithText("Every 14 days · 12\u00A0people").assertIsDisplayed()
+        compose.onAllNodesWithText("12", useUnmergedTree = true).assertCountEquals(0)
+        // One merged node: the name, then the line, once each.
+        assertEquals(listOf("Inner orbit", "Every 14 days · 12\u00A0people"), rowTexts("Inner orbit"))
+    }
+
+    @Test
+    fun one_person_is_singular() {
+        setRows(row(id = 1L, name = "Inner orbit", memberCount = 1, summary = every(7)))
+
+        compose.onNodeWithText("Every 7 days · 1\u00A0person").assertIsDisplayed()
+    }
+
+    // The pill drew nothing at zero; the line says what Home's card says of
+    // an empty list, so the two screens agree.
+    @Test
+    fun an_empty_list_says_no_one_yet() {
+        setRows(row(id = 1L, name = "Inner orbit", memberCount = 0, summary = every(14)))
+
+        compose.onNodeWithText("Every 14 days · No one yet").assertIsDisplayed()
+    }
+
+    // A list with no rhythm to say (no template, no override) had no second
+    // line; now the count is the line.
+    @Test
+    fun with_no_rhythm_the_count_is_the_line() {
+        setRows(
+            row(id = 1L, name = "Inner orbit", memberCount = 12, summary = null),
+            row(id = 2L, name = "Book club", memberCount = 0, summary = null),
+        )
+
+        assertEquals(listOf("Inner orbit", "12\u00A0people"), rowTexts("Inner orbit"))
+        assertEquals(listOf("Book club", "No one yet"), rowTexts("Book club"))
+    }
+
+    // The error stays alone: a count after it would read as part of what
+    // could not be read (rules.md Code 3 keeps the error itself).
+    @Test
+    fun an_unreadable_rhythm_says_so_alone_with_no_count() {
+        setRows(row(id = 1L, name = "Inner orbit", memberCount = 5, summary = ListRowSummary.Unreadable))
+
+        assertEquals(listOf("Inner orbit", "Couldn't read this list's rhythm"), rowTexts("Inner orbit"))
+        compose.onAllNodesWithText("5\u00A0people", substring = true, useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun the_line_builder_never_joins_the_count_to_the_error() {
+        assertEquals(ListRowSummary.Unreadable.text, listRowMeta(ListRowSummary.Unreadable, memberCount = 5))
+        assertEquals(
+            UiText.res(R.string.lists_row_meta, every(14).text, UiText.plural(R.plurals.lists_row_members, 12, 12)),
+            listRowMeta(every(14), memberCount = 12),
+        )
+        assertEquals(UiText.res(R.string.lists_row_members_none), listRowMeta(null, memberCount = 0))
     }
 
     @Test

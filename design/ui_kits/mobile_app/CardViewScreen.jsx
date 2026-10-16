@@ -10,22 +10,22 @@ function CardViewScreen({ listName = 'Inner orbit', onBack, onCall, onDone }) {
   const queue = [
     {
       name: 'Sarah Chen', lastCalled: '11d ago', avgLen: '14 min', pickupRate: '82%',
-      list: 'Inner orbit', bestWindow: '6:42p \u2013 9:15p',
+      bestWindow: '6:42p \u2013 9:15p',
       heat: [0.02,0.01,0.00,0.00,0.00,0.00,0.05,0.18,0.32,0.42,0.35,0.15,0.12,0.22,0.35,0.48,0.58,0.72,0.88,0.94,0.85,0.60,0.30,0.10],
     },
     {
       name: 'Jamie Torres', lastCalled: '3d ago', avgLen: '22 min', pickupRate: '71%',
-      list: 'Inner orbit', bestWindow: '9:30p \u2013 11:45p',
+      bestWindow: '9:30p \u2013 11:45p',
       heat: [0.25,0.10,0.02,0.00,0.00,0.00,0.00,0.05,0.08,0.10,0.08,0.05,0.10,0.15,0.12,0.18,0.22,0.30,0.45,0.62,0.85,0.94,0.80,0.55],
     },
     {
       name: 'Marcus Reed', lastCalled: '18d ago', avgLen: '9 min', pickupRate: '64%',
-      list: 'Inner orbit', bestWindow: 'Sat \u2013 Sun afternoons',
+      bestWindow: 'Sat \u2013 Sun afternoons',
       heat: [0.05,0.02,0.00,0.00,0.00,0.00,0.08,0.25,0.40,0.45,0.50,0.48,0.55,0.60,0.58,0.52,0.45,0.30,0.22,0.18,0.12,0.10,0.08,0.06],
     },
     {
       name: 'Priya Anand', lastCalled: '6d ago', avgLen: '31 min', pickupRate: '89%',
-      list: 'Inner orbit', bestWindow: '7:00a \u2013 9:30a',
+      bestWindow: '7:00a \u2013 9:30a',
       heat: [0.02,0.00,0.00,0.00,0.00,0.15,0.65,0.90,0.92,0.78,0.40,0.22,0.18,0.15,0.12,0.18,0.25,0.30,0.28,0.20,0.15,0.08,0.05,0.02],
     },
   ];
@@ -109,21 +109,9 @@ function CardViewScreen({ listName = 'Inner orbit', onBack, onCall, onDone }) {
           }}
         >
           <ContactCardFace contact={contact} />
-          {/* Swipe hints */}
-          <div style={{
-            position: 'absolute', top: 24, left: 24,
-            padding: '6px 14px', borderRadius: 999, background: 'var(--orbit-brick, #A04838)', color: '#fff',
-            fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase',
-            opacity: drag < -30 ? Math.min(-drag / 120, 1) : 0,
-            transform: `rotate(-12deg)`,
-          }}>Later</div>
-          <div style={{
-            position: 'absolute', top: 24, right: 24,
-            padding: '6px 14px', borderRadius: 999, background: 'var(--orbit-sage, #87A383)', color: '#fff',
-            fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase',
-            opacity: drag > 30 ? Math.min(drag / 120, 1) : 0,
-            transform: 'rotate(12deg)',
-          }}>Sooner</div>
+          {/* Nothing rides along with a drag (rules.md Design 9, 2026-10-08; CARD-08): the
+              rotated "Later" and "Sooner" pills that faded in here were removed. The moving
+              card and the Later and Sooner buttons below already say which way it goes. */}
         </div>
       </div>
 
@@ -243,17 +231,11 @@ function HeatStrip({ heat, nowHour }) {
   );
 }
 
-// Classify where "now" falls on the heat map
-function nowVerdict(heat, nowHour) {
-  const v = heat[Math.floor(nowHour) % 24];
-  if (v >= 0.6) return { tone: 'sage',       text: 'Good time to call' };
-  if (v >= 0.3) return { tone: 'amber',      text: 'Sometimes answers now' };
-  return                 { tone: 'stone',      text: 'Rarely answers now' };
-}
-
+// No grade of "now" under the strip (rules.md Design 9, 2026-10-08; CARD-04): the chip
+// that said "Good time to call" read the strip's own value at the current hour, and the
+// strip still shows it with that hour outlined.
 function ContactCardFace({ contact, blurred = false }) {
   const nowHour = useNowHour();
-  const verdict = nowVerdict(contact.heat, nowHour);
 
   return (
     <div style={{
@@ -261,7 +243,8 @@ function ContactCardFace({ contact, blurred = false }) {
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       filter: blurred ? 'blur(2px)' : 'none',
     }}>
-      <Chip tone="terracotta">{contact.list}</Chip>
+      {/* No list chip over the face (rules.md Design 9, 2026-10-08): the app bar's title
+          already names the list on this screen. */}
       <div style={{ marginTop: 20 }}>
         <Avatar name={contact.name} size={104} />
       </div>
@@ -288,9 +271,6 @@ function ContactCardFace({ contact, blurred = false }) {
             </div>
           </div>
           <HeatStrip heat={contact.heat} nowHour={nowHour} />
-          <div style={{ marginTop: 10 }}>
-            <Chip tone={verdict.tone}>{verdict.text}</Chip>
-          </div>
         </div>
       )}
 

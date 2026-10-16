@@ -59,6 +59,9 @@ sealed interface CardViewUiState {
     data class Ready(
         val contactId: Long,
         val contact: Contact,
+        // The list's name, read through [listName] for the app bar's title.
+        // Only the app bar says it: the face's list chip went on 2026-10-08
+        // (rules.md Design 9, no badges; CARD-06).
         val listContext: String,
         // 2026-06-09 — real due-now count from SurfaceQueueUseCase via CardFeed.
         val queueSize: Int,

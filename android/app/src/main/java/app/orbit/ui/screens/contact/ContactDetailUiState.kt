@@ -12,7 +12,7 @@ import app.orbit.ui.util.UiText
  *
  * Extends the original read-only scaffold with `Orphaned`, `listsOn`,
  * `recentCalls`, and `longestGapLabel` so the screen can render the read-only
- * detail surface (photo + hero + chip row + 5-row stats panel + history).
+ * detail surface (photo + hero + lists line + 5-row stats panel + history).
  *
  * The Notes section (NOTE-01) is surfaced via `Ready.notes`, which carries
  * [NoteRow] entries with VM-pre-formatted `relativeTimestamp` +
@@ -125,7 +125,7 @@ sealed interface ContactDetailUiState {
         // Attempt surface — parallel-indexed with [recentCalls]:
         // `recentCallIsAttempt[i]` is true when `recentCalls[i]` was a reach-out
         // that didn't connect (CallSource.ATTEMPT — voicemail / no answer); the
-        // row renders "Attempted" + a phone-slash icon.
+        // row reads "Attempted", in words with no icon (rules.md Design 9).
         val recentCallIsAttempt: List<Boolean> = emptyList()
     ) : ContactDetailUiState
 

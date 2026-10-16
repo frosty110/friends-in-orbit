@@ -64,7 +64,7 @@
   --fs-contact-name: 28px;
   --fs-list-tile: 17px;
   --fs-stat-value: 14px;
-  --fs-badge: 13px;
+  --fs-label: 13px; /* was --fs-badge until 2026-10-08 (rules.md Design 9) */
   --fs-title: 24px;
   --fs-h2:    20px;
   --fs-h3:    18px;

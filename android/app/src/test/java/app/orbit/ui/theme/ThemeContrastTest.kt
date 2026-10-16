@@ -231,14 +231,14 @@ class ThemeContrastTest {
     }
 
     @Test
-    fun `chip tones stay legible (fg on bg) for every theme and mode`() {
+    fun `avatar initials stay legible (fg on bg) for every theme and mode`() {
+        // These five pairs were checked as chip tones until the display chip went
+        // (2026-10-08, rules.md Design 9). Avatars are what read them now, and
+        // nothing else checks initials against their background.
         for (def in OrbitThemes.all) {
             for ((label, tones) in listOf("light" to def.lightTones, "dark" to def.darkTones)) {
-                val chips = with(tones.chip) {
-                    listOf("terracotta" to terracotta, "sage" to sage, "amber" to amber, "brick" to brick, "stone" to stone)
-                }
-                for ((slot, t) in chips) {
-                    assertContrast("${def.id.name} $label chip:$slot", t.fg, t.bg, uiAA)
+                tones.avatarPalettes.forEachIndexed { slot, (bg, fg) ->
+                    assertContrast("${def.id.name} $label avatar:$slot", fg, bg, uiAA)
                 }
             }
         }

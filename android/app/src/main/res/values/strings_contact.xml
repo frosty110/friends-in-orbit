@@ -46,6 +46,12 @@
     <!-- Section headings. -->
     <string name="contact_section_lists">On these lists</string>
     <string name="contact_not_on_any_list">Not on any list yet</string>
+    <!-- Under "On these lists" while the privacy curtain hides list names; uncovered,
+         the line is the lists' own names, joined by commas. %1$d: how many lists. -->
+    <plurals name="contact_lists_count">
+        <item quantity="one">%1$d list</item>
+        <item quantity="other">%1$d lists</item>
+    </plurals>
     <string name="contact_section_stats">Stats</string>
     <string name="contact_section_recent_calls">Recent calls</string>
     <string name="contact_no_calls">No calls yet.</string>
@@ -71,13 +77,16 @@
     <string name="contact_orphan_body">History stays here. Re-link to a phone contact, or archive to remove from lists.</string>
     <string name="contact_orphan_relink">Re-link</string>
 
-    <!-- A row in Recent calls that isn't a measured phone call. -->
+    <!-- A phone call's row in Recent calls says which way it went, in the words Call history's
+         rows end with (strings_calllog.xml keeps its own copy, one file per area), then how
+         long it lasted: "Outgoing · 12 min". There is no icon for the direction. -->
+    <string name="contact_call_outgoing">Outgoing</string>
+    <string name="contact_call_incoming">Incoming</string>
+    <!-- %1$s: contact_call_outgoing or contact_call_incoming. %2$s: the call's length, "12 min". -->
+    <string name="contact_call_kind_length">%1$s · %2$s</string>
+    <!-- A row in Recent calls that isn't a measured phone call, so it has no length. -->
     <string name="contact_call_attempted">Attempted</string>
     <string name="contact_call_logged">Logged</string>
-    <!-- Screen-reader words for a call row's direction icon, the same words Call history leads
-         its rows with. %1$s: the person's first name. -->
-    <string name="contact_call_you_called">You called</string>
-    <string name="contact_call_they_called">%1$s called</string>
 
     <!-- Arriving from the call log: write a note about that call. -->
     <string name="contact_retro_note_hint">Add a note about this call</string>

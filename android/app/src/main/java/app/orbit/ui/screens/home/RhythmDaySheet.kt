@@ -50,7 +50,9 @@ import app.orbit.ui.util.formatDuration
  *
  * Tapping a day column on the 7-day strip opens this sheet: who you actually
  * spoke to that day, which way each call went, how long it ran, and when.
- * The strip answers "how was my week"; this answers "who was that".
+ * The strip answers "how was my week"; this answers "who was that". Each row
+ * says the direction in words and wears it as the avatar's rim, with no
+ * phone icon after it (rules.md Design 9).
  *
  * The direction language is deliberately symmetric and unweighted —
  * "You called" / "They called", never "you only made N calls". The strip is
@@ -291,16 +293,12 @@ private fun RhythmCallRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(Modifier.width(OrbitTheme.spacing.x2))
-        PhIcon(
-            name = if (call.direction == CallDirection.OUTGOING) {
-                "phone-outgoing"
-            } else {
-                "phone-incoming"
-            },
-            size = 18.dp,
-            tint = rim,
-        )
+        // Nothing trails the words. Until 2026-10-08 a phone-outgoing or
+        // phone-incoming icon in the rim's colour ended the row; the meta line
+        // already says the direction ("You called · 14 min · 4:30pm") and the
+        // rim draws it, so the icon only named the kind again and went at the
+        // owner's choice (rules.md Design 9). The rim stays: it is the rhythm
+        // strip's own mark, keyed by the strip's legend.
     }
 }
 

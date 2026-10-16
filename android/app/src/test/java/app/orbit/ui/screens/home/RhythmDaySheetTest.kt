@@ -1,10 +1,21 @@
 package app.orbit.ui.screens.home
 
 import android.app.Application
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.test.core.app.ApplicationProvider
 import app.orbit.data.entity.CallDirection
+import app.orbit.ui.theme.OrbitSpacing
+import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.formatDuration
+import kotlin.math.abs
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -20,10 +31,17 @@ import org.robolectric.annotation.Config
  *
  * The copy lives in string resources (strings_home.xml), so the summary is a
  * UiText resolved here against real resources under Robolectric.
+ *
+ * The rows themselves (2026-10-08, rules.md Design 9): no phone icon trails a
+ * call row. The meta line says the direction in words and the avatar's rim
+ * draws it; the icon only named the kind a third time, and went at the
+ * owner's choice.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = Application::class)
 class RhythmDaySheetTest {
+
+    @get:Rule val compose = createComposeRule()
 
     private val context = ApplicationProvider.getApplicationContext<Application>()
 
@@ -78,5 +96,50 @@ class RhythmDaySheetTest {
     fun `direction words are the same shape for both sides`() {
         assertEquals("You called", context.getString(directionWord(CallDirection.OUTGOING)))
         assertEquals("They called", context.getString(directionWord(CallDirection.INCOMING)))
+    }
+
+    /**
+     * The icon was decorative ([app.orbit.ui.components.PhIcon] gives it no
+     * description), so it has no node to look for; this reads where it sat
+     * from the layout. The name's layout says how much room the row gave its
+     * words (the width the text was laid out in, not the width of the glyphs
+     * drawn, which a cut-short name does not fill under Robolectric). With
+     * nothing after the words that room ends at the row's own end padding;
+     * with the 18dp icon and its 8dp spacer back, it ended 26dp sooner.
+     */
+    @Test
+    fun `a call row says which way in words and nothing trails them`() {
+        val longName = "Kai Mensah-Abernathy Oyelaran-Whitfield of the very long surname"
+        compose.setContent {
+            OrbitTheme {
+                RhythmDaySheet(
+                    dayLabel = "Today",
+                    calls = listOf(
+                        call(1L, CallDirection.OUTGOING).copy(contactName = longName),
+                        call(2L, CallDirection.INCOMING),
+                    ),
+                    curtain = false,
+                    onOpenContact = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("You called · 10 min · 4:30pm", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("They called · 10 min · 4:30pm", useUnmergedTree = true).assertExists()
+
+        val row = compose.onNode(hasClickAction() and hasText(longName)).fetchSemanticsNode().boundsInRoot
+        val name = compose.onNodeWithText(longName, useUnmergedTree = true).fetchSemanticsNode()
+        val layouts = mutableListOf<TextLayoutResult>()
+        name.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+        val room = layouts.single().layoutInput.constraints.maxWidth
+        val endPadding = with(compose.density) { OrbitSpacing().x2.toPx() }
+        val gap = row.right - (name.boundsInRoot.left + room)
+        assertTrue(
+            "the words' room runs to the row's end padding, with no icon after it " +
+                "(${gap}px from the edge, padding ${endPadding}px)",
+            abs(gap - endPadding) < 0.5f,
+        )
     }
 }

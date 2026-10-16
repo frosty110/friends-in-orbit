@@ -343,7 +343,7 @@ class ContactDetailViewModel @Inject constructor(
         // recentCallEventIds above).
         val recentCallIsManual = tuple.events.map { it.source == CallSource.MANUAL }
         // Attempt surface: parallel-indexed with recentCalls; reach-outs
-        // that didn't connect render "Attempted" + a phone-slash icon.
+        // that didn't connect read "Attempted", in words (rules.md Design 9).
         val recentCallIsAttempt = tuple.events.map { it.source == CallSource.ATTEMPT }
         val longestGapLabel = computeLongestGap(tuple.events)
         val noteRows = tuple.noteEntities.map { it.toNoteRow(now) }

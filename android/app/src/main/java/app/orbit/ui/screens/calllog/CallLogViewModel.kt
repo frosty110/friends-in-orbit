@@ -198,12 +198,13 @@ class CallLogViewModel @Inject constructor(
                 val contact = byContactId[ev.contactId] ?: return@mapNotNull null
                 val listId = mostRecentListByContactId[ev.contactId]
                 val listName = listId?.let { listById[it]?.name } ?: ""
-                // Manual-log surface — user-logged connections (source =
-                // MANUAL, durationSeconds = 0) render "Logged" + a check-circle.
-                // Attempt surface — reach-outs that didn't connect (source =
-                // ATTEMPT, durationSeconds = 0) render "Attempted" + phone-slash.
-                // Both carry no durationLabel, skipped by the row's subtitle
-                // builder.
+                // Manual-log surface: user-logged connections (source =
+                // MANUAL, durationSeconds = 0) read "Logged". Attempt surface:
+                // reach-outs that didn't connect (source = ATTEMPT,
+                // durationSeconds = 0) read "Attempted". Both carry no
+                // durationLabel, skipped by the row's subtitle builder. The
+                // words are the screen's (strings_calllog.xml, from kind); no
+                // icon names the kind since 2026-10-08 (rules.md Design 9).
                 val isManual = ev.source == CallSource.MANUAL
                 val isAttempt = ev.source == CallSource.ATTEMPT
                 val kind = when {
@@ -211,13 +212,6 @@ class CallLogViewModel @Inject constructor(
                     isManual -> CallLogKind.Logged
                     ev.direction == CallDirection.OUTGOING -> CallLogKind.Outgoing
                     else -> CallLogKind.Incoming
-                }
-                // The direction word is the screen's (strings_calllog.xml, from kind).
-                val directionIcon = when (kind) {
-                    CallLogKind.Attempted -> "phone-slash"
-                    CallLogKind.Logged -> "check-circle"
-                    CallLogKind.Outgoing -> "phone-outgoing"
-                    CallLogKind.Incoming -> "phone-incoming"
                 }
                 LogItem(
                     occurredAt = ev.occurredAt,
@@ -231,7 +225,6 @@ class CallLogViewModel @Inject constructor(
                         photoUri = contact.photoUri,
                         listName = listName,
                         durationLabel = if (isManual || isAttempt) null else formatDuration(ev.durationSeconds),
-                        directionIconName = directionIcon,
                         timeLabel = formatWallClock(ev.occurredAt, zone),
                         isIgnored = contact.isIgnored,
                         kind = kind,

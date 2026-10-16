@@ -22,11 +22,11 @@
 - When a timed pause has run out, a banner at the top: "{Name} is unpaused" / "They'll come up again on their lists.", with a dismiss control (CONTACT-05)
 - The hero: photo or initials, the name, the number (tappable; TalkBack: "Call {number}"), and a status line where one applies: "Paused until 12 Oct", "Paused until you unpause", "Ignored", "Archived"
 - "Call" and "Log a connection"
-- "On these lists": a chip per list that isn't archived (LIST-24), or "Not on any list yet"; "Add to lists"
+- "On these lists": one line naming every list that isn't archived (LIST-24), joined by commas, "Inner orbit, Late night" (CONTACT-01), or "Not on any list yet"; "Add to lists". Until 2026-10-08 a chip per list; a read-only chip is a badge (rules.md Design 9)
 - "Stats": "Last call", "Total calls", "Average length", "Longest gap" and "Usually" (the part of the day you talk: "Mornings", "Evenings") with an info tip; a stat without enough history says "Not enough calls yet" (CONTACT-02)
 - "Custom schedule", for someone on two or more lists that aren't archived, or anyone with a schedule saved (so it can always be seen and reset): "Comes up every 14 days, like the rest of {list}." ("Follows the rhythm of {list}." when the list's rhythm cannot be read) with "Set a schedule for this person"; once set, List settings' "How often" day wheel ("Aim for every 14 days", "Aim for every day" at one day; ADR 0011) and "Reset to default" (CONTACT-03; no rhythm choice since LIST-30)
 - "Notes": a field ("Add a note") with "Add", then every note, newest first, with when it was written (NOTE-01)
-- "Recent calls": each with an icon for its kind, its length (or "Logged" / "Attempted"), and how long ago; "View all calls" in the overflow for the rest
+- "Recent calls": each call says its kind in words, then how long ago: "Outgoing · 12 min" or "Incoming · 12 min" for a phone call, "Logged" for a connection you logged by hand, "Attempted" for one that did not connect; "View all calls" in the overflow for the rest. No icon names the kind (until 2026-10-08 an icon led each row; it went at the owner's choice, rules.md Design 9)
 - The one accent element: "Call" (rules.md Design 6)
 
 ## Actions and menus
@@ -55,7 +55,7 @@
 - Ignored: the status line "Ignored", "Unignore" in the overflow, no Pause. Archived: the status line "Archived"
 - Call log access off: a notice above the stats, "Orbit can't see your phone calls" with "Open settings"; "Never called", "Not enough calls yet" and "No calls yet." are not claimed, while "Total calls" and any calls or connections already recorded stay
 - Empty parts: "Not on any list yet", "No notes yet.", "No calls yet."
-- Privacy curtain: the name and title read "Contact", the number reads "Number hidden" and does not dial (PRIV-07), list names read "List" ("its list" in the schedule sentence), note bodies "Note hidden", and no photo is shown (PRIV-03)
+- Privacy curtain: the name and title read "Contact", the number reads "Number hidden" and does not dial (PRIV-07), the lists line says only how many, "2 lists" or "1 list" ("its list" in the schedule sentence), note bodies "Note hidden", and no photo is shown (PRIV-03)
 
 ## Leads to
 
@@ -72,7 +72,7 @@
 - `ContactDetailViewModelTest` (archived lists not named, counted or followed; a saved schedule shows on one list; Ready, Error and recovery, Orphaned with its notes, the ignored and archived flags, pause and unpause, ignore and undo, archive, logging a connection and an attempt, notes, focusNote, scrollToCallEventId, the lapsed-pause banner, failure snackbars)
 - `ContactOverflowMenuTest` (the overflow's order and its Pause/Unpause, Ignore/Unignore and Open in Contacts variants)
 - `ContactDetailCurtainTest` (every name, the number and the pane title under the curtain)
-- `ContactDetailScreenTest` (added this round: arriving scrolled to a call shows that row and "Add note to this call"; the pane title is the name, or the message heading when there is no person)
+- `ContactDetailScreenTest` (added this round: arriving scrolled to a call shows that row and "Add note to this call"; the pane title is the name, or the message heading when there is no person; added 2026-10-08: the lists line names every list and draws no chip, "2 lists" and "1 list" under the curtain, "Not on any list yet" with none; a call row reads "Outgoing · 12 min", "Incoming · 12 min", "Logged" or "Attempted", the same under the curtain, with no description carrying the direction)
 - `NotesMenuTest` (added this round), `OrphanBannerTest` and `UnpauseBannerTest` (on the JVM from this round), `RuleOverrideSectionTest`
 - Use cases: `PauseContactUseCaseTest`, `IgnoreContactUseCaseTest`, `UnignoreContactUseCaseTest`, `ArchiveContactUseCaseTest`, `RelinkContactUseCaseTest`, `AddNoteUseCaseTest`, `AddRetroactiveNoteUseCaseTest`, `EditNoteUseCaseTest`, `DeleteNoteUseCaseTest`
 - `OrbitNavHostTest` (added this round: "View all calls" opens this person's calls and back returns to the same entry, LOG-04; "Open settings" leads to Settings)

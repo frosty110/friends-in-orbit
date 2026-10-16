@@ -61,6 +61,11 @@ import app.orbit.ui.theme.OrbitTheme
  * the cluster-tier `accentTint` (per the per-screen accent budget) and carry a
  * check or an ✕, so colour is never the only signal.
  *
+ * An applied filter says its count in its own label ("Rarely called · 7"). The
+ * chip is a control, so the count is part of what it does, not a badge: these
+ * chips are the shape rules.md Design 9 keeps (2026-10-08), and nothing in this
+ * row tags a person or a list.
+ *
  * Plain words (rubric D7): "Unsorted" is "Not on a list", and the list filter
  * reads "On a list" / "On {list}" rather than "In list…" / "In: {list}". List
  * names are masked to "a list" under the privacy curtain.

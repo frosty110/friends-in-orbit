@@ -43,7 +43,7 @@
   /* Brand */
   --orbit-terracotta:        #B85338;   /* primary CTA. Deepened 2026-10-05 from #C8654A: white on it was 3.88:1, now 4.85:1 */
   --orbit-terracotta-dark:   #90412C;   /* pressed, light mode */
-  --orbit-terracotta-tint:   #EDD6CE;   /* soft pill / selected bg */
+  --orbit-terracotta-tint:   #EDD6CE;   /* selected bg: a chosen filter chip or row (the cluster tier, rules.md Design 5) */
   --orbit-sage:              #87A383;   /* positive status: dots and fills only (2.76:1 on paper) */
   --orbit-sage-text:         #5D7859;   /* positive status as text ("Allowed"), 4.5:1 */
   --orbit-sage-tint:         #D8E3D6;
@@ -60,7 +60,7 @@
   --orbit-stone-deep:        #524B45;
 
   /* Cool neutral — the only cool slot, for purely informational states
-     (sync, import progress, read-only badge). Keeps warm family for emotion. */
+     (sync, import progress). Keeps warm family for emotion. */
   --orbit-slate:             #6B7570;
   --orbit-slate-tint:         #DCE1DE;
 
@@ -154,7 +154,8 @@
   --fs-body:      16px;   /* minimum body, non-negotiable */
   --fs-meta:      14px;   /* timestamps, secondary */
   --fs-stat-value: 14px;  /* stat values on the card foot, SemiBold, tabular figures */
-  --fs-badge:     13px;   /* count badges, Medium, tabular figures */
+  --fs-label:     13px;   /* short labels, Medium, tabular figures: Material's labelMedium in the app (Theme.kt).
+                             Was --fs-badge until 2026-10-08, named for the count badges rules.md Design 9 retired */
   --fs-micro:     12px;   /* captions, eyebrows */
 
   --fw-regular: 400;
@@ -303,7 +304,9 @@ p, .body {
   color: var(--fg-muted);
   font-weight: var(--fw-regular);
 }
-.micro, .badge-text {
+/* .caption was .badge-text until 2026-10-08: the same 12px style, renamed because nothing in
+   Orbit is a badge (rules.md Design 9). */
+.micro, .caption {
   font-size: var(--fs-micro);
   color: var(--fg-muted);
   letter-spacing: var(--tracking-wide);

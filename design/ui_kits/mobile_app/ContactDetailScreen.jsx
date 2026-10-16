@@ -28,9 +28,10 @@ function ContactDetailScreen({ name = 'Sarah Chen', onBack, onCall }) {
           <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'var(--fg-muted)', marginTop: 4 }}>
             +1 (415) 555‑0182
           </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            <Chip tone="terracotta">Inner orbit</Chip>
-            <Chip tone="amber">Family</Chip>
+          {/* The lists she is on, in words, not chips (rules.md Design 9, 2026-10-08), joined
+              as the app's lists line joins them. */}
+          <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'var(--fg-muted)', marginTop: 4 }}>
+            On Inner orbit, Family
           </div>
         </div>
 
@@ -64,7 +65,7 @@ function ContactDetailScreen({ name = 'Sarah Chen', onBack, onCall }) {
               display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px',
               borderTop: i === 0 ? 'none' : '1px solid var(--line-soft)',
             }}>
-              <Icon name={h.dir === 'out' ? 'phone-outgoing' : 'phone-incoming'} size={18} color="var(--fg-muted)" />
+              {/* No direction icon: the words say which way (rules.md Design 9, 2026-10-08). */}
               <div style={{ flex: 1, fontFamily: 'Inter', fontSize: 15, color: 'var(--fg)' }}>
                 {h.dir === 'out' ? 'You called' : 'They called'}
               </div>

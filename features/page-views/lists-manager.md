@@ -16,10 +16,10 @@
 ## What the user sees
 
 - App bar: Back and "Lists"
-- One row per list, in Home's order: a drag handle ("Reorder list"), the name, a second line: a regular list's rhythm as its interval, whatever rule it runs ("Every 14 days"; "Every 3 days" for a Late night list and "Every day" for Energize, LIST-30); a smart list's rule, not its interval ("Recently added · 30 days", "Never called"), which is what tells a list that fills itself apart, on screen and to TalkBack (LIST-07; until 2026-10-08 a "Smart list" chip also said so); or "Couldn't read this list's rhythm" when the stored rhythm cannot be decoded (the deck fails on the same data), a count badge (left out at zero), "+" ("Add people to {list}"; regular lists only) and "More actions for {list}"
+- One row per list, in Home's order: a drag handle ("Reorder list"), the name, a second line, "+" ("Add people to {list}"; regular lists only) and "More actions for {list}". The second line is what the list does, then who is on it, in words: "Every 14 days · 12 people", "Every 7 days · 1 person", "Recently added · 30 days · 4 people", and "Every 14 days · No one yet" for a list with nobody on it (Home's words for an empty list). What the list does is a regular list's rhythm as its interval, whatever rule it runs ("Every 14 days"; "Every 3 days" for a Late night list and "Every day" for Energize, LIST-30), or a smart list's rule, not its interval ("Recently added · 30 days", "Never called"), which is what tells a list that fills itself apart, on screen and to TalkBack (LIST-07; until 2026-10-08 a "Smart list" chip also said so). A list with no rhythm to say shows the count alone ("12 people", "No one yet"). When the stored rhythm cannot be decoded the line is "Couldn't read this list's rhythm", alone, with no count (the deck fails on the same data). The count's number and noun never split across a wrap ("2 people" keeps together, a no-break space in `lists_row_members`). TalkBack hears the row as one node: the name, then the line once. Until 2026-10-08 the count was a bare number in an accent pill after the name, left out at zero (rules.md Design 9)
 - A foot note: "Drag to reorder. Lists higher up show first on home."
 - "Archived (2)", which expands to the archived lists, each with "Restore", a delete control ("Delete {list}") and a settings control ("List settings for {list}")
-- A floating "New list" button when lists exist (the one accent; LIST-20), centred in the body when there are none
+- A floating "New list" button when lists exist, centred in the body when there are none (LIST-20). It is the screen's one accent (rules.md Design 5), again since the rows' accent count pills went on 2026-10-08
 
 ## Actions and menus
 
@@ -48,8 +48,8 @@
 
 ## Tests that pin it
 
-- `ListsManagerViewModelTest` (archive, restore, delete with undo, reorder, the nudge toggle, the failure path, the rhythm line for every rule type and its unreadable case), `RuleParamsResolutionTest` (the resolver shared with List settings)
+- `ListsManagerViewModelTest` (archive, restore, delete with undo, reorder, the nudge toggle, the failure path, the rhythm line for every rule type and its unreadable case, which the row is told is an error), `RuleParamsResolutionTest` (the resolver shared with List settings)
 - `ListRowMenuOrderTest` (menu order, and the same pause and resume words as Home)
-- `ListsManagerScreenTest` (a row tap, "List settings" and "New list" go to different places; "New list" is handed to the caller, which opens New list; a new list is scrolled into view, and the lists first shown and a restored one are not; added 2026-10-08: a smart list's row shows its rule and no "Smart list" chip)
+- `ListsManagerScreenTest` (a row tap, "List settings" and "New list" go to different places; "New list" is handed to the caller, which opens New list; a new list is scrolled into view, and the lists first shown and a restored one are not; added 2026-10-08: a smart list's row shows its rule and no "Smart list" chip, and every row's line ends with the count in words, "1 person" and "No one yet" included, alone when there is no rhythm, never after the unreadable-rhythm line, with no count pill and the line heard once)
 - `OrbitNavHostTest` (a row tap opens the deck and "List settings" opens List settings, LIST-23; "New list" opens New list and leaving it returns here, and `lists?openCreate=true` opens it once, LIST-28)
 - Gallery previews: `ListsManagerContentPreview`, `ListsManagerReadyPreview`, `ListRowPreviewLightStatic`, `ListRowPreviewDarkSmart`, `ArchivedListRowPreviewLight`, `RenameListDialogLightPreview`, `DeleteListDialogLightPreview`, the Loading, Error and archived-expanded previews, with the curtain pass

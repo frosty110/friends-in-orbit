@@ -16,11 +16,11 @@
 - Header: the face, **name** and **number** ("Number hidden" under the privacy curtain), **Call** (the screen's one accent) and **Log a connection**. The sheet has two modes: **We connected** (a call or a visit Orbit could not see) and **Couldn't reach them** (an attempt: voicemail, no answer); an attempt shows as "Attempted" in history and stays out of the stats.
 - A status line under the number where one applies: "Paused until 12 Oct" or "Paused until you unpause" while a pause is in force, "Ignored" or "Archived" for someone who is.
 - **More actions for Avery** (the three dots): *View all calls*, *Pause* (or *Unpause* while paused; not offered while the person is ignored), *Open in Contacts* (when the person is in your phone's contacts), then *Ignore* (or *Unignore* while ignored). Pause opens the shared sheet: 1 week, 1 month, Until you unpause; the snackbar names the length and offers Undo.
-- **On these lists**: the membership chips ("Not on any list yet" when none). Under the curtain each reads "List".
+- **On these lists**: one line naming every list, "Inner orbit, Late night" ("Not on any list yet" when none). Under the curtain it says only how many, "2 lists". Since 2026-10-08: it was a row of membership chips, which rules.md Design 9 (no badges) retires; the render above still shows the chip.
 - **Stats**: *Last call · Total calls · Average length · Longest gap · Usually* (with an info tip). A stat without enough history says **Not enough calls yet** in words, never a dash (CONTACT-3).
 - **Add to lists** opens the list picker.
 - **Notes**: an "Add a note" field; each note has a "More" menu (Edit, Delete with Undo) as well as the long-press and swipe; the timestamp switches between "11 days ago" and the date. Note bodies read "Note hidden" under the curtain.
-- **Recent calls**: direction icons, durations and relative times; "Logged" and "Attempted" rows for connections you recorded by hand.
+- **Recent calls**: each call's kind in words, then how long ago: "Outgoing · 12 min" or "Incoming · 12 min" for a phone call, "Logged" and "Attempted" for connections you recorded by hand. Since 2026-10-08 no icon leads a row: a direction icon was the only visible sign of who called whom until the owner chose words in its place (rules.md Design 9, no badges).
 - For someone on two or more lists, a **Custom schedule** section: "Follows the keep in touch rhythm from Inner orbit." with "Set a schedule for this person".
 - States: a hero-shaped placeholder while loading; "This person isn't in Orbit anymore" with Go back; "Couldn't load this person" with Try again (CONTACT-08). A deleted phone contact shows the orphan banner with Re-link and Archive.
 

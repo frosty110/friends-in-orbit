@@ -14,8 +14,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,7 +25,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -51,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -71,7 +69,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import app.orbit.R
 import app.orbit.data.CallDirection
 import app.orbit.data.CallEntry
-import app.orbit.data.ChipTone
 import app.orbit.data.Contact
 import app.orbit.data.NoteRow
 import app.orbit.domain.model.PauseDuration
@@ -80,7 +77,6 @@ import app.orbit.domain.usecase.LogConnectionWhen
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.ContactStatsPanel
 import app.orbit.ui.components.InfoTip
-import app.orbit.ui.components.ListContextChip
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.LogConnectionSheet
 import app.orbit.ui.components.OrbitAppBar
@@ -96,7 +92,6 @@ import app.orbit.ui.components.OrbitScreenMessage
 import app.orbit.ui.components.OrbitSnackbarHost
 import app.orbit.ui.components.OrbitTextField
 import app.orbit.ui.components.PauseDurationSheet
-import app.orbit.ui.components.PhIcon
 import app.orbit.ui.components.SectionLabel
 import app.orbit.ui.components.StatEntry
 import app.orbit.ui.screens.contact.sections.NotesSection
@@ -116,8 +111,10 @@ import kotlinx.coroutines.delay
  * CONTACT-01 / CONTACT-02 / CONTACT-06.
  *
  * Renders: Coil-backed photo with Avatar fallback, hero name (32sp) + phone
- * number, "On these lists" chip row, 5-row stats panel (Last call / Total
- * calls / Average length / Longest gap / Usually), recent calls list (50/page).
+ * number, "On these lists" with the lists named on one line ("Inner orbit,
+ * Late night"; a row of chips until 2026-10-08, rules.md Design 9), 5-row
+ * stats panel (Last call / Total calls / Average length / Longest gap /
+ * Usually), recent calls list (50/page).
  *
  * Hero action row: "Call" (Primary — the screen's one terracotta element;
  * ACTION_DIAL via the shared Dialer util) and "Log a connection" (Secondary —
@@ -128,12 +125,12 @@ import kotlinx.coroutines.delay
  * screen root is the pane title and the hero name is a heading; without
  * them a new person's page was never announced (rubric D8).
  *
- * Privacy curtain (PRIV-03): hero name, pane title, overflow label and
- * lists-on chip labels render the literal "Contact" when
- * [LocalPrivacyCurtain] is true (focus-loss). The phone number is masked too
- * ("Number hidden", PRIV-07) and carries no click action at all under the
- * curtain, so it neither dials nor announces as a button; it used to show
- * through the curtain.
+ * Privacy curtain (PRIV-03): hero name, pane title and overflow label render
+ * the literal "Contact" when [LocalPrivacyCurtain] is true (focus-loss), and
+ * the lists line says only how many ("2 lists"), so no list name shows. The
+ * phone number is masked too ("Number hidden", PRIV-07) and carries no click
+ * action at all under the curtain, so it neither dials nor announces as a
+ * button; it used to show through the curtain.
  */
 @Composable
 fun ContactDetailScreen(
@@ -594,7 +591,6 @@ internal object ContactDetailItemKey {
 
 private const val CONTENT_TYPE_CALL_ROW = "callRow"
 
-@OptIn(ExperimentalLayoutApi::class) // function-scoped per Pitfall 8
 @Composable
 private fun ContactBodyLazyColumn(
     contact: Contact,
@@ -622,12 +618,11 @@ private fun ContactBodyLazyColumn(
     retroNoteAffordanceFor: Long?,
     callEventIds: List<Long>,
     // Parallel-indexed with [recentCalls] — true when the row is a
-    // user-logged connection (CallSource.MANUAL); renders "Logged" + a
-    // check-circle icon instead of duration + direction.
+    // user-logged connection (CallSource.MANUAL); reads "Logged" instead of
+    // direction and length.
     recentCallIsManual: List<Boolean>,
     // Parallel-indexed with [recentCalls] — true when the row is a reach-out
-    // that didn't connect (CallSource.ATTEMPT); renders "Attempted" + a
-    // phone-slash icon.
+    // that didn't connect (CallSource.ATTEMPT); reads "Attempted".
     recentCallIsAttempt: List<Boolean>,
     // FINDING A — Call button variant. Primary (terracotta) in the Ready
     // state; Secondary in the Orphaned state, where the banner's Re-link
@@ -860,24 +855,35 @@ private fun ContactBodyLazyColumn(
                     Spacer(Modifier.height(OrbitTheme.spacing.x6))
                     SectionEyebrow(stringResource(R.string.contact_section_lists))
                     Spacer(Modifier.height(OrbitTheme.spacing.x3))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
-                        verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2)
-                    ) {
-                        listsOn.forEach { listName ->
-                            // ListContextChip masks the name to "List" under the
-                            // curtain, the same word every list-name surface uses (it
-                            // read "Contact" here). Stone is the neutral read-only tone.
-                            ListContextChip(listName = listName, tone = ChipTone.Stone)
-                        }
-                        if (listsOn.isEmpty()) {
-                            // A bare dash read as broken (vision CONTACT-3).
-                            Text(
-                                text = stringResource(R.string.contact_not_on_any_list),
-                                style = OrbitTheme.type.body,
-                                color = OrbitTheme.colors.fgMuted
-                            )
-                        }
+                    // One line of words under the heading (CONTACT-01): every
+                    // list by name, since this is the person's own page, and no
+                    // "On", which the heading already says. Until 2026-10-08 it
+                    // was a wrapping row of Stone chips, one per list; a
+                    // read-only chip is a badge (rules.md Design 9).
+                    if (listsOn.isEmpty()) {
+                        // A bare dash read as broken (vision CONTACT-3).
+                        Text(
+                            text = stringResource(R.string.contact_not_on_any_list),
+                            style = OrbitTheme.type.body,
+                            color = OrbitTheme.colors.fgMuted
+                        )
+                    } else {
+                        Text(
+                            // Under the curtain no list name shows, masked or
+                            // not: the count ("2 lists"), as Search and the
+                            // picker say it (PRIV-03).
+                            text = if (curtain) {
+                                pluralStringResource(
+                                    R.plurals.contact_lists_count,
+                                    listsOn.size,
+                                    listsOn.size
+                                )
+                            } else {
+                                listsOn.joinToString(", ")
+                            },
+                            style = OrbitTheme.type.body,
+                            color = OrbitTheme.colors.fg
+                        )
                     }
                 }
 
@@ -1004,8 +1010,9 @@ private fun ContactBodyLazyColumn(
                     RuleOverrideSection(
                         listsOnSize = listsOn.size,
                         inheritedRhythm = inheritedRhythm,
-                        // List names are masked under the curtain (ListContextChip):
-                        // null makes the section say "from its list".
+                        // List names are masked under the curtain (PRIV-03,
+                        // components_curtain_list): null makes the section say
+                        // "from its list".
                         primaryListName = if (curtain) null else primaryListName,
                         hasOverride = hasOverride,
                         currentParams = currentParams ?: RuleParams.KeepInTouch(),
@@ -1056,7 +1063,6 @@ private fun ContactBodyLazyColumn(
                     ) {
                         CallHistoryRow(
                             call = recentCalls[idx],
-                            personFirstName = displayName.substringBefore(' '),
                             isManual = recentCallIsManual.getOrNull(idx) ?: false,
                             isAttempt = recentCallIsAttempt.getOrNull(idx) ?: false
                         )
@@ -1183,75 +1189,66 @@ internal fun OrphanBanner(onRelink: () -> Unit, onArchive: () -> Unit) {
  * populated by the VM's `toUiCallEntry` mapper using
  * `app.orbit.ui.util.RelativeTime` — this row composable just renders them.
  *
- * Direction is an icon for the eye and words for TalkBack: the icon's box
- * reads "You called" or "{first name} called", the words Call history leads
- * its rows with (strings_contact.xml keeps its own copy, one file per area).
- * Until 2026-10-06 the icon was the only carrier, so a screen-reader user
- * heard the length and the time but never who called whom (WCAG 1.1.1).
- * PhIcon itself stays decorative, as everywhere.
+ * The first line says what kind of call it was, in words. A phone call reads
+ * its direction, then its length: "Outgoing · 12 min" or "Incoming · 12 min"
+ * (`contact_call_kind_length`), the words Call history ends its rows with,
+ * in this area's own keys (one file per area, voice.md). The second line is
+ * the time since ("3 days ago"). TalkBack reads the same visible text, once.
  *
  * [isManual] rows are user-logged connections (CallSource.MANUAL,
- * durationSeconds = 0): a check-circle icon + "Logged" replaces the
- * direction icon + duration label, which would otherwise read "—".
+ * durationSeconds = 0) and read "Logged"; [isAttempt] rows are reach-outs
+ * that didn't connect (CallSource.ATTEMPT, durationSeconds = 0) and read
+ * "Attempted", distinct from a logged connection, because you reached out
+ * but didn't actually talk. Neither has a length to show. Every phone call
+ * here has one: the reconciler ingests no connected call under a second
+ * (`CallLogReconciler.isIngestable`; an unanswered outgoing call is an
+ * attempt) and `CallEntry.lengthLabel` is never null.
  *
- * [isAttempt] rows are reach-outs that didn't connect (CallSource.ATTEMPT,
- * durationSeconds = 0): a phone-slash icon + "Attempted" — distinct from a
- * logged connection, because you reached out but didn't actually talk.
- * Those two rows say what happened in their own text, so the icon needs no
- * words of its own.
+ * Until 2026-10-08 each row led with an 18dp icon for its kind
+ * (phone-outgoing, phone-incoming, check-circle, phone-slash). For a phone
+ * call it was the only visible sign of who called whom, and a semantics box
+ * around it gave TalkBack "You called" or "{first name} called" (added
+ * 2026-10-06, WCAG 1.1.1). A glyph whose only job is to name a kind is a
+ * badge (rules.md Design 9), so the owner chose to remove the icons and give
+ * this row "Outgoing · 12 min" / "Incoming · 12 min" in their place. The row
+ * shows no name, so the privacy curtain has nothing to mask in it.
  */
 @Composable
 private fun CallHistoryRow(
     call: CallEntry,
-    personFirstName: String,
     isManual: Boolean = false,
     isAttempt: Boolean = false
 ) {
-    Row(
+    val kindLine: String = when {
+        isAttempt -> stringResource(R.string.contact_call_attempted)
+        isManual -> stringResource(R.string.contact_call_logged)
+        else -> stringResource(
+            R.string.contact_call_kind_length,
+            stringResource(
+                if (call.direction == CallDirection.Outgoing) {
+                    R.string.contact_call_outgoing
+                } else {
+                    R.string.contact_call_incoming
+                }
+            ),
+            call.lengthLabel.asString()
+        )
+    }
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = OrbitTheme.spacing.x3),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(vertical = OrbitTheme.spacing.x3)
     ) {
-        val iconName: String = when {
-            isAttempt -> "phone-slash"
-            isManual -> "check-circle"
-            call.direction == CallDirection.Outgoing -> "phone-outgoing"
-            else -> "phone-incoming"
-        }
-        val directionLabel: String? = when {
-            isAttempt || isManual -> null
-            call.direction == CallDirection.Outgoing -> stringResource(
-                R.string.contact_call_you_called
-            )
-            else -> stringResource(R.string.contact_call_they_called, personFirstName)
-        }
-        Box(
-            modifier = if (directionLabel != null) {
-                Modifier.semantics { contentDescription = directionLabel }
-            } else {
-                Modifier
-            }
-        ) {
-            PhIcon(name = iconName, size = 18.dp, tint = OrbitTheme.colors.fgMuted)
-        }
-        Spacer(Modifier.width(OrbitTheme.spacing.x3))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = when {
-                    isAttempt -> stringResource(R.string.contact_call_attempted)
-                    isManual -> stringResource(R.string.contact_call_logged)
-                    else -> call.lengthLabel.asString()
-                },
-                style = OrbitTheme.type.body,
-                color = OrbitTheme.colors.fg
-            )
-            Text(
-                text = call.relativeWhen.asString(),
-                style = OrbitTheme.type.meta,
-                color = OrbitTheme.colors.fgMuted
-            )
-        }
+        Text(
+            text = kindLine,
+            style = OrbitTheme.type.body,
+            color = OrbitTheme.colors.fg
+        )
+        Text(
+            text = call.relativeWhen.asString(),
+            style = OrbitTheme.type.meta,
+            color = OrbitTheme.colors.fgMuted
+        )
     }
 }
 
@@ -1325,7 +1322,6 @@ internal val previewContact: Contact = Contact(
     avgLengthLabel = formatDuration(14 * 60),
     pickupRateLabel = "82%",
     totalCalls = 12,
-    due = false,
     listIds = listOf("inner-orbit"),
     bestWindowLabel = UiText.res(R.string.time_daypart_evenings),
     heat = FloatArray(24) { 0f },
