@@ -191,7 +191,7 @@ class ListsManagerScreenTest {
             ),
         )
 
-        compose.onNodeWithText("Recently added · 30 days · 4 people").assertIsDisplayed()
+        compose.onNodeWithText("Recently added · 30 days · 4\u00A0people").assertIsDisplayed()
         compose.onAllNodesWithText("Smart list", useUnmergedTree = true).assertCountEquals(0)
     }
 
@@ -205,17 +205,17 @@ class ListsManagerScreenTest {
     fun the_count_ends_the_rhythm_line_and_no_pill_shows_it() {
         setRows(row(id = 1L, name = "Inner orbit", memberCount = 12, summary = every(14)))
 
-        compose.onNodeWithText("Every 14 days · 12 people").assertIsDisplayed()
+        compose.onNodeWithText("Every 14 days · 12\u00A0people").assertIsDisplayed()
         compose.onAllNodesWithText("12", useUnmergedTree = true).assertCountEquals(0)
         // One merged node: the name, then the line, once each.
-        assertEquals(listOf("Inner orbit", "Every 14 days · 12 people"), rowTexts("Inner orbit"))
+        assertEquals(listOf("Inner orbit", "Every 14 days · 12\u00A0people"), rowTexts("Inner orbit"))
     }
 
     @Test
     fun one_person_is_singular() {
         setRows(row(id = 1L, name = "Inner orbit", memberCount = 1, summary = every(7)))
 
-        compose.onNodeWithText("Every 7 days · 1 person").assertIsDisplayed()
+        compose.onNodeWithText("Every 7 days · 1\u00A0person").assertIsDisplayed()
     }
 
     // The pill drew nothing at zero; the line says what Home's card says of
@@ -236,7 +236,7 @@ class ListsManagerScreenTest {
             row(id = 2L, name = "Book club", memberCount = 0, summary = null),
         )
 
-        assertEquals(listOf("Inner orbit", "12 people"), rowTexts("Inner orbit"))
+        assertEquals(listOf("Inner orbit", "12\u00A0people"), rowTexts("Inner orbit"))
         assertEquals(listOf("Book club", "No one yet"), rowTexts("Book club"))
     }
 
@@ -247,14 +247,14 @@ class ListsManagerScreenTest {
         setRows(row(id = 1L, name = "Inner orbit", memberCount = 5, summary = ListRowSummary.Unreadable))
 
         assertEquals(listOf("Inner orbit", "Couldn't read this list's rhythm"), rowTexts("Inner orbit"))
-        compose.onAllNodesWithText("5 people", substring = true, useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodesWithText("5\u00A0people", substring = true, useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test
     fun the_line_builder_never_joins_the_count_to_the_error() {
         assertEquals(ListRowSummary.Unreadable.text, listRowMeta(ListRowSummary.Unreadable, memberCount = 5))
         assertEquals(
-            UiText.res(R.string.lists_row_meta, every(14).text, UiText.plural(R.plurals.lists_members_count, 12, 12)),
+            UiText.res(R.string.lists_row_meta, every(14).text, UiText.plural(R.plurals.lists_row_members, 12, 12)),
             listRowMeta(every(14), memberCount = 12),
         )
         assertEquals(UiText.res(R.string.lists_row_members_none), listRowMeta(null, memberCount = 0))

@@ -50,7 +50,10 @@ import timber.log.Timber
  * locked phone shows NOTIF-13's public version either way). Do Not Disturb
  * bypass: an app needs Do Not Disturb access to set it, and Orbit has none.
  * The dot starts off whatever the old channel had. Deleting an old channel also
- * takes away a notification showing on it, once.
+ * takes away a notification showing on it, once. And Android clears the "set by
+ * the user" marks on any channel an app creates, so the carried values are
+ * Orbit's settings for the new channel: the same values, no longer locked as the
+ * user's (NOTIF-17 in the notifications README says what that could mean).
  *
  * Every later start finds the new channel and submits it again at its own
  * importance, which updates the name and description (the phone's language

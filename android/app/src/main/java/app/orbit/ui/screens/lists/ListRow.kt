@@ -196,7 +196,7 @@ fun ListRow(
  */
 internal fun listRowMeta(summary: ListRowSummary?, memberCount: Int): UiText {
     val people = if (memberCount > 0) {
-        UiText.plural(R.plurals.lists_members_count, memberCount, memberCount)
+        UiText.plural(R.plurals.lists_row_members, memberCount, memberCount)
     } else {
         UiText.res(R.string.lists_row_members_none)
     }

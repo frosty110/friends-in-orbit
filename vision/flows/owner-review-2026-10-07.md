@@ -296,4 +296,9 @@ Two were the owner's call, asked the same day:
   off), sound, vibration and lights. Lockscreen visibility and Do Not Disturb
   bypass cannot be set by an app, so those two reset (NOTIF-17). That is more
   than the owner was told when asked ("a custom sound or vibration resets
-  once"): only those two reset.
+  once"): only those two reset, and a picked sound only if Android refuses it
+  when the new channel is created. One honest caveat: the carried values arrive
+  as Orbit's own settings for the new channel, no longer marked as the person's,
+  so a phone feature that adjusts channels nobody has touched could adjust them.
+  Stock Android's own assistant does not; whether a maker's does was not
+  checked.

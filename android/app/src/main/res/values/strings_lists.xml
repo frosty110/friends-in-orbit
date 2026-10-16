@@ -57,12 +57,18 @@
 
     <!-- The whole second line under a list's name on Lists: what the list does, then who is
          on it. %1$s: its rhythm or rule, above ("Every 14 days", "Recently added · 30 days").
-         %2$s: lists_members_count ("12 people") or lists_row_members_none.
+         %2$s: lists_row_members ("12 people") or lists_row_members_none.
          "Every 14 days · 12 people". Never joined to lists_rhythm_unreadable, which shows alone. -->
     <string name="lists_row_meta">%1$s · %2$s</string>
     <!-- The same line's count for a list with nobody on it, and the whole line when the list has
          no rhythm to say. The words Home's card uses for an empty list. -->
     <string name="lists_row_members_none">No one yet</string>
+    <!-- The same line's count. The space is a no-break space (\u00A0), so a line that wraps
+         never leaves the number at one line's end and the noun on the next ("2 / people"). -->
+    <plurals name="lists_row_members">
+        <item quantity="one">%1$d\u00A0person</item>
+        <item quantity="other">%1$d\u00A0people</item>
+    </plurals>
 
     <!-- A row in the Lists manager. -->
     <string name="lists_row_reorder">Reorder list</string>
@@ -256,7 +262,8 @@
     <string name="lists_smart_no_params">Nothing to set. This list shows everyone you have never called.</string>
 
     <!-- Members preview. -->
-    <!-- The count over a list's people, and the end of its Lists row's line (lists_row_meta). -->
+    <!-- The count over a list's people (the People header). The Lists row's line uses
+         lists_row_members. -->
     <plurals name="lists_members_count">
         <item quantity="one">%1$d person</item>
         <item quantity="other">%1$d people</item>

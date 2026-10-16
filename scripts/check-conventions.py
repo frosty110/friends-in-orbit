@@ -263,8 +263,9 @@ def kotlin_code_lines(text: str) -> tuple[list[str], bool]:
 
     B and F skip a line that starts with a comment marker. G needs more, because
     the retired components are named in comments that stay true after they go:
-    a trailing note on a code line (Type.kt's `val badge: TextStyle, // ...
-    CountBadge ...`) and a block comment's inner lines are not code either. So
+    a trailing note on a code line (Type.kt's `val label: TextStyle, // ...
+    was `badge` until CountBadge went ...`) and a block comment's inner lines
+    are not code either. So
     this reads the file as Kotlin does: `//` to the end of the line, `/* */`
     nested, neither inside a string or char literal, and a raw string may span
     lines. The list keeps one entry per source line, so line numbers hold.
