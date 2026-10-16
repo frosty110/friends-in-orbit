@@ -49,7 +49,6 @@ class CardFaceCurtainTest {
                 CompositionLocalProvider(LocalPrivacyCurtain provides curtain) {
                     ContactCardFace(
                         contact = contact,
-                        listContext = "Inner orbit",
                         nowHour = 19,
                         whyNowLine = UiText.res(R.string.card_why_ago, formatAgo(11)),
                     )

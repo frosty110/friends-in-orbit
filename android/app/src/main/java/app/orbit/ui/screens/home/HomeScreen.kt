@@ -566,7 +566,6 @@ private fun ListTile(
             ListNameRow(
                 name = displayName,
                 memberLabel = memberLabel(tile.memberCount),
-                isSmart = tile.type == ListType.SMART,
                 tone = tone,
             )
             // Zone 2: Next up, a row of its own on the lighter wash, full
@@ -714,19 +713,26 @@ internal fun homeTileMenuActions(
  * own row with its own background ... And compact").
  *
  * The name comes first and gives way: it ellipsizes, and the count never
- * does. A Row measures its unweighted children first, so the count and the
- * glyph take what they need and the name gets the rest. At large text the
- * name may take a second line rather than shrink to a few letters (rules.md
- * Design 2). The count is the band's name colour at full strength, not faded:
- * a 72% alpha count fell under 4.5:1 on the band, and ThemeContrastTest holds
- * nameFg to 4.5:1 on every card's band. Not a target of its own: a tap here is
- * the card's tap.
+ * does. A Row measures its unweighted children first, so the count takes
+ * what it needs and the name gets the rest. At large text the name may take
+ * a second line rather than shrink to a few letters (rules.md Design 2). The
+ * count is the band's name colour at full strength, not faded: a 72% alpha
+ * count fell under 4.5:1 on the band, and ThemeContrastTest holds nameFg to
+ * 4.5:1 on every card's band. Not a target of its own: a tap here is the
+ * card's tap.
+ *
+ * Nothing marks a smart list here (rules.md Design 9, no badges; HOME-5,
+ * LIST-07). A 13dp shuffle glyph after its name, read to TalkBack as "Smart
+ * list", went on 2026-10-08: the same marker left the Lists screen that day
+ * at the owner's word ("We don't need this badge"), a smart list's card
+ * works like any other, and what the list is stays said in words on its
+ * Lists row (its rule) and in List settings' "Smart rule" section. The
+ * count is words, not a badge, and stays.
  */
 @Composable
 private fun ListNameRow(
     name: String,
     memberLabel: String,
-    isSmart: Boolean,
     tone: OrbitTones.ListTone,
 ) {
     val largeText = LocalDensity.current.fontScale > 1.3f
@@ -737,33 +743,14 @@ private fun ListNameRow(
             .background(tone.band)
             .padding(horizontal = OrbitTheme.spacing.x4, vertical = OrbitTheme.spacing.x2),
     ) {
-        // The name and the glyph share the room the count leaves, so the
-        // glyph stays beside the name however short it is.
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-            Text(
-                text = name,
-                style = OrbitTheme.type.listTile.copy(color = tone.nameFg),
-                maxLines = if (largeText) 2 else 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            // LIST-07: the smart-list cue. Type isn't a name, so it stays
-            // visible under the privacy curtain. PhIcon is decorative by
-            // design, so the meaning is said here: without it TalkBack had no
-            // way to tell the two list kinds apart on Home (WCAG 1.1.1).
-            // Home's own label since the Lists screen dropped its "Smart
-            // list" chip (2026-10-08).
-            if (isSmart) {
-                val smartLabel = stringResource(R.string.home_tile_smart_list)
-                Spacer(Modifier.width(OrbitTheme.spacing.x1))
-                PhIcon(
-                    name = "shuffle-angular",
-                    size = 13.dp,
-                    tint = tone.nameFg,
-                    modifier = Modifier.semantics { contentDescription = smartLabel },
-                )
-            }
-        }
+        // The name takes the room the count leaves.
+        Text(
+            text = name,
+            style = OrbitTheme.type.listTile.copy(color = tone.nameFg),
+            maxLines = if (largeText) 2 else 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
         // Quiet while the count is still hydrating (null reads as ""), rather
         // than a wrong "No one yet".
         if (memberLabel.isNotEmpty()) {

@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -67,14 +66,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.orbit.R
-import app.orbit.data.ChipTone
 import app.orbit.data.Contact
 import app.orbit.data.NoteRow
 import app.orbit.data.entity.ListType
 import app.orbit.domain.usecase.LogConnectionWhen
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.InfoTip
-import app.orbit.ui.components.ListContextChip
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.LogConnectionSheet
 import app.orbit.ui.components.OrbitAppBar
@@ -120,7 +117,8 @@ import kotlinx.coroutines.flow.collectLatest
 // labelled Later and Sooner buttons already teach the swipe, CARD-08), no
 // "Up now" / "Coming up" over the name and no answer chip in the pattern
 // panel (CARD-04), and the Later and Sooner snackbars no longer say when the
-// person comes back (CARD-02).
+// person comes back (CARD-02). Later that day, with rules.md Design 9 (no
+// badges): no list chip on the face; the app bar names the list (CARD-06).
 
 /**
  * @param onOpenContact opens a person's page from the face or "Open details".
@@ -684,7 +682,6 @@ private fun ReadyCard(
                     ) {
                         ContactCardFace(
                             contact = face.contact,
-                            listContext = face.listContext,
                             nowHour = face.nowHour,
                             whyNowLine = face.whyNowLine,
                             lastNote = face.recentNotes.firstOrNull()
@@ -848,7 +845,6 @@ private fun CircleSideButton(icon: String, label: String, onClick: () -> Unit) {
 @Composable
 internal fun ContactCardFace(
     contact: Contact,
-    listContext: String,
     nowHour: Int,
     whyNowLine: UiText?,
     lastNote: NoteRow? = null
@@ -880,22 +876,13 @@ internal fun ContactCardFace(
                 )
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                // List-context chip, top right. In the column's flow rather than
-                // overlaid on the face: overlaid, a long list name at 200% text
-                // wrapped over the avatar (gate G3). The offset keeps it 12dp
-                // from the card's edge, where it always sat.
-                if (listContext.isNotBlank()) {
-                    ListContextChip(
-                        listName = listContext,
-                        tone = ChipTone.Terracotta,
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .offset(x = OrbitTheme.spacing.x3)
-                    )
-                    Spacer(Modifier.height(OrbitTheme.spacing.x3))
-                } else {
-                    Spacer(Modifier.height(OrbitTheme.spacing.x6 + OrbitTheme.spacing.x3))
-                }
+                // Nothing names the list on the face (rules.md Design 9, no
+                // badges; CARD-06). A Terracotta chip with the list's name sat
+                // at the top end here until 2026-10-08; the app bar's title
+                // already names the list ("List" under the curtain) and is the
+                // pane title TalkBack announces. This is the inset the face
+                // kept when there was no chip, so the avatar does not move up.
+                Spacer(Modifier.height(OrbitTheme.spacing.x6 + OrbitTheme.spacing.x3))
                 Avatar(name = shownName, size = 104.dp, photoUri = if (curtain) null else contact.photoUri)
                 // Nothing over the name (CARD-04). An eyebrow said "Up now" or
                 // "Coming up" here from 2026-05-08 (the tide marker) until the
@@ -1219,7 +1206,9 @@ private fun CardViewContentPreview() {
     }
 }
 
-// Gate G3: a 40-character name and list name, at 100% and 200% text.
+// Gate G3: a 40-character name and list name, at 100% and 200% text. The list
+// name is the app bar's title alone since the face's chip went (2026-10-08,
+// rules.md Design 9).
 @PreviewLightDark
 @Preview(name = "200%", fontScale = 2f)
 @Composable

@@ -1,10 +1,13 @@
 package app.orbit.ui.screens.card
 
 import android.app.Application
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -12,6 +15,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.orbit.R
 import app.orbit.data.Contact
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatDuration
@@ -27,9 +31,10 @@ import org.robolectric.annotation.Config
  * What the rendered Card view owes the user, checked on the JVM against the
  * semantics tree (the ContactDetailCurtainTest / PreviewGalleryTest
  * convention): the face opens details and never dials (CARD-01), it shows
- * no eyebrow over the name and no answer chip (CARD-04), in
- * landscape on a phone the Call button is on screen without scrolling
- * (CARD-06), the Error deck offers Try again only when a retry can re-read
+ * no eyebrow over the name and no answer chip (CARD-04), the list's name
+ * is said once, by the app bar, and never on the face (CARD-06, rules.md
+ * Design 9), in landscape on a phone the Call button is on screen without
+ * scrolling (CARD-06), the Error deck offers Try again only when a retry can re-read
  * something (CARD-07), and every Error deck has a pane title for TalkBack to
  * announce. Drives the stateless [CardViewContent]; [CardViewScreen] takes a
  * Hilt ViewModel and cannot be composed here.
@@ -79,26 +84,29 @@ class CardViewScreenTest {
         state: CardViewUiState,
         onTapToCall: (Long, String) -> Unit = { _, _ -> },
         onOpenContact: (Long) -> Unit = {},
+        curtain: Boolean = false,
     ) {
         compose.setContent {
             OrbitTheme {
-                CardViewContent(
-                    state = state,
-                    listId = "1",
-                    callLogDenied = false,
-                    messages = MutableSharedFlow<CardMessage>().asSharedFlow(),
-                    onBack = {},
-                    onBrowse = { _, _ -> },
-                    onEditList = {},
-                    onAddContacts = {},
-                    onTapToCall = onTapToCall,
-                    onSwipeLeft = {},
-                    onSwipeRight = {},
-                    onUndo = {},
-                    onRetry = {},
-                    onOpenSettings = {},
-                    onOpenContact = onOpenContact,
-                )
+                CompositionLocalProvider(LocalPrivacyCurtain provides curtain) {
+                    CardViewContent(
+                        state = state,
+                        listId = "1",
+                        callLogDenied = false,
+                        messages = MutableSharedFlow<CardMessage>().asSharedFlow(),
+                        onBack = {},
+                        onBrowse = { _, _ -> },
+                        onEditList = {},
+                        onAddContacts = {},
+                        onTapToCall = onTapToCall,
+                        onSwipeLeft = {},
+                        onSwipeRight = {},
+                        onUndo = {},
+                        onRetry = {},
+                        onOpenSettings = {},
+                        onOpenContact = onOpenContact,
+                    )
+                }
             }
         }
     }
@@ -166,6 +174,37 @@ class CardViewScreenTest {
         // 9:00 is outside the peak: the old chip said "Rarely answers now".
         setState(ready.copy(contact = withPattern, nowHour = 9, isAheadOfToday = true))
         assertNoEyebrowAndNoChip()
+    }
+
+    // CARD-06, amended 2026-10-08 (rules.md Design 9, no badges): until then
+    // a Terracotta chip with the list's name sat at the top of the face,
+    // under an app bar whose title already said it. The name is now said
+    // once, by the app bar, which is also the pane title TalkBack announces.
+    // Each test fails with the chip back: a second "Inner orbit" (or, under
+    // the curtain, a second "List") is found on the face.
+    private val heading = SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)
+
+    @Test
+    fun `CARD-06 - the list's name is said once, by the app bar, and not on the card face`() {
+        setReady()
+
+        compose.onAllNodesWithText("Inner orbit", useUnmergedTree = true).assertCountEquals(1)
+        compose.onNode(hasText("Inner orbit") and heading, useUnmergedTree = true).assertExists()
+        compose.onNode(titled("Inner orbit"), useUnmergedTree = true).assertExists()
+        // The face is still there, with the person on it.
+        compose.onNodeWithText("Avery Quinn").assertIsDisplayed()
+    }
+
+    @Test
+    fun `CARD-06 - under the curtain the list reads List once and its name never`() {
+        setState(ready, curtain = true)
+
+        compose.onAllNodesWithText("List", useUnmergedTree = true).assertCountEquals(1)
+        compose.onNode(hasText("List") and heading, useUnmergedTree = true).assertExists()
+        compose.onAllNodes(
+            hasText("Inner orbit", substring = true) or hasContentDescription("Inner orbit", substring = true),
+            useUnmergedTree = true,
+        ).assertCountEquals(0)
     }
 
     @Test
