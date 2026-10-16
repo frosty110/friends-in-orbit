@@ -1,7 +1,7 @@
 # rule-engine
 
 **Status:** shipped
-**Last reviewed:** 2026-10-07
+**Last reviewed:** 2026-10-08
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/domain/rule/` (`RuleEngine.kt`, `KeepInTouchEngine.kt`, `LateNightEngine.kt`, `EnergizeEngine.kt`, `EngineFactory.kt`, `RuleParams.kt`, `RuleContext.kt`, `ContactSnapshot.kt`, `OverrideResolver.kt`, `RuleInterval.kt`)
 - Tests: `android/app/src/test/java/app/orbit/domain/rule/` (`KeepInTouchEngineTest`, `LateNightEngineTest`, `EnergizeEngineTest`, `OverrideResolverTest`, `RuleParamsSerializationTest`, `RuleIntervalTest`)
@@ -12,7 +12,7 @@
 
 ### Why it exists
 
-The rule engine decides who is "due" on each list at any moment. It turns the home due-counts from decoration into information and makes the card-view queue intelligent. Without it, the app is a contact list; with it, the app is a quiet friend who knows who you meant to call.
+The rule engine decides who is "due" on each list at any moment. It orders each list's deck on Card view and its queue on Browse, so the person who comes up first (Home's Next up) is the one most worth a call. Home's due counts, which it once fed, were retired by HOME-6, and no screen counts people as due. Without it, the app is a contact list; with it, the app is a quiet friend who knows who you meant to call.
 
 ### User story
 

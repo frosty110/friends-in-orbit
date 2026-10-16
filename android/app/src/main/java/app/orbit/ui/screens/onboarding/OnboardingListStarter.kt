@@ -96,8 +96,11 @@ class OnboardingListStarter(
         }
         // Fresh memberships have nextDueAt = null (due now) but the
         // denormalized ListEntity.dueCount stays 0 until a choke-point
-        // recompute. Home's live header counts them while the tile badge reads
-        // the column; recompute so the first Home render is consistent.
+        // recompute. No screen shows that column any more (Home's due counts
+        // went, HOME-6; rules.md Design 9); the nudge gate reads it
+        // (ListPromptWorker, NOTIF-12: it posts only while someone is due),
+        // so recompute now rather than leave the new list looking empty to
+        // the gate until Home's next stale-count refresh.
         listRepo.recomputeDueCountForList(listId, now)
     }
 }
