@@ -1,11 +1,12 @@
 package app.orbit.ui.screens.home
 
 import android.app.Application
-import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.test.core.app.ApplicationProvider
 import app.orbit.data.entity.CallDirection
 import app.orbit.ui.theme.OrbitSpacing
@@ -100,10 +101,11 @@ class RhythmDaySheetTest {
     /**
      * The icon was decorative ([app.orbit.ui.components.PhIcon] gives it no
      * description), so it has no node to look for; this reads where it sat
-     * from the layout. A name too long for its row is cut short at the end of
-     * the space it is given, so its right edge is where the row's words stop.
-     * With nothing after them that is the row's own end padding; with the
-     * 18dp icon and its 8dp spacer back, the words stopped 26dp sooner.
+     * from the layout. The name's layout says how much room the row gave its
+     * words (the width the text was laid out in, not the width of the glyphs
+     * drawn, which a cut-short name does not fill under Robolectric). With
+     * nothing after the words that room ends at the row's own end padding;
+     * with the 18dp icon and its 8dp spacer back, it ended 26dp sooner.
      */
     @Test
     fun `a call row says which way in words and nothing trails them`() {
@@ -127,13 +129,17 @@ class RhythmDaySheetTest {
         compose.onNodeWithText("You called · 10 min · 4:30pm", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("They called · 10 min · 4:30pm", useUnmergedTree = true).assertExists()
 
-        val row = compose.onNode(hasClickAction() and hasText(longName)).getBoundsInRoot()
-        val name = compose.onNodeWithText(longName, useUnmergedTree = true).getBoundsInRoot()
-        val endPadding = OrbitSpacing().x2
-        val gap = row.right - name.right
+        val row = compose.onNode(hasClickAction() and hasText(longName)).fetchSemanticsNode().boundsInRoot
+        val name = compose.onNodeWithText(longName, useUnmergedTree = true).fetchSemanticsNode()
+        val layouts = mutableListOf<TextLayoutResult>()
+        name.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+        val room = layouts.single().layoutInput.constraints.maxWidth
+        val endPadding = with(compose.density) { OrbitSpacing().x2.toPx() }
+        val gap = row.right - (name.boundsInRoot.left + room)
         assertTrue(
-            "the name runs to the row's end padding, with no icon after it ($gap from the edge)",
-            abs((gap - endPadding).value) < 0.5f,
+            "the words' room runs to the row's end padding, with no icon after it " +
+                "(${gap}px from the edge, padding ${endPadding}px)",
+            abs(gap - endPadding) < 0.5f,
         )
     }
 }
