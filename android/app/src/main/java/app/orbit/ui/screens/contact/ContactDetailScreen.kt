@@ -14,8 +14,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -51,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -71,7 +70,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import app.orbit.R
 import app.orbit.data.CallDirection
 import app.orbit.data.CallEntry
-import app.orbit.data.ChipTone
 import app.orbit.data.Contact
 import app.orbit.data.NoteRow
 import app.orbit.domain.model.PauseDuration
@@ -80,7 +78,6 @@ import app.orbit.domain.usecase.LogConnectionWhen
 import app.orbit.ui.components.Avatar
 import app.orbit.ui.components.ContactStatsPanel
 import app.orbit.ui.components.InfoTip
-import app.orbit.ui.components.ListContextChip
 import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.components.LogConnectionSheet
 import app.orbit.ui.components.OrbitAppBar
@@ -116,8 +113,10 @@ import kotlinx.coroutines.delay
  * CONTACT-01 / CONTACT-02 / CONTACT-06.
  *
  * Renders: Coil-backed photo with Avatar fallback, hero name (32sp) + phone
- * number, "On these lists" chip row, 5-row stats panel (Last call / Total
- * calls / Average length / Longest gap / Usually), recent calls list (50/page).
+ * number, "On these lists" with the lists named on one line ("Inner orbit,
+ * Late night"; a row of chips until 2026-10-08, rules.md Design 9), 5-row
+ * stats panel (Last call / Total calls / Average length / Longest gap /
+ * Usually), recent calls list (50/page).
  *
  * Hero action row: "Call" (Primary — the screen's one terracotta element;
  * ACTION_DIAL via the shared Dialer util) and "Log a connection" (Secondary —
@@ -128,12 +127,12 @@ import kotlinx.coroutines.delay
  * screen root is the pane title and the hero name is a heading; without
  * them a new person's page was never announced (rubric D8).
  *
- * Privacy curtain (PRIV-03): hero name, pane title, overflow label and
- * lists-on chip labels render the literal "Contact" when
- * [LocalPrivacyCurtain] is true (focus-loss). The phone number is masked too
- * ("Number hidden", PRIV-07) and carries no click action at all under the
- * curtain, so it neither dials nor announces as a button; it used to show
- * through the curtain.
+ * Privacy curtain (PRIV-03): hero name, pane title and overflow label render
+ * the literal "Contact" when [LocalPrivacyCurtain] is true (focus-loss), and
+ * the lists line says only how many ("2 lists"), so no list name shows. The
+ * phone number is masked too ("Number hidden", PRIV-07) and carries no click
+ * action at all under the curtain, so it neither dials nor announces as a
+ * button; it used to show through the curtain.
  */
 @Composable
 fun ContactDetailScreen(
@@ -594,7 +593,6 @@ internal object ContactDetailItemKey {
 
 private const val CONTENT_TYPE_CALL_ROW = "callRow"
 
-@OptIn(ExperimentalLayoutApi::class) // function-scoped per Pitfall 8
 @Composable
 private fun ContactBodyLazyColumn(
     contact: Contact,
@@ -860,24 +858,35 @@ private fun ContactBodyLazyColumn(
                     Spacer(Modifier.height(OrbitTheme.spacing.x6))
                     SectionEyebrow(stringResource(R.string.contact_section_lists))
                     Spacer(Modifier.height(OrbitTheme.spacing.x3))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2),
-                        verticalArrangement = Arrangement.spacedBy(OrbitTheme.spacing.x2)
-                    ) {
-                        listsOn.forEach { listName ->
-                            // ListContextChip masks the name to "List" under the
-                            // curtain, the same word every list-name surface uses (it
-                            // read "Contact" here). Stone is the neutral read-only tone.
-                            ListContextChip(listName = listName, tone = ChipTone.Stone)
-                        }
-                        if (listsOn.isEmpty()) {
-                            // A bare dash read as broken (vision CONTACT-3).
-                            Text(
-                                text = stringResource(R.string.contact_not_on_any_list),
-                                style = OrbitTheme.type.body,
-                                color = OrbitTheme.colors.fgMuted
-                            )
-                        }
+                    // One line of words under the heading (CONTACT-01): every
+                    // list by name, since this is the person's own page, and no
+                    // "On", which the heading already says. Until 2026-10-08 it
+                    // was a wrapping row of Stone chips, one per list; a
+                    // read-only chip is a badge (rules.md Design 9).
+                    if (listsOn.isEmpty()) {
+                        // A bare dash read as broken (vision CONTACT-3).
+                        Text(
+                            text = stringResource(R.string.contact_not_on_any_list),
+                            style = OrbitTheme.type.body,
+                            color = OrbitTheme.colors.fgMuted
+                        )
+                    } else {
+                        Text(
+                            // Under the curtain no list name shows, masked or
+                            // not: the count ("2 lists"), as Search and the
+                            // picker say it (PRIV-03).
+                            text = if (curtain) {
+                                pluralStringResource(
+                                    R.plurals.contact_lists_count,
+                                    listsOn.size,
+                                    listsOn.size
+                                )
+                            } else {
+                                listsOn.joinToString(", ")
+                            },
+                            style = OrbitTheme.type.body,
+                            color = OrbitTheme.colors.fg
+                        )
                     }
                 }
 
@@ -1004,8 +1013,9 @@ private fun ContactBodyLazyColumn(
                     RuleOverrideSection(
                         listsOnSize = listsOn.size,
                         inheritedRhythm = inheritedRhythm,
-                        // List names are masked under the curtain (ListContextChip):
-                        // null makes the section say "from its list".
+                        // List names are masked under the curtain (PRIV-03,
+                        // components_curtain_list): null makes the section say
+                        // "from its list".
                         primaryListName = if (curtain) null else primaryListName,
                         hasOverride = hasOverride,
                         currentParams = currentParams ?: RuleParams.KeepInTouch(),

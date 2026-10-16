@@ -1,6 +1,7 @@
 package app.orbit.ui.screens.contact
 
 import android.app.Application
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -16,6 +17,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.orbit.R
 import app.orbit.data.CallDirection
 import app.orbit.data.CallEntry
+import app.orbit.ui.components.LocalPrivacyCurtain
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatDuration
 import org.junit.Rule
@@ -201,6 +203,60 @@ class ContactDetailScreenTest {
     fun an_archived_person_says_so_under_the_number() {
         compose.setContent { ContactDetailPreviewHost(previewState.copy(isArchived = true)) }
         compose.onNodeWithText("Archived").assertIsDisplayed()
+    }
+
+    // CONTACT-01, amended 2026-10-08: "On these lists" is one line of words,
+    // every list by name, where it was a row of Stone chips (rules.md
+    // Design 9). A chip drew its list's name as a text node of its own, so no
+    // node reading exactly a list's name means no chip is left.
+
+    @Test
+    fun the_lists_are_named_in_one_line_under_the_heading_and_draw_no_chip() {
+        compose.setContent {
+            ContactDetailPreviewHost(
+                previewState.copy(listsOn = listOf("Inner orbit", "Late night", "Family", "Work"))
+            )
+        }
+        scrollTo(ContactDetailItemKey.LISTS)
+        compose.onNodeWithText("On these lists").assertIsDisplayed()
+        // All of them, no "and 1 more" on the person's own page, no "On".
+        compose.onNodeWithText("Inner orbit, Late night, Family, Work").assertIsDisplayed()
+        compose.onAllNodesWithText("Inner orbit", useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Work", useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodesWithText("and 1 more", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun under_the_curtain_the_lists_line_is_a_count() {
+        compose.setContent {
+            CompositionLocalProvider(LocalPrivacyCurtain provides true) {
+                ContactDetailPreviewHost(previewState.copy(listsOn = listOf("Inner orbit", "Late night")))
+            }
+        }
+        scrollTo(ContactDetailItemKey.LISTS)
+        compose.onNodeWithText("2 lists").assertIsDisplayed()
+        compose.onAllNodesWithText("Inner orbit", substring = true, useUnmergedTree = true)
+            .assertCountEquals(0)
+        // The chips' curtain word, once per list, is gone with them.
+        compose.onAllNodesWithText("List", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun under_the_curtain_one_list_is_one_list() {
+        compose.setContent {
+            CompositionLocalProvider(LocalPrivacyCurtain provides true) {
+                ContactDetailPreviewHost(previewState.copy(listsOn = listOf("Inner orbit")))
+            }
+        }
+        scrollTo(ContactDetailItemKey.LISTS)
+        compose.onNodeWithText("1 list").assertIsDisplayed()
+    }
+
+    @Test
+    fun a_person_on_no_list_says_so() {
+        compose.setContent { ContactDetailPreviewHost(previewState.copy(listsOn = emptyList())) }
+        scrollTo(ContactDetailItemKey.LISTS)
+        compose.onNodeWithText("Not on any list yet").assertIsDisplayed()
     }
 
     @Test

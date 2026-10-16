@@ -25,7 +25,7 @@ import kotlin.test.assertTrue
  *  - PICK-03 canSelectAllMatching: gated on filter-active AND remaining
  *    unselected matches.
  *  - countFor: chip count IGNORES other active filters but
- *    RESPECTS search + ignored — load-bearing for chip-badge correctness.
+ *    RESPECTS search + ignored: load-bearing for filter-count correctness.
  *  - PICK-01 InList: the "On a list" filter and its countFor walk.
  *  - emptyReason: one honest reason per empty list area (everyone on the
  *    list, no re-link targets, everyone ignored, no search or filter match).

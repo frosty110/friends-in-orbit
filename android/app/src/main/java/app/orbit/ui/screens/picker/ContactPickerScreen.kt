@@ -1136,8 +1136,9 @@ private fun ContactPickerEveryoneIgnoredPreview() {
     )
 }
 
-// PICK-08: the eye toggle on, so the ignored person is listed, muted and
-// tagged. The gallery's audits see the toggle in both states (off above).
+// PICK-08: the eye toggle on, so the ignored person is listed, muted, with
+// "Ignored · " leading their call line and no checkbox (rules.md Design 9).
+// The gallery's audits see the toggle in both states (off above).
 @PreviewLightDark
 @Preview(name = "200%", fontScale = 2f)
 @Composable

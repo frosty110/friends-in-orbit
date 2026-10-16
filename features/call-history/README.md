@@ -1,10 +1,10 @@
 # call-history
 
 **Status:** in-progress
-**Last reviewed:** 2026-10-07 (audit round: attempts in the spec, the visible row menu, LOG-03)
+**Last reviewed:** 2026-10-08 (an ignored person's row says Ignored on its second line, not "(ignored)" on the name, IGNORE-09 and rules.md Design 9; before that, 2026-10-07: attempts in the spec, the visible row menu, LOG-03)
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/ui/screens/calllog/` (`CallLogScreen.kt`, `CallLogViewModel.kt`, `CallLogUiState.kt`); route `Routes.CallLogPattern` (`call-log?contactId={contactId}`), reachable from Settings (everyone's calls, `Routes.CallLog`) and from Contact detail's "View all calls" (that person's calls, `Routes.callLogFor(id)`)
-- Tests: `android/app/src/test/java/app/orbit/ui/screens/calllog/CallLogViewModelTest.kt` (the join, the kinds, the filters, paging, the LOG-04 and LOG-05 states), `android/app/src/test/java/app/orbit/ui/screens/calllog/CallLogRowMenuTest.kt` (the row menu's labels and order), `android/app/src/test/java/app/orbit/ui/screens/calllog/CallLogContentTest.kt` (the pane title in every state, the row button's TalkBack name and its curtain mask), `android/app/src/test/java/app/orbit/data/dao/CallEventDaoLogTest.kt`
+- Tests: `android/app/src/test/java/app/orbit/ui/screens/calllog/CallLogViewModelTest.kt` (the join, the kinds, the filters, paging, the LOG-04 and LOG-05 states), `android/app/src/test/java/app/orbit/ui/screens/calllog/CallLogRowMenuTest.kt` (the row menu's labels and order), `android/app/src/test/java/app/orbit/ui/screens/calllog/CallLogContentTest.kt` (the pane title in every state, the row button's TalkBack name and its curtain mask, an ignored row's plain name and "Ignored · " second line), `android/app/src/test/java/app/orbit/data/dao/CallEventDaoLogTest.kt`
 
 ---
 
@@ -30,10 +30,10 @@ As a user, I open the in-app call log to see what I've reached out about recentl
 - Tap a row → contact-detail scrolled to that call's row, with the inline "Add note to this call" affordance below it (the retroactive-note path, LOG-03).
 - Row menu: every row carries a visible three-dots button, "More actions for {name}" to TalkBack (the name masked under the curtain), and a long-press opens the same menu with a haptic ("Quick actions" to TalkBack, the glossary's two words for the two triggers). The entries, in this order (`CallLogRowMenuTest`): "Call again" (`ACTION_DIAL`) and "Open details" (the row's tap reads the same to TalkBack; both said "Open contact" until 2026-10-05). Neither is destructive. "Add note" is intentionally absent: tap already lands on the focused call with the note affordance. Until 2026-10-06 the menu was long-press only and silent, so sighted users had no hint it existed (UX rubric D5: every gesture has a visible alternative). The button is muted (`fgMuted`), not the accent, and the dial lives inside the menu so no row repeats the phone icon (rules.md §Design 6).
 - Honest pagination: the log renders in 200-row increments with a "Show n more" footer where n is the real next increment (`min(remaining, 200)`); the footer disappears exactly when everything is shown.
-- Ignored contacts stay visible but greyed (50% avatar opacity, subtle name + " (ignored)" suffix); rows remain tappable.
+- Ignored contacts stay visible, greyed (50% avatar, subtle text), with Ignored leading the row's second line: "Ignored · from Inner orbit · 12 min · Outgoing" ("Ignored · 12 min · Outgoing" under the curtain); the name shows plain, and rows remain tappable (IGNORE-09). Until 2026-10-08 the name read "Avery Quinn (ignored)", a tag on the title (rules.md Design 9, at the owner's word "We should just omit badges in general"). Grey alone would leave colour as the only signal, so the word stays, on a line the row already has.
 - **Honest states (LOG-05).** A quiet skeleton while loading. "No calls yet" only when Orbit can read the call log and there are none. Without call log access and with nothing recorded: "Orbit can't see your calls", what that means, and "Open settings" (the shared `components_action_open_settings`; Orbit's Settings owns the grant and the resync, as Card view's notice does; opened from Settings it goes back instead). Without access but with history: the rows, under the shared inline notice (`OrbitInlineNotice`, the same component as Card view's) reading "Orbit can't see new calls, so some may be missing here." with "Open settings". Not "this list": on this screen that word would read as an Orbit list. A failed read: "Couldn't load your calls" over the shared error body ("Nothing is lost. Try again in a moment.") with the shared "Try again".
 - **The title in every state.** "Call history" for everyone; "Calls with {name}" for one person. The one-person title is blank only while Loading, for the moment the person's row takes to arrive, rather than briefly claiming "Call history" for everyone. Once the state has settled without a name (a read that failed before its first emission, the case Retry exists for; access denied before the row loaded), the bar says "Call history", because a screen with no pane title is one TalkBack never announces. Until 2026-10-06 those states had a blank bar.
-- Privacy curtain: names render as the literal "Contact" (rows and the "Calls with" title), avatars drop their photo, and the "from {list}" context is left out (list names are masked everywhere, per `ListContextChip`).
+- Privacy curtain: names render as the literal "Contact" (rows and the "Calls with" title), avatars drop their photo, and the "from {list}" context is left out (list names are masked everywhere, PRIV-03, `components_curtain_list`).
 
 ### Requirements
 
@@ -51,6 +51,7 @@ As a user, I open the in-app call log to see what I've reached out about recentl
 - [x] "View all calls" on Contact detail shows only that person's calls (LOG-04; `CallLogViewModelTest`).
 - [x] Denied access with no history reads as denied, never "No calls yet"; unknown permission stays Loading (LOG-05; `CallLogViewModelTest`).
 - [x] A failing stream shows an error with Retry, and Retry recovers (LOG-05; `CallLogViewModelTest`).
+- [ ] An ignored person's row shows the name plain and "Ignored · " first on its second line, under the curtain too, and nobody else's row says it (IGNORE-09; `CallLogContentTest`, added 2026-10-08; written, not yet run).
 - [ ] Dark mode + 200% font scale + TalkBack pass (needs device run; the preview gallery renders every state in light, dark and font scales up to 200%).
 - [x] Encrypted Room reads per ADR 0002.
 

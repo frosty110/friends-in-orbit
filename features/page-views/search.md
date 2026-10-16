@@ -3,7 +3,7 @@
 **Route:** `search`
 **Group:** People
 **Status:** active
-**Last reviewed:** 2026-10-06
+**Last reviewed:** 2026-10-08
 **Spec:** [browse](../browse/README.md): BROWSE-03, BROWSE-05, BROWSE-06; BULK-06 in [orbit-lists](../orbit-lists/README.md); LAUNCH-01 in [widgets](../widgets/README.md); PRIV-03 in [privacy-and-lock](../privacy-and-lock/README.md)
 
 ---
@@ -18,7 +18,7 @@
 - App bar: Back and "Search"
 - A search field, "Search people", focused with the keyboard up as the screen opens, with its own clear control
 - Before typing: "Find someone" / "Search everyone in your contacts by name or number."
-- Results, one row per person: face, name, "Last call: 3 days ago" or "Never called" (left out when call log access is off), the lists they are on or "Not on any list", an "Add to lists" action, and a quiet, muted, labelled dial button ("Call Kai")
+- Results, one row per person: face, name, "Last call: 3 days ago" or "Never called" (left out when call log access is off), the lists they are on in one muted line, "On Inner orbit, Late night" ("On Inner orbit, Late night, Family and 2 more" past three; the same line as the Add people picker's rows), or "Not on any list", an "Add to lists" action, and a quiet, muted, labelled dial button ("Call Kai"). Until 2026-10-08 the lists were a row of chips, one per list; a read-only chip is a badge (rules.md Design 9)
 - When call log access is off, a notice above the results: "Orbit can't see your calls, so call times are hidden."
 - No control on this screen is in the accent; the dial buttons are muted (rules.md Design 6)
 
@@ -36,7 +36,7 @@
 - No hits: "Nothing matches “q”" / "Try a shorter name, or part of their number." with "Clear search"
 - Error: "Couldn't search right now" / "Nothing is lost. Try again in a moment." with Try again
 - Call log access off: the notice, and no call times on the rows; "Never called" is never said about someone Orbit cannot see
-- Privacy curtain: names read "Contact", list chips "List", and the typed search is masked (PRIV-03)
+- Privacy curtain: names read "Contact", the lists line says only how many ("On 2 lists", "On 1 list") and names no list, and the typed search is masked (PRIV-03)
 
 ## Leads to
 
@@ -48,6 +48,8 @@
 ## Tests that pin it
 
 - `GlobalSearchViewModelTest` (ranking, states, the call-log-denied flag added this round)
+- `GlobalSearchContentTest` (added 2026-10-08: a result says "On Inner orbit, Late night" and draws no chip, "On 2 lists" under the curtain with no name, "Not on any list" with none)
+- `OnListsLineTest` (added 2026-10-08: the shared line for one, three and four lists, under the curtain, and none)
 - `ContactSearchTest` (the matcher: phone digits, folded accents)
 - `OrbitNavHostTest` (added this round: "Open settings" leads to Settings)
 - Gallery previews: `GlobalSearchContentPreview`, `GlobalSearchResultsPreview`, `GlobalSearchLoadingPreview`, `GlobalSearchNoMatchesPreview`, `GlobalSearchErrorPreview`, with the curtain pass
