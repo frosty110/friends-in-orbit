@@ -1,36 +1,31 @@
 package app.orbit.domain.usecase
 
 import app.orbit.data.db.TransactionRunner
-import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ListRepository
-import app.orbit.data.repository.RuleTemplateRepository
 import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.domain.clock.Clock
-import app.orbit.domain.rule.RuleParams
-import app.orbit.domain.rule.resolveParamsFor
 import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first
-import kotlinx.serialization.json.Json
 
 /**
- * Negative-penalty analog of [SkipContactUseCase] — CORE-03 "swipe right brings
- * contact forward". Subtracts a sooner delta from `nextDueAt`, clamped to not
- * go below `now` (immediate re-surfacing is acceptable, but a negative
- * `nextDueAt` would corrupt cross-list membership math).
+ * Sooner, the counterpart of [SkipContactUseCase] (CORE-03 "swipe right
+ * brings contact forward", CARD-02): pulls `nextDueAt` earlier by
+ * [moveAmountFor] the list's size, a day on a list of up to 10 people,
+ * three days on a bigger one, and never earlier than now. On a small list
+ * that can make the person the next one up.
  *
- * The sooner delta uses half the rule template's `skipPenaltyHours` as a
- * symmetric-ish counterpart — if skip pushes N hours forward, sooner pulls
- * N/2 hours back. Clamped to at least 1 hour so the user always sees the
- * effect.
+ * Until 2026-11-10 the amount was half the list rule's `skipPenaltyHours`
+ * (12 hours on a Keep in touch list), at least an hour; the owner found
+ * that "very short", and the one amount Later uses replaced it.
  *
  * Scope mirrors [SkipContactUseCase]:
- *   - `listId != null` — only that list's membership.
- *   - `listId == null` — every list the contact is on (cross-list propagation,
- *     DOM-06 intent).
+ *   - `listId != null`: only that list's membership.
+ *   - `listId == null`: every list the contact is on (cross-list propagation,
+ *     DOM-06 intent), each moved by its own list's amount.
  *
  * H6 fix — uses [ListRepository.updateNextDueAt] so a "sooner" (negative skip)
  * never bumps `skipCount`. The previous reuse of `incrementSkipCount` polluted
@@ -40,38 +35,39 @@ class SurfaceSoonerUseCase @Inject constructor(
     private val txRunner: TransactionRunner,
     private val contactRepo: ContactRepository,
     private val listRepo: ListRepository,
-    private val ruleTemplateRepo: RuleTemplateRepository,
     private val clock: Clock,
-    private val json: Json,
     private val widgetRefreshTrigger: WidgetRefreshTrigger = WidgetRefreshTrigger { },
 ) {
 
     /**
-     * H7 fix — returns [MutationResult] so missing-row races are structurally
+     * H7 fix: returns [MutationResult] so missing-row races are structurally
      * surfaced rather than silently swallowed. Aggregation logic mirrors
-     * [SkipContactUseCase].
+     * [SkipContactUseCase], including a move that finds no membership to
+     * move ([MutationResult.MembershipMissing], so the card says the Sooner
+     * failed instead of "Kai moved sooner.", rules.md Code 3).
      *
      * One clock read, as in [SkipContactUseCase.invoke] (whose KDoc says why
      * the card no longer hands in an instant).
      */
     suspend operator fun invoke(contactId: Long, listId: Long? = null): MutationResult {
-        val contact = contactRepo.observeById(contactId).first()
+        contactRepo.observeById(contactId).first()
             ?: return MutationResult.MembershipMissing
         val memberships = listRepo.observeMembershipsForContact(contactId).first()
         val targets = if (listId == null) memberships else memberships.filter { it.listId == listId }
+        if (targets.isEmpty()) return MutationResult.MembershipMissing
+        // CARD-02: each list's size, from the query the Lists row reads.
+        val memberCounts = listRepo.observeMemberCountsByListId().first()
         val now = clock.now()
 
         var aggregate: MutationResult = MutationResult.Success
         for (membership in targets) {
-            // Review follow-up #2 — H7 contract: a list/template that vanished
-            // mid-flight is a precondition-missing race, not a silent success.
-            // Flip the aggregate to MembershipMissing before continuing so the
-            // caller can distinguish a true Success from "preconditions vanished
-            // → zero side effects".
-            val newDue = nextDueAfterSooner(contact, membership, now) ?: run {
+            // The H7 contract, as in SkipContactUseCase: no count means the
+            // list's rows went between the reads, so there is nobody to move.
+            val memberCount = memberCounts[membership.listId] ?: run {
                 aggregate = MutationResult.MembershipMissing
                 continue
             }
+            val newDue = nextDueAfterSooner(membership, now, moveAmountFor(memberCount))
 
             // H6 — direct nextDueAt write, no skipCount mutation. Sooner is a
             // negative skip; bumping skipCount on every sooner would corrupt
@@ -113,27 +109,9 @@ class SurfaceSoonerUseCase @Inject constructor(
         return aggregate
     }
 
-    /** The one computation of a Sooner's new `nextDueAt`; null when its list or template is gone. */
-    private suspend fun nextDueAfterSooner(
-        contact: ContactEntity,
-        membership: ListMembershipEntity,
-        now: Instant,
-    ): Instant? {
-        val list = listRepo.getById(membership.listId) ?: return null
-        val templateId = list.ruleTemplateId ?: return null
-        val template = ruleTemplateRepo.getById(templateId) ?: return null
-        val params = resolveParamsFor(contact, list, template, json)
-
-        val skipPenaltyHours = when (params) {
-            is RuleParams.KeepInTouch -> params.skipPenaltyHours
-            is RuleParams.LateNight -> params.skipPenaltyHours
-            is RuleParams.Energize -> params.skipPenaltyHours
-        }
-        // Sooner delta = half the skip penalty, clamped to at least 1 hour
-        // so the user always observes the effect.
-        val soonerDeltaHours = (skipPenaltyHours / 2).coerceAtLeast(1)
-        val basis = maxOf(membership.nextDueAt ?: now, now)
-        val candidate = basis.minus(Duration.ofHours(soonerDeltaHours.toLong()))
-        return if (candidate.isBefore(now)) now else candidate
-    }
+    /** The one computation of a Sooner's new `nextDueAt`. */
+    private fun nextDueAfterSooner(membership: ListMembershipEntity, now: Instant, amount: Duration): Instant =
+        // Never earlier than now: a person due in 2 days on a big list lands
+        // at now, as does a cold-start one (no time yet counts as now).
+        maxOf(now, (membership.nextDueAt ?: now).minus(amount))
 }

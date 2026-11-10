@@ -169,26 +169,40 @@ val CardViewUiState.listType: ListType?
 sealed interface CardMessage {
 
     /**
-     * A Later or Sooner the user can take back with "Undo": "Kai moved to
-     * later." / "Kai moved sooner." (CARD-02). [curtainText] is the same
-     * sentence with "They" for the name, shown instead of [text] while the
-     * privacy curtain is down (PRIV-03), as [Logged]'s is.
+     * A message the snackbar says (PRIV-03): [text] names the person where
+     * the name is known, and [curtainText] is the same sentence without the
+     * name, which the screen shows instead while the privacy curtain is down.
+     * Every message with words is one of these, and the screen picks between
+     * the two in one place, so no sentence reaches a covered app with the
+     * name in it. Until 2026-11-10 only [Undoable] and [Logged] carried the
+     * twin, and "Called Kai" and "Couldn't move Kai to later. Try again."
+     * named the person under the curtain.
      */
-    data class Undoable(val text: UiText, val curtainText: UiText, val token: Long) : CardMessage
+    sealed interface Said : CardMessage {
+        val text: UiText
+        val curtainText: UiText
+    }
+
+    /**
+     * A Later or Sooner the user can take back with "Undo": "Kai moved to
+     * later." / "Kai moved sooner." (CARD-02), and "They moved to later." /
+     * "They moved sooner." under the curtain.
+     */
+    data class Undoable(override val text: UiText, override val curtainText: UiText, val token: Long) : Said
 
     /**
      * The call log confirmed a call placed from this card; offers "Add a
-     * note" (CARD-03). Only for a call too short or unanswered to be worth a
-     * note by itself; one that is opens the page instead ([OpenNote]).
+     * note" (CARD-03): "Called Kai", and "Call logged" under the curtain.
+     * Only for a call too short or unanswered to be worth a note by itself;
+     * one that is opens the page instead ([OpenNote]).
      */
-    data class Called(val text: UiText, val contactId: Long) : CardMessage
+    data class Called(override val text: UiText, override val curtainText: UiText, val contactId: Long) : Said
 
     /**
-     * CARD-10: a connection or attempt logged from the card. [curtainText]
-     * is the same sentence without the name, shown instead of [text] while
-     * the privacy curtain is down (PRIV-03).
+     * CARD-10: a connection or attempt logged from the card, "Logged. Kai
+     * comes up again in 2 weeks.", with "They" for the name under the curtain.
      */
-    data class Logged(val text: UiText, val curtainText: UiText) : CardMessage
+    data class Logged(override val text: UiText, override val curtainText: UiText) : Said
 
     /**
      * CARD-11: a call placed from this card connected and lasted a minute or
@@ -197,6 +211,11 @@ sealed interface CardMessage {
      */
     data class OpenNote(val contactId: Long, val callEventId: Long) : CardMessage
 
-    /** A write failed; says so (rules.md Code 3, no silent fallbacks). */
-    data class Failed(val text: UiText) : CardMessage
+    /**
+     * A write failed, or a Later or Sooner moved nobody; says so (rules.md
+     * Code 3, no silent fallbacks): "Couldn't move Kai to later. Try
+     * again.", and "Couldn't move them to later. Try again." under the
+     * curtain. A failure that names nobody carries the same sentence twice.
+     */
+    data class Failed(override val text: UiText, override val curtainText: UiText) : Said
 }

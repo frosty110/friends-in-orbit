@@ -45,6 +45,8 @@ import org.robolectric.annotation.Config
  *   card, and the snackbar after it drops the name under the curtain.
  * - CARD-11: the page for a call worth a note opens without a snackbar, and
  *   the notification after a call for that person is withdrawn.
+ * - PRIV-03 (2026-11-10): "Called Avery" and a failed move's sentence drop
+ *   the name under the curtain, as the Later, Sooner and log snackbars do.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [33], application = Application::class)
@@ -303,15 +305,80 @@ class CardViewMovesTest {
         compose.onAllNodesWithText("Called", substring = true).assertCountEquals(0)
     }
 
+    // The words the ViewModel picks for a confirmed call (CARD-03).
+    private val calledAvery = CardMessage.Called(
+        text = UiText.res(R.string.card_called_named, "Avery"),
+        curtainText = UiText.res(R.string.card_call_logged),
+        contactId = 1L,
+    )
+
     @Test
     fun `CARD-03 - Add a note on Called opens the page with no call named`() {
         val opened = mutableListOf<Pair<Long, Long?>>()
         setCard(onAddNote = { id, call -> opened += id to call })
-        show(CardMessage.Called(UiText.res(R.string.card_called_named, "Avery"), contactId = 1L))
+        show(calledAvery)
 
         compose.onNodeWithText("Add a note").performClick()
         frames(5)
 
         compose.runOnIdle { assertEquals(listOf<Pair<Long, Long?>>(1L to null), opened) }
+    }
+
+    // PRIV-03 ------------------------------------------------------------
+
+    @Test
+    fun `CARD-03 - without the curtain the snackbar after a call names the person`() {
+        setCard()
+        show(calledAvery)
+        compose.onNodeWithText("Called Avery").assertExists()
+    }
+
+    @Test
+    fun `PRIV-03 - under the curtain the snackbar after a call says Call logged, never the name`() {
+        // Until 2026-11-10 Called had one sentence, shown whatever the
+        // curtain, so "Called Avery" stayed readable over a covered app.
+        setCard(curtain = true)
+        show(calledAvery)
+        compose.onNodeWithText("Call logged").assertExists()
+        compose.onNodeWithText("Add a note").assertExists()
+        compose.onAllNodesWithText("Avery", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun `PRIV-03 - under the curtain a failed move has no name`() {
+        // The same gap: "Couldn't move Avery to later. Try again." named the
+        // person under the curtain until 2026-11-10.
+        val laterFailed = CardMessage.Failed(
+            text = UiText.res(R.string.card_later_failed_named, "Avery"),
+            curtainText = UiText.res(R.string.card_later_failed_unnamed),
+        )
+        setCard(curtain = true)
+        show(laterFailed)
+        compose.onNodeWithText("Couldn't move them to later. Try again.").assertExists()
+        compose.onAllNodesWithText("Avery", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun `PRIV-03 - under the curtain a failed Sooner has no name`() {
+        val soonerFailed = CardMessage.Failed(
+            text = UiText.res(R.string.card_sooner_failed_named, "Avery"),
+            curtainText = UiText.res(R.string.card_sooner_failed_unnamed),
+        )
+        setCard(curtain = true)
+        show(soonerFailed)
+        compose.onNodeWithText("Couldn't move them sooner. Try again.").assertExists()
+        compose.onAllNodesWithText("Avery", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun `without the curtain a failed move names the person`() {
+        setCard()
+        show(
+            CardMessage.Failed(
+                text = UiText.res(R.string.card_later_failed_named, "Avery"),
+                curtainText = UiText.res(R.string.card_later_failed_unnamed),
+            ),
+        )
+        compose.onNodeWithText("Couldn't move Avery to later. Try again.").assertExists()
     }
 }
