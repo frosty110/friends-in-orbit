@@ -3,8 +3,8 @@ package app.orbit.data.mappers
 import app.orbit.R
 import app.orbit.data.Contact
 import app.orbit.data.entity.CallEventEntity
-import app.orbit.data.entity.CallSource
 import app.orbit.data.entity.ContactEntity
+import app.orbit.domain.model.isConnection
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatDuration
 import app.orbit.ui.util.formatRelative
@@ -81,7 +81,8 @@ fun Contact.withCallStats(events: List<CallEventEntity>, now: Instant): Contact 
     // not set "last contacted", inflate the call count, or feed the average.
     // They still surface in the history list with their own "Attempted"
     // treatment; they just don't masquerade as connections in the stats.
-    val connections = events.filter { it.source != CallSource.ATTEMPT }
+    // `isConnection` is the one definition (domain/model/LastSpoke.kt).
+    val connections = events.filter { it.isConnection }
     val mostRecent = connections.maxByOrNull { it.occurredAt }
     // Zero-duration events (MANUAL marks) are excluded from the
     // average; they still count toward totalCalls and lastCalledLabel.

@@ -1,5 +1,6 @@
 package app.orbit.domain.usecase
 
+import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.domain.FakeContactRepository
 import app.orbit.domain.FakeListRepository
@@ -35,12 +36,47 @@ class SkipContactUseCaseTest {
 
     private val T0: Instant = Instant.parse("2026-01-01T12:00:00Z")
 
+    private val passThruTx = object : TransactionRunner {
+        override suspend fun <T> withTransaction(block: suspend () -> T): T = block()
+    }
+
     private fun useCase(contactRepo: FakeContactRepository, listRepo: FakeListRepository) =
-        SkipContactUseCase(contactRepo, listRepo, TestClock(T0))
+        SkipContactUseCase(passThruTx, contactRepo, listRepo, TestClock(T0))
 
     /** [others] more people beside contact 1 on [listId], so the list counts `others + 1`. */
     private fun othersOn(listId: Long, others: Int): List<ListMembershipEntity> =
         (1..others).map { membershipFixture(contactId = 1_000L + listId * 100 + it, listId = listId) }
+
+    // ============================================================================
+    // The list's due count (R2.B)
+    // ============================================================================
+
+    /**
+     * A Later can take the only due person out of the due set, and the nudge
+     * worker gates on `lists.dueCount`. Until 2026-11-10 a Later never
+     * recomputed it (Sooner did), so a list with nobody due could still post
+     * a nudge. Each moved list is recomputed, at the move's own instant.
+     */
+    @Test
+    fun `a Later recomputes the due count of every list it moved, at its own instant`() = runTest {
+        val contactRepo = FakeContactRepository(listOf(contactFixture(id = 1L)))
+        val listRepo = FakeListRepository(listOf(
+            listFixture(id = 10L, ruleTemplateId = 1L),
+            listFixture(id = 20L, ruleTemplateId = 1L),
+        ))
+        listRepo.seedMemberships(listOf(
+            membershipFixture(contactId = 1L, listId = 10L, nextDueAt = T0.minusSeconds(60)),
+            membershipFixture(contactId = 1L, listId = 20L, nextDueAt = T0.minusSeconds(60)),
+        ))
+
+        useCase(contactRepo, listRepo)(contactId = 1L, listId = 10L)
+        assertEquals(listOf(10L), listRepo.recomputeDueCountCalls.map { it.listId }, "only the moved list")
+        assertEquals(T0, listRepo.recomputeDueCountCalls.single().now)
+
+        listRepo.recomputeDueCountCalls.clear()
+        useCase(contactRepo, listRepo)(contactId = 1L, listId = null)
+        assertEquals(setOf(10L, 20L), listRepo.recomputeDueCountCalls.map { it.listId }.toSet(), "every list moved")
+    }
 
     // ============================================================================
     // Scope

@@ -107,8 +107,9 @@ interface ListDao {
 
     /**
      * NOTIF-12 fire-time gate — O(1) read of the denormalized dueCount column
-     * (populated by MIGRATION_8_9 backfill and kept fresh by the seven mutator
-     * use cases via [recomputeDueCount]). Workers use this to skip posting when
+     * (populated by MIGRATION_8_9 backfill and kept fresh by the mutator use
+     * cases via [recomputeDueCount]; Later, SkipContactUseCase, joined them on
+     * 2026-11-10). Workers use this to skip posting when
      * no members are due, keeping silent days truly silent.
      *
      * Returns null when the list row does not exist (deleted between schedule and
@@ -120,11 +121,12 @@ interface ListDao {
     // ─── R2.B — denormalized dueCount keep-fresh helper ────────────────
     //
     // ADR 0006 Rule 2: hot-path derived values are denormalized into the schema
-    // and updated by the use cases that mutate the underlying data. The seven
-    // mutator use cases (Move, Copy, BulkRemove, Ignore, Unignore + SurfaceSooner,
-    // MarkCalled) all call this method inside their existing withTransaction
-    // blocks. The `nowMs` arg is epoch-millis to match `nextDueAt`'s storage
-    // affinity (OrbitTypeConverters.Instant ↔ Long).
+    // and updated by the use cases that mutate the underlying data. The
+    // mutator use cases (Move, Copy, BulkRemove, Ignore, Unignore +
+    // SurfaceSooner, MarkCalled, and SkipContact since 2026-11-10) all call
+    // this method inside their existing withTransaction blocks. The `nowMs`
+    // arg is epoch-millis to match `nextDueAt`'s storage affinity
+    // (OrbitTypeConverters.Instant ↔ Long).
 
     /** R2.B — atomic dueCount recompute for a single list. */
     @Query(

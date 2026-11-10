@@ -145,14 +145,15 @@ class CardViewViewModelInteractionTest {
             json = json,
         )
         val moveWrites = VanishingRows(listRepo)
+        val passThruTx = object : app.orbit.data.db.TransactionRunner {
+            override suspend fun <T> withTransaction(block: suspend () -> T): T = block()
+        }
         val skipContact = SkipContactUseCase(
+            txRunner = passThruTx,
             contactRepo = contactRepo,
             listRepo = moveWrites,
             clock = clock,
         )
-        val passThruTx = object : app.orbit.data.db.TransactionRunner {
-            override suspend fun <T> withTransaction(block: suspend () -> T): T = block()
-        }
         val surfaceSooner = SurfaceSoonerUseCase(
             txRunner = passThruTx,
             contactRepo = contactRepo,

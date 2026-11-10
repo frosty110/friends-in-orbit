@@ -187,9 +187,9 @@ class ListPromptWorkerTest {
         )
         fakeLists.stubbedDueCount = 1
 
-        // Inject dndBlocking = true via the ControlledWorker override.
-        // (Robolectric's ShadowNotificationManager.setInterruptionFilter is protected —
-        // not accessible from outside the shadow package; override the hook instead.)
+        // Inject dndBlocking = true via the ControlledWorker override. (The real
+        // gate can be driven with NotificationManager.setInterruptionFilter under
+        // Robolectric, as PostCallNotifierTest does; this test keeps the hook.)
         val result = buildWorker(listId, dndBlocking = true).doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
@@ -574,9 +574,8 @@ private class RecordingNudgeScheduler(context: Context, listRepo: ListRepository
 /**
  * Subclass of [ListPromptWorker] that overrides test-injectable hooks:
  * - [currentLocalTime] → returns [fixedNow] when non-null (active-hours gate tests).
- * - [dndBlocking] → returns [stubbedDndBlocking] (DND gate tests — Robolectric's
- *   ShadowNotificationManager.setInterruptionFilter is protected, not accessible
- *   from outside the shadow package).
+ * - [dndBlocking] → returns [stubbedDndBlocking] (DND gate tests; the real gate
+ *   is driven through setInterruptionFilter in PostCallNotifierTest).
  */
 private class ControlledWorker(
     appContext: Context,

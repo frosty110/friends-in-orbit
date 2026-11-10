@@ -24,8 +24,8 @@ val CallEventEntity.isConnection: Boolean
  * dial read "Spoke today" there while Card view, which filtered attempts out
  * itself, still said "Spoke 3 weeks ago." about the same person. Card view
  * (`CardViewViewModel`) and Contact detail's "Last call"
- * (`ContactMapper.withCallStats`) each still filter by hand and should use
- * this too.
+ * (`ContactMapper.withCallStats`) filtered attempts out by hand until the same
+ * day; all three read [isConnection] now.
  */
 fun Iterable<CallEventEntity>.lastSpokeAt(): Instant? =
     asSequence().filter { it.isConnection }.maxOfOrNull { it.occurredAt }

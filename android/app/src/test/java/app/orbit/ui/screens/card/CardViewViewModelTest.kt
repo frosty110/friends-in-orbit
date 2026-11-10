@@ -107,7 +107,11 @@ class CardViewViewModelTest {
             clock = clock,
             json = json,
         )
+        val passThruTx = object : app.orbit.data.db.TransactionRunner {
+            override suspend fun <T> withTransaction(block: suspend () -> T): T = block()
+        }
         val skipContact = SkipContactUseCase(
+            txRunner = passThruTx,
             contactRepo = contactRepo,
             listRepo = listRepo,
             clock = clock,
@@ -116,9 +120,6 @@ class CardViewViewModelTest {
         // args are wired here so the unit-test target compiles.
         // SurfaceSoonerUseCase requires a TransactionRunner. Pass-thru
         // runner runs the block directly (no dispatcher switch).
-        val passThruTx = object : app.orbit.data.db.TransactionRunner {
-            override suspend fun <T> withTransaction(block: suspend () -> T): T = block()
-        }
         val surfaceSooner = app.orbit.domain.usecase.SurfaceSoonerUseCase(
             txRunner = passThruTx,
             contactRepo = contactRepo,

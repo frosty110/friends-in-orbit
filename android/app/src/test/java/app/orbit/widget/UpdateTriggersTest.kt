@@ -106,6 +106,7 @@ class UpdateTriggersTest {
         val listRepo = FakeListRepository(listOf(listFixture(id = 10L, ruleTemplateId = 1L)))
         listRepo.seedMemberships(listOf(membershipFixture(contactId = 1L, listId = 10L)))
         val useCase = SkipContactUseCase(
+            txRunner = passThruTx,
             contactRepo = contactRepo,
             listRepo = listRepo,
             clock = TestClock(T0),

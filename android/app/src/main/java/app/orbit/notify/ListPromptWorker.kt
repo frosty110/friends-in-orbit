@@ -161,8 +161,10 @@ open class ListPromptWorker @AssistedInject constructor(
 
     /**
      * Returns true when DND would block a default-importance notification.
-     * Delegates to [Context.isDndBlocking] in production; overridden in tests
-     * where the Robolectric shadow does not expose a public DND setter.
+     * Delegates to [Context.isDndBlocking] in production; ListPromptWorkerTest
+     * overrides it. (It was thought Robolectric could not set the filter; the
+     * framework's NotificationManager.setInterruptionFilter does work under
+     * Robolectric 4.13, and PostCallNotifierTest drives the real gate that way.)
      */
     internal open fun dndBlocking(): Boolean = appContext.isDndBlocking()
 

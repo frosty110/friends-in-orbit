@@ -1,5 +1,6 @@
 package app.orbit.domain.usecase
 
+import app.orbit.data.db.TransactionRunner
 import app.orbit.data.entity.ListMembershipEntity
 import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ListRepository
@@ -36,6 +37,7 @@ import kotlinx.coroutines.flow.first
  * `skipCount = 0` and resets the column (`MarkCalledUseCase`).
  */
 class SkipContactUseCase @Inject constructor(
+    private val txRunner: TransactionRunner,
     private val contactRepo: ContactRepository,
     private val listRepo: ListRepository,
     private val clock: Clock,
@@ -84,11 +86,21 @@ class SkipContactUseCase @Inject constructor(
                 continue
             }
 
-            val result = listRepo.incrementSkipCount(
-                contactId = contactId,
-                listId = membership.listId,
-                newNextDueAt = nextDueAfterLater(membership, now, moveAmountFor(memberCount)),
-            )
+            // R2.B, as in SurfaceSoonerUseCase: the write and the list's dueCount
+            // recompute in one transaction. A Later can move the only due person
+            // out of the due set; until 2026-11-10 it left `lists.dueCount` one
+            // high, so the nudge worker's gate (ListDao.dueCountForList) could
+            // post a nudge for a list with nobody due until another write
+            // recomputed it.
+            val result = txRunner.withTransaction {
+                val r = listRepo.incrementSkipCount(
+                    contactId = contactId,
+                    listId = membership.listId,
+                    newNextDueAt = nextDueAfterLater(membership, now, moveAmountFor(memberCount)),
+                )
+                listRepo.recomputeDueCountForList(membership.listId, now)
+                r
+            }
             if (result is MutationResult.MembershipMissing) aggregate = result
         }
         // WIDGET-06: skip changes who-is-due on the success path.

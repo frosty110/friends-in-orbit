@@ -21,6 +21,8 @@ import app.orbit.data.repository.ListRepository
 import app.orbit.data.repository.WaitingCalls
 import app.orbit.domain.CallLogResyncTrigger
 import app.orbit.domain.clock.Clock
+import app.orbit.domain.model.isConnection
+import app.orbit.domain.model.lastSpokeAt
 import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.LogConnectionUseCase
 import app.orbit.domain.usecase.LogConnectionWhen
@@ -36,6 +38,12 @@ import app.orbit.ui.util.formatAgo
 import app.orbit.ui.util.formatRelative
 import app.orbit.ui.util.formatSpan
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.TextStyle
+import java.util.Locale
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -54,12 +62,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import java.time.Duration
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.TextStyle
-import java.util.Locale
-import javax.inject.Inject
 
 /**
  * Card View VM — thin subscriber to [CardFeed] plus the card-loop interaction
@@ -581,10 +583,11 @@ class CardViewViewModel @Inject constructor(
                 val isAhead = s.nextDueAt.isAfter(now)
                 // Connections only for "when you last spoke" and for CARD-03's
                 // evidence: an ATTEMPT is a reach-out that did not connect
-                // (Enums.kt), the same filter withCallStats applies to "Last
-                // call", so the face never says "Spoke today" over a
-                // voicemail.
-                val connections = recentCalls.filter { it.source != CallSource.ATTEMPT }
+                // (Enums.kt). One definition, `isConnection` and `lastSpokeAt`
+                // (domain/model/LastSpoke.kt), shared with Home's Next up and
+                // withCallStats' "Last call", so no screen says "Spoke today"
+                // over a voicemail.
+                val connections = recentCalls.filter { it.isConnection }
                 CardViewUiState.Ready(
                     contactId = s.contact.id,
                     contact = s.contact.toUiContact()
@@ -597,7 +600,7 @@ class CardViewViewModel @Inject constructor(
                     isAheadOfToday = isAhead,
                     whyNowLine = whyNowLine(connections, now),
                     listType = listType,
-                    lastCallAt = connections.maxOfOrNull { it.occurredAt },
+                    lastCallAt = connections.lastSpokeAt(),
                 )
             }
         }

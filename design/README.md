@@ -206,7 +206,7 @@ For React (stroke recoloring), inline the SVG or wrap:
 **Curated icon set included** (in `design/assets/icons/`):
 phone · phone-call · phone-slash · phone-pause · user · user-circle · users · user-plus · heart · star · bookmark-simple · list · list-bullets · squares-four · magnifying-glass · sliders-horizontal · funnel · arrow-left · arrow-right · caret-right · caret-left · caret-down · x · check · check-circle · clock · clock-counter-clockwise · calendar-blank · bell · bell-slash · moon · sun · gear · fingerprint · shield-check · pencil-simple · trash · plus · dots-three · note-pencil · chat-circle · pause-circle · play · shuffle · shuffle-angular · house · house-simple · circle-notch · eye · eye-slash · download-simple · upload-simple · info · warning · warning-circle · link
 
-Two icons are no longer in the set: phone-outgoing and phone-incoming went with the call-direction icons on 2026-10-08, because a call's direction is said in words and a glyph whose only job is to name a call's kind is a badge (rules.md Design 9). The app's icon set dropped them on 2026-11-10. Their SVGs are still in `design/assets/icons/`, where the UI kit's standalone export lists them; they are not for new work.
+Two icons are no longer in the set: phone-outgoing and phone-incoming went with the call-direction icons on 2026-10-08, because a call's direction is said in words and a glyph whose only job is to name a call's kind is a badge (rules.md Design 9). The app's icon set and `design/assets/icons/` dropped them on 2026-11-10.
 
 Add more as needed from [phosphoricons.com](https://phosphoricons.com) (Regular weight only).
 
