@@ -2,8 +2,10 @@ package app.orbit.widget
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
+import androidx.glance.GlanceId
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -75,6 +77,31 @@ object WidgetUpdateScheduler {
         val request = OneTimeWorkRequestBuilder<WidgetUpdateWorker>().build()
         WorkManager.getInstance(context)
             .enqueueUniqueWork(UNIQUE_WORK, ExistingWorkPolicy.REPLACE, request)
+    }
+
+    /**
+     * The worker's redraw of one placed widget (WIDGET-05): bumps the widget's
+     * [RefreshGenerationKey], then [GlanceAppWidget.update]s it.
+     *
+     * update() alone is not enough. When the widget's Glance session is still
+     * running (about 45 seconds after it starts), update() only reloads the
+     * widget's Glance state and recomposes; provideGlance, where the people
+     * are read, does not run again, and the widget would redraw the previous
+     * people. The bump is the change in that state the running session
+     * watches for ([rememberWidgetSnapshot]); with no session running,
+     * provideGlance reads fresh anyway and the bump costs one small write.
+     * Seen on the emulator 2026-11-10 (widgets README, Known gotchas).
+     */
+    suspend fun redraw(context: Context, widget: GlanceAppWidget, glanceId: GlanceId) {
+        bumpRefreshGeneration(context, glanceId)
+        widget.update(context, glanceId)
+    }
+
+    /** [redraw]'s first half, apart so a test can check it without Glance's session. */
+    internal suspend fun bumpRefreshGeneration(context: Context, glanceId: GlanceId) {
+        updateAppWidgetState(context, glanceId) { state ->
+            state[RefreshGenerationKey] = (state[RefreshGenerationKey] ?: 0L) + 1
+        }
     }
 
     /**

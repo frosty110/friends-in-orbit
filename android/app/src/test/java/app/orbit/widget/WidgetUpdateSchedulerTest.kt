@@ -2,7 +2,11 @@ package app.orbit.widget
 
 import android.app.Application
 import android.appwidget.AppWidgetManager
+import androidx.glance.appwidget.AppWidgetId
+import androidx.glance.appwidget.state.getAppWidgetState
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.test.runTest
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.testing.WorkManagerTestInitHelper
@@ -159,5 +163,33 @@ class WidgetUpdateSchedulerTest {
     fun widgetFor_refusesAnIdThatNamesNoPlacedWidget() {
         assertNull(WidgetUpdateScheduler.widgetFor(context, AppWidgetManager.INVALID_APPWIDGET_ID))
         assertNull(WidgetUpdateScheduler.widgetFor(context, 4_242))
+    }
+
+    /**
+     * WIDGET-05: a running Glance session only reloads the widget's Glance
+     * state on update(), so the worker's redraw must change that state every
+     * time, or the session redraws the previous people (seen on the emulator
+     * 2026-11-10). Each redraw moves this widget's generation and no other's.
+     * That the session re-reads on the change is a device check: Glance does
+     * not compose under these tests.
+     */
+    @Test
+    fun redraw_movesThisWidgetsRefreshGenerationEveryTime() = runTest {
+        val widget = AppWidgetId(4_301)
+        val other = AppWidgetId(4_302)
+        suspend fun generation(id: AppWidgetId) =
+            getAppWidgetState(context, PreferencesGlanceStateDefinition, id)[RefreshGenerationKey]
+
+        assertNull(generation(widget), "a widget never redrawn has no generation")
+
+        WidgetUpdateScheduler.bumpRefreshGeneration(context, widget)
+        val first = generation(widget)
+        WidgetUpdateScheduler.bumpRefreshGeneration(context, widget)
+        val second = generation(widget)
+
+        assertNotNull(first)
+        assertNotNull(second)
+        assertNotEquals(first, second, "every redraw must change what the session watches")
+        assertNull(generation(other), "one widget's redraw leaves another's state alone")
     }
 }
