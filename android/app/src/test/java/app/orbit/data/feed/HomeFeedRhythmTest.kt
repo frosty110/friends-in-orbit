@@ -21,6 +21,7 @@ import app.orbit.domain.membershipFixture
 import app.orbit.domain.ruleTemplateFixture
 import app.orbit.domain.usecase.SurfaceNextUseCase
 import app.orbit.testutil.newPrefs
+import app.orbit.ui.screens.home.homeRecencyWhy
 import app.orbit.ui.screens.week.weekPages
 import java.time.Duration
 import java.time.Instant
@@ -53,8 +54,10 @@ import org.robolectric.annotation.Config
  * These tests pin that hydration: names resolved from the list's members,
  * direction carried through from the call event, the 3-minute qualifying floor
  * and the trailing-7-day window still applied, and the "Someone" fallback for a
- * contact who has since left the list. The "Next up" case pins what the feed
- * hands the ViewModel for the card's person: name, number and the latest call.
+ * contact who has since left the list. The "Next up" cases pin what the feed
+ * hands the ViewModel for the card's person: name and when you last spoke,
+ * which is the newest connection and never an attempt (2026-11-10), worded
+ * through the ViewModel's own [homeRecencyWhy].
  *
  * Each test owns its DataStore (`tmp.newPrefs`), see testutil/TestDataStore.kt.
  */
@@ -87,13 +90,14 @@ class HomeFeedRhythmTest {
         // Shifts the event earlier within its own day, so same-day events can be
         // ordered deterministically without crossing a date boundary.
         minutesEarlier: Long = 0L,
+        source: CallSource = CallSource.CALL_LOG,
     ) = CallEventEntity(
         id = id,
         contactId = contactId,
         occurredAt = now.minusSeconds(daysAgo * 86_400L + minutesEarlier * 60L),
         direction = direction,
         durationSeconds = seconds,
-        source = CallSource.CALL_LOG,
+        source = source,
     )
 
     private fun feed(
@@ -248,8 +252,8 @@ class HomeFeedRhythmTest {
     }
 
     // HOME-3: the card's person is the list's head of queue (the same
-    // SurfaceNextUseCase answer Card view shows first), with the latest call,
-    // from which the VM words the why line. No number since 2026-10-08: the
+    // SurfaceNextUseCase answer Card view shows first), with their latest
+    // connection, from which the VM words the why line. No number since 2026-10-08: the
     // row's call button went (HOME-9).
     @Test
     fun `next up is the list's head of queue with their latest call`() = runTest {
@@ -271,8 +275,65 @@ class HomeFeedRhythmTest {
         val nextUp = assertNotNull(feed.enrichment.first { it.containsKey(1L) }.getValue(1L).nextUp)
         assertEquals(7L, nextUp.contactId)
         assertEquals("Kai Mensah", nextUp.name)
-        assertEquals(latest.occurredAt, nextUp.lastCalledAt)
+        assertEquals(latest.occurredAt, nextUp.lastSpokeAt)
         assertNull(nextUp.photoUri)
+    }
+
+    /** Kai, due, as the only member of list 1, with [events] as his history. */
+    private suspend fun nextUpOfKai(vararg events: CallEventEntity) = assertNotNull(
+        feed(
+            contacts = listOf(contactFixture(id = 7L, displayName = "Kai Mensah")),
+            events = events.toList(),
+            memberships = listOf(membershipFixture(contactId = 7L, listId = 1L, nextDueAt = now.minusSeconds(3_600L))),
+            templates = listOf(ruleTemplateFixture(id = 1L)),
+        ).enrichment.first { it.containsKey(1L) }.getValue(1L).nextUp,
+    )
+
+    private fun whyLine(lastSpokeAt: Instant?): String =
+        homeRecencyWhy(lastSpokeAt, now).asString(ApplicationProvider.getApplicationContext<Application>())
+
+    // HOME-3, 2026-11-10: "Spoke" means a conversation happened. An unanswered
+    // dial is an ATTEMPT (Enums.kt), and until this date the feed took the
+    // newest event of any kind, so Home read "Spoke today" over it while the
+    // card's why line, which drops attempts, still said "Spoke 3 days ago."
+    // Fails with the old pick: the line reads "Spoke today".
+    @Test
+    fun `an attempt after an older call leaves next up on the older call`() = runTest {
+        val spoke = callEvent(1L, 7L, daysAgo = 3, seconds = 20 * 60, CallDirection.OUTGOING)
+        val nextUp = nextUpOfKai(
+            spoke,
+            callEvent(2L, 7L, daysAgo = 0, seconds = 0, CallDirection.OUTGOING, source = CallSource.ATTEMPT),
+        )
+
+        assertEquals(spoke.occurredAt, nextUp.lastSpokeAt)
+        assertEquals("Spoke 3 days ago", whyLine(nextUp.lastSpokeAt))
+    }
+
+    // Nobody has spoken, so the line says so, unanswered dials or not.
+    // Fails with the old pick: the line reads "Spoke yesterday".
+    @Test
+    fun `someone only ever tried has no calls yet`() = runTest {
+        val nextUp = nextUpOfKai(
+            callEvent(1L, 7L, daysAgo = 1, seconds = 0, CallDirection.OUTGOING, source = CallSource.ATTEMPT),
+        )
+
+        assertNull(nextUp.lastSpokeAt)
+        assertEquals("No calls yet", whyLine(nextUp.lastSpokeAt))
+    }
+
+    // A connection logged by hand is a conversation (the user told Orbit they
+    // talked), so it counts even with no length and an attempt after it.
+    @Test
+    fun `a logged connection counts as having spoken`() = runTest {
+        val logged = callEvent(1L, 7L, daysAgo = 1, seconds = 0, CallDirection.OUTGOING, source = CallSource.MANUAL)
+        val nextUp = nextUpOfKai(
+            callEvent(2L, 7L, daysAgo = 5, seconds = 20 * 60, CallDirection.INCOMING),
+            logged,
+            callEvent(3L, 7L, daysAgo = 0, seconds = 0, CallDirection.OUTGOING, source = CallSource.ATTEMPT),
+        )
+
+        assertEquals(logged.occurredAt, nextUp.lastSpokeAt)
+        assertEquals("Spoke yesterday", whyLine(nextUp.lastSpokeAt))
     }
 
     @Test

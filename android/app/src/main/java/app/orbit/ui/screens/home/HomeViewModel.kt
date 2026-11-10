@@ -220,7 +220,7 @@ class HomeViewModel @Inject constructor(
                 contactId = raw.contactId,
                 name = raw.name,
                 photoUri = raw.photoUri,
-                why = homeRecencyWhy(raw.lastCalledAt, now)
+                why = homeRecencyWhy(raw.lastSpokeAt, now)
             )
         },
         rhythm = e?.rhythm ?: emptyList()
@@ -356,8 +356,11 @@ class HomeViewModel @Inject constructor(
 
 /**
  * Warm, neutral recency line for the Next-up person (HOME-3): context, not
- * shame ("you haven't called X in N days" is forbidden; voice.md). A null
- * last-call reads as a plain "No calls yet"; then "Spoke today", "Spoke
+ * shame ("you haven't called X in N days" is forbidden; voice.md). It
+ * measures from [lastSpokeAt], the newest connection and never an attempt
+ * (`app.orbit.domain.model.lastSpokeAt`, which the feed applies). Null,
+ * nobody having spoken, reads as a plain "No calls yet", unanswered dials
+ * or not; then "Spoke today", "Spoke
  * yesterday", "Spoke 3 weeks ago", with [formatAgo]'s one wording as the
  * argument so Home and the card never word the same gap two ways. No "You"
  * since 2026-10-08, on Home and the card alike: the owner asked for fewer
@@ -369,9 +372,9 @@ class HomeViewModel @Inject constructor(
  * like `resolvePickerPhase`, so `WhyLineVoiceTest` renders it for every
  * bucket without the feed.
  */
-internal fun homeRecencyWhy(lastCalledAt: Instant?, now: Instant): UiText {
-    if (lastCalledAt == null) return UiText.res(R.string.home_why_never)
-    val days = ChronoUnit.DAYS.between(lastCalledAt, now)
+internal fun homeRecencyWhy(lastSpokeAt: Instant?, now: Instant): UiText {
+    if (lastSpokeAt == null) return UiText.res(R.string.home_why_never)
+    val days = ChronoUnit.DAYS.between(lastSpokeAt, now)
     return when {
         days <= 0L -> UiText.res(R.string.home_why_today)
         days == 1L -> UiText.res(R.string.home_why_yesterday)
