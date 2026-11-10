@@ -3,6 +3,7 @@ package app.orbit.ui.screens.calllog
 import android.app.Application
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -21,6 +22,7 @@ import app.orbit.ui.theme.OrbitTheme
 import app.orbit.ui.util.UiText
 import app.orbit.ui.util.formatDuration
 import kotlin.math.abs
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -42,7 +44,8 @@ import org.robolectric.annotation.Config
  *    and "Ignored" as the first segment of the second line. Until then the
  *    name carried "(ignored)", a tag on the title (rules.md Design 9). The
  *    row is still greyed, but grey alone would leave colour as the only
- *    signal, so the word stays;
+ *    signal, so the word stays; in one person's log too since 2026-11-10,
+ *    where the rows had been greyed with no word;
  *  - no glyph names a row's kind (rules.md Design 9, the owner's choice of
  *    2026-10-08): everyone's log ends the second line with the kind's word
  *    and the row with the time alone, and one person's log starts each row
@@ -150,6 +153,58 @@ class CallLogContentTest {
         compose.onAllNodesWithText("Ignored", substring = true, ignoreCase = true, useUnmergedTree = true)
             .assertCountEquals(0)
     }
+
+    // ─── One person's log says Ignored too (IGNORE-09, 2026-11-10) ─────────
+
+    /** "Calls with Jordan Lee": one row of each kind, all for the same person. */
+    private fun onePersonLog(isIgnored: Boolean): CallLogUiState = CallLogUiState.Ready(
+        sections = listOf(
+            section(
+                row(1L, "Jordan Lee", CallLogKind.Outgoing, durationMinutes = 12, isIgnored = isIgnored),
+                row(2L, "Jordan Lee", CallLogKind.Incoming, durationMinutes = 3, isIgnored = isIgnored),
+                row(3L, "Jordan Lee", CallLogKind.Logged, durationMinutes = null, isIgnored = isIgnored),
+                row(4L, "Jordan Lee", CallLogKind.Attempted, durationMinutes = null, isIgnored = isIgnored),
+            ),
+        ),
+        scope = CallLogScope.Person(contactId = 1L, name = "Jordan Lee"),
+    )
+
+    // Until 2026-11-10 one person's log greyed an ignored person's rows and
+    // said nothing, so colour was the only signal (UX rubric D8). Each row's
+    // second line now leads with the word, as in everyone's log; a row with
+    // no length has the word as its whole line. Fails with the old
+    // everyone-only condition: no row says "Ignored".
+    @Test
+    fun one_persons_log_of_someone_ignored_says_ignored_on_every_row() {
+        show(onePersonLog(isIgnored = true))
+        // Under the title each row already had, which stays as it was, and
+        // before the time at the row's end.
+        mapOf(
+            "You called" to "Ignored · 12 min",
+            "Jordan called" to "Ignored · 3 min",
+            "You logged a connection" to "Ignored",
+            "You tried to reach them" to "Ignored",
+        ).forEach { (title, line) ->
+            assertEquals(listOf(title, line, "4:30pm"), rowTexts(title))
+        }
+        compose.onAllNodesWithText("Ignored", substring = true, useUnmergedTree = true).assertCountEquals(4)
+    }
+
+    @Test
+    fun one_persons_log_of_someone_not_ignored_does_not_say_ignored() {
+        show(onePersonLog(isIgnored = false))
+        assertEquals(listOf("You called", "12 min", "4:30pm"), rowTexts("You called"))
+        assertEquals(listOf("Jordan called", "3 min", "4:30pm"), rowTexts("Jordan called"))
+        // A row with no length has no second line at all.
+        assertEquals(listOf("You logged a connection", "4:30pm"), rowTexts("You logged a connection"))
+        compose.onAllNodesWithText("Ignored", substring = true, ignoreCase = true, useUnmergedTree = true)
+            .assertCountEquals(0)
+    }
+
+    /** The texts a row's merged, clickable node carries, in order: its title, its second line, its time. */
+    private fun rowTexts(title: String): List<String> =
+        compose.onNode(hasClickAction() and hasText(title)).fetchSemanticsNode()
+            .config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text }
 
     // ─── No glyph for the kind (rules.md Design 9, 2026-10-08) ─────────────
 

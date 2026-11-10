@@ -51,7 +51,8 @@
     <string name="calllog_direction_logged">Logged</string>
     <string name="calllog_direction_attempted">Attempted</string>
     <!-- A person the user has ignored still shows, greyed, with this word first in the
-         subtitle: "Ignored · from Inner orbit · 12 min · Outgoing". -->
+         subtitle: "Ignored · from Inner orbit · 12 min · Outgoing" in everyone's log,
+         "Ignored · 12 min" in one person's, alone on a row with no length. -->
     <string name="calllog_ignored">Ignored</string>
 
     <!-- In one person's log every row is them, so rows say what happened.
