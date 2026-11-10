@@ -9,6 +9,7 @@ import app.orbit.data.repository.ContactRepository
 import app.orbit.data.repository.ListRepository
 import app.orbit.di.ApplicationScope
 import app.orbit.domain.clock.Clock
+import app.orbit.domain.model.lastSpokeAt
 import app.orbit.domain.usecase.SurfaceNextUseCase
 import app.orbit.domain.usecase.SurfaceResult
 import app.orbit.ui.screens.home.ListTileState
@@ -148,7 +149,7 @@ open class HomeFeed @Inject constructor(
      *
      * "Next up" reuses the exact Card View surfacing contract
      * ([SurfaceNextUseCase]); the `why` line is formatted in the ViewModel
-     * (presentation), so this layer carries the raw `lastCalledAt`.
+     * (presentation), so this layer carries the raw [NextUpRaw.lastSpokeAt].
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     open val enrichment: StateFlow<Map<Long, ListEnrichment>> =
@@ -211,14 +212,15 @@ open class HomeFeed @Inject constructor(
         ) { surface, calls, members, _ ->
             val byId = members.associateBy { it.id }
             val nextUp = (surface as? SurfaceResult.Found)?.let { found ->
-                val last = calls.asSequence()
-                    .filter { it.contactId == found.contact.id }
-                    .maxByOrNull { it.occurredAt }
                 NextUpRaw(
                     contactId = found.contact.id,
                     name = found.contact.displayName,
                     photoUri = found.contact.photoUri,
-                    lastCalledAt = last?.occurredAt,
+                    // HOME-3: the newest connection, never an attempt. Until
+                    // 2026-11-10 this took the newest event of any kind, so
+                    // an unanswered dial read "Spoke today" here while the
+                    // card's why line, which drops attempts, did not.
+                    lastSpokeAt = calls.filter { it.contactId == found.contact.id }.lastSpokeAt(),
                 )
             }
             listId to ListEnrichment(nextUp = nextUp, rhythm = buildRhythm(calls, byId))
@@ -379,10 +381,15 @@ data class ListEnrichment(
     val rhythm: List<RhythmDay>,
 )
 
-/** Raw "head of queue" for a list. `lastCalledAt` feeds the VM's recency `why` line. */
+/**
+ * Raw "head of queue" for a list. [lastSpokeAt] feeds the VM's recency `why`
+ * line: when you last spoke ([app.orbit.domain.model.lastSpokeAt], so never
+ * an attempt), null when nobody has. Named `lastCalledAt` until 2026-11-10,
+ * when it held the newest call of any kind.
+ */
 data class NextUpRaw(
     val contactId: Long,
     val name: String,
     val photoUri: String?,
-    val lastCalledAt: Instant?,
+    val lastSpokeAt: Instant?,
 )

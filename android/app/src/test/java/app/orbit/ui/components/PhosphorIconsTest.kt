@@ -45,6 +45,21 @@ class PhosphorIconsTest {
         assertTrue("Expected to find icon usages; is the source path right?", used.size > 20)
     }
 
+    /**
+     * The call-direction icons went on 2026-10-08: a call's direction is said
+     * in words ("Outgoing · 12 min", "You called"), and a glyph that only
+     * names its kind is a badge (rules.md Design 9; CONTACT-09, HOME-8).
+     * Nothing drew them after that, but they stayed in the set until
+     * 2026-11-10, and an icon in the set is an invitation to draw it.
+     */
+    @Test
+    fun `the call-direction icons are not in the set`() {
+        val back = listOf("phone-incoming", "phone-outgoing").filter { it in PhosphorIcons }
+        assertTrue("Call-direction icons back in the set: $back", back.isEmpty())
+        val drawn = listOf("ph_phone_incoming.xml", "ph_phone_outgoing.xml").filter { File(drawables, it).exists() }
+        assertTrue("Call-direction drawables back in res/drawable: $drawn", drawn.isEmpty())
+    }
+
     private companion object {
         val PATH = Regex("<path[^>]*/>", RegexOption.DOT_MATCHES_ALL)
         val FILL = Regex("""android:fillColor="([^"]+)"""")

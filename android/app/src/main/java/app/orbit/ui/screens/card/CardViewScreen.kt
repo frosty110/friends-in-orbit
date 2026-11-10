@@ -341,13 +341,14 @@ internal fun CardViewContent(
             snackbarHostState.currentSnackbarData?.dismiss()
             val text = when (message) {
                 // PRIV-03: the nameless sentence while the curtain is down,
-                // "They moved to later." (CARD-02) and "Logged. They come up
-                // again ..." (CARD-10). Until 2026-10-08 a Later or Sooner
-                // named the person under the curtain too.
-                is CardMessage.Undoable -> if (currentCurtain) message.curtainText else message.text
-                is CardMessage.Called -> message.text
-                is CardMessage.Logged -> if (currentCurtain) message.curtainText else message.text
-                is CardMessage.Failed -> message.text
+                // for every message with words: "They moved to later."
+                // (CARD-02), "Call logged" (CARD-03), "Logged. They come up
+                // again ..." (CARD-10), "Couldn't move them to later. Try
+                // again.". One branch, so a new message cannot skip it. Until
+                // 2026-10-08 a Later or Sooner named the person under the
+                // curtain, and until 2026-11-10 "Called Kai" and the failures
+                // did.
+                is CardMessage.Said -> if (currentCurtain) message.curtainText else message.text
                 is CardMessage.OpenNote -> {
                     // CARD-11: the page for the call, in place of a snackbar.
                     // NOTIF-16's notification for the same call (posted only

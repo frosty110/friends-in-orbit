@@ -105,13 +105,11 @@ class UpdateTriggersTest {
         val contactRepo = FakeContactRepository(listOf(contactFixture(id = 1L)))
         val listRepo = FakeListRepository(listOf(listFixture(id = 10L, ruleTemplateId = 1L)))
         listRepo.seedMemberships(listOf(membershipFixture(contactId = 1L, listId = 10L)))
-        val templateRepo = FakeRuleTemplateRepository(listOf(ruleTemplateFixture(id = 1L)))
         val useCase = SkipContactUseCase(
+            txRunner = passThruTx,
             contactRepo = contactRepo,
             listRepo = listRepo,
-            ruleTemplateRepo = templateRepo,
             clock = TestClock(T0),
-            json = JsonProvider.json,
             widgetRefreshTrigger = trigger,
         )
 
@@ -132,14 +130,11 @@ class UpdateTriggersTest {
         val contactRepo = FakeContactRepository(listOf(contactFixture(id = 1L)))
         val listRepo = FakeListRepository(listOf(listFixture(id = 10L, ruleTemplateId = 1L)))
         listRepo.seedMemberships(listOf(membershipFixture(contactId = 1L, listId = 10L)))
-        val templateRepo = FakeRuleTemplateRepository(listOf(ruleTemplateFixture(id = 1L)))
         val useCase = SurfaceSoonerUseCase(
             txRunner = passThruTx,
             contactRepo = contactRepo,
             listRepo = listRepo,
-            ruleTemplateRepo = templateRepo,
             clock = TestClock(T0),
-            json = JsonProvider.json,
             widgetRefreshTrigger = trigger,
         )
 

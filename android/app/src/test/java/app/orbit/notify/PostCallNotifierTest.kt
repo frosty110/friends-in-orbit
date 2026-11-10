@@ -26,6 +26,7 @@ import app.orbit.nav.Routes
 import app.orbit.testutil.newPrefs
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -45,6 +46,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
 import org.robolectric.annotation.Config
+import timber.log.Timber
 
 /**
  * NOTIF-16, over the real NOTE-05 query (in-memory Room), a real DataStore
@@ -72,33 +74,35 @@ class PostCallNotifierTest {
     private lateinit var db: OrbitDatabase
     private lateinit var repo: CallEventRepository
     private lateinit var waiting: WaitingCalls
-    private lateinit var notifier: TestNotifier
+    private lateinit var notifier: PostCallNotifier
     private var listId = 0L
 
-    private class TestNotifier(
-        context: Context,
-        waiting: WaitingCalls,
-        repo: CallEventRepository,
-        foreground: AppForeground,
-        prefs: AppPrefs,
-        clock: TestClock,
-    ) : PostCallNotifier(context, waiting, repo, foreground, prefs, clock) {
-        var dnd = false
-        override fun dndBlocking(): Boolean = dnd
+    /**
+     * Why each pass stayed quiet, in order, read from the notifier's
+     * structured log line ("post_call_skip reason=dnd": a reason, no PII,
+     * rules.md Code 4). An empty shade cannot say which gate held it.
+     */
+    private val skips = CopyOnWriteArrayList<String>()
+    private val skipTree = object : Timber.Tree() {
+        override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+            SKIP.matchEntire(message)?.let { skips += it.groupValues[1] }
+        }
     }
 
     @Before
     fun setUp() {
+        Timber.plant(skipTree)
         db = Room.inMemoryDatabaseBuilder(context, OrbitDatabase::class.java).allowMainThreadQueries().build()
         repo = CallEventRepositoryImpl(db, db.callEventDao(), db.contactDao(), db.listMembershipDao(), db.listDao())
         waiting = WaitingCalls(repo, prefs, clock)
-        notifier = TestNotifier(context, waiting, repo, foreground, prefs, clock)
+        notifier = PostCallNotifier(context, waiting, repo, foreground, prefs, clock)
         OrbitNotifications.ensureChannels(context)
         runBlocking { listId = db.listDao().insert(ListEntity(name = "Inner orbit", sortOrder = 0)) }
     }
 
     @After
     fun tearDown() {
+        Timber.uproot(skipTree)
         watchScope.cancel()
         db.close()
         storeScope.cancel()
@@ -141,6 +145,19 @@ class PostCallNotifierTest {
             .map { it.notification }
 
     private fun minutes(m: Long) = Duration.ofMinutes(m)
+
+    private fun afterCallChannel(): NotificationChannel =
+        assertNotNull(manager.getNotificationChannel(OrbitNotifications.CHANNEL_AFTER_CALL), "the after-call channel")
+
+    /**
+     * Every gate a case does not close starts open: a fresh application per
+     * case gives a fresh notification manager, and setUp makes the channel.
+     */
+    private fun assertEveryGateOpen() {
+        assertEquals(NotificationManager.IMPORTANCE_DEFAULT, afterCallChannel().importance, "channel on")
+        assertTrue(manager.areNotificationsEnabled(), "notifications on")
+        assertEquals(NotificationManager.INTERRUPTION_FILTER_ALL, manager.currentInterruptionFilter, "Do Not Disturb off")
+    }
 
     /** One sync pass: the marker before, the calls it writes, the hook after. */
     private suspend fun syncWriting(bulkPass: Boolean = false, write: suspend () -> Unit) {
@@ -273,28 +290,61 @@ class PostCallNotifierTest {
         assertTrue(active().isEmpty())
     }
 
-    @Test
-    fun `nothing posts with the channel off, notifications off, or Do Not Disturb on`() = runBlocking {
-        val kai = person(1L, "Kai Mensah")
+    // The nudge's gates (NOTIF-01, NOTIF-06), one case each. Each case closes
+    // one gate on a fresh Robolectric application, with the other two open,
+    // and checks the reason the notifier gives for staying quiet, so taking a
+    // gate out of PostCallNotifier fails its case. Until 2026-11-10 one case
+    // closed all three in turn: the channel first, then notifications, then
+    // Do Not Disturb. Robolectric's notification manager brings a deleted
+    // channel back with its old settings and only ever lowers an existing
+    // channel's importance, so the channel could not be turned on again and
+    // stayed off. The Do Not Disturb pass stopped at the channel, and with
+    // the notifications gate taken out so did the notifications pass: the
+    // case stayed green with either gate, or both, removed.
 
-        // The user switching the channel off in Android's settings.
-        manager.deleteNotificationChannel(OrbitNotifications.CHANNEL_AFTER_CALL)
+    @Test
+    fun `nothing posts with the channel off`() = runBlocking {
+        val kai = person(1L, "Kai Mensah")
+        assertEveryGateOpen()
+
+        // The user switching the channel off in Android's settings. Submitted
+        // again at a lower importance, an existing channel takes it.
         manager.createNotificationChannel(
             NotificationChannel(OrbitNotifications.CHANNEL_AFTER_CALL, "After a call", NotificationManager.IMPORTANCE_NONE),
         )
-        syncWriting { call(kai, startedAgo = minutes(30)) }
-        assertTrue(active().isEmpty(), "channel off")
+        assertEquals(NotificationManager.IMPORTANCE_NONE, afterCallChannel().importance)
+        syncWriting { call(kai, startedAgo = minutes(20)) }
 
-        manager.deleteNotificationChannel(OrbitNotifications.CHANNEL_AFTER_CALL)
-        OrbitNotifications.ensureChannels(context)
+        assertTrue(active().isEmpty())
+        assertEquals(listOf("channel_off"), skips)
+    }
+
+    @Test
+    fun `nothing posts with notifications off`() = runBlocking {
+        val kai = person(1L, "Kai Mensah")
+        assertEveryGateOpen()
+
+        // Orbit's notifications switched off, or the permission refused.
         Shadows.shadowOf(manager).setNotificationsEnabled(false)
         syncWriting { call(kai, startedAgo = minutes(20)) }
-        assertTrue(active().isEmpty(), "notifications off")
 
-        Shadows.shadowOf(manager).setNotificationsEnabled(true)
-        notifier.dnd = true
-        syncWriting { call(kai, startedAgo = minutes(10)) }
-        assertTrue(active().isEmpty(), "Do Not Disturb")
+        assertTrue(active().isEmpty())
+        assertEquals(listOf("notifications_off"), skips)
+    }
+
+    @Test
+    fun `nothing posts with Do Not Disturb on`() = runBlocking {
+        val kai = person(1L, "Kai Mensah")
+        assertEveryGateOpen()
+
+        // Priority only, the usual Do Not Disturb. Robolectric's notification
+        // manager takes the filter as given; on a phone only the user, or an
+        // app with Do Not Disturb access, sets it.
+        manager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+        syncWriting { call(kai, startedAgo = minutes(20)) }
+
+        assertTrue(active().isEmpty())
+        assertEquals(listOf("dnd"), skips)
     }
 
     @Test
@@ -350,5 +400,9 @@ class PostCallNotifierTest {
         db.noteDao().insert(NoteEntity(contactId = kai, createdAt = now, body = "Went well"))
 
         withTimeout(30_000L) { while (active().isNotEmpty()) delay(25) }
+    }
+
+    private companion object {
+        val SKIP = Regex("""post_call_skip reason=(\w+)""")
     }
 }

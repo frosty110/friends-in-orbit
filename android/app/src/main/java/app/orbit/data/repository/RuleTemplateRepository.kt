@@ -25,7 +25,8 @@ interface RuleTemplateRepository {
     /**
      * One-shot lookup by primary key; returns null if absent. Used by the
      * use cases that resolve a template from `ListEntity.ruleTemplateId: Long?`
-     * (SurfaceNextUseCase, MarkCalledUseCase, SkipContactUseCase).
+     * (SurfaceNextUseCase, MarkCalledUseCase). Later and Sooner read no
+     * template since 2026-11-10: they move by the list's size (CARD-02).
      */
     suspend fun getById(id: Long): RuleTemplateEntity?
 

@@ -117,6 +117,7 @@ Two requirements sit above the table because every screen meets them, and they a
 | `UiText` (`ui/util`) | Text a ViewModel or worker produces | Copy lives in resources; only user data is plain |
 | `formatSpan` / `formatRelative` / `formatClockTime` (`ui/util`) | Any duration or time | One wording for "time since", the phone's 12/24-hour setting |
 | `comesUp` (`ui/util/ComesUp.kt`) | When someone next comes up | One set of buckets (later today, tomorrow, a weekday, a span) for the card's Log a connection snackbar (CARD-10) and All quiet line (CARD-05) and Browse's rows; each screen words them in its own strings. The card's Later and Sooner say no "when" (CARD-02, 2026-10-08) |
+| `lastSpokeAt` / `isConnection` (`domain/model/LastSpoke.kt`) | When you last spoke | A call that connected or a connection logged by hand; never an attempt (no answer, a voicemail). One definition for Home's "Spoke 3 weeks ago", Card view's why line and Contact detail's "Last call", so an unanswered dial never reads as "Spoke today" anywhere (2026-11-10) |
 
 ## Known gaps
 

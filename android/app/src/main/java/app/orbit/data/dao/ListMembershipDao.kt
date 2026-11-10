@@ -118,7 +118,10 @@ interface ListMembershipDao {
      * Per-list membership counts, read by two screens that say them in
      * words: the end of a Lists row's second line ("Every 14 days · 12
      * people", an accent pill until 2026-10-08, rules.md Design 9) and Home's
-     * name row ("12 people", "No one yet"). The nudge gate and smart-list
+     * name row ("12 people", "No one yet"). Later and Sooner read it too
+     * (moveAmountFor, CARD-02): the size that decides how far a move goes is
+     * the number the Lists row says, so a change here changes the moves. The
+     * nudge gate and smart-list
      * sync do not read this: the gate reads `lists.dueCount`, and the sync
      * reads each smart list's members row by row.
      * Returns a Flow<Map<Long, Int>> where the key is listId.

@@ -86,7 +86,7 @@ open class PostCallNotifier @Inject constructor(
             appForeground.isForeground -> "foreground"
             !context.areNotificationsEnabled() -> "notifications_off"
             !context.isChannelEnabled(OrbitNotifications.CHANNEL_AFTER_CALL) -> "channel_off"
-            dndBlocking() -> "dnd"
+            context.isDndBlocking() -> "dnd"
             else -> null
         }
         if (skip != null) {
@@ -159,13 +159,6 @@ open class PostCallNotifier @Inject constructor(
                 }
             }
     }
-
-    /**
-     * True when Do Not Disturb would block the notification (NOTIF-06). A
-     * hook, as on [ListPromptWorker], because Robolectric's notification
-     * manager offers no way to set the interruption filter.
-     */
-    internal open fun dndBlocking(): Boolean = context.isDndBlocking()
 
     companion object {
         /** How recently a call must have ended for its notification to be worth posting. */

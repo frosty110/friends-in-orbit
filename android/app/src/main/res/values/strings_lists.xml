@@ -54,11 +54,16 @@
     <string name="lists_rule_summary_commonly_called">Commonly called · top %1$d%%</string>
     <string name="lists_rule_summary_rarely_called">Rarely called · bottom %1$d%%</string>
     <string name="lists_rule_summary_never_called">Never called</string>
+    <!-- The whole second line under a smart list's name on Lists, in place of its rule, when
+         the rule is missing or cannot be decoded: the list cannot fill itself. Shown alone,
+         with no count, like lists_rhythm_unreadable. -->
+    <string name="lists_rule_unreadable">Couldn\'t read this list\'s rule</string>
 
     <!-- The whole second line under a list's name on Lists: what the list does, then who is
          on it. %1$s: its rhythm or rule, above ("Every 14 days", "Recently added · 30 days").
          %2$s: lists_row_members ("12 people") or lists_row_members_none.
-         "Every 14 days · 12 people". Never joined to lists_rhythm_unreadable, which shows alone. -->
+         "Every 14 days · 12 people". Never joined to lists_rhythm_unreadable or
+         lists_rule_unreadable, which show alone. -->
     <string name="lists_row_meta">%1$s · %2$s</string>
     <!-- The same line's count for a list with nobody on it, and the whole line when the list has
          no rhythm to say. The words Home's card uses for an empty list. -->

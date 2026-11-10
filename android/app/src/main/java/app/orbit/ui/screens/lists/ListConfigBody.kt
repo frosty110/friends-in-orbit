@@ -295,11 +295,23 @@ private fun ColumnScope.ListConfigBodySections(
 
     if (state.type == ListType.SMART) {
         val rule = state.smartRule
-        if (rule != null) {
-            SettingGroup(title = stringResource(R.string.lists_section_smart_rule)) {
+        SettingGroup(title = stringResource(R.string.lists_section_smart_rule)) {
+            if (rule != null) {
                 SmartRuleEditor(
                     rule = rule,
                     onChange = onSmartRuleChange
+                )
+            } else {
+                // A rule that is missing or no longer decodes is said, in the
+                // words the Lists row uses (LIST-07), not hidden: until
+                // 2026-11-10 the whole group vanished and the list looked like
+                // one with nothing to set (rules.md Code 3).
+                Text(
+                    text = stringResource(R.string.lists_rule_unreadable),
+                    style = OrbitTheme.type.meta.copy(color = OrbitTheme.colors.fgMuted),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = OrbitTheme.spacing.x4, end = OrbitTheme.spacing.x4, top = OrbitTheme.spacing.x4)
                 )
             }
         }

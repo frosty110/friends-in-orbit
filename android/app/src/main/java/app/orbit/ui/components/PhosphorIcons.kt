@@ -47,8 +47,6 @@ internal val PhosphorIcons: Map<String, Int> = mapOf(
     "pause-circle" to R.drawable.ph_pause_circle,
     "pencil-simple" to R.drawable.ph_pencil_simple,
     "phone-call" to R.drawable.ph_phone_call,
-    "phone-incoming" to R.drawable.ph_phone_incoming,
-    "phone-outgoing" to R.drawable.ph_phone_outgoing,
     "phone-pause" to R.drawable.ph_phone_pause,
     "phone-slash" to R.drawable.ph_phone_slash,
     "phone" to R.drawable.ph_phone,

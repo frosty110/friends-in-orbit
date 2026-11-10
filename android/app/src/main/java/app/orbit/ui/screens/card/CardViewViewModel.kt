@@ -1,5 +1,6 @@
 package app.orbit.ui.screens.card
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -20,9 +21,12 @@ import app.orbit.data.repository.ListRepository
 import app.orbit.data.repository.WaitingCalls
 import app.orbit.domain.CallLogResyncTrigger
 import app.orbit.domain.clock.Clock
+import app.orbit.domain.model.isConnection
+import app.orbit.domain.model.lastSpokeAt
 import app.orbit.domain.undo.UndoStack
 import app.orbit.domain.usecase.LogConnectionUseCase
 import app.orbit.domain.usecase.LogConnectionWhen
+import app.orbit.domain.usecase.MutationResult
 import app.orbit.domain.usecase.SkipContactUseCase
 import app.orbit.domain.usecase.SurfaceResult
 import app.orbit.domain.usecase.SurfaceSoonerUseCase
@@ -34,6 +38,12 @@ import app.orbit.ui.util.formatAgo
 import app.orbit.ui.util.formatRelative
 import app.orbit.ui.util.formatSpan
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.TextStyle
+import java.util.Locale
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -52,12 +62,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import java.time.Duration
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.TextStyle
-import java.util.Locale
-import javax.inject.Inject
 
 /**
  * Card View VM — thin subscriber to [CardFeed] plus the card-loop interaction
@@ -69,9 +73,9 @@ import javax.inject.Inject
  *     pre-revision card mapped a bare `toUiContact()` and showed placeholder
  *     stats + an all-zero heat strip on every contact.
  *   - **Swipe undo.** `onSwipeLeft` / `onSwipeRight` capture the prior
- *     membership schedule, run the mutation, then emit a snackbar with Undo
- *     that restores `nextDueAt` + `skipCount` via [UndoStack] (same pattern
- *     as SettingsIgnoredViewModel).
+ *     membership schedule, run the mutation, then, once it has moved
+ *     someone, emit a snackbar with Undo that restores `nextDueAt` +
+ *     `skipCount` via [UndoStack] (same pattern as SettingsIgnoredViewModel).
  *   - **Silent call advance (CORE-04).** `onCall` records that a dial left for
  *     the dialer; on return ([onReturnedFromDial]) the VM kicks an immediate
  *     incremental call-log sync so the detected call advances the deck on its
@@ -237,33 +241,41 @@ class CardViewViewModel @Inject constructor(
     fun onSwipeLeft(contactId: Long) = viewModelScope.launch {
         callAckJob?.cancel()
         val name = firstNameOf(contactId)
-        runMutation(
-            if (name != null) {
-                UiText.res(R.string.card_later_failed_named, name)
-            } else {
-                UiText.res(R.string.card_later_failed_unnamed)
-            },
-        ) {
-            val prior = captureSchedule(contactId)
-            skipContact(contactId = contactId, listId = listId)
-            stageUndo(prior, laterMessage(name))
-        }
+        move(
+            contactId = contactId,
+            done = words(name, R.string.card_later_named, R.string.card_later_unnamed),
+            failure = words(name, R.string.card_later_failed_named, R.string.card_later_failed_unnamed),
+        ) { skipContact(contactId = contactId, listId = listId) }
     }
 
     /** CORE-03: Sooner (right swipe or the Sooner button) brings this contact forward on the current list. */
     fun onSwipeRight(contactId: Long) = viewModelScope.launch {
         callAckJob?.cancel()
         val name = firstNameOf(contactId)
-        runMutation(
-            if (name != null) {
-                UiText.res(R.string.card_sooner_failed_named, name)
-            } else {
-                UiText.res(R.string.card_sooner_failed_unnamed)
-            },
-        ) {
+        move(
+            contactId = contactId,
+            done = words(name, R.string.card_sooner_named, R.string.card_sooner_unnamed),
+            failure = words(name, R.string.card_sooner_failed_named, R.string.card_sooner_failed_unnamed),
+        ) { surfaceSooner(contactId = contactId, listId = listId) }
+    }
+
+    /**
+     * A Later or Sooner: captures the prior schedule, runs [write], and once
+     * the move has landed stages its Undo with [done] as the snackbar
+     * (CARD-02). [MutationResult.MembershipMissing] means nobody moved (the
+     * person or their list went between the card's render and the tap), so
+     * it says [failure] and stages nothing, through [sayFailed], the one
+     * failure path a write that throws takes too (rules.md Code 3). Until
+     * 2026-11-10 the result was ignored: a move that changed nothing said
+     * "Kai moved to later." and offered an Undo with nothing to undo.
+     */
+    private suspend fun move(contactId: Long, done: Words, failure: Words, write: suspend () -> MutationResult) {
+        runMutation(failure) {
             val prior = captureSchedule(contactId)
-            surfaceSooner(contactId = contactId, listId = listId)
-            stageUndo(prior, soonerMessage(name))
+            when (write()) {
+                MutationResult.Success -> stageUndo(prior, done)
+                MutationResult.MembershipMissing -> sayFailed(failure)
+            }
         }
     }
 
@@ -289,7 +301,7 @@ class CardViewViewModel @Inject constructor(
         viewModelScope.launch {
             callAckJob?.cancel()
             val name = firstNameOf(contactId)
-            runMutation(UiText.res(R.string.components_snackbar_save_failed)) {
+            runMutation(Words.plain(UiText.res(R.string.components_snackbar_save_failed))) {
                 val now = clock.now()
                 logConnection(contactId, whenChoice, note, isAttempt, now = now)
                 // A connection logged for a day long past can leave the person
@@ -391,12 +403,11 @@ class CardViewViewModel @Inject constructor(
                 _messages.tryEmit(CardMessage.OpenNote(contactId = contactId, callEventId = worthANote.id))
                 return@launch
             }
-            val text = if (name != null) {
-                UiText.res(R.string.card_called_named, name)
-            } else {
-                UiText.res(R.string.card_call_logged)
-            }
-            _messages.tryEmit(CardMessage.Called(text = text, contactId = contactId))
+            // PRIV-03: "Call logged" under the curtain, the sentence for an
+            // unknown name. Until 2026-11-10 "Called Kai" had no twin and
+            // named the person over a covered app.
+            val said = words(name, R.string.card_called_named, R.string.card_call_logged)
+            _messages.tryEmit(CardMessage.Called(text = said.text, curtainText = said.curtainText, contactId = contactId))
         }
     }
 
@@ -440,7 +451,7 @@ class CardViewViewModel @Inject constructor(
      */
     fun onUndo(token: Long) = viewModelScope.launch {
         if (token != undoToken) return@launch
-        runMutation(UiText.res(R.string.card_undo_failed)) { undoStack.take()?.inverse?.invoke() }
+        runMutation(Words.plain(UiText.res(R.string.card_undo_failed))) { undoStack.take()?.inverse?.invoke() }
     }
 
     // ─── Swipe-undo internals ────────────────────────────────────────────────
@@ -470,7 +481,7 @@ class CardViewViewModel @Inject constructor(
      * [message] is the snackbar's sentence and its nameless twin, as [UiText]
      * in [CardMessage] (`UndoStack.PendingUndo` carries only the inverse).
      */
-    private fun stageUndo(prior: List<ListMembershipEntity>, message: MoveMessage) {
+    private fun stageUndo(prior: List<ListMembershipEntity>, message: Words) {
         val inverse: suspend () -> Unit = {
             prior.forEach { membership ->
                 listRepo.restoreMembershipSchedule(
@@ -495,41 +506,49 @@ class CardViewViewModel @Inject constructor(
             ?.takeIf { it.contactId == contactId }
             ?.contact?.name?.trim()?.substringBefore(' ')?.ifBlank { null }
 
-    /** A Later's or Sooner's snackbar: the sentence, and the one shown under the curtain. */
-    private data class MoveMessage(val text: UiText, val curtainText: UiText)
-
-    // CARD-02: the snackbar names the person and says only that they moved,
-    // in the app's two verbs for this, Later and Sooner (voice.md glossary):
-    // "Kai moved to later." It never says when they come back: the owner
-    // asked on 2026-10-08 that the card not surface how far a move goes
-    // (until then it read "Kai will come up again tomorrow." and "Kai comes
-    // up later today."). A separate sentence for an unknown name, so no
-    // language has to fit "They" into a slot meant for a name; that sentence
-    // is the curtain's too (PRIV-03), as Log a connection's is (CARD-10).
-    private fun laterMessage(name: String?): MoveMessage {
-        val unnamed = UiText.res(R.string.card_later_unnamed)
-        val named = name?.let { UiText.res(R.string.card_later_named, it) }
-        return MoveMessage(text = named ?: unnamed, curtainText = unnamed)
+    /**
+     * A snackbar's sentence and the one shown under the privacy curtain
+     * (PRIV-03): the two halves of every [CardMessage.Said].
+     */
+    private data class Words(val text: UiText, val curtainText: UiText) {
+        companion object {
+            /** A sentence that names nobody reads the same under the curtain. */
+            fun plain(text: UiText) = Words(text = text, curtainText = text)
+        }
     }
 
-    private fun soonerMessage(name: String?): MoveMessage {
-        val unnamed = UiText.res(R.string.card_sooner_unnamed)
-        val named = name?.let { UiText.res(R.string.card_sooner_named, it) }
-        return MoveMessage(text = named ?: unnamed, curtainText = unnamed)
+    // CARD-02: the snackbar after a Later or Sooner names the person and says
+    // only that they moved, in the app's two verbs for this, Later and Sooner
+    // (voice.md glossary): "Kai moved to later." It never says when they come
+    // back: the owner asked on 2026-10-08 that the card not surface how far a
+    // move goes (until then it read "Kai will come up again tomorrow." and
+    // "Kai comes up later today."). A separate sentence for an unknown name,
+    // so no language has to fit "They" into a slot meant for a name; that
+    // sentence is the curtain's too (PRIV-03), as Log a connection's is
+    // (CARD-10). The failures and "Called Kai" (CARD-03) are built the same
+    // way since 2026-11-10.
+    private fun words(name: String?, @StringRes named: Int, @StringRes unnamed: Int): Words {
+        val nameless = UiText.res(unnamed)
+        return Words(text = name?.let { UiText.res(named, it) } ?: nameless, curtainText = nameless)
     }
 
     /**
-     * H4-style uniform mutation wrapper — surfaces failures on the snackbar
+     * H4-style uniform mutation wrapper: surfaces failures on the snackbar
      * instead of silently dropping them inside `viewModelScope.launch`.
      * CancellationException is rethrown so structured concurrency stays intact.
      */
-    private suspend fun runMutation(failureLabel: UiText, block: suspend () -> Unit) {
+    private suspend fun runMutation(failure: Words, block: suspend () -> Unit) {
         try {
             block()
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
-            _messages.tryEmit(CardMessage.Failed(failureLabel))
+            sayFailed(failure)
         }
+    }
+
+    /** The one failure path (rules.md Code 3): a write that threw, or a move that moved nobody ([move]). */
+    private fun sayFailed(failure: Words) {
+        _messages.tryEmit(CardMessage.Failed(text = failure.text, curtainText = failure.curtainText))
     }
 
     // ─── Snapshot → UI state ─────────────────────────────────────────────────
@@ -564,10 +583,11 @@ class CardViewViewModel @Inject constructor(
                 val isAhead = s.nextDueAt.isAfter(now)
                 // Connections only for "when you last spoke" and for CARD-03's
                 // evidence: an ATTEMPT is a reach-out that did not connect
-                // (Enums.kt), the same filter withCallStats applies to "Last
-                // call", so the face never says "Spoke today" over a
-                // voicemail.
-                val connections = recentCalls.filter { it.source != CallSource.ATTEMPT }
+                // (Enums.kt). One definition, `isConnection` and `lastSpokeAt`
+                // (domain/model/LastSpoke.kt), shared with Home's Next up and
+                // withCallStats' "Last call", so no screen says "Spoke today"
+                // over a voicemail.
+                val connections = recentCalls.filter { it.isConnection }
                 CardViewUiState.Ready(
                     contactId = s.contact.id,
                     contact = s.contact.toUiContact()
@@ -580,7 +600,7 @@ class CardViewViewModel @Inject constructor(
                     isAheadOfToday = isAhead,
                     whyNowLine = whyNowLine(connections, now),
                     listType = listType,
-                    lastCallAt = connections.maxOfOrNull { it.occurredAt },
+                    lastCallAt = connections.lastSpokeAt(),
                 )
             }
         }

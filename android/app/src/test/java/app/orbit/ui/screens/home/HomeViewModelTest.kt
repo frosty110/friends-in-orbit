@@ -447,22 +447,22 @@ class HomeViewModelTest {
     // 2026-10-08: the row's call button went (HOME-9).
     // ============================================================================
 
-    private fun enrichmentFor(lastCalledAt: Instant?) = mapOf(
+    private fun enrichmentFor(lastSpokeAt: Instant?) = mapOf(
         1L to ListEnrichment(
             nextUp = NextUpRaw(
                 contactId = 7L,
                 name = "Kai Mensah",
                 photoUri = "content://photo/7",
-                lastCalledAt = lastCalledAt,
+                lastSpokeAt = lastSpokeAt,
             ),
             rhythm = emptyList(),
         ),
     )
 
-    private suspend fun nextUpFor(lastCalledAt: Instant?): NextUp {
+    private suspend fun nextUpFor(lastSpokeAt: Instant?): NextUp {
         val setup = fixture(
             initialTiles = listOf(tile(1L, "Inner orbit")),
-            initialEnrichment = enrichmentFor(lastCalledAt),
+            initialEnrichment = enrichmentFor(lastSpokeAt),
         )
         var nextUp: NextUp? = null
         setup.vm.uiState.test(timeout = 2.seconds) {
@@ -475,7 +475,7 @@ class HomeViewModelTest {
 
     @Test
     fun `next up carries the person`() = runTest {
-        val nextUp = nextUpFor(lastCalledAt = null)
+        val nextUp = nextUpFor(lastSpokeAt = null)
         assertEquals(7L, nextUp.contactId)
         assertEquals("Kai Mensah", nextUp.name)
         assertEquals("content://photo/7", nextUp.photoUri)
@@ -488,10 +488,10 @@ class HomeViewModelTest {
     @Test
     fun `the why line reads never, today, yesterday or how long ago you spoke`() = runTest {
         val now = TestClock().now()
-        assertEquals(UiText.res(R.string.home_why_never), nextUpFor(lastCalledAt = null).why)
-        assertEquals(UiText.res(R.string.home_why_today), nextUpFor(lastCalledAt = now.minus(Duration.ofHours(3))).why)
-        assertEquals(UiText.res(R.string.home_why_yesterday), nextUpFor(lastCalledAt = now.minus(Duration.ofDays(1))).why)
-        val threeWeeks = nextUpFor(lastCalledAt = now.minus(Duration.ofDays(21))).why
+        assertEquals(UiText.res(R.string.home_why_never), nextUpFor(lastSpokeAt = null).why)
+        assertEquals(UiText.res(R.string.home_why_today), nextUpFor(lastSpokeAt = now.minus(Duration.ofHours(3))).why)
+        assertEquals(UiText.res(R.string.home_why_yesterday), nextUpFor(lastSpokeAt = now.minus(Duration.ofDays(1))).why)
+        val threeWeeks = nextUpFor(lastSpokeAt = now.minus(Duration.ofDays(21))).why
         assertEquals(UiText.res(R.string.home_why_ago, formatAgo(21)), threeWeeks)
         assertEquals("Spoke 3 weeks ago", threeWeeks.asString(context))
         assertEquals("No calls yet", UiText.res(R.string.home_why_never).asString(context))

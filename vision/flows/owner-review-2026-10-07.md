@@ -302,3 +302,43 @@ Two were the owner's call, asked the same day:
   so a phone feature that adjusts channels nobody has touched could adjust them.
   Stock Android's own assistant does not; whether a maker's does was not
   checked.
+
+## Finishing up, 2026-11-10
+
+The owner: "Finish this up." Two kinds of loose end were left: the one
+decision that was waiting on the owner, and defects earlier rounds had noticed
+and listed without fixing.
+
+**How far Later and Sooner move someone** (CARD-02), from the owner's comment
+on the Sooner button ("likely 1 day/3 days depending on the size of the list.
+But we don't surface how much"). Built as proposed, with the owner's go-ahead
+to finish:
+
+- A list of up to 10 people: Later moves the person a day later, Sooner a day
+  sooner.
+- 11 or more people: three days each way.
+- Sooner never goes earlier than now; Later on someone already overdue counts
+  from now.
+- The size is the number the Lists row says ("12 people"), read from the same
+  query, so the two cannot disagree. Nothing on screen names the amount.
+- The rule lives in one place (`moveAmountFor`, `MoveAmount.kt`): changing
+  the cut-off or the amounts is one edit. Until now each move worked out its
+  own amount from the list rule (Later a day on Keep in touch, two on Late
+  night; Sooner half that), which the owner found "very short".
+
+**Fixed while finishing** (each was listed under "Noticed, not changed" in
+PR #16 or #17):
+
+| What | Was | Now |
+|---|---|---|
+| A Later or Sooner that moved nobody (the person or list vanished mid-flight) | "Kai moved to later." and an Undo | "Couldn't move Kai to later. Try again.", no Undo (rules.md Code 3) |
+| "Called Kai", and a failed move's message, under the privacy curtain | Named the person | The unnamed twin, as every other card message already did (PRIV-03) |
+| Home's "Spoke today" after an unanswered call | Counted the attempt as speaking | Only a call that connected or a logged connection counts; one definition shared with the card and Contact detail |
+| One person's call log, someone ignored | Greyed, no word (colour only) | "Ignored · 12 min", as everyone's log says |
+| A smart list whose rule cannot be read | Lists showed its count like a working list; List settings hid the rule | "Couldn't read this list's rule", in both places |
+| A Later's effect on the nudge gate | The list's due count stayed one high, so a nudge could post with nobody due | Recomputed with the move, as Sooner already did |
+| The test for Do Not Disturb after a call | Passed even with the gate removed | Each gate is tested on its own, proven by removing it |
+| The phone-in / phone-out icons | Still in the icon set after the direction icons went | Removed, so they cannot come back by accident |
+
+In the prototype, Contact detail's "View all calls" now opens that person's
+log ("Calls with Kai"), as the app does; it opened everyone's.

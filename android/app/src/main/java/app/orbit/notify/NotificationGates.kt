@@ -12,8 +12,9 @@ import androidx.core.content.getSystemService
  * write `if (!areNotificationsEnabled() || isDndBlocking()) return` at the top of
  * [doWork] without importing a manager directly.
  *
- * Gate helpers touch the Android framework and are validated on-device;
- * they are NOT covered by JVM unit tests.
+ * Gate helpers touch the Android framework. PostCallNotifierTest covers all
+ * three under Robolectric (notifications off, a channel off, Do Not Disturb
+ * through the real interruption filter); a device remains the final check.
  */
 
 /**

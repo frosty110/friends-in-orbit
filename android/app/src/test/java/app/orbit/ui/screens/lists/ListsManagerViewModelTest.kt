@@ -268,9 +268,57 @@ class ListsManagerViewModelTest {
             val ready = first as ListsManagerUiState.Ready
             val tile = ready.active.single()
             assertEquals("Recently added · 30 days", tile.ruleSummary?.text?.asString(context))
+            // Readable, so the row still joins the count to it
+            // ("Recently added · 30 days · 4 people", ListsManagerScreenTest).
+            assertTrue(tile.ruleSummary is ListRowSummary.Readable)
             assertEquals(ListType.SMART, tile.type)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    /** The summary on the tile of a smart list whose stored rule is [smartRuleJson]. */
+    private suspend fun smartTileSummary(smartRuleJson: String?): ListRowSummary? {
+        val vm =
+            ListsManagerViewModel(
+                listRepo = FakeListRepository(
+                    initialLists = listOf(listFixture(id = 8L, type = ListType.SMART, smartRuleJson = smartRuleJson)),
+                ),
+                ruleTemplateRepo = FakeRuleTemplateRepository(),
+                nudgeScheduler = ListsManagerFakeNudgeScheduler()
+            )
+        var summary: ListRowSummary? = null
+        vm.uiState.test(timeout = 2.seconds) {
+            var first = awaitItem()
+            if (first is ListsManagerUiState.Loading) first = awaitItem()
+            val tile = (first as ListsManagerUiState.Ready).active.single()
+            assertEquals(ListType.SMART, tile.type)
+            summary = tile.ruleSummary
+            cancelAndIgnoreRemainingEvents()
+        }
+        return summary
+    }
+
+    // LIST-07, 2026-11-10: a smart rule that does not decode said nothing
+    // until then, so the row showed the count alone ("12 people"), like a
+    // working list (rules.md Code 3). It now says so, as the error the row
+    // shows alone, the way a regular list's unreadable rhythm does. Fails with
+    // the old null: the summary is missing.
+    @Test
+    fun smart_list_whose_rule_cannot_be_read_says_so() = runTest {
+        val malformed = smartTileSummary("{not json")
+        assertEquals(ListRowSummary.Unreadable.Rule, malformed)
+        assertEquals("Couldn't read this list's rule", malformed?.text?.asString(context))
+        // Well-formed JSON naming a rule this build does not know reads the same.
+        assertEquals(ListRowSummary.Unreadable.Rule, smartTileSummary("""{"type":"bestFriends"}"""))
+    }
+
+    // Nothing in Orbit writes a smart list without a rule; only a restored
+    // backup can carry one, and it cannot fill either, so it gets the same
+    // line rather than the count alone.
+    @Test
+    fun smart_list_with_no_rule_says_it_cannot_read_one() = runTest {
+        assertEquals(ListRowSummary.Unreadable.Rule, smartTileSummary(null))
+        assertEquals(ListRowSummary.Unreadable.Rule, smartTileSummary("  "))
     }
 
     // ============================================================================
@@ -386,7 +434,7 @@ class ListsManagerViewModelTest {
         assertEquals(unreadable, singleTileSubtitle(corruptOverride, seededTemplates))
         // Said as the error, not as a rhythm, so the row never joins the
         // member count to it (rules.md Design 9 put the count on this line).
-        assertEquals(ListRowSummary.Unreadable, singleTileSummary(corruptOverride, seededTemplates))
+        assertEquals(ListRowSummary.Unreadable.Rhythm, singleTileSummary(corruptOverride, seededTemplates))
 
         // The same when the override is absent and the template's own blob
         // is the broken one.

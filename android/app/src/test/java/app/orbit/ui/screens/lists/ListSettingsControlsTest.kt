@@ -372,6 +372,22 @@ class ListSettingsControlsTest {
         compose.onAllNodes(hasText("Add people")).assertCountEquals(0)
     }
 
+    // ─── LIST-07: a smart rule that cannot be read is said, not hidden ─────────
+
+    /**
+     * Until 2026-11-10 a smart list whose rule was missing or no longer
+     * decoded lost its whole "Smart rule" group, so List settings looked like a
+     * list with nothing to set (rules.md Code 3). It now says so, in the words
+     * the Lists row uses.
+     */
+    @Test
+    fun a_smart_list_whose_rule_cannot_be_read_says_so_under_smart_rule() {
+        setScreen(ready(type = ListType.SMART))
+
+        compose.onNodeWithText("Smart rule").assertExists()
+        compose.onNodeWithText("Couldn't read this list's rule").assertExists()
+    }
+
     private fun editableTextIs(expected: String) =
         SemanticsMatcher("editable text is \"$expected\"") { node ->
             node.config.getOrNull(SemanticsProperties.EditableText)?.text == expected

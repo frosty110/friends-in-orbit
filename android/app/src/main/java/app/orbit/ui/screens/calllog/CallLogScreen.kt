@@ -119,11 +119,13 @@ import app.orbit.ui.util.formatDuration
  * IGNORE-09 (greyed-state contract):
  *   - avatar 50% opacity
  *   - name in fgSubtle (vs fg), and nothing added to it
- *   - "Ignored" as the first segment of the second line, in everyone's log:
- *     "Ignored · from Inner orbit · 12 min · Outgoing". Until 2026-10-08 the
- *     name carried an "(ignored)" suffix, a tag on the title (rules.md
- *     Design 9). Greying alone would leave colour as the only signal, so the
- *     word stays.
+ *   - "Ignored" as the first segment of the second line, in everyone's log
+ *     ("Ignored · from Inner orbit · 12 min · Outgoing") and in one person's
+ *     ("Ignored · 12 min", or "Ignored" alone on a row with no length). Until
+ *     2026-10-08 the name carried an "(ignored)" suffix, a tag on the title
+ *     (rules.md Design 9). Greying alone would leave colour as the only
+ *     signal, so the word stays; one person's log greyed its rows without it
+ *     until 2026-11-10.
  *   - subtitle text in fgSubtle (vs fgMuted)
  *   - row remains tappable (opens ContactDetail; greyed != inert)
  *
@@ -511,10 +513,12 @@ private fun CallLogRowComposable(
                 val directionWord = stringResource(row.kind.directionWord())
                 val ignoredWord = stringResource(R.string.calllog_ignored)
                 val subtitle = buildList {
-                    // IGNORE-09: the word leads the line, in everyone's log
-                    // (the one-person log titles rows by what happened, never
-                    // by the name, and never carried it). The name stays plain.
-                    if (!onePerson && row.isIgnored) add(ignoredWord)
+                    // IGNORE-09: the word leads the line in both views, and
+                    // the name or title stays plain. The one-person log ("Calls
+                    // with Jordan") left it out until 2026-11-10, so greying was
+                    // the only sign there and colour carried it alone (UX rubric
+                    // D8). A row there with no length says the word by itself.
+                    if (row.isIgnored) add(ignoredWord)
                     // List names are masked under the curtain (PRIV-03,
                     // components_curtain_list), and in the one-person log
                     // every row would repeat it.
@@ -666,6 +670,15 @@ private val previewPersonState: CallLogUiState = CallLogUiState.Ready(
     scope = previewPerson,
 )
 
+// The same log for someone the user ignores: every row greyed, and its second
+// line led by "Ignored" ("Ignored · 22 min", or the word alone), IGNORE-09.
+private val previewIgnoredPersonState: CallLogUiState = CallLogUiState.Ready(
+    sections = (previewPersonState as CallLogUiState.Ready).sections.map { section ->
+        section.copy(rows = section.rows.map { it.copy(isIgnored = true) })
+    },
+    scope = previewPerson,
+)
+
 @Composable
 private fun CallLogPreviewHost(state: CallLogUiState) {
     OrbitTheme {
@@ -694,6 +707,12 @@ private fun CallLogContentPreview() {
 @Composable
 private fun CallLogPersonPreview() {
     CallLogPreviewHost(previewPersonState)
+}
+
+@PreviewLightDark
+@Composable
+private fun CallLogPersonIgnoredPreview() {
+    CallLogPreviewHost(previewIgnoredPersonState)
 }
 
 @PreviewLightDark

@@ -159,7 +159,9 @@ interface ListRepository {
     fun observeById(id: Long): Flow<ListEntity?>
 
     /**
-     * Per-list membership counts for tile rendering. Returns a Flow<Map<Long, Int>>
+     * Per-list membership counts: the Lists row's and Home's "12 people", and
+     * the list size Later and Sooner move by (moveAmountFor, CARD-02), one
+     * number for both. Returns a Flow<Map<Long, Int>>
      * keyed by listId; empty lists (no memberships) are absent from the map. UI
      * layer must default missing entries to 0.
      */
