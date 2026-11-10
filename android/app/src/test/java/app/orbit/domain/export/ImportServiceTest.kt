@@ -29,8 +29,20 @@ import java.time.LocalTime
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import app.orbit.data.AppPrefs
+import app.orbit.data.WidgetSettings
+import app.orbit.data.WidgetSource
+import app.orbit.domain.WidgetRefreshTrigger
+import app.orbit.testutil.newPrefs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Rule
+import org.junit.rules.TemporaryFolder
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -59,6 +71,14 @@ class ImportServiceTest {
 
     private lateinit var db: OrbitDatabase
 
+    @get:Rule
+    val tmp = TemporaryFolder()
+    private val storeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val prefs: AppPrefs by lazy { tmp.newPrefs(storeScope) }
+    private var widgetRefreshes = 0
+
+    private fun importService() = ImportService(context, db, prefs, WidgetRefreshTrigger { widgetRefreshes++ })
+
     @Before
     fun setUp() {
         db = Room.inMemoryDatabaseBuilder(context, OrbitDatabase::class.java)
@@ -69,6 +89,7 @@ class ImportServiceTest {
     @After
     fun tearDown() {
         db.close()
+        storeScope.cancel()
     }
 
     // ─── Fixture data ─────────────────────────────────────────────────────
@@ -212,7 +233,7 @@ class ImportServiceTest {
             val passphrase = "correct horse battery".toCharArray()
             buildExportService().export(Uri.fromFile(file), passphrase.copyOf())
 
-            val importService = ImportService(context, db)
+            val importService = importService()
             val payload = importService.read(Uri.fromFile(file), passphrase.copyOf())
             assertEquals(ExportEnvelope.CURRENT_VERSION, payload.envelopeVersion)
             importService.apply(payload)
@@ -264,6 +285,30 @@ class ImportServiceTest {
         assertEquals(2, phones.size)
         assertEquals("+15551234567", phones[0].normalizedPhone)
         assertTrue(phones.all { it.isPrimary })
+    }
+
+    @Test
+    fun `import puts every widget back to every list and refreshes them`() = runBlocking {
+        // WIDGET-16: the backup's lists come back under its own ids, so a
+        // widget pointed at list 1 must not quietly start showing whatever
+        // list 1 is now.
+        prefs.setWidgetSource(appWidgetId = 7, source = WidgetSource.OneList(1L))
+        prefs.setWidgetNamesHidden(appWidgetId = 7, hidden = true)
+        prefs.setWidgetSource(appWidgetId = 8, source = WidgetSource.OneList(2L))
+
+        val file = File.createTempFile("orbit-export", ".bin")
+        try {
+            val passphrase = "correct horse battery".toCharArray()
+            buildExportService().export(Uri.fromFile(file), passphrase.copyOf())
+            val importService = importService()
+            importService.apply(importService.read(Uri.fromFile(file), passphrase.copyOf()))
+        } finally {
+            file.delete()
+        }
+
+        assertEquals(WidgetSettings.DEFAULT, prefs.widgetSettings(7).first())
+        assertEquals(WidgetSettings.DEFAULT, prefs.widgetSettings(8).first())
+        assertEquals(1, widgetRefreshes)
     }
 
     @Test

@@ -1,6 +1,9 @@
 package app.orbit.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
+import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -29,8 +32,10 @@ import java.util.concurrent.TimeUnit
  * AFTER the wipe so placed widgets re-render the empty state at once
  * instead of the wiped person's name (WIDGET-06).
  *
- * Enforcement: ONLY this file and [WidgetUpdateWorker] may call
- * [androidx.glance.appwidget.GlanceAppWidgetManager] or `widget.update*()`.
+ * Enforcement: ONLY this file and [WidgetUpdateWorker] may update a widget
+ * (`widget.update*()`, or [androidx.glance.appwidget.GlanceAppWidgetManager]
+ * to find the widgets to update). Reading one widget's own id to read its
+ * settings (`widgetSnapshot`) is not an update.
  * Any call outside these two files is Pitfall 2 — flag it in code review.
  */
 object WidgetUpdateScheduler {
@@ -70,6 +75,45 @@ object WidgetUpdateScheduler {
         val request = OneTimeWorkRequestBuilder<WidgetUpdateWorker>().build()
         WorkManager.getInstance(context)
             .enqueueUniqueWork(UNIQUE_WORK, ExistingWorkPolicy.REPLACE, request)
+    }
+
+    /**
+     * WIDGET-12: redraws one widget now, for its settings screen. The user is
+     * looking at the home screen behind it, so this is not debounced; it
+     * updates only [appWidgetId], so it cannot coalesce with (or cancel) the
+     * debounced fan-out the way [refreshNow] would. If the redraw throws, the
+     * debounced refresh picks it up 30 seconds later rather than never
+     * (rules.md Code 3), and the caller hears about it.
+     */
+    suspend fun refreshOne(context: Context, appWidgetId: Int) {
+        val widget = widgetFor(context, appWidgetId) ?: return
+        try {
+            val glanceId = GlanceAppWidgetManager(context).getGlanceIdBy(appWidgetId)
+            widget.update(context, glanceId)
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            throw ce
+        } catch (t: Throwable) {
+            scheduleImmediate(context)
+            throw t
+        }
+    }
+
+    /**
+     * The Orbit widget placed as [appWidgetId], or null when that id is not
+     * one of ours (Widget settings is exported, so any app could start it with
+     * any id) or no longer placed.
+     */
+    fun widgetFor(context: Context, appWidgetId: Int): GlanceAppWidget? {
+        val provider = AppWidgetManager.getInstance(context)
+            .getAppWidgetInfo(appWidgetId)
+            ?.provider
+            ?: return null
+        if (provider.packageName != context.packageName) return null
+        return when (provider.className) {
+            OrbitWidget2x2Receiver::class.java.name -> OrbitWidget2x2()
+            OrbitWidget4x2Receiver::class.java.name -> OrbitWidget4x2()
+            else -> null
+        }
     }
 
     /**

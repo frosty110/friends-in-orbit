@@ -18,19 +18,14 @@
 package app.orbit.widget
 
 import android.content.Context
+import androidx.compose.runtime.getValue
 import androidx.glance.GlanceId
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
 import androidx.glance.state.PreferencesGlanceStateDefinition
-import dagger.hilt.android.EntryPointAccessors
-import kotlinx.coroutines.flow.first
 import app.orbit.ui.theme.OrbitWidgetTheme
-import app.orbit.ui.theme.deviceAccentHue
-import app.orbit.ui.theme.orbitWidgetAvatarTones
-import app.orbit.ui.theme.orbitWidgetColorProviders
-import app.orbit.ui.theme.themeSettingsSnapshot
 
 class OrbitWidget4x2 : GlanceAppWidget() {
 
@@ -39,32 +34,20 @@ class OrbitWidget4x2 : GlanceAppWidget() {
     override val sizeMode = SizeMode.Responsive(WidgetBreakpoints.suggestions)
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val entry = EntryPointAccessors.fromApplication(
-            context,
-            WidgetEntryPoint::class.java,
-        )
-        // One-shot snapshot — never keep a live Flow open in provideGlance.
-        val data = entry.widgetSurfaceUseCase().invoke()
-        // Minimal mode + appearance, one-shot (WIDGET-04 / THEMING).
-        val prefs = entry.appPrefs()
-        val minimalMode = prefs.minimalModeEnabled.first()
-        val themeSettings = prefs.themeSettingsSnapshot()
-        val deviceHue = deviceAccentHue(context)
-        val widgetColors = orbitWidgetColorProviders(themeSettings, deviceHue)
-        val people = widgetPeople(
-            context = context,
-            data = data,
-            max = 3,
-            minimalMode = minimalMode,
-            tones = orbitWidgetAvatarTones(themeSettings, deviceHue),
-        )
+        val initial = widgetSnapshot(context, id, max = 3)
 
         provideContent {
-            OrbitWidgetTheme(colors = widgetColors) {
-                SuggestionsBody(
-                    people = people,
-                    onOpenApp = actionStartActivity(openHomeIntent(context)),
-                )
+            val snapshot by rememberWidgetSnapshot(context, id, max = 3, initial = initial)
+            OrbitWidgetTheme(colors = snapshot.colors) {
+                val chooseList = snapshot.chooseListIntent
+                if (chooseList != null) {
+                    ChooseListBody(onChoose = actionStartActivity(chooseList))
+                } else {
+                    SuggestionsBody(
+                        people = snapshot.people,
+                        onEmptyTap = actionStartActivity(snapshot.emptyTapIntent),
+                    )
+                }
             }
         }
     }

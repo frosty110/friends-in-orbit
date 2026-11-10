@@ -33,6 +33,6 @@ interface WidgetEntryPoint {
     /** WIDGET-01/02 — cross-list contact source for widget rendering. */
     fun widgetSurfaceUseCase(): WidgetSurfaceUseCase
 
-    /** WIDGET-04 — minimal-mode masking flag read at render time. */
+    /** Each widget's settings (WIDGET-12, WIDGET-15) and the appearance, read at render time. */
     fun appPrefs(): AppPrefs
 }

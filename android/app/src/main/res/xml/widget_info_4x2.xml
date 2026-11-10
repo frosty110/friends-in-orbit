@@ -8,8 +8,8 @@
   call"), up to 4×3 and beyond, where the others get their own rows. Each size
   has its own arrangement (WidgetLayouts.kt, SizeMode.Responsive).
 
-  Previews (WIDGET-09), initialLayout (WIDGET-11) and updatePeriodMillis="0"
-  as in widget_info_2x2.xml.
+  Previews (WIDGET-09), initialLayout (WIDGET-11), updatePeriodMillis="0"
+  and configure (WIDGET-12, Widget settings) as in widget_info_2x2.xml.
 
   Glance 1.1.1 has no horizontal scroll, so the others are a static list,
   not a carousel.
@@ -29,4 +29,6 @@
     android:maxResizeHeight="450dp"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:updatePeriodMillis="0" />
+    android:updatePeriodMillis="0"
+    android:configure="app.orbit.widget.settings.WidgetSettingsActivity"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

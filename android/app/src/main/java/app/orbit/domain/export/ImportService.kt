@@ -3,6 +3,7 @@ package app.orbit.domain.export
 import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
+import app.orbit.data.AppPrefs
 import app.orbit.data.db.OrbitDatabase
 import app.orbit.data.entity.CallDirection
 import app.orbit.data.entity.CallEventEntity
@@ -16,6 +17,7 @@ import app.orbit.data.entity.NoteEntity
 import app.orbit.data.entity.RuleKind
 import app.orbit.data.entity.RuleTemplateEntity
 import app.orbit.domain.JsonProvider
+import app.orbit.domain.WidgetRefreshTrigger
 import app.orbit.notify.NudgeSchedule
 import app.orbit.notify.foldActiveWindow
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -62,6 +64,8 @@ import kotlinx.coroutines.withContext
 open class ImportService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val database: OrbitDatabase,
+    private val appPrefs: AppPrefs,
+    private val widgetRefresh: WidgetRefreshTrigger,
 ) {
 
     /**
@@ -82,8 +86,17 @@ open class ImportService @Inject constructor(
     /**
      * Stage 2 — REPLACE-apply the validated payload. One transaction:
      * either the whole backup lands or nothing changes.
+     *
+     * WIDGET-16: the backup's lists come back under the backup's own ids, so
+     * a widget pointed at one list could start showing a different list's
+     * people. Every widget goes back to every list first: if that write
+     * fails, the import fails before touching the database (rules.md Code 3);
+     * if the transaction then fails, the widgets show every list, which is
+     * harmless. The refresh after it is the one a replaced database always
+     * needed (WIDGET-06) and, until 2026-11-09, did not ask for.
      */
     open suspend fun apply(payload: ImportPayload): ImportSummary {
+        appPrefs.clearAllWidgetSettings()
         database.withTransaction {
             // Wipe child tables before parents so FK constraints never trip.
             // Raw DELETEs on the transaction connection — the repositories
@@ -107,6 +120,7 @@ open class ImportService @Inject constructor(
             payload.callEvents.forEach { database.callEventDao().insert(it) }
             payload.notes.forEach { database.noteDao().insert(it) }
         }
+        widgetRefresh.scheduleRefresh()
         return ImportSummary(
             listCount = payload.lists.size,
             contactCount = payload.contacts.size,

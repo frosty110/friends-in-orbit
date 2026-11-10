@@ -13,8 +13,6 @@ import android.graphics.Bitmap
 import app.orbit.R
 import app.orbit.data.entity.ContactEntity
 import app.orbit.domain.usecase.WidgetSurfaceData
-import app.orbit.nav.AppLinks
-import app.orbit.nav.Routes
 import app.orbit.ui.components.AvatarBitmaps
 import app.orbit.ui.theme.WidgetAvatarColors
 import app.orbit.ui.theme.WidgetAvatarTones
@@ -26,8 +24,8 @@ import kotlinx.coroutines.withContext
  * One person on a widget.
  *
  * [name] is what the widget writes: the display name, or the curtain's word
- * ("Contact", `components_curtain_contact`) in minimal mode (WIDGET-04).
- * [face] is null in minimal mode, which draws a silhouette. [openIntent] opens
+ * ("Contact", `components_curtain_contact`) when that widget hides names
+ * (WIDGET-15). [face] is null then too, which draws a silhouette. [openIntent] opens
  * the deck of the list that surfaced them, with them on top (WIDGET-08);
  * [dialIntent] opens the dialer, and is null on a device without one, where
  * the widget offers no Call control rather than one that does nothing.
@@ -64,17 +62,17 @@ suspend fun widgetPeople(
     context: Context,
     data: WidgetSurfaceData,
     max: Int,
-    minimalMode: Boolean,
+    namesHidden: Boolean,
     tones: WidgetAvatarTones,
 ): List<WidgetPerson> = withContext(Dispatchers.IO) {
     val sizePx = (WidgetSizes.avatarLarge * context.resources.displayMetrics.density).toInt()
-    // WIDGET-04: the masked name is the privacy curtain's own word, from the
+    // WIDGET-15: the masked name is the privacy curtain's own word, from the
     // same resource (voice.md, "Where copy lives"), resolved once per render.
     val maskedName = context.getString(R.string.components_curtain_contact)
     (listOfNotNull(data.primary) + data.alternatives).take(max).map { contact ->
         WidgetPerson(
-            name = if (minimalMode) maskedName else contact.displayName,
-            face = if (minimalMode) null else face(context, contact, sizePx, tones),
+            name = if (namesHidden) maskedName else contact.displayName,
+            face = if (namesHidden) null else face(context, contact, sizePx, tones),
             openIntent = openIntent(context, data.listIdByContactId[contact.id]),
             dialIntent = dialIntent(contact)
                 .takeIf { it.resolveActivity(context.packageManager) != null },
@@ -102,8 +100,4 @@ private fun face(
 
 /** The list's deck when known; Orbit's start screen otherwise. */
 private fun openIntent(context: Context, listId: Long?) =
-    if (listId == null) {
-        openHomeIntent(context)
-    } else {
-        AppLinks.openRoute(context, Routes.card(listId.toString()))
-    }
+    if (listId == null) openHomeIntent(context) else openListIntent(context, listId)

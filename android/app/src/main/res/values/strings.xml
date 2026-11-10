@@ -32,6 +32,29 @@
     <string name="widget_preview_alt_2">Sarah Okafor</string>
     <string name="widget_preview_alt_2_initials" translatable="false">SO</string>
 
+    <!-- WIDGET-14: a widget whose list was archived or deleted. Never the
+         list's name: the widget shows none. A tap opens Widget settings. -->
+    <string name="widget_choose_list">Choose a list</string>
+    <string name="widget_choose_list_a11y">This widget\'s list is archived or deleted. Choose a list</string>
+
+    <!-- WIDGET-12, WIDGET-15: Widget settings, one placed widget's settings
+         screen. Its launcher label is the title, never a list name. -->
+    <string name="widget_settings_title">Widget settings</string>
+    <!-- Heading over the person the widget will lead with. -->
+    <string name="widget_settings_preview_heading">Up now on this widget</string>
+    <string name="widget_settings_source_missing">This widget\'s list is archived or deleted. Choose another below.</string>
+    <string name="widget_settings_source_heading">Suggest people from</string>
+    <string name="widget_settings_source_every_list">Every list</string>
+    <string name="widget_settings_source_every_list_helper">Whoever is up next across your lists</string>
+    <string name="widget_settings_no_lists">Your lists will show up here once you make one.</string>
+    <string name="widget_settings_home_heading">On the home screen</string>
+    <string name="widget_settings_show_names">Show names and faces</string>
+    <!-- Under the switch while it is off. %1$s is the privacy curtain's
+         stand-in name (components_curtain_contact), what the widget writes
+         in place of each name. -->
+    <string name="widget_settings_show_names_off_helper">Shows \"%1$s\" and a plain circle instead</string>
+    <string name="widget_settings_save_failed">Couldn\'t save that. Try again.</string>
+
     <!-- LAUNCH-01: launcher shortcuts. Fixed words only: a long-press menu is
          readable by anyone holding the unlocked phone, so no person's name
          and no list name ever appears here. -->

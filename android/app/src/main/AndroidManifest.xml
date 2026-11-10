@@ -49,6 +49,25 @@
         </activity>
 
         <!--
+          WIDGET-12: Widget settings, both widgets' configure activity
+          (android:configure in res/xml/widget_info_*.xml). Exported because the
+          launcher starts it; the activity refuses any id that is not one of
+          our placed widgets. Its own task (empty affinity) so opening it does
+          not bring the main Orbit task forward, and out of recents, since it
+          shows list names. The label is fixed words, never a list name.
+        -->
+        <activity
+            android:name=".widget.settings.WidgetSettingsActivity"
+            android:exported="true"
+            android:label="@string/widget_settings_title"
+            android:taskAffinity=""
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!--
           Disable WorkManager's default initializer so the
           Configuration.Provider on OrbitApp takes effect (HiltWorkerFactory).
           Without this override, WorkManager initializes itself with the

@@ -29,3 +29,21 @@ class WorkManagerWidgetRefreshTrigger @Inject constructor(
         WidgetUpdateScheduler.scheduleImmediate(context)
     }
 }
+
+/**
+ * WIDGET-12: redraws one placed widget now, for Widget settings. A seam so the
+ * ViewModel holds no Context (voice.md, "Where copy lives": ViewModels never
+ * hold one) and its tests can count refreshes.
+ */
+fun interface OneWidgetRefresher {
+    suspend fun refresh(appWidgetId: Int)
+}
+
+/** Production [OneWidgetRefresher]: [WidgetUpdateScheduler.refreshOne]. */
+class GlanceOneWidgetRefresher @Inject constructor(
+    @ApplicationContext private val context: Context,
+) : OneWidgetRefresher {
+    override suspend fun refresh(appWidgetId: Int) {
+        WidgetUpdateScheduler.refreshOne(context, appWidgetId)
+    }
+}

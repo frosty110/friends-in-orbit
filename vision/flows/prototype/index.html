@@ -3463,7 +3463,7 @@ screen({
   spec: 'features/widgets/README.md', code: 'widget/WidgetContent.kt',
   purpose: 'The loop without opening the app: who to call next, with their face, and a labelled Call.',
   owes: ['The next person across all lists, with the app\'s own round face (WIDGET-11)', 'Only the labelled Call dials; a tap on the person opens their list\'s deck in Orbit (WIDGET-08)', 'Every size from one row to a card has an arrangement, with a 48dp Call at each (WIDGET-07)', 'A quiet "All quiet for now." state that opens Orbit (WIDGET-10)'],
-  drift: 'They always show real names: the widgets\' masked-name mode (WIDGET-04) reads a preference that no Settings control has set since the 2026-04-28 retirement of minimal mode (ADR 0003), so whether a widget should follow the privacy curtain is an open product question, not a fixed gap (features/widgets/README.md, open questions).',
+  drift: 'Since 2026-11-09 each widget has its own settings, opened when it is placed: every list or one list, and whether it shows names and faces (WIDGET-12 to WIDGET-16). The prototype draws only the every-list, names-shown widget; Widget settings itself is not drawn here (features/page-views/widget-settings.md).',
   states: [['default', 'Someone to call'], ['empty', 'All quiet for now']],
   to: [['S53', 'Call'], ['S11', 'Tap a person (their list\'s deck)'], ['S10', 'Empty widget opens Orbit']],
   render(st) {

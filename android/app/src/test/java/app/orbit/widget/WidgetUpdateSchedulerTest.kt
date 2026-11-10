@@ -1,6 +1,7 @@
 package app.orbit.widget
 
 import android.app.Application
+import android.appwidget.AppWidgetManager
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -8,6 +9,7 @@ import androidx.work.testing.WorkManagerTestInitHelper
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -142,5 +144,20 @@ class WidgetUpdateSchedulerTest {
 
         assertEquals(true, immediateAllCancelled, "immediate work must be CANCELLED after cancelAll")
         assertEquals(true, periodicAllCancelled, "periodic work must be CANCELLED after cancelAll")
+    }
+
+    // ─── widgetFor: Widget settings' guard (WIDGET-12) ──────────────────────
+
+    /**
+     * Widget settings is exported, so any app can start it with any id. An id
+     * that names no placed widget, or no id at all, gets no settings screen
+     * and no refresh. (That a placed Orbit widget resolves to its class is a
+     * device check: placing one under Robolectric runs Glance's update, which
+     * needs the Hilt graph these tests do not build.)
+     */
+    @Test
+    fun widgetFor_refusesAnIdThatNamesNoPlacedWidget() {
+        assertNull(WidgetUpdateScheduler.widgetFor(context, AppWidgetManager.INVALID_APPWIDGET_ID))
+        assertNull(WidgetUpdateScheduler.widgetFor(context, 4_242))
     }
 }

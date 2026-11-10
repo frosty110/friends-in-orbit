@@ -15,6 +15,8 @@ import app.orbit.testutil.MainDispatcherRule
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import app.orbit.domain.WidgetRefreshTrigger
+import app.orbit.testutil.newPrefs
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +30,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -47,6 +50,12 @@ class ImportViewModelTest {
 
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
+
+    // ImportService needs prefs and a widget refresh; the fake below
+    // overrides apply, the only method that touches either.
+    @get:Rule
+    val tmp = TemporaryFolder()
+    private val prefs by lazy { tmp.newPrefs(appScope) }
 
     private val context: android.content.Context get() =
         ApplicationProvider.getApplicationContext()
@@ -71,7 +80,7 @@ class ImportViewModelTest {
     /** Fake service: scripted [read] outcome (optionally held at [readGate]) + apply-counting. */
     private inner class FakeImportService(
         private val readOutcome: Result<ImportPayload>,
-    ) : ImportService(context, db) {
+    ) : ImportService(context, db, prefs, WidgetRefreshTrigger { }) {
         var applyCount: Int = 0
         var readCount: Int = 0
         var lastReadUri: Uri? = null

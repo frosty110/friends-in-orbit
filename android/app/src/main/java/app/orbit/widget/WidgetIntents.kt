@@ -6,11 +6,15 @@
 // now Glance UI only.
 package app.orbit.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import app.orbit.MainActivity
 import app.orbit.data.entity.ContactEntity
+import app.orbit.nav.AppLinks
+import app.orbit.nav.Routes
+import app.orbit.widget.settings.WidgetSettingsActivity
 
 /**
  * Builds an ACTION_DIAL intent for the given contact. Uses [ContactEntity.phoneNumber]
@@ -35,3 +39,22 @@ fun dialIntent(contact: ContactEntity): Intent =
  */
 fun openHomeIntent(context: Context): Intent =
     Intent(context, MainActivity::class.java)
+
+/**
+ * Opens [listId]'s deck (WIDGET-08): a person's tap, and the empty state of a
+ * widget pointed at one list, which opens where the user pointed it.
+ */
+fun openListIntent(context: Context, listId: Long): Intent =
+    AppLinks.openRoute(context, Routes.card(listId.toString()))
+
+/**
+ * Opens Widget settings for one placed widget (WIDGET-14's "Choose a list").
+ * The id rides in the data URI as well as the extra: PendingIntents compare
+ * intents without their extras, so without it two widgets' taps could share
+ * one PendingIntent and open the other widget's settings.
+ */
+fun widgetSettingsIntent(context: Context, appWidgetId: Int): Intent =
+    Intent(context, WidgetSettingsActivity::class.java).apply {
+        data = Uri.fromParts("orbit-widget", appWidgetId.toString(), null)
+        putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+    }

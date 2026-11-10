@@ -18,6 +18,10 @@
 
     updatePeriodMillis="0": all update timing is driven by WidgetUpdateWorker
     (WorkManager); system-floor 30-min polling is disabled (WIDGET-05 / WIDGET-06).
+
+    configure (WIDGET-12): Widget settings opens when the widget is placed and
+    from the launcher's reconfigure. configuration_optional, so a launcher
+    that skips it still places a working widget, showing every list.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_2x2_description"
@@ -34,4 +38,6 @@
     android:maxResizeHeight="450dp"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:updatePeriodMillis="0" />
+    android:updatePeriodMillis="0"
+    android:configure="app.orbit.widget.settings.WidgetSettingsActivity"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

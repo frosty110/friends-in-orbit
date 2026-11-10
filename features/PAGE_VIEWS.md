@@ -1,7 +1,7 @@
 # Page views: what each screen owes the user
 
 **Status:** active
-**Last reviewed:** 2026-10-07
+**Last reviewed:** 2026-11-09
 **Purpose:** One file per screen, each saying what a user expects to see and do there: how the screen is reached, what is on it, every action and menu, every state, where it leads, and the tests that pin it. Expectation-framed, not an implementation spec. For the canonical per-feature PRD/TECH, see [`INDEX.md`](INDEX.md).
 
 > Cross-cutting expectations that hold on every screen: warm, unhurried, sentence-case copy with no gamification; explicit empty states (never a blank screen, and never a false one while data loads: quiet chrome where the data is already cached, a quiet skeleton where the first read takes time); a failed read says so and offers Try again; destructive and bulk actions are undoable from a snackbar, and a write that fails says so; names, photos, list names, numbers and notes are masked when the app loses focus (the privacy curtain, PRIV-03); denied permissions degrade gracefully and never make a false claim ("Never called" is not said about someone Orbit cannot see); every gesture has a visible path; one accent element per screen (rules.md Design 5).
@@ -55,6 +55,7 @@ Each page view lives in its own file under [`page-views/`](page-views/). When a 
 | [Settings](page-views/settings.md) | `settings` |
 | [Ignored](page-views/ignored-contacts.md) | `settings/ignored` |
 | [Call history](page-views/call-history.md) | `call-log`, `call-log?contactId={contactId}` |
+| [Widget settings](page-views/widget-settings.md) | none: its own screen, opened by the launcher for one placed widget |
 
 ---
 
@@ -94,4 +95,4 @@ There is no `Code:` field: code paths live in the feature README's Ground truth,
 
 ## Surfaces outside the app
 
-- **Home-screen widgets, nudges and launcher shortcuts** ship, but they are not screens of the app, so they have no page view. What each owes the user is in [`widgets/README.md`](widgets/README.md) and [`notifications/README.md`](notifications/README.md). Where each one lands (Card view, Search, Home) is recorded under "Reached from" on the screen it opens.
+- **Home-screen widgets, nudges and launcher shortcuts** ship, but they are not screens of the app, so they have no page view. What each owes the user is in [`widgets/README.md`](widgets/README.md) and [`notifications/README.md`](notifications/README.md). Where each one lands (Card view, Search, Home) is recorded under "Reached from" on the screen it opens. A widget's own settings screen is a screen of the app, so it has a page view: [Widget settings](page-views/widget-settings.md).
