@@ -789,6 +789,9 @@ const LIST_ORDER = ['touch', 'late', 'recent'];
 // Renaming from List settings' title (LIST-26) writes L[lid].name; Restart puts these back.
 const LIST_NAMES = Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.name]));
 const members = (lid) => [...L[lid].queue, ...L[lid].other];
+// A list's size, everyone on it, paused and ignored too: the count Lists and Home show ("12
+// people"), and the count that sets how far Later and Sooner move someone (moveDays).
+const listSize = (lid) => members(lid).length;
 const listsOf = (pid) => LIST_ORDER.filter((l) => members(l).includes(pid));
 // The lists Home and Lists show, in order.
 const shownLists = () => (D.onlyLists ? LIST_ORDER.filter((l) => D.onlyLists.includes(l)) : LIST_ORDER);
@@ -1773,7 +1776,7 @@ function daySheet(calls, title, { seeWeek = '', closeSt = 'default', rowAttrs = 
 }
 function listCard(lid, idx) {
   const l = L[lid];
-  const n = l.queue.length + l.other.length;
+  const n = listSize(lid);
   const head = cardPerson(lid);
   // HOME-9 (2026-10-08): Next up has no control of its own; the card's tap opens the deck, where Call is.
   const next = head
@@ -1921,14 +1924,27 @@ function comesUp(days) {
   if (d < 7) return [`on ${WEEKDAYS[d % 7]}`, WEEKDAYS[d % 7]];
   return [`in ${spanOf(d)}`, `In ${spanOf(d)}`];
 }
-/* What Later and Sooner write, as SkipContactUseCase and SurfaceSoonerUseCase do: Later puts the
-   turn a skip penalty past the later of the turn and now (a day on a Keep in touch list, two on
-   Late night); Sooner pulls it half that earlier, never before now. The card no longer says
-   how far (CARD-02, 2026-10-08): the snackbar only says the person moved. How far each moves is
-   waiting on the owner's decision (about 1 or 3 days by the list's size). */
-const skipPenaltyDays = (lid) => (L[lid] && L[lid].template === 'Late night' ? 2 : 1);
-const laterTurn = (lid, pid) => Math.max(turnOf(lid, pid), 0) + skipPenaltyDays(lid);
-const soonerTurn = (lid, pid) => Math.max(Math.max(turnOf(lid, pid), 0) - skipPenaltyDays(lid) / 2, 0);
+/* How far Later and Sooner move someone, as SkipContactUseCase and SurfaceSoonerUseCase do since
+   2026-11-10 (CARD-02). The owner, 2026-10-08: "The sooner/later mechanism needs to be generic to
+   the user but likely 1 day/3 days depending on the size of the list"; built as proposed once
+   the owner said "Finish this up". The size is listSize, the count Lists shows: a list of up to
+   10 people moves a person 1 day each way, one of 11 or more 3 days. Later counts from the later
+   of the turn and now, so someone already up goes a full step past now; Sooner pulls the turn
+   that far earlier, never before now. The card never says how far (CARD-02, 2026-10-08): the
+   snackbar only says the person moved. In the demo In touch has 12 people (3 days) and Late
+   night 4 (1 day). Until 2026-11-10 the step was the rule's skip penalty (a day on a Keep in
+   touch list, two on Late night), and Sooner half of it. */
+const SMALL_LIST_MAX = 10;
+const moveDays = (lid) => (listSize(lid) <= SMALL_LIST_MAX ? 1 : 3);
+const laterTurn = (lid, pid) => Math.max(turnOf(lid, pid), 0) + moveDays(lid);
+const soonerTurn = (lid, pid) => Math.max(turnOf(lid, pid) - moveDays(lid), 0);
+/* The one place a Later or a Sooner writes a turn: the card's buttons and swipe (moveOn) and the
+   journeys' steps (F3) both come here, so what a step narrates is what a tap does. A Sooner that
+   reaches now is up now, behind everyone who was up before it (setTurnNow). */
+function moveTurn(lid, pid, dir) {
+  const days = (dir === 'later' ? laterTurn : soonerTurn)(lid, pid);
+  if (days <= 0) setTurnNow(lid, pid); else setTurn(lid, pid, days);
+}
 const CARD_NOTES = { kai: [['27 days ago', 'Asked about the move to Lisbon. Follow up on the new job.']], priya: [['6 days ago', 'Her sister is visiting in October.']] };
 
 /* CARD-08: Later and Sooner fly the card off in their direction exactly as a released swipe
@@ -1965,7 +1981,7 @@ screen({
   id: 'S11', group: 'loop', name: 'Card view', route: 'card/{listId}',
   spec: 'features/page-views/card-view.md', code: ['ui/screens/card/CardViewScreen.kt', 'ui/screens/card/CardViewViewModel.kt', 'ui/screens/card/CardSwipeFrame.kt', 'ui/util/ComesUp.kt', 'domain/usecase/SkipContactUseCase.kt', 'domain/usecase/SurfaceSoonerUseCase.kt'],
   purpose: 'Hand you one name with enough context to say yes.',
-  owes: ['One person at a time, with nothing over the name (CARD-04, 2026-10-08)', 'The app bar names the list, so the face carries no list chip (CARD-06, rules.md Design 9, 2026-10-08)', 'Why now: how long it has been ("Spoke 3 weeks ago."), the pair\'s usual rhythm, the last note (CARD-04)', 'When they usually answer, with no chip under the hours, plus Last call, Average length, Total calls', 'Call with the labelled button, the only control that dials (CARD-01)', 'Later and Sooner, by swipe or by the round buttons with "Later" and "Sooner" under them, each with its own Undo (CARD-02); the buttons fly the card off as the swipe does, and with reduced motion the move just happens (CARD-08)', 'After Later or Sooner the snackbar says only that the person moved, never when: "Kai moved to later.", "Kai moved sooner." (CARD-02, 2026-10-08)', 'No badges: nothing fades in when the card sits idle (CARD-09 retired) or rides along while it is dragged', '"Open details" and "Log a connection" side by side; logging uses Contact detail\'s sheet, moves the deck on and says when they come up again by the calendar: logged today on a 2-day list, "Logged. Kai comes up again on Tuesday.", the day after tomorrow (CARD-10)', 'After a call placed from the card that lasted a minute or more, the note page opens by itself, once per call: if the notification for that call already opened it, the card opens no second page (CARD-11, NOTE-04); a shorter call says "Called Kai" with "Add a note" (CARD-03)', 'A three-dots menu: Browse people (opens on the card\'s person, BROWSE-09), Add people, List settings', 'Honest empty states with a way home; an error with Try again (CARD-07)'],
+  owes: ['One person at a time, with nothing over the name (CARD-04, 2026-10-08)', 'The app bar names the list, so the face carries no list chip (CARD-06, rules.md Design 9, 2026-10-08)', 'Why now: how long it has been ("Spoke 3 weeks ago."), the pair\'s usual rhythm, the last note (CARD-04)', 'When they usually answer, with no chip under the hours, plus Last call, Average length, Total calls', 'Call with the labelled button, the only control that dials (CARD-01)', 'Later and Sooner, by swipe or by the round buttons with "Later" and "Sooner" under them, each with its own Undo (CARD-02); the buttons fly the card off as the swipe does, and with reduced motion the move just happens (CARD-08)', 'After Later or Sooner the snackbar says only that the person moved, never when: "Kai moved to later.", "Kai moved sooner." (CARD-02, 2026-10-08)', 'How far a move goes, never shown: 1 day each way on a list of up to 10 people, 3 days on one of 11 or more, by the count Lists shows for it; Later counts from now for someone already up, and Sooner never goes earlier than now (CARD-02, 2026-11-10)', 'No badges: nothing fades in when the card sits idle (CARD-09 retired) or rides along while it is dragged', '"Open details" and "Log a connection" side by side; logging uses Contact detail\'s sheet, moves the deck on and says when they come up again by the calendar: logged today on a 2-day list, "Logged. Kai comes up again on Tuesday.", the day after tomorrow (CARD-10)', 'After a call placed from the card that lasted a minute or more, the note page opens by itself, once per call: if the notification for that call already opened it, the card opens no second page (CARD-11, NOTE-04); a shorter call says "Called Kai" with "Add a note" (CARD-03)', 'A three-dots menu: Browse people (opens on the card\'s person, BROWSE-09), Add people, List settings', 'Honest empty states with a way home; an error with Try again (CARD-07)'],
   drift: null,
   states: [['default', 'Ready'], ['called', 'After a short call: Called Kai'], ['log', 'Log a connection', 'overlay'], ['logged', 'After logging: the deck moved on'], ['menu', 'More actions menu', 'overlay'], ['nolog', 'Call log permission off'], ['empty', 'No one in this list'], ['none', 'All quiet for now']],
   to: [['S53', 'Call'], ['S23', 'By itself after a call of a minute or more; or "Add a note" on "Called Kai"'], ['S20', 'Open details, or tap the card face'], ['S13', 'Menu: Browse people (on the card\'s person)'], ['S32', 'Menu: Add people'], ['S31', 'Menu: List settings'], ['S40', 'Notice: Open settings'], ['S10', 'Back, or Go home']],
@@ -2064,20 +2080,19 @@ screen({
 });
 // CARD-02: the snackbar says the person moved, never when (2026-10-08) and never "due". Each move
 // writes the person's next turn, so Browse shows them there too, and Undo puts the turn back; the
-// next face fades in.
-function moveOn(lid, turnFor, say) {
+// next face fades in. How far the turn moves is moveTurn's (1 or 3 days by the list's size).
+function moveOn(lid, dir, say) {
   lid = lid || 'touch';
   const pid = cardPerson(lid); if (!pid) return false;
   const prior = D.turns[lid][pid];
-  const days = turnFor(lid, pid);
-  if (days <= 0) setTurnNow(lid, pid); else setTurn(lid, pid, days);
+  moveTurn(lid, pid, dir);
   D.cardIn = true;
   snack(say(first(pid)), 'Undo');
   S.snack.undo = () => { D.turns[lid][pid] = prior; };
   return false;
 }
-ACT.defer = (lid) => moveOn(lid, laterTurn, (who) => `${who} moved to later.`);
-ACT.sooner = (lid) => moveOn(lid, soonerTurn, (who) => `${who} moved sooner.`);
+ACT.defer = (lid) => moveOn(lid, 'later', (who) => `${who} moved to later.`);
+ACT.sooner = (lid) => moveOn(lid, 'sooner', (who) => `${who} moved sooner.`);
 ACT.browseFocus = (arg) => { D.browseFocus = arg === 'card'; };
 ACT.undo = () => { if (S.snack && S.snack.undo) S.snack.undo(); S.snack = null; return false; };
 
@@ -2305,7 +2320,7 @@ screen({
   id: 'S13', group: 'loop', name: 'Browse people', route: 'browse/{listId}?focus={focus}',
   spec: 'features/page-views/browse.md', code: ['ui/screens/browse/BrowseListScreen.kt', 'ui/screens/browse/BrowseViewModel.kt', 'ui/util/ComesUp.kt'],
   purpose: 'See a whole list in the order the card brings people up, change that order by hand, find someone, and manage people in bulk.',
-  owes: ['One numbered sequence under "Next up", in the card\'s own order, each row opening with when: "Up now", "Tomorrow", "Thursday", "In 2 weeks", by the day on the calendar, so tomorrow at 8:30am is "Tomorrow" at any hour today (BROWSE-07, 2026-10-08)', 'No dot beside anyone: "Up now" says who is worth a call, so Browse has no accent element (BROWSE-07, rules.md Design 9, 2026-10-08)', 'Then "Everyone else" for anyone the rule cannot place, "Paused" and "Ignored": the heading says which, so a row there has a muted name and no word beside it, and a paused row\'s second line says until when ("Until 12 Oct", "Until you unpause") (BROWSE-07)', 'Opened from the card\'s menu: that person first and scrolled into view, their second line opening with "On your card" in place of when ("On your card · Last call: 3 days ago"; BROWSE-09)', 'A drag handle on each row in the order; a drop says "Moved Kai earlier" or "Moved Kai later", with Undo (BROWSE-08)', 'One snackbar at a time: a newer one replaces the one on screen at once, and its Undo reverts only the change it names (MOVE-07, 2026-10-08)', 'One quiet line under the order: a call, Later or Sooner moves people again', 'Search by name or number and clear it fast; filter: Recently called, Not called yet; both keep the order and its numbers', 'Tap a person for details; tap the muted phone to dial (Design 6)', 'Long-press for Quick actions: Call, Select, Pause, Ignore', 'A visible Select button, so multi-select is not gesture-only (BROWSE-2)', 'Multi-select to move, copy, remove, pause all, ignore all; undo any of them', 'A skeleton while loading, never a false "No one here yet" (BROWSE-06)', 'Add people with the + in the app bar'],
+  owes: ['One numbered sequence under "Next up", in the card\'s own order, each row opening with when: "Up now", "Tomorrow", "Thursday", "In 2 weeks", by the day on the calendar, so tomorrow at 8:30am is "Tomorrow" at any hour today (BROWSE-07, 2026-10-08)', 'No dot beside anyone: "Up now" says who is worth a call, so Browse has no accent element (BROWSE-07, rules.md Design 9, 2026-10-08)', 'Then "Everyone else" for anyone the rule cannot place, "Paused" and "Ignored": the heading says which, so a row there has a muted name and no word beside it, and a paused row\'s second line says until when ("Until 12 Oct", "Until you unpause") (BROWSE-07)', 'Opened from the card\'s menu: that person first and scrolled into view, their second line opening with "On your card" in place of when ("On your card · Last call: 3 days ago"; BROWSE-09)', 'A drag handle on each row in the order; a drop says "Moved Kai earlier" or "Moved Kai later", with Undo (BROWSE-08)', 'One snackbar at a time: a newer one replaces the one on screen at once, and its Undo reverts only the change it names (MOVE-07, 2026-10-08)', 'One quiet line under the order: a call, Later or Sooner moves people again', 'A Later or Sooner on the card shows here at once: the row moves and says its new when, 1 day each way on a list of up to 10 people, 3 days on a bigger one (CARD-02, 2026-11-10)', 'Search by name or number and clear it fast; filter: Recently called, Not called yet; both keep the order and its numbers', 'Tap a person for details; tap the muted phone to dial (Design 6)', 'Long-press for Quick actions: Call, Select, Pause, Ignore', 'A visible Select button, so multi-select is not gesture-only (BROWSE-2)', 'Multi-select to move, copy, remove, pause all, ignore all; undo any of them', 'A skeleton while loading, never a false "No one here yet" (BROWSE-06)', 'Add people with the + in the app bar'],
   drift: null,
   states: [['default', 'The order, opened from the card'], ['moved', 'After a drag'], ['moved2', 'Two drops in a row: the newer snackbar'], ['filtered', 'Filter on'], ['rowmenu', 'Long-press a row', 'overlay'], ['pause', 'Pause one person', 'overlay'], ['select', 'Multi-select'], ['selmore', 'More batch actions', 'overlay'], ['pauseall', 'Pause all', 'overlay'], ['move', 'Move to which list?', 'overlay'], ['copy', 'Copy to which list?', 'overlay'], ['nolog', 'Call log permission off'], ['nomatch', 'No search matches'], ['empty', 'Empty list']],
   to: [['S20', 'Tap a person'], ['S53', 'Phone icon, or long-press Call'], ['S32', '+ Add people'], ['S40', 'Notice: Open settings'], ['S11', 'Back (the card follows the order)']],
@@ -2810,7 +2825,7 @@ screen({
     // A no-break space keeps the number with its noun when the line wraps ("2 people", never "2 / people").
     const sizeOf = (n) => (n === 0 ? 'No one yet' : plural(n, 'person', 'people').replace(' ', '\u00a0'));
     const rows = shownLists().map((lid) => {
-      const l = L[lid]; const n = members(lid).length;
+      const l = L[lid]; const n = listSize(lid);
       return `<div class="card row" data-list="${lid}" style="border-radius:20px;padding:10px 4px 10px 0;min-height:76px;cursor:pointer" ${A.go('S11', null, lid)} aria-label="Open list">
         <button class="ib muted" aria-label="Reorder list" ${A.snack('Drag the handle to reorder. Lists higher up show first on home.')}>${ic('dots-six-vertical').replace('class="i"', 'class="i" style="width:18px;height:18px"')}</button>
         <div class="grow"><div class="body">${esc(l.name)}</div><div class="meta">${rhythmLine(lid)} · ${sizeOf(n)}</div></div>
@@ -3396,26 +3411,29 @@ screen({
   id: 'S42', group: 'records', name: 'Call history', route: 'call-log',
   spec: 'features/page-views/call-history.md', code: 'ui/screens/calllog/CallLogScreen.kt',
   purpose: 'An honest, calm record of real calls with the people on your lists.',
-  owes: ['Every call, newest first: the name, then one line with the list, the length and the direction in words ("from In touch · 22 min · Incoming"; Logged and Attempted rows end in "Logged" and "Attempted"), and the time at the end, with no direction icon (one sat above the time until 2026-10-08, rules.md Design 9)', 'From a person\'s page, only the calls with them, titled "Calls with {name}", each row starting with what happened ("You called", "Nia called", "You logged a connection", "You tried to reach them") and no icon before it (LOG-04, rules.md Design 9)', 'Filter by All, Incoming, Outgoing', 'An ignored person\'s rows stay, greyed with the avatar at half strength, under the plain name, the second line opening with "Ignored · " ("Ignored · from Inner orbit · 12 min · Outgoing"; IGNORE-09; "(ignored)" after the name until 2026-10-08, rules.md Design 9)', '"Show N more" with the real next increment', 'Tap a row to open the person with a note box under that call; a three-dots button or long-press for Call again and Open details', '"No calls yet" only when there truly are none; "Orbit can\'t see your calls" with Open settings when access is off; Try again on failure (LOG-05)'],
+  owes: ['Every call, newest first: the name, then one line with the list, the length and the direction in words ("from In touch · 22 min · Incoming"; Logged and Attempted rows end in "Logged" and "Attempted"), and the time at the end, with no direction icon (one sat above the time until 2026-10-08, rules.md Design 9)', 'From a person\'s page, only the calls with them, titled "Calls with {name}", each row starting with what happened ("You called", "Nia called", "You logged a connection", "You tried to reach them") and no icon before it (LOG-04, rules.md Design 9)', 'In an ignored person\'s own log the rows are greyed and the line under each opens with "Ignored · " too ("Ignored · 2 min"), as in everyone\'s log, so grey is never the only sign (IGNORE-09, 2026-11-10)', 'Filter by All, Incoming, Outgoing', 'An ignored person\'s rows stay, greyed with the avatar at half strength, under the plain name, the second line opening with "Ignored · " ("Ignored · from Inner orbit · 12 min · Outgoing"; IGNORE-09; "(ignored)" after the name until 2026-10-08, rules.md Design 9)', '"Show N more" with the real next increment', 'Tap a row to open the person with a note box under that call; a three-dots button or long-press for Call again and Open details', '"No calls yet" only when there truly are none; "Orbit can\'t see your calls" with Open settings when access is off; Try again on failure (LOG-05)'],
   drift: null,
-  states: [['default', 'All calls'], ['incoming', 'Incoming only'], ['person', 'One person (Calls with Nia)'], ['rowmenu', 'More actions on a row', 'overlay'], ['denied', 'Call log access off'], ['empty', 'No calls yet']],
+  states: [['default', 'All calls'], ['incoming', 'Incoming only'], ['person', 'One person (Calls with Nia)'], ['personig', 'One ignored person (Calls with Jordan)'], ['rowmenu', 'More actions on a row', 'overlay'], ['denied', 'Call log access off'], ['empty', 'No calls yet']],
   to: [['S20', 'Tap a row (note field focused under that call)'], ['S53', 'Call again'], ['S40', 'Denied: Open settings']],
   render(st, p) {
-    const onePerson = st === 'person';
-    const bar = appBar({ title: onePerson ? 'Calls with Nia Ferreira' : 'Call history' });
+    const onePerson = st === 'person' || st === 'personig';
+    // One person's log: Nia's, or Jordan's, whom the user has ignored (IGNORE-09).
+    const who = st === 'personig' ? 'jordan' : 'nia';
+    const bar = appBar({ title: onePerson ? `Calls with ${P[who].name}` : 'Call history' });
     if (st === 'empty') return view({ bar, body: `<div class="center-t" style="padding:80px 32px;display:flex;flex-direction:column;align-items:center;gap:8px"><span style="color:var(--fg-muted)">${ic('phone')}</span><div class="h3">No calls yet</div><div class="body muted" style="max-width:320px">Calls with the people in your contacts show up here.</div></div>` });
     if (st === 'denied') return view({ bar, body: `<div class="center-t" style="padding:80px 32px;display:flex;flex-direction:column;align-items:center;gap:12px"><span style="color:var(--fg-muted)">${ic('phone-slash')}</span><div class="h3">Orbit can't see your calls</div><div class="body muted" style="max-width:320px">Call history comes from your phone's call log, and Orbit doesn't have access to it. Turn it on in Settings and your calls will appear here. They stay on this device.</div><button class="btn primary sm" ${A.go('S40')}>Open settings</button></div>` });
     const filt = st === 'incoming' ? 'Incoming' : 'All';
     const chips = ['All', 'Incoming', 'Outgoing'].map((c) => `<button class="chip${filt === c ? ' on' : ''}" style="min-height:44px" ${A.st(c === 'Incoming' ? 'incoming' : 'default')}>${c}</button>`).join('');
     // LOG-04: in one person's log every row is them, so rows say what happened instead of repeating the name.
-    const said = (dir) => dir === 'Incoming' ? `${first('nia')} called` : dir === 'Outgoing' ? 'You called' : dir === 'Logged' ? 'You logged a connection' : 'You tried to reach them';
+    const said = (dir) => dir === 'Incoming' ? `${first(who)} called` : dir === 'Outgoing' ? 'You called' : dir === 'Logged' ? 'You logged a connection' : 'You tried to reach them';
     const days = LOG.map(([day, rows]) => {
-      const shown = rows.filter((r) => (filt === 'All' || r[3] === filt) && (!onePerson || r[0] === 'nia'));
+      const shown = rows.filter((r) => (filt === 'All' || r[3] === filt) && (!onePerson || r[0] === who));
       if (!shown.length) return '';
       return `<div class="eyebrow" role="heading" aria-level="2" style="padding:14px 16px 6px;position:sticky;top:0;background:var(--bg);z-index:1">${day}</div>` + shown.map(([pid, list, dur, dir, at]) => {
         // IGNORE-09: an ignored person's row stays, greyed, with the plain name; the second line
         // opens with "Ignored · ". The name read "Jordan Pike (ignored)" until 2026-10-08
-        // (rules.md Design 9).
+        // (rules.md Design 9). One person's log says it too since 2026-11-10 ("Ignored · 2 min"):
+        // until then its rows were only greyed, so colour was the only sign.
         const ig = pid === 'jordan';
         // The direction is said in words: the last word of everyone's second line ("Outgoing",
         // "Incoming", "Logged", "Attempted"), and the title of one person's row ("You called").
@@ -3423,7 +3441,7 @@ screen({
         // rows start with the title, and the time stands alone at the end.
         const sub = [ig ? 'Ignored' : '', list ? 'from ' + list : '', dur, dir].filter(Boolean).join(' · ');
         const lead = onePerson ? said(dir) : P[pid].name;
-        const under = onePerson ? dur : sub;
+        const under = onePerson ? [ig ? 'Ignored' : '', dur].filter(Boolean).join(' · ') : sub;
         return `<div class="row" style="padding:8px 4px 8px 16px;min-height:64px;cursor:pointer" ${A.go('S20', 'retro', pid)} data-lp="rowmenu" data-p="${pid}" aria-label="Open details">${onePerson ? '' : `<div style="${ig ? 'opacity:.5' : ''}">${avatar(pid, 44)}</div>`}<div class="grow"><div class="body"${ig ? ' style="color:var(--fg-subtle)"' : ''}>${lead}</div>${under ? `<div class="meta"${ig ? ' style="color:var(--fg-subtle)"' : ''}>${under}</div>` : ''}</div><span class="micro">${at}</span>${iconBtn('dots-three-vertical', A.st('rowmenu', pid), 'More actions for ' + P[pid].name, 'muted')}</div>`;
       }).join('');
     }).join('');
@@ -3907,6 +3925,11 @@ function cardCallDone() {
   D.waiting = [CALLS.kai];
   S.stack.forEach((e) => { if (e.id === 'S11') e.p = 'touch'; if (e.id === 'S10') e.st = 'one'; });
 }
+/* F3's moves, made the way the card makes them (moveTurn), from In touch's usual order. In touch
+   has 12 people, so each moves 3 days: Later on Kai, who was up, counts from now and lands on
+   Wednesday; Sooner on Luma, also up, cannot bring her earlier than now. */
+function laterKai() { resetTurns('touch'); moveTurn('touch', 'kai', 'later'); }
+function soonerLuma() { laterKai(); moveTurn('touch', 'luma', 'sooner'); }
 const FLOWS = [
   { id: 'F1', name: 'First run, from install to Home', why: 'Two permissions, a blocking sync, a suggested list, a required first list, then the nudge question on Done (ONB-30).',
     steps: [
@@ -3938,11 +3961,11 @@ const FLOWS = [
   { id: 'F3', name: 'Decide on the card: later, sooner, browse', why: 'Everything you can do with one name besides calling, and the order the card follows.',
     steps: [
       { id: 'S11', p: 'touch', say: 'Kai is up first, with nothing over the name and no badges on the card, not even a list chip: the app bar names the list. Swipe left or tap Later, the round button with "Later" under it: it flies the card off to the left, as the swipe does.', tap: '[data-act="cardMove"][data-arg="later"]', do: () => { resetTurns('touch'); } },
-      { id: 'S11', p: 'touch', say: 'The next person fades in, and a snackbar says Kai moved, never when, with Undo. With reduced motion nothing flies: the move just happens.', snack: 'Kai moved to later.', undo: true, do: () => { resetTurns('touch'); setTurn('touch', 'kai', 1); }, tap: '[data-act="cardMove"][data-arg="sooner"]' },
-      { id: 'S11', p: 'touch', say: 'Sooner, by its button or a right swipe, flies the card off to the right. Luma was already up, so Sooner cannot bring her any closer than now: she stays up, behind those who were up before her.', snack: 'Luma moved sooner.', undo: true, do: () => { resetTurns('touch'); setTurn('touch', 'kai', 1); setTurnNow('touch', 'luma'); }, tap: '[aria-label^="More actions"]' },
-      { id: 'S11', st: 'menu', p: 'touch', say: 'The three-dots menu: Browse people, Add people, List settings, the same words as Home.', tap: '[data-go="S13"]', do: () => { resetTurns('touch'); setTurn('touch', 'kai', 1); setTurnNow('touch', 'luma'); } },
-      { id: 'S13', p: 'touch', say: 'Browse is the order the card follows, numbered, each row saying when by the calendar: Jamie, due tomorrow at 8:30am, reads "Tomorrow". Owen, on the card now, is first, his second line opening with "On your card" where the when would be; no row has a dot or a chip. Luma and Kai sit where Sooner and Later put them. Drag a handle to move someone.', tap: '[data-drag="theo"]', do: () => { resetTurns('touch'); setTurn('touch', 'kai', 1); setTurnNow('touch', 'luma'); D.browseFocus = true; } },
-      { id: 'S13', st: 'moved', p: 'touch', say: 'Theo, dragged up under Owen, is "Up now". "Moved Theo earlier" has Undo, and the line under the order says a call, Later or Sooner moves people again. A second drop now would replace this snackbar at once, and each Undo puts back only its own drop.', do: () => { resetTurns('touch'); setTurn('touch', 'kai', 1); setTurnNow('touch', 'luma'); reorder('touch', 'theo', 'owen'); } },
+      { id: 'S11', p: 'touch', say: 'The next person fades in, and a snackbar says Kai moved, never when, with Undo. In touch has 12 people, so Later moved Kai 3 days, counted from now because he was already up: he comes up on Wednesday (on a list of 10 people or fewer it would be 1 day). With reduced motion nothing flies: the move just happens.', snack: 'Kai moved to later.', undo: true, do: () => { laterKai(); }, tap: '[data-act="cardMove"][data-arg="sooner"]' },
+      { id: 'S11', p: 'touch', say: 'Sooner, by its button or a right swipe, flies the card off to the right, and moves Luma 3 days sooner on this list. She was already up, so Sooner cannot bring her any closer than now: she stays up, behind those who were up before her.', snack: 'Luma moved sooner.', undo: true, do: () => { soonerLuma(); }, tap: '[aria-label^="More actions"]' },
+      { id: 'S11', st: 'menu', p: 'touch', say: 'The three-dots menu: Browse people, Add people, List settings, the same words as Home.', tap: '[data-go="S13"]', do: () => { soonerLuma(); } },
+      { id: 'S13', p: 'touch', say: 'Browse is the order the card follows, numbered, each row saying when by the calendar: Jamie, due tomorrow at 8:30am, reads "Tomorrow". Owen, on the card now, is first, his second line opening with "On your card" where the when would be; no row has a dot or a chip. Luma, still up, sits behind those who were up before her, and Kai, 3 days out, reads "Wednesday", after Jamie and before Sarah, "Thursday". Drag a handle to move someone.', tap: '[data-drag="theo"]', do: () => { soonerLuma(); D.browseFocus = true; } },
+      { id: 'S13', st: 'moved', p: 'touch', say: 'Theo, dragged up under Owen, is "Up now". "Moved Theo earlier" has Undo, and the line under the order says a call, Later or Sooner moves people again. A second drop now would replace this snackbar at once, and each Undo puts back only its own drop.', do: () => { soonerLuma(); reorder('touch', 'theo', 'owen'); } },
       { id: 'S11', st: 'none', p: 'touch', say: 'If no one is eligible (everyone paused), the card says so and offers Browse.', from: ['S10'] },
     ] },
   { id: 'F4', name: 'Start a new list', why: 'New list, step by step, from Home to a list with people on it (LIST-28, LIST-29).',
