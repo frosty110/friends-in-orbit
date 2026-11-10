@@ -374,27 +374,52 @@ class ListsManagerViewModel @Inject constructor(
             memberCount = memberCountsByListId[id] ?: 0,
             type = type,
             ruleSummary = when (type) {
-                ListType.SMART -> ruleSummary(smartRuleJson)?.let(ListRowSummary::Readable)
+                ListType.SMART -> ruleSummary(smartRuleJson)
                 ListType.STATIC -> rhythmSummary(this)
             },
             notificationsEnabled = notificationsEnabled
         )
 
     /**
-     * Sentence-case rule-summary formatter for the Lists Manager copywriting
-     * contract. Maps each [SmartListRule] subtype to its row subtitle
-     * (strings_lists.xml, with plurals for the day counts). Returns null for
-     * malformed JSON: bad JSON should not crash the screen; the row simply
-     * renders without a subtitle.
+     * A smart list's rule as its row subtitle, for the Lists Manager
+     * copywriting contract (LIST-07): each [SmartListRule] subtype in its own
+     * words (strings_lists.xml, with plurals for the day counts).
+     *
+     * A rule that does not decode is [ListRowSummary.Unreadable.Rule],
+     * "Couldn't read this list's rule", shown alone like the regular list's
+     * "Couldn't read this list's rhythm" ([rhythmSummary]). Until 2026-11-10
+     * this returned null and the row showed the count alone ("12 people"),
+     * the same line as a working list with nothing to say: a quiet fallback
+     * over a list that can never fill (`SmartListMembershipSync` skips a rule
+     * it cannot decode, and List settings hides its Smart rule section), the
+     * shrug rules.md Code 3 forbids.
+     *
+     * No rule at all (null or blank) gets the same line, not the count alone.
+     * Nothing in Orbit writes a smart list without one: `CreateListUseCase`
+     * makes a list SMART only with an encoded rule, every rule edit writes an
+     * encoded rule, and converting to a regular list clears the rule and the
+     * type in one transaction. Only a restored backup can carry one
+     * (`ImportService` copies the type and the rule as they are, and an
+     * export's rule defaults to null), and that list cannot fill either. The
+     * regular list's "nothing configured" stays the count alone because
+     * onboarding writes it (`RuleParamsResolution.None`).
      */
-    private fun ruleSummary(smartRuleJson: String?): UiText? {
-        if (smartRuleJson.isNullOrBlank()) return null
+    private fun ruleSummary(smartRuleJson: String?): ListRowSummary {
+        if (smartRuleJson.isNullOrBlank()) return ListRowSummary.Unreadable.Rule
         val rule = try {
             json.decodeFromString(SmartListRule.serializer(), smartRuleJson)
-        } catch (_: Throwable) {
-            return null
+        } catch (_: IllegalArgumentException) {
+            // kotlinx.serialization reports every decode failure as a
+            // SerializationException, an IllegalArgumentException (the
+            // resolveRuleParams precedent). Anything else is not a decode
+            // failure and reaches the screen's Error state (LIST-22).
+            return ListRowSummary.Unreadable.Rule
         }
-        return when (rule) {
+        return ListRowSummary.Readable(ruleWords(rule))
+    }
+
+    private fun ruleWords(rule: SmartListRule): UiText =
+        when (rule) {
             is SmartListRule.RecentlyAddedNotCalled ->
                 UiText.plural(R.plurals.lists_rule_summary_recently_added, rule.daysWindow, rule.daysWindow)
             is SmartListRule.LongGap ->
@@ -405,7 +430,6 @@ class ListsManagerViewModel @Inject constructor(
                 UiText.res(R.string.lists_rule_summary_rarely_called, rule.bottomPercent)
             SmartListRule.NeverCalled -> UiText.res(R.string.lists_rule_summary_never_called)
         }
-    }
 
     /**
      * A regular list's rhythm as its row subtitle, as its interval whichever
@@ -420,7 +444,7 @@ class ListsManagerViewModel @Inject constructor(
      * `RuleTemplateEntity`, which is why this takes the template lookup and
      * not the override JSON alone. Null when neither exists (a partially
      * configured row). A blob that does not decode says so
-     * ([ListRowSummary.Unreadable], "Couldn't read this list's rhythm")
+     * ([ListRowSummary.Unreadable.Rhythm], "Couldn't read this list's rhythm")
      * instead of passing for a list with no rhythm: both are Orbit's own
      * writes, so a failed decode is a bug the user should see where the deck
      * fails on the same data (rules.md Code 3). Until 2026-10-06 both cases
@@ -433,7 +457,7 @@ class ListsManagerViewModel @Inject constructor(
         val resolved = resolveRuleParams(entity.ruleParamsOverrideJson, template?.paramsJson, json)
         val params = when (resolved) {
             RuleParamsResolution.None -> return null
-            RuleParamsResolution.Unreadable -> return ListRowSummary.Unreadable
+            RuleParamsResolution.Unreadable -> return ListRowSummary.Unreadable.Rhythm
             is RuleParamsResolution.Decoded -> resolved.params
         }
         // Whole days, as How often words them (48h reads "Every 2 days").

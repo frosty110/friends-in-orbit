@@ -19,7 +19,7 @@ import app.orbit.ui.util.UiText
  *     added · 30 days") or a regular list's rhythm as its interval ("Every 14
  *     days", "Every 3 days", "Every day"; LIST-30), decoded once in the
  *     ViewModel rather than inside the composable, or the fact that the
- *     stored rhythm could not be read. The README promises every row a rhythm
+ *     stored rhythm or rule could not be read. The README promises every row a rhythm
  *     summary; regular lists had none until 2026-10-06.
  *   - `notificationsEnabled` drives the row menu's "Pause nudges" / "Resume
  *     nudges" entry, the same entry Home's long-press menu offers (LIST-23:
@@ -63,12 +63,12 @@ data class ListTileState(
 )
 
 /**
- * What a list's row says about its rhythm, or that it could not say. Two
- * variants rather than one [UiText] because the row joins the member count to
- * a rhythm ("Every 14 days · 12 people") but never to the error: a count
- * after "Couldn't read this list's rhythm" would read as part of what failed.
- * With the error as plain text the row could only tell the two apart by
- * comparing strings.
+ * What a list's row says about its rhythm or rule, or that it could not say.
+ * [Readable] and [Unreadable] are told apart by type rather than being one
+ * [UiText] because the row joins the member count to a rhythm ("Every 14
+ * days · 12 people") but never to the error: a count after "Couldn't read
+ * this list's rhythm" would read as part of what failed. With the error as
+ * plain text the row could only tell the two apart by comparing strings.
  */
 sealed interface ListRowSummary {
     /** The words the row shows for this summary. */
@@ -78,10 +78,23 @@ sealed interface ListRowSummary {
     @Immutable data class Readable(override val text: UiText) : ListRowSummary
 
     /**
-     * A regular list's stored rhythm does not decode (rules.md Code 3: the
-     * deck fails on the same data, so the row says so instead of nothing).
+     * What the list does could not be read, so the row says that, alone
+     * (rules.md Code 3: say so instead of nothing). One variant per thing a
+     * list can fail to say, each in its own words.
      */
-    @Immutable data object Unreadable : ListRowSummary {
-        override val text: UiText = UiText.res(R.string.lists_rhythm_unreadable)
+    sealed interface Unreadable : ListRowSummary {
+        /** A regular list's stored rhythm does not decode; the deck fails on the same data. */
+        @Immutable data object Rhythm : Unreadable {
+            override val text: UiText = UiText.res(R.string.lists_rhythm_unreadable)
+        }
+
+        /**
+         * A smart list's rule is missing or does not decode, so it can never
+         * fill itself. Until 2026-11-10 the row showed the count alone, like
+         * a working list with nothing to say (LIST-07).
+         */
+        @Immutable data object Rule : Unreadable {
+            override val text: UiText = UiText.res(R.string.lists_rule_unreadable)
+        }
     }
 }

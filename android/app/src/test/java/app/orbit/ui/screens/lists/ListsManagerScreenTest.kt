@@ -45,7 +45,8 @@ import org.robolectric.annotation.Config
  * A list that was not there before (Create's new list, last in the order) is
  * scrolled into view; the lists first shown and a restored one are not news.
  * Each row says its member count in words at the end of its second line
- * (rules.md Design 9, 2026-10-08), never after the unreadable-rhythm error.
+ * (rules.md Design 9, 2026-10-08), never after the unreadable-rhythm error,
+ * nor after a smart list's unreadable-rule error (2026-11-10).
  *
  * Runs on the JVM under Robolectric: it reads the semantics tree and fires
  * click actions, which needs no emulator (development-cycle.md, Verify).
@@ -244,15 +245,39 @@ class ListsManagerScreenTest {
     // could not be read (rules.md Code 3 keeps the error itself).
     @Test
     fun an_unreadable_rhythm_says_so_alone_with_no_count() {
-        setRows(row(id = 1L, name = "Inner orbit", memberCount = 5, summary = ListRowSummary.Unreadable))
+        setRows(row(id = 1L, name = "Inner orbit", memberCount = 5, summary = ListRowSummary.Unreadable.Rhythm))
 
         assertEquals(listOf("Inner orbit", "Couldn't read this list's rhythm"), rowTexts("Inner orbit"))
         compose.onAllNodesWithText("5\u00A0people", substring = true, useUnmergedTree = true).assertCountEquals(0)
     }
 
+    // LIST-07, 2026-11-10: a smart list whose rule cannot be read says so in
+    // its own words, alone, as a regular list's unreadable rhythm does. It
+    // showed the count alone until then ("12 people"), like a working list.
+    @Test
+    fun an_unreadable_smart_rule_says_so_alone_with_no_count() {
+        setRows(
+            row(
+                id = 3L,
+                name = "Recently added, not called",
+                memberCount = 12,
+                type = ListType.SMART,
+                summary = ListRowSummary.Unreadable.Rule,
+            ),
+        )
+
+        assertEquals(
+            listOf("Recently added, not called", "Couldn't read this list's rule"),
+            rowTexts("Recently added, not called"),
+        )
+        compose.onAllNodesWithText("12\u00A0people", substring = true, useUnmergedTree = true).assertCountEquals(0)
+    }
+
     @Test
     fun the_line_builder_never_joins_the_count_to_the_error() {
-        assertEquals(ListRowSummary.Unreadable.text, listRowMeta(ListRowSummary.Unreadable, memberCount = 5))
+        listOf(ListRowSummary.Unreadable.Rhythm, ListRowSummary.Unreadable.Rule).forEach { error ->
+            assertEquals(error.text, listRowMeta(error, memberCount = 5))
+        }
         assertEquals(
             UiText.res(R.string.lists_row_meta, every(14).text, UiText.plural(R.plurals.lists_row_members, 12, 12)),
             listRowMeta(every(14), memberCount = 12),

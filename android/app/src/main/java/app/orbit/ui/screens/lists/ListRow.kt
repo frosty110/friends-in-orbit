@@ -187,12 +187,15 @@ fun ListRow(
  * | [summary] | Result |
  * |---|---|
  * | a rhythm or rule | "Every 14 days · 12 people", "Recently added · 30 days · 1 person", "Every 7 days · No one yet" |
- * | none (a regular list with no rhythm yet, or a smart rule that does not decode) | "12 people", "No one yet" |
- * | [ListRowSummary.Unreadable] | "Couldn't read this list's rhythm", alone |
+ * | none (a regular list with no rhythm yet) | "12 people", "No one yet" |
+ * | [ListRowSummary.Unreadable.Rhythm] | "Couldn't read this list's rhythm", alone |
+ * | [ListRowSummary.Unreadable.Rule] | "Couldn't read this list's rule", alone |
  *
  * "No one yet" is what Home's card says of an empty list, so the two screens
  * agree; the pill said nothing at zero. The count is never joined to the
- * error, where it would read as part of what could not be read.
+ * error, where it would read as part of what could not be read. A smart rule
+ * that could not be read fell in the "none" row until 2026-11-10, so a list
+ * that cannot fill read like a working one.
  */
 internal fun listRowMeta(summary: ListRowSummary?, memberCount: Int): UiText {
     val people = if (memberCount > 0) {
@@ -203,7 +206,7 @@ internal fun listRowMeta(summary: ListRowSummary?, memberCount: Int): UiText {
     return when (summary) {
         null -> people
         is ListRowSummary.Readable -> UiText.res(R.string.lists_row_meta, summary.text, people)
-        ListRowSummary.Unreadable -> summary.text
+        is ListRowSummary.Unreadable -> summary.text
     }
 }
 
