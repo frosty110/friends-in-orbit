@@ -110,9 +110,7 @@ class CardViewViewModelTest {
         val skipContact = SkipContactUseCase(
             contactRepo = contactRepo,
             listRepo = listRepo,
-            ruleTemplateRepo = templateRepo,
             clock = clock,
-            json = json,
         )
         // CardViewViewModel ctor takes surfaceSooner + listRepository; the
         // args are wired here so the unit-test target compiles.
@@ -125,9 +123,7 @@ class CardViewViewModelTest {
             txRunner = passThruTx,
             contactRepo = contactRepo,
             listRepo = listRepo,
-            ruleTemplateRepo = templateRepo,
             clock = clock,
-            json = json,
         )
         // CardViewViewModel ctor takes NoteRepository
         // + Clock for the RecentNotesSummary (NOTE-03). Empty FakeNoteRepository

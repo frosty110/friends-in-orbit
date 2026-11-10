@@ -7,6 +7,7 @@ import app.orbit.data.entity.CallEventEntity
 import app.orbit.data.entity.CallSource
 import app.orbit.data.feed.CardFeed
 import app.orbit.data.repository.CallEventRepository
+import app.orbit.data.repository.ListRepository
 import app.orbit.domain.CallLogResyncTrigger
 import app.orbit.domain.FakeCallEventRepository
 import app.orbit.domain.FakeContactRepository
@@ -26,6 +27,7 @@ import app.orbit.domain.usecase.LogConnectionWhen
 import app.orbit.domain.usecase.AddRetroactiveNoteUseCase
 import app.orbit.domain.usecase.LogConnectionUseCase
 import app.orbit.domain.usecase.MarkCalledUseCase
+import app.orbit.domain.usecase.MutationResult
 import app.orbit.domain.usecase.SkipContactUseCase
 import app.orbit.domain.usecase.SurfaceNextUseCase
 import app.orbit.domain.usecase.SurfaceQueueUseCase
@@ -96,6 +98,8 @@ class CardViewViewModelInteractionTest {
         val rebuild: (handle: SavedStateHandle) -> CardViewViewModel,
         /** The writes "Log a connection" goes through; can be made to fail. */
         val logWrites: ReschedulingCallEvents,
+        /** The schedule writes Later and Sooner go through; a row can vanish. */
+        val moveWrites: VanishingRows,
     )
 
     /**
@@ -140,12 +144,11 @@ class CardViewViewModelInteractionTest {
             clock = clock,
             json = json,
         )
+        val moveWrites = VanishingRows(listRepo)
         val skipContact = SkipContactUseCase(
             contactRepo = contactRepo,
-            listRepo = listRepo,
-            ruleTemplateRepo = templateRepo,
+            listRepo = moveWrites,
             clock = clock,
-            json = json,
         )
         val passThruTx = object : app.orbit.data.db.TransactionRunner {
             override suspend fun <T> withTransaction(block: suspend () -> T): T = block()
@@ -153,10 +156,8 @@ class CardViewViewModelInteractionTest {
         val surfaceSooner = SurfaceSoonerUseCase(
             txRunner = passThruTx,
             contactRepo = contactRepo,
-            listRepo = listRepo,
-            ruleTemplateRepo = templateRepo,
+            listRepo = moveWrites,
             clock = clock,
-            json = json,
         )
         val noteRepo = FakeNoteRepository()
         val savedState = SavedStateHandle(mapOf("listId" to savedStateListId))
@@ -210,7 +211,24 @@ class CardViewViewModelInteractionTest {
             )
         }
         val vm = build(savedState)
-        return Setup(vm, contactRepo, listRepo, callEventRepo, undoStack, resync, noteRepo, savedState, build, logWrites)
+        return Setup(vm, contactRepo, listRepo, callEventRepo, undoStack, resync, noteRepo, savedState, build, logWrites, moveWrites)
+    }
+
+    /**
+     * The list repository Later and Sooner write through: [inner], except
+     * that while [rowGone] is set a schedule write finds no row and reports
+     * [MutationResult.MembershipMissing], as the real one does when the
+     * person or their list goes between the use case's read and its write
+     * (H7). The card then has nobody who moved.
+     */
+    private class VanishingRows(private val inner: FakeListRepository) : ListRepository by inner {
+        var rowGone = false
+
+        override suspend fun incrementSkipCount(contactId: Long, listId: Long, newNextDueAt: Instant): MutationResult =
+            if (rowGone) MutationResult.MembershipMissing else inner.incrementSkipCount(contactId, listId, newNextDueAt)
+
+        override suspend fun updateNextDueAt(contactId: Long, listId: Long, nextDueAt: Instant): MutationResult =
+            if (rowGone) MutationResult.MembershipMissing else inner.updateNextDueAt(contactId, listId, nextDueAt)
     }
 
     /**
@@ -262,10 +280,11 @@ class CardViewViewModelInteractionTest {
     // No / skip path — onSwipeLeft defers the contact.
     //
     // Cold-start membership (nextDueAt == null) → SkipContactUseCase clamps the
-    // basis to `now` and pushes nextDueAt by the template's skipPenaltyHours
-    // (KeepInTouch default = 24h). The fake's incrementSkipCount records the
-    // write and bumps skipCount; the snapshot re-emits with the now-future
-    // nextDueAt (isAheadOfToday = true).
+    // basis to `now` and pushes nextDueAt by a day, the move on a list of up
+    // to 10 people (CARD-02, moveAmountFor; the template's 24-hour skip
+    // penalty until 2026-11-10, the same here by coincidence). The fake's
+    // incrementSkipCount records the write and bumps skipCount; the snapshot
+    // re-emits with the now-future nextDueAt (isAheadOfToday = true).
     // ========================================================================
 
     @Test
@@ -284,12 +303,12 @@ class CardViewViewModelInteractionTest {
             assertTrue(afterSkip.isAheadOfToday, "skip pushes nextDueAt into the future")
             cancelAndIgnoreRemainingEvents()
         }
-        // The skip wrote exactly one membership row: +24h from now (cold-start
-        // basis clamps to `now`).
+        // The skip wrote exactly one membership row: a day from now on this
+        // one-person list (cold-start basis clamps to `now`).
         val skip = setup.listRepo.incrementSkipCalls.single()
         assertEquals(1L, skip.contactId)
         assertEquals(1L, skip.listId)
-        assertEquals(T0.plus(Duration.ofHours(24)), skip.newNextDueAt)
+        assertEquals(T0.plus(Duration.ofDays(1)), skip.newNextDueAt)
     }
 
     @Test
@@ -346,8 +365,9 @@ class CardViewViewModelInteractionTest {
         val moved = setup.listRepo.updateNextDueAtCalls.single()
         assertEquals(1L, moved.contactId)
         assertEquals(1L, moved.listId)
-        // soonerDelta = max(1, 24/2) = 12h pulled back from the 10-day future.
-        assertEquals(futureDue.minus(Duration.ofHours(12)), moved.newNextDueAt)
+        // A day earlier on this one-person list (CARD-02, moveAmountFor;
+        // 12 hours, half the template's skip penalty, until 2026-11-10).
+        assertEquals(futureDue.minus(Duration.ofDays(1)), moved.newNextDueAt)
         assertTrue(
             setup.listRepo.incrementSkipCalls.isEmpty(),
             "sooner must not bump skipCount",
@@ -457,8 +477,27 @@ class CardViewViewModelInteractionTest {
 
     // ========================================================================
     // Failure path (rules.md Code 3): a write that fails says so on the
-    // snackbar, names the person, and stages nothing to undo.
+    // snackbar, names the person, and stages nothing to undo. Under the
+    // curtain the sentence is the nameless one (PRIV-03, since 2026-11-10).
     // ========================================================================
+
+    private val laterFailedSarah = CardMessage.Failed(
+        text = UiText.res(R.string.card_later_failed_named, "Sarah"),
+        curtainText = UiText.res(R.string.card_later_failed_unnamed),
+    )
+    private val soonerFailedSarah = CardMessage.Failed(
+        text = UiText.res(R.string.card_sooner_failed_named, "Sarah"),
+        curtainText = UiText.res(R.string.card_sooner_failed_unnamed),
+    )
+
+    /** Sarah on list 1, due in 10 days, so a Sooner has somewhere to bring her. */
+    private fun Setup.seedSarahAhead() {
+        contactRepo.seed(listOf(contactFixture(id = 1L, displayName = "Sarah Connor")))
+        listRepo.seed(listOf(listFixture(id = 1L, ruleTemplateId = 1L)))
+        listRepo.seedMemberships(
+            listOf(membershipFixture(contactId = 1L, listId = 1L, nextDueAt = T0.plus(Duration.ofDays(10)))),
+        )
+    }
 
     @Test
     fun `a Later whose write fails emits Failed naming the person and stages no undo`() = runTest {
@@ -469,10 +508,7 @@ class CardViewViewModelInteractionTest {
             awaitItem() // Ready
             setup.vm.messages.test(timeout = 2.seconds) {
                 setup.vm.onSwipeLeft(contactId = 1L)
-                assertEquals(
-                    CardMessage.Failed(UiText.res(R.string.card_later_failed_named, "Sarah")),
-                    awaitItem(),
-                )
+                assertEquals(laterFailedSarah, awaitItem())
                 cancelAndIgnoreRemainingEvents()
             }
             cancelAndIgnoreRemainingEvents()
@@ -485,24 +521,93 @@ class CardViewViewModelInteractionTest {
     @Test
     fun `a Sooner whose write fails emits Failed naming the person`() = runTest {
         val setup = fixture()
-        setup.contactRepo.seed(listOf(contactFixture(id = 1L, displayName = "Sarah Connor")))
-        setup.listRepo.seed(listOf(listFixture(id = 1L, ruleTemplateId = 1L)))
-        setup.listRepo.seedMemberships(
-            listOf(membershipFixture(contactId = 1L, listId = 1L, nextDueAt = T0.plus(Duration.ofDays(10)))),
-        )
+        setup.seedSarahAhead()
         setup.listRepo.failWrites = true
         setup.vm.uiState.test(timeout = 2.seconds) {
             awaitItem()
             setup.vm.messages.test(timeout = 2.seconds) {
                 setup.vm.onSwipeRight(contactId = 1L)
-                assertEquals(
-                    CardMessage.Failed(UiText.res(R.string.card_sooner_failed_named, "Sarah")),
-                    awaitItem(),
-                )
+                assertEquals(soonerFailedSarah, awaitItem())
                 cancelAndIgnoreRemainingEvents()
             }
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // A move that moved nobody (rules.md Code 3): the use case returns
+    // MembershipMissing because the person or their list went between the
+    // card's render and the write. Until 2026-11-10 the card ignored the
+    // result and said "Sarah moved to later." with an Undo that had nothing
+    // to undo; now it says the move failed, the same way a thrown write does.
+
+    @Test
+    fun `a Later that moved nobody says it failed and stages no undo`() = runTest {
+        val setup = fixture()
+        setup.seedSarahReady()
+        setup.moveWrites.rowGone = true
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            awaitItem()
+            setup.vm.messages.test(timeout = 2.seconds) {
+                setup.vm.onSwipeLeft(contactId = 1L)
+                assertEquals(laterFailedSarah, awaitItem())
+                expectNoEvents() // no "Sarah moved to later." after it
+                cancelAndIgnoreRemainingEvents()
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertNull(setup.undoStack.peek(), "nothing to undo: nobody moved")
+        val row = setup.listRepo.observeMembershipsForContact(1L).first().single()
+        assertNull(row.nextDueAt, "Sarah's place is as it was")
+        assertEquals(0, row.skipCount)
+    }
+
+    @Test
+    fun `a Sooner that moved nobody says it failed and stages no undo`() = runTest {
+        val setup = fixture()
+        setup.seedSarahAhead()
+        setup.moveWrites.rowGone = true
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            awaitItem()
+            setup.vm.messages.test(timeout = 2.seconds) {
+                setup.vm.onSwipeRight(contactId = 1L)
+                assertEquals(soonerFailedSarah, awaitItem())
+                expectNoEvents() // no "Sarah moved sooner." after it
+                cancelAndIgnoreRemainingEvents()
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertNull(setup.undoStack.peek(), "nothing to undo: nobody moved")
+        assertEquals(
+            T0.plus(Duration.ofDays(10)),
+            setup.listRepo.observeMembershipsForContact(1L).first().single().nextDueAt,
+            "Sarah's place is as it was",
+        )
+    }
+
+    @Test
+    fun `a Later for someone who has left the list says it failed`() = runTest {
+        // The real use case's own check: Sarah is no longer on list 1 when
+        // the Later runs, so there is no membership to move. Until
+        // 2026-11-10 the use case called that a Success. (Whether the
+        // sentence names her depends on whether the deck has re-emitted
+        // yet, so only the curtain's half is pinned.)
+        val setup = fixture()
+        setup.seedSarahReady()
+        setup.vm.uiState.test(timeout = 2.seconds) {
+            awaitItem()
+            setup.listRepo.updateMemberships { emptyList() }
+            setup.vm.messages.test(timeout = 2.seconds) {
+                setup.vm.onSwipeLeft(contactId = 1L)
+                val failed = awaitItem()
+                assertTrue(failed is CardMessage.Failed, "expected Failed, got $failed")
+                assertEquals(UiText.res(R.string.card_later_failed_unnamed), failed.curtainText)
+                expectNoEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertNull(setup.undoStack.peek())
+        assertTrue(setup.listRepo.incrementSkipCalls.isEmpty())
     }
 
     // ========================================================================
@@ -585,7 +690,14 @@ class CardViewViewModelInteractionTest {
     // now ahead of today), so a real, logged call was never acknowledged.
     // ========================================================================
 
-    private val calledSarah = CardMessage.Called(UiText.res(R.string.card_called_named, "Sarah"), contactId = 1L)
+    // "Call logged" is the sentence under the curtain (PRIV-03). Until
+    // 2026-11-10 Called had no twin, and "Called Sarah" showed over a
+    // covered app; every equality below pins the twin.
+    private val calledSarah = CardMessage.Called(
+        text = UiText.res(R.string.card_called_named, "Sarah"),
+        curtainText = UiText.res(R.string.card_call_logged),
+        contactId = 1L,
+    )
 
     @Test
     fun `CARD-03 - a call that lands while the person stays at the head is acknowledged`() = runTest {
@@ -765,8 +877,9 @@ class CardViewViewModelInteractionTest {
     // CARD-02 (owner, 2026-10-08): a Later or Sooner says that the person
     // moved, never when they come back. Until then the snackbar read "Sarah
     // will come up again tomorrow." and "Sarah comes up later today.". How
-    // far each move goes is unchanged (the tests above pin the amounts);
-    // only the words changed.
+    // far each move goes (a day on a small list, three on a big one, since
+    // 2026-11-10) is pinned above and in the use cases' own tests; the
+    // words never say it.
     // ========================================================================
 
     /** Sarah on list 1 with [nextDueAt]; returns the snackbar [move] raises. */
@@ -1001,7 +1114,8 @@ class CardViewViewModelInteractionTest {
             awaitItem()
             setup.vm.messages.test(timeout = 2.seconds) {
                 setup.vm.onLogConnection(1L, LogConnectionWhen.Today, note = "", isAttempt = false)
-                assertEquals(CardMessage.Failed(UiText.res(R.string.components_snackbar_save_failed)), awaitItem())
+                val saveFailed = UiText.res(R.string.components_snackbar_save_failed)
+                assertEquals(CardMessage.Failed(text = saveFailed, curtainText = saveFailed), awaitItem())
                 cancelAndIgnoreRemainingEvents()
             }
             expectNoEvents()

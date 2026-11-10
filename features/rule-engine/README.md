@@ -1,7 +1,7 @@
 # rule-engine
 
 **Status:** shipped
-**Last reviewed:** 2026-10-08
+**Last reviewed:** 2026-11-10 (Later and Sooner no longer move by the skip penalty; CARD-02 owns how far they go)
 **Ground truth:**
 - Code: `android/app/src/main/java/app/orbit/domain/rule/` (`RuleEngine.kt`, `KeepInTouchEngine.kt`, `LateNightEngine.kt`, `EnergizeEngine.kt`, `EngineFactory.kt`, `RuleParams.kt`, `RuleContext.kt`, `ContactSnapshot.kt`, `OverrideResolver.kt`, `RuleInterval.kt`)
 - Tests: `android/app/src/test/java/app/orbit/domain/rule/` (`KeepInTouchEngineTest`, `LateNightEngineTest`, `EnergizeEngineTest`, `OverrideResolverTest`, `RuleParamsSerializationTest`, `RuleIntervalTest`)
@@ -27,7 +27,7 @@ As a user, I say how often I mean to talk to the people on a list ("every 2 week
 **Tunable parameters per rule** (`RuleParams` subtypes, JSON in `RuleTemplateEntity.paramsJson`).
 - Cooldown min / max (how soon can a contact re-surface).
 - Escalation factor (how much urgency grows past cooldown).
-- Skip penalty (effect of swipe-left on next surface time).
+- Skip penalty: added to the cooldown once per Later (the membership's `skipCount`) when an engine computes a time. It is not how far a Later or Sooner moves someone: that is the list's size, a day or three days (CARD-02 in `features/card-view/README.md`, `domain/usecase/MoveAmount.kt`, since 2026-11-10). Until then Later added this penalty to the person's time and Sooner took off half of it.
 - Short-call threshold (default 60s) + short-call reset percent — calls under the threshold don't fully reset cooldown.
 - Incoming-call reset percent.
 
@@ -74,7 +74,7 @@ As a user, I say how often I mean to talk to the people on a list ("every 2 week
 
 ### Architecture
 
-Lives in `android/app/src/main/java/app/orbit/domain/rule/`. Pure Kotlin, no Android dependencies. Consumed by use cases (`SurfaceNextUseCase`, `MarkCalledUseCase`, `SkipContactUseCase`, due-count recompute), never directly by UI.
+Lives in `android/app/src/main/java/app/orbit/domain/rule/`. Pure Kotlin, no Android dependencies. Consumed by use cases (`SurfaceNextUseCase`, `MarkCalledUseCase`, due-count recompute), never directly by UI. `SkipContactUseCase` (Later) and `SurfaceSoonerUseCase` (Sooner) read no rule since 2026-11-10 (CARD-02); Later still bumps `skipCount`, which the engines read.
 
 Contract (`RuleEngine.kt`):
 ```kotlin
