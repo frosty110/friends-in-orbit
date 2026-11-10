@@ -2561,12 +2561,12 @@ screen({
       return view({ bar, body: `<div class="tint-box" style="margin:0 24px 12px;border-radius:16px"><div class="h3">This contact was deleted from your phone</div><div class="body muted" style="margin:4px 0 12px">History stays here. Re-link to a phone contact, or archive to remove from lists.</div><div class="row"><button class="btn primary sm" ${A.go('S32', null, 'relink')}>${ic('link')}Re-link</button><button class="btn tonal sm" ${A.st('default')} ${A.snack('Archived ' + pp.name, 'Undo')}>${ic('eye-slash')}Archive</button></div></div>${body}` });
     }
     if (st === 'menu') layer = menu([
-      { label: 'View all calls', icon: 'clock-counter-clockwise', attrs: A.go('S42') },
+      { label: 'View all calls', icon: 'clock-counter-clockwise', attrs: A.go('S42', 'person', pid) },
       { label: 'Pause', icon: 'pause-circle', attrs: A.st('pause', pid) },
       { label: 'Ignore', icon: 'eye-slash', danger: true, attrs: `${A.st('default')} ${A.snack('Ignored ' + pp.name, 'Undo')}` },
     ], { top: 100, right: 12 });
     if (st === 'pmenu') layer = menu([
-      { label: 'View all calls', icon: 'clock-counter-clockwise', attrs: A.go('S42') },
+      { label: 'View all calls', icon: 'clock-counter-clockwise', attrs: A.go('S42', 'person', pid) },
       { label: 'Unpause', icon: 'pause-circle', attrs: `${A.st('default', pid)} ${A.snack('Unpaused ' + pp.name, 'Undo')}` },
       { label: 'Ignore', icon: 'eye-slash', danger: true, attrs: `${A.st('default')} ${A.snack('Ignored ' + pp.name, 'Undo')}` },
     ], { top: 100, right: 12 }, 'paused');
@@ -3417,10 +3417,13 @@ screen({
   to: [['S20', 'Tap a row (note field focused under that call)'], ['S53', 'Call again'], ['S40', 'Denied: Open settings']],
   render(st, p) {
     const onePerson = st === 'person' || st === 'personig';
-    // One person's log: Nia's, or Jordan's, whom the user has ignored (IGNORE-09).
-    const who = st === 'personig' ? 'jordan' : 'nia';
+    // One person's log: whoever Contact detail's "View all calls" opened it for (LOG-04),
+    // Nia's from the review panel, or Jordan's, whom the user has ignored (IGNORE-09).
+    const who = st === 'personig' ? 'jordan' : P[p] ? p : 'nia';
+    // Someone with no calls in the demo log gets the log's own "No calls yet", not a blank page.
+    const noneForWho = onePerson && !LOG.some(([, rs]) => rs.some((r) => r[0] === who));
     const bar = appBar({ title: onePerson ? `Calls with ${P[who].name}` : 'Call history' });
-    if (st === 'empty') return view({ bar, body: `<div class="center-t" style="padding:80px 32px;display:flex;flex-direction:column;align-items:center;gap:8px"><span style="color:var(--fg-muted)">${ic('phone')}</span><div class="h3">No calls yet</div><div class="body muted" style="max-width:320px">Calls with the people in your contacts show up here.</div></div>` });
+    if (st === 'empty' || noneForWho) return view({ bar, body: `<div class="center-t" style="padding:80px 32px;display:flex;flex-direction:column;align-items:center;gap:8px"><span style="color:var(--fg-muted)">${ic('phone')}</span><div class="h3">No calls yet</div><div class="body muted" style="max-width:320px">Calls with the people in your contacts show up here.</div></div>` });
     if (st === 'denied') return view({ bar, body: `<div class="center-t" style="padding:80px 32px;display:flex;flex-direction:column;align-items:center;gap:12px"><span style="color:var(--fg-muted)">${ic('phone-slash')}</span><div class="h3">Orbit can't see your calls</div><div class="body muted" style="max-width:320px">Call history comes from your phone's call log, and Orbit doesn't have access to it. Turn it on in Settings and your calls will appear here. They stay on this device.</div><button class="btn primary sm" ${A.go('S40')}>Open settings</button></div>` });
     const filt = st === 'incoming' ? 'Incoming' : 'All';
     const chips = ['All', 'Incoming', 'Outgoing'].map((c) => `<button class="chip${filt === c ? ' on' : ''}" style="min-height:44px" ${A.st(c === 'Incoming' ? 'incoming' : 'default')}>${c}</button>`).join('');
