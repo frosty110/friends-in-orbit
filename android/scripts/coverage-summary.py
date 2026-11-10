@@ -135,7 +135,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("path", nargs="?", default=DEFAULT_PATH)
     ap.add_argument("--markdown", help="write a PR-comment markdown summary to this path")
-    ap.add_argument("--min-domain", type=float, help="exit 1 if domain LINE coverage is below this %")
+    ap.add_argument("--min-domain", type=float, help="exit 1 if domain LINE coverage is below this %%")
     args = ap.parse_args()
 
     if not os.path.exists(args.path):
