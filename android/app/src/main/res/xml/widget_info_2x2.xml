@@ -20,8 +20,11 @@
     (WorkManager); system-floor 30-min polling is disabled (WIDGET-05 / WIDGET-06).
 
     configure (WIDGET-12): Widget settings opens when the widget is placed and
-    from the launcher's reconfigure. configuration_optional, so a launcher
-    that skips it still places a working widget, showing every list.
+    from the launcher's reconfigure (reconfigurable). Not
+    configuration_optional: that flag tells Android 12+ launchers to skip the
+    screen at placement, which Pixel Launcher did (2026-11-09). Backing out
+    still keeps the widget, on every list, because the screen answers
+    RESULT_OK as it opens.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_2x2_description"
@@ -40,4 +43,4 @@
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="0"
     android:configure="app.orbit.widget.settings.WidgetSettingsActivity"
-    android:widgetFeatures="reconfigurable|configuration_optional" />
+    android:widgetFeatures="reconfigurable" />

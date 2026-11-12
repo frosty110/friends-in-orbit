@@ -92,6 +92,13 @@ class WidgetSettingsViewModel @Inject constructor(
         appScope.launch {
             for (write in writes) write()
         }
+        // The widget's first draw. When this screen opens at placement,
+        // Glance sends the new widget no update of its own (a configure
+        // screen is expected to ask), so without this a widget left with Back
+        // would sit on its loading frame until the hourly sweep. Queued with
+        // the writes, on the application scope, so an immediate Back cannot
+        // cancel it; on a reconfigure it is one redundant redraw.
+        writes.trySend { redraw() }
     }
 
     fun onSelectSource(source: WidgetSource) = save { appPrefs.setWidgetSource(appWidgetId, source) }

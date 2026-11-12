@@ -67,9 +67,11 @@ class WidgetSettingsActivity : ComponentActivity() {
             finish()
             return
         }
-        // OK from the start, not only on Done: with configuration_optional,
-        // a cancelled first configuration must not remove the widget the user
-        // just placed. It works with every list until they choose otherwise.
+        // OK from the start, not only on Done: a launcher removes a widget
+        // whose first configuration is cancelled, and Back must not remove
+        // the widget the user just placed. It works with every list until
+        // they choose otherwise. (The first draw is the ViewModel's: Glance
+        // sends no first update to a widget that has a configure screen.)
         setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
 
         if (!BuildConfig.DEBUG) {

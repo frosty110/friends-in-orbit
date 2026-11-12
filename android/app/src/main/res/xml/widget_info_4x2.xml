@@ -31,4 +31,4 @@
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="0"
     android:configure="app.orbit.widget.settings.WidgetSettingsActivity"
-    android:widgetFeatures="reconfigurable|configuration_optional" />
+    android:widgetFeatures="reconfigurable" />

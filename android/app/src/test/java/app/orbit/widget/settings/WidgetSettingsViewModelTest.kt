@@ -145,6 +145,14 @@ class WidgetSettingsViewModelTest {
             .first()
     }
 
+    /** Glance sends no first update to a widget with a configure screen; opening the screen asks for it. */
+    @Test
+    fun opening_the_screen_draws_this_widget() = runBlocking {
+        buildVm(prefs())
+
+        awaitValue(listOf(widgetId)) { synchronized(redraws) { redraws.toList() } }
+    }
+
     @Test
     fun offers_every_list_then_active_lists_in_lists_order_and_previews_the_cross_list_lead() = runBlocking {
         val vm = buildVm(prefs())
@@ -168,7 +176,8 @@ class WidgetSettingsViewModelTest {
         val ready = vm.awaitReady { it.source == WidgetSource.OneList(2L) }
         assertEquals(WidgetSettingsPreview.Person("Ben", photoUri = null, masked = false), ready.preview)
         awaitValue(WidgetSource.OneList(2L)) { prefs.widgetSettings(widgetId).first().source }
-        awaitValue(listOf(widgetId)) { synchronized(redraws) { redraws.toList() } }
+        // The opening draw, then the one for the change.
+        awaitValue(listOf(widgetId, widgetId)) { synchronized(redraws) { redraws.toList() } }
     }
 
     @Test
@@ -220,7 +229,7 @@ class WidgetSettingsViewModelTest {
             synchronized(events) { events.toList() }
         }
         assertEquals(WidgetSource.EveryList, vm.awaitReady().source)
-        assertEquals(emptyList(), synchronized(redraws) { redraws.toList() })
+        assertEquals(listOf(widgetId), synchronized(redraws) { redraws.toList() }, "only the opening draw")
         collecting.cancel()
     }
 }
