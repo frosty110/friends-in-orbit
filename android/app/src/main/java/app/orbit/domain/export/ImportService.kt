@@ -25,6 +25,7 @@ import java.time.Instant
 import java.time.LocalTime
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -113,7 +114,20 @@ open class ImportService @Inject constructor(
                 ?.let { t.addSuppressed(it) }
             throw t
         }
-        widgetRefresh.scheduleRefresh()
+        // The database is replaced from here on, so nothing below may report
+        // the import as failed: "couldn't be restored" after a restore that
+        // landed would invite the user to run a destructive restore again. A
+        // refresh that cannot be enqueued only leaves the widgets on their old
+        // people until the hourly sweep (WIDGET-06) redraws them. Not logged
+        // here: this layer holds people's data and logs nothing (rules.md
+        // Code 4); the production trigger logs its own failure as an event.
+        try {
+            widgetRefresh.scheduleRefresh()
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (ignored: Throwable) {
+            // See above: the import landed, and that is what the caller hears.
+        }
         return ImportSummary(
             listCount = payload.lists.size,
             contactCount = payload.contacts.size,

@@ -4,6 +4,7 @@ import android.content.Context
 import app.orbit.domain.WidgetRefreshTrigger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
+import timber.log.Timber
 
 /**
  * Production implementation of [WidgetRefreshTrigger] that delegates to
@@ -25,8 +26,18 @@ class WorkManagerWidgetRefreshTrigger @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : WidgetRefreshTrigger {
 
+    /**
+     * Never throws. Every caller asks for a refresh beside a write that has
+     * already landed (WIDGET-06), so an enqueue that fails must not make that
+     * write look failed. The widgets then redraw at the hourly sweep. An
+     * event, never a name (rules.md Code 4).
+     */
     override fun scheduleRefresh() {
-        WidgetUpdateScheduler.scheduleImmediate(context)
+        try {
+            WidgetUpdateScheduler.scheduleImmediate(context)
+        } catch (t: Throwable) {
+            Timber.tag("widget").w(t, "widget_refresh_enqueue_failed")
+        }
     }
 }
 

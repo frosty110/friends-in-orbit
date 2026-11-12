@@ -312,6 +312,24 @@ class ImportServiceTest {
     }
 
     @Test
+    fun `a widget refresh that cannot be enqueued does not fail an import that landed`() = runBlocking {
+        // The transaction has committed by then; reporting a failure would
+        // invite the user to run a destructive restore again.
+        val file = File.createTempFile("orbit-export", ".bin")
+        val summary = try {
+            val passphrase = "correct horse battery".toCharArray()
+            buildExportService().export(Uri.fromFile(file), passphrase.copyOf())
+            val importService = ImportService(context, db, prefs, WidgetRefreshTrigger { error("WorkManager unavailable") })
+            importService.apply(importService.read(Uri.fromFile(file), passphrase.copyOf()))
+        } finally {
+            file.delete()
+        }
+
+        assertEquals(1, summary.listCount)
+        assertEquals(listOf(1L, 2L), db.contactDao().getAllOnce().map { it.id }.sorted())
+    }
+
+    @Test
     fun `a failed import leaves every widget's settings as they were`() = runBlocking {
         // WIDGET-16 and the import's own contract: a rolled-back import
         // changes nothing. Until this was fixed the widgets' settings were
