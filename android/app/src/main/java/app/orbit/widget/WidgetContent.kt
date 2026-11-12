@@ -19,6 +19,8 @@
 //   and the labelled accent Call button is the one control that opens the
 //   dialer, as on Card view (CARD-01). A stray tap on a widget used to dial.
 // - WIDGET-10 the empty state says "All quiet for now."
+// - WIDGET-14 a widget whose list is archived or deleted says "Choose a list"
+//   and opens its settings, rather than quietly showing every list (2026-11-09).
 // - WIDGET-11 it looks like Orbit: Android's own widget corner radius, the
 //   theme's colours in light and dark, and the app's avatar (photo, else the
 //   two-letter monogram on its palette colour, always a circle).
@@ -66,12 +68,15 @@ import app.orbit.ui.theme.WidgetSpacing
 
 // ─── Entry points ────────────────────────────────────────────────────────────
 
-/** "Next call": one person, arranged for the widget's size. */
+/**
+ * "Next call": one person, arranged for the widget's size. [onEmptyTap] is
+ * the empty state's tap: Orbit, or the deck of the widget's one list.
+ */
 @Composable
-fun NextCallBody(people: List<WidgetPerson>, onOpenApp: Action) {
+fun NextCallBody(people: List<WidgetPerson>, onEmptyTap: Action) {
     val lead = people.firstOrNull()
     if (lead == null) {
-        EmptyState(onOpenApp)
+        EmptyState(onEmptyTap)
         return
     }
     val size = LocalSize.current
@@ -83,10 +88,10 @@ fun NextCallBody(people: List<WidgetPerson>, onOpenApp: Action) {
 
 /** "Call suggestions": the lead person and, where there is room, up to two more. */
 @Composable
-fun SuggestionsBody(people: List<WidgetPerson>, onOpenApp: Action) {
+fun SuggestionsBody(people: List<WidgetPerson>, onEmptyTap: Action) {
     val lead = people.firstOrNull()
     if (lead == null) {
-        EmptyState(onOpenApp)
+        EmptyState(onEmptyTap)
         return
     }
     val size = LocalSize.current
@@ -355,9 +360,9 @@ private fun CallButton(person: WidgetPerson, labelled: Boolean) {
  * circle); otherwise the Inter monogram tinted with the palette colour for the
  * name, on an oval of the matching background, each a day and night pair so
  * the widget follows the phone into dark mode on its own. Circles are shape
- * drawables, not clipped outlines, so they stay round on every host. In
- * minimal mode (WIDGET-04) a silhouette, so neither a face nor initials
- * reach the home screen.
+ * drawables, not clipped outlines, so they stay round on every host. On a
+ * widget that hides names (WIDGET-15) a silhouette, so neither a face nor
+ * initials reach the home screen.
  *
  * Decorative: the name is always written beside it, as in the app.
  */
@@ -429,7 +434,23 @@ private fun Divider() {
     Spacer(GlanceModifier.width(WidgetSpacing.x3.dp))
 }
 
-// ─── Empty state ─────────────────────────────────────────────────────────────
+// ─── Notices: empty, and a list that is gone ─────────────────────────────────
+
+/**
+ * WIDGET-14: the widget's list is archived or deleted. It says so without
+ * naming the list (the widget never shows a list name) and a tap opens Widget
+ * settings. Both widgets draw this instead of their people. It does not fall
+ * back to every list: that would put people on it whom the user had kept off.
+ */
+@Composable
+fun ChooseListBody(onChoose: Action) {
+    val context = LocalContext.current
+    Notice(
+        text = context.getString(R.string.widget_choose_list),
+        description = context.getString(R.string.widget_choose_list_a11y),
+        onTap = onChoose,
+    )
+}
 
 /**
  * WIDGET-10: nobody to suggest right now, said like a friend: "All quiet for
@@ -445,15 +466,23 @@ private fun Divider() {
  * a second query for upcoming people would be a second copy of its filters.
  */
 @Composable
-private fun EmptyState(onOpenApp: Action) {
+private fun EmptyState(onTap: Action) {
     val context = LocalContext.current
-    val text = context.getString(R.string.widget_empty)
-    // One whole sentence for TalkBack, not the two strings glued in code.
-    val description = context.getString(R.string.widget_empty_a11y)
+    Notice(
+        text = context.getString(R.string.widget_empty),
+        // One whole sentence for TalkBack, not the two strings glued in code.
+        description = context.getString(R.string.widget_empty_a11y),
+        onTap = onTap,
+    )
+}
+
+/** The Orbit glyph over a line of muted text, the whole card one tap target. */
+@Composable
+private fun Notice(text: String, description: String, onTap: Action) {
     val compact = LocalSize.current.height < WidgetBreakpoints.Compact.height
     WidgetFrame(
         modifier = GlanceModifier
-            .clickable(onOpenApp)
+            .clickable(onTap)
             .semantics { contentDescription = description },
         strip = compact,
     ) {

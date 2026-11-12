@@ -1,6 +1,8 @@
 package app.orbit.di
 
 import app.orbit.domain.WidgetRefreshTrigger
+import app.orbit.widget.GlanceOneWidgetRefresher
+import app.orbit.widget.OneWidgetRefresher
 import app.orbit.widget.WorkManagerWidgetRefreshTrigger
 import dagger.Binds
 import dagger.Module
@@ -25,4 +27,10 @@ abstract class WidgetModule {
     abstract fun bindWidgetRefreshTrigger(
         impl: WorkManagerWidgetRefreshTrigger,
     ): WidgetRefreshTrigger
+
+    /** WIDGET-12: Widget settings redraws its own widget at once. */
+    @Binds
+    abstract fun bindOneWidgetRefresher(
+        impl: GlanceOneWidgetRefresher,
+    ): OneWidgetRefresher
 }

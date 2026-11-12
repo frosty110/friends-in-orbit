@@ -1,5 +1,6 @@
 package app.orbit.domain.usecase
 
+import app.orbit.data.WidgetSource
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.entity.ListEntity
 import app.orbit.data.entity.ListMembershipEntity
@@ -18,6 +19,7 @@ import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneOffset
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
@@ -61,8 +63,17 @@ class WidgetSurfaceUseCaseTest {
             clock = clock,
             json = JsonProvider.json,
         )
+        val surfaceQueueUseCase = SurfaceQueueUseCase(
+            contactRepo = contactRepo,
+            listRepo = listRepo,
+            callEventRepo = callEventRepo,
+            ruleTemplateRepo = templateRepo,
+            clock = clock,
+            json = JsonProvider.json,
+        )
         return WidgetSurfaceUseCase(
             surfaceNext = surfaceNextUseCase,
+            surfaceQueue = surfaceQueueUseCase,
             listRepo = listRepo,
             clock = clock,
             zoneId = ZoneOffset.UTC,
@@ -323,5 +334,99 @@ class WidgetSurfaceUseCaseTest {
             result.listIdByContactId,
             "the shared person comes from list 20, where they are most overdue; every shown person has a list",
         )
+    }
+
+    // ─── One list (WIDGET-13, WIDGET-14) ──────────────────────────────────────
+
+    /**
+     * A widget pointed at one list shows that list's first three in its own
+     * queue order, not one head per list: the cross-list loop, fed one list,
+     * would have left "Call suggestions" with nobody beside the lead.
+     */
+    @Test
+    fun oneList_showsItsQueueInOrder_andIgnoresOtherLists() = runTest {
+        val list = listFixture(id = 1L, ruleTemplateId = 1L)
+        val other = listFixture(id = 2L, ruleTemplateId = 1L)
+        val useCase = buildUseCase(
+            contacts = (1L..5L).map { contactFixture(id = it) },
+            lists = listOf(list, other),
+            memberships = listOf(
+                membershipFixture(contactId = 1L, listId = 1L, nextDueAt = T0.minusSeconds(100)),
+                membershipFixture(contactId = 2L, listId = 1L, nextDueAt = T0.minusSeconds(300)),
+                membershipFixture(contactId = 3L, listId = 1L, nextDueAt = T0.minusSeconds(200)),
+                membershipFixture(contactId = 4L, listId = 1L, nextDueAt = T0.plusSeconds(100)),
+                // Most overdue of all, but on the other list: not this widget's.
+                membershipFixture(contactId = 5L, listId = 2L, nextDueAt = T0.minusSeconds(9_000)),
+            ),
+        )
+
+        val result = useCase(WidgetSource.OneList(1L))
+
+        assertEquals(2L, result.primary?.id)
+        assertEquals(listOf(3L, 1L), result.alternatives.map { it.id })
+        assertEquals(mapOf(2L to 1L, 3L to 1L, 1L to 1L), result.listIdByContactId)
+        assertFalse(result.sourceMissing)
+    }
+
+    @Test
+    fun oneList_respectsMax() = runTest {
+        val useCase = buildUseCase(
+            contacts = (1L..3L).map { contactFixture(id = it) },
+            lists = listOf(listFixture(id = 1L, ruleTemplateId = 1L)),
+            memberships = (1L..3L).map {
+                membershipFixture(contactId = it, listId = 1L, nextDueAt = T0.minusSeconds(it * 100))
+            },
+        )
+
+        val result = useCase(WidgetSource.OneList(1L), max = 1)
+
+        assertEquals(3L, result.primary?.id)
+        assertTrue(result.alternatives.isEmpty())
+    }
+
+    /** Nobody to surface on the chosen list is the quiet state, not a missing list. */
+    @Test
+    fun oneList_withNoMembers_isQuietNotMissing() = runTest {
+        val useCase = buildUseCase(
+            contacts = emptyList(),
+            lists = listOf(listFixture(id = 1L, ruleTemplateId = 1L)),
+            memberships = emptyList(),
+        )
+
+        val result = useCase(WidgetSource.OneList(1L))
+
+        assertNull(result.primary)
+        assertFalse(result.sourceMissing)
+    }
+
+    /** WIDGET-14: an archived list is missing, and its members are not shown. */
+    @Test
+    fun oneList_archived_isSourceMissing() = runTest {
+        val useCase = buildUseCase(
+            contacts = listOf(contactFixture(id = 1L)),
+            lists = listOf(listFixture(id = 1L, ruleTemplateId = 1L, isArchived = true)),
+            memberships = listOf(membershipFixture(contactId = 1L, listId = 1L, nextDueAt = T0)),
+        )
+
+        val result = useCase(WidgetSource.OneList(1L))
+
+        assertTrue(result.sourceMissing)
+        assertNull(result.primary)
+        assertTrue(result.alternatives.isEmpty())
+    }
+
+    /** WIDGET-14: a deleted list is missing too; it never falls back to every list. */
+    @Test
+    fun oneList_deleted_isSourceMissing_withoutFallingBackToEveryList() = runTest {
+        val useCase = buildUseCase(
+            contacts = listOf(contactFixture(id = 1L)),
+            lists = listOf(listFixture(id = 2L, ruleTemplateId = 1L)),
+            memberships = listOf(membershipFixture(contactId = 1L, listId = 2L, nextDueAt = T0)),
+        )
+
+        val result = useCase(WidgetSource.OneList(1L))
+
+        assertTrue(result.sourceMissing)
+        assertNull(result.primary)
     }
 }

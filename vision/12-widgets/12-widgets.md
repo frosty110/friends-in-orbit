@@ -34,3 +34,6 @@ Its premise, a random person across all lists, was cut from the app because rand
 
 ### `WIDGET-3` · Carry context onto the larger widget · **Later**
 Where space allows (the 4×2 and up), echo `CARD-1`: show the why-now line or the last note, so the widget answers "why them?" not just "who". The same context that earns a yes inside the app earns it on the home screen. Names are already on the widget; a note body would need the same privacy judgement (`features/privacy-and-lock/README.md`, "Surfaces outside the app").
+
+### `WIDGET-4` · Point a widget at one list · **Built 2026-11-09**
+Each placed widget chooses where it suggests from: every list (as before) or one list, plus whether it shows names and faces. A "Next call" for *Family* on one home screen, "Call suggestions" for *Old friends* on another, without any new action on the widget itself. The widget still never shows a list name. Canonical: `features/widgets/README.md` (WIDGET-12 to WIDGET-16) and [`page-views/widget-settings.md`](../../features/page-views/widget-settings.md).

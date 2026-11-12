@@ -40,16 +40,18 @@ class WidgetUpdateWorker @AssistedInject constructor(
         return try {
             val manager = GlanceAppWidgetManager(applicationContext)
 
-            // 2×2 fan-out — update every placed 2×2 instance.
+            // 2×2 fan-out — redraw every placed 2×2 instance. redraw, not a
+            // bare update(): a widget whose Glance session is still running
+            // would otherwise keep its previous people (see redraw).
             val ids2x2 = manager.getGlanceIds(OrbitWidget2x2::class.java)
             ids2x2.forEach { id ->
-                OrbitWidget2x2().update(applicationContext, id)
+                WidgetUpdateScheduler.redraw(applicationContext, OrbitWidget2x2(), id)
             }
 
-            // 4×2 fan-out — update every placed 4×2 instance.
+            // 4×2 fan-out — redraw every placed 4×2 instance.
             val ids4x2 = manager.getGlanceIds(OrbitWidget4x2::class.java)
             ids4x2.forEach { id ->
-                OrbitWidget4x2().update(applicationContext, id)
+                WidgetUpdateScheduler.redraw(applicationContext, OrbitWidget4x2(), id)
             }
 
             Timber.tag("widget").i(

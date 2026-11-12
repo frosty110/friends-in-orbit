@@ -22,13 +22,12 @@ import kotlinx.coroutines.flow.map
 
 // Tiny Preferences wrapper for the persisted flags: onboarding state, the
 // call-log import window and last-sync time, picker thresholds, appearance,
-// and (re-introduced for WIDGET-04 widget masking only) a minimal-mode flag.
+// and each home-screen widget's settings (WIDGET-12, WIDGET-15).
 // The original minimal-mode + biometric-lock keys were removed 2026-04-28
 // (whole-app review: biometric cut, minimal-mode user-toggle cut). The
-// minimal-mode flag here is scoped entirely to widget rendering: it masks
-// contact names as "Contact" on the home-screen widget surface. There is NO
-// in-app minimal-mode toggle and NO biometric coupling (biometric lock cut on
-// 2026-04-28, ADR 0003 superseded).
+// widget-only minimal-mode flag that survived them (WIDGET-04) was removed on
+// 2026-11-09: nothing ever set it, and each widget's own "Show names and
+// faces" replaced it (WIDGET-15).
 //
 // The call-log "sync enabled" key was removed 2026-10-06: nothing read it.
 // The OS permission is the only switch (ARCH-04), and the two writes that
@@ -144,22 +143,6 @@ open class AppPrefs(private val dataStore: DataStore<Preferences>) {
 
     val lastCallLogSyncAt: Flow<Long> =
         dataStore.data.map { it[KEY_LAST_CALL_LOG_SYNC_AT] ?: 0L }
-
-    /**
-     * WIDGET-04 — widget-only contact-name masking flag.
-     *
-     * When `true`, the 2×2 and 4×2 home-screen widgets replace the contact's
-     * display name with the generic string "Contact" so shoulder-surfers cannot
-     * read the name off the widget. Avatar initials and photos are also masked
-     * to a silhouette. This flag is NOT coupled to any in-app minimal-mode
-     * toggle (the user-facing toggle was cut 2026-04-28, ADR 0003 superseded)
-     * and carries ZERO biometric coupling. It can only be set via
-     * [setMinimalModeEnabled] (currently wired in the Settings surface).
-     *
-     * Default `false` — real names shown unless the user opts into masking.
-     */
-    val minimalModeEnabled: Flow<Boolean> =
-        dataStore.data.map { it[KEY_MINIMAL_MODE] ?: false }
 
     /**
      * 5-minute TTL gate for [app.orbit.data.feed.HomeFeed.refreshDueCountsIfStale].
@@ -297,11 +280,6 @@ open class AppPrefs(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { it[KEY_LAST_CALL_LOG_SYNC_AT] = value.coerceAtLeast(0L) }
     }
 
-    /** WIDGET-04 — setter companion to [minimalModeEnabled]. */
-    suspend fun setMinimalModeEnabled(value: Boolean) {
-        dataStore.edit { it[KEY_MINIMAL_MODE] = value }
-    }
-
     /** Setter companion to [lastDueCountRecomputeAt]; written by the staleness gate on success. */
     open suspend fun setLastDueCountRecomputeAt(epochMs: Long) {
         dataStore.edit { it[KEY_LAST_DUE_COUNT_RECOMPUTE_AT] = epochMs.coerceAtLeast(0L) }
@@ -415,6 +393,85 @@ open class AppPrefs(private val dataStore: DataStore<Preferences>) {
     }
 
     /**
+     * WIDGET-12, WIDGET-15: one placed widget's settings, keyed by its
+     * `appWidgetId`. Absent keys read as [WidgetSettings.DEFAULT] (every list,
+     * names and faces shown), which is what every widget placed before
+     * per-widget settings existed shows, so they need no migration.
+     *
+     * A list id and a boolean, never a name: this store is not encrypted
+     * (features/privacy-and-lock/README.md). Per-widget keys, as NOTIF-15's
+     * per-list ones: each widget's settings are written by its own settings
+     * screen and read by its own render, so they never contend.
+     */
+    fun widgetSettings(appWidgetId: Int): Flow<WidgetSettings> =
+        dataStore.data.map { prefs ->
+            WidgetSettings(
+                source = prefs[widgetListKey(appWidgetId)]
+                    ?.let { WidgetSource.OneList(it) }
+                    ?: WidgetSource.EveryList,
+                namesHidden = prefs[widgetNamesHiddenKey(appWidgetId)] ?: false,
+            )
+        }
+
+    /** WIDGET-12: setter companion to [widgetSettings]'s source. Open for test failures. */
+    open suspend fun setWidgetSource(appWidgetId: Int, source: WidgetSource) {
+        dataStore.edit { prefs ->
+            when (source) {
+                WidgetSource.EveryList -> prefs.remove(widgetListKey(appWidgetId))
+                is WidgetSource.OneList -> prefs[widgetListKey(appWidgetId)] = source.listId
+            }
+        }
+    }
+
+    /** WIDGET-15: setter companion to [widgetSettings]'s names switch. */
+    open suspend fun setWidgetNamesHidden(appWidgetId: Int, hidden: Boolean) {
+        dataStore.edit { it[widgetNamesHiddenKey(appWidgetId)] = hidden }
+    }
+
+    /** WIDGET-16: a removed widget's settings go with it. */
+    suspend fun clearWidgetSettings(appWidgetIds: Collection<Int>) {
+        dataStore.edit { prefs ->
+            appWidgetIds.forEach { id ->
+                prefs.remove(widgetListKey(id))
+                prefs.remove(widgetNamesHiddenKey(id))
+            }
+        }
+    }
+
+    /**
+     * WIDGET-16: the list every widget pointed at one list follows, keyed by
+     * `appWidgetId`. Import reads it before [clearAllWidgetSources] so it can
+     * [restoreWidgetSources] if the database transaction rolls back.
+     */
+    suspend fun widgetSources(): Map<Int, Long> =
+        dataStore.data.first().asMap().entries.mapNotNull { (key, value) ->
+            val id = key.name.removePrefix(WIDGET_LIST_PREFIX).takeIf { it != key.name }?.toIntOrNull()
+            if (id != null && value is Long) id to value else null
+        }.toMap()
+
+    /**
+     * WIDGET-16: every widget back to every list. Import calls this because it
+     * re-inserts the backup's own list ids, so a stored id could name a
+     * different list afterwards. Only the list: whether a widget shows names
+     * and faces names no list, so import never touches it (a widget that hides
+     * names keeps hiding them). [resetAll] already covers reset.
+     */
+    suspend fun clearAllWidgetSources() {
+        dataStore.edit { prefs ->
+            prefs.asMap().keys
+                .filter { it.name.startsWith(WIDGET_LIST_PREFIX) }
+                .forEach { prefs.remove(it) }
+        }
+    }
+
+    /** WIDGET-16: puts back what [widgetSources] read, after a failed import. */
+    suspend fun restoreWidgetSources(sources: Map<Int, Long>) {
+        dataStore.edit { prefs ->
+            sources.forEach { (id, listId) -> prefs[widgetListKey(id)] = listId }
+        }
+    }
+
+    /**
      * SET-06 — destructive wipe of every key in the DataStore. Used by
      * [app.orbit.data.repository.ResetService] in the user-confirmed Reset path.
      *
@@ -431,9 +488,6 @@ open class AppPrefs(private val dataStore: DataStore<Preferences>) {
         private val KEY_CALL_LOG_IMPORT_DAYS = intPreferencesKey("call_log_import_days")
         private val KEY_LAST_CALL_LOG_SYNC_AT = longPreferencesKey("last_call_log_sync_at_ms")
 
-        // WIDGET-04 — widget-only contact-name masking. Re-introduced
-        // scoped to widgets after the in-app toggle was cut (ADR 0003 superseded).
-        private val KEY_MINIMAL_MODE = booleanPreferencesKey("minimal_mode_enabled")
         private val KEY_LAST_DUE_COUNT_RECOMPUTE_AT =
             longPreferencesKey("last_due_count_recompute_at")
         private val KEY_LAST_CONTACTS_INGESTED_AT = longPreferencesKey("last_contacts_ingested_at")
@@ -462,6 +516,12 @@ open class AppPrefs(private val dataStore: DataStore<Preferences>) {
         // NOTIF-15: per-list record of who the last nudge named.
         private fun nudgeLastNamedKey(listId: Long) = longPreferencesKey("nudge_last_named_$listId")
 
+        // WIDGET-16: the list keys share a prefix, so import can find every
+        // widget's list (widgetSources, clearAllWidgetSources) without the ids.
+        private const val WIDGET_LIST_PREFIX = "widget_list_"
+        private fun widgetListKey(appWidgetId: Int) = longPreferencesKey("$WIDGET_LIST_PREFIX$appWidgetId")
+        private fun widgetNamesHiddenKey(appWidgetId: Int) = booleanPreferencesKey("widget_names_hidden_$appWidgetId")
+
         // NOTE-05: calls dismissed from Home's stack, "{id}:{dismissedAtMs}".
         private val KEY_POST_CALL_DISMISSED = stringSetPreferencesKey("post_call_dismissed")
     }
@@ -483,5 +543,22 @@ data class PickerThresholds(
 ) {
     companion object {
         val DEFAULT = PickerThresholds(20, 50, 30, 90)
+    }
+}
+
+/**
+ * WIDGET-12: where a widget suggests people from. [EveryList] is the
+ * cross-list head of every active list, as the widgets have always worked;
+ * [OneList] is that one list's queue (WIDGET-13).
+ */
+sealed interface WidgetSource {
+    data object EveryList : WidgetSource
+    data class OneList(val listId: Long) : WidgetSource
+}
+
+/** One placed widget's settings (WIDGET-12, WIDGET-15), read by [AppPrefs.widgetSettings]. */
+data class WidgetSettings(val source: WidgetSource, val namesHidden: Boolean) {
+    companion object {
+        val DEFAULT = WidgetSettings(WidgetSource.EveryList, namesHidden = false)
     }
 }

@@ -29,7 +29,7 @@ import org.robolectric.annotation.Config
 /**
  * [widgetPeople] is the one path both widgets take from [WidgetSurfaceData]
  * to what they draw: the name, the face, and what a tap does. These pin it
- * where the Glance composition cannot be inspected on the JVM (WIDGET-04,
+ * where the Glance composition cannot be inspected on the JVM (WIDGET-15,
  * WIDGET-08). Until 2026-10-06 the widget tests exercised a parallel copy of
  * this logic that production never called.
  *
@@ -58,42 +58,42 @@ class WidgetPeopleTest {
     private suspend fun people(
         data: WidgetSurfaceData,
         max: Int,
-        minimalMode: Boolean = false,
+        namesHidden: Boolean = false,
     ) = widgetPeople(
         context = context,
         data = data,
         max = max,
-        minimalMode = minimalMode,
+        namesHidden = namesHidden,
         tones = tones,
     )
 
-    // ─── WIDGET-04: minimal mode ─────────────────────────────────────────
+    // ─── WIDGET-15: names and faces hidden ──────────────────────────────
 
     /**
      * Every name is the curtain's word, from the same resource the in-app
      * curtain reads; every face is gone.
      */
     @Test
-    fun minimalMode_masksEveryNameWithTheCurtainWord_andDropsEveryFace() = runBlocking {
+    fun namesHidden_masksEveryNameWithTheCurtainWord_andDropsEveryFace() = runBlocking {
         val masked = context.getString(R.string.components_curtain_contact)
 
-        val people = people(three, max = 3, minimalMode = true)
+        val people = people(three, max = 3, namesHidden = true)
 
         assertEquals(3, people.size)
         people.forEach { person ->
             assertEquals(masked, person.name)
-            assertNull(person.face, "minimal mode draws a silhouette, never a face")
+            assertNull(person.face, "hidden names draw a silhouette, never a face")
         }
         val realNames = listOf(alice, bob, carol).map { it.displayName }
         assertTrue(
             people.none { it.name in realNames },
-            "no real name may reach the widget in minimal mode",
+            "no real name may reach a widget that hides names",
         )
     }
 
     /** Off, the widget writes the display name and prepares a face. */
     @Test
-    fun minimalModeOff_writesTheDisplayName_andPreparesAFace() = runBlocking {
+    fun namesShown_writesTheDisplayName_andPreparesAFace() = runBlocking {
         val people = people(three, max = 3)
 
         assertEquals(

@@ -9,9 +9,16 @@
 // system (APPWIDGET_UPDATE broadcast) can trigger updates (T-11-06 mitigation).
 package app.orbit.widget
 
+import android.content.Context
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 
 class OrbitWidget2x2Receiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = OrbitWidget2x2()
+
+    /** WIDGET-16: a removed widget's settings go with it. */
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        super.onDeleted(context, appWidgetIds)
+        forgetWidgetSettings(context, appWidgetIds)
+    }
 }

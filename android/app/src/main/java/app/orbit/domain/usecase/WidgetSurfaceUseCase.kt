@@ -1,6 +1,7 @@
 package app.orbit.domain.usecase
 
 import androidx.compose.runtime.Immutable
+import app.orbit.data.WidgetSource
 import app.orbit.data.entity.ContactEntity
 import app.orbit.data.repository.ListRepository
 import app.orbit.domain.clock.Clock
@@ -34,9 +35,19 @@ import kotlinx.coroutines.flow.first
  * `SurfaceResult.Found` for the card eyebrow; only the sort key is adjusted.
  * [WidgetSurfaceData.primary] is the head; [WidgetSurfaceData.alternatives] the
  * next 0–2 entries.
+ *
+ * **One list (WIDGET-13):** a widget pointed at one list reads that list's
+ * queue from [SurfaceQueueUseCase] instead. The loop above takes one person
+ * per list, its head, so fed a single list it would yield one person and leave
+ * "Call suggestions" with nobody beside the lead. [SurfaceQueueUseCase] is the
+ * documented sibling of [SurfaceNextUseCase], with the same filter chain and
+ * comparator and the same head, so this adds no second copy of the filters and
+ * the IGNORE-08 note above still holds. The time-of-day penalty is uniform
+ * inside one list (ADR 0008), so it does not apply.
  */
 class WidgetSurfaceUseCase @Inject constructor(
     private val surfaceNext: SurfaceNextUseCase,
+    private val surfaceQueue: SurfaceQueueUseCase,
     private val listRepo: ListRepository,
     private val clock: Clock,
     private val zoneId: ZoneId,
@@ -51,7 +62,32 @@ class WidgetSurfaceUseCase @Inject constructor(
      * a cold one-shot read is the correct pattern (unlike in-app ViewModels
      * which keep a live Flow collected).
      */
-    suspend operator fun invoke(): WidgetSurfaceData {
+    suspend operator fun invoke(
+        source: WidgetSource = WidgetSource.EveryList,
+        max: Int = MAX_SHOWN,
+    ): WidgetSurfaceData = when (source) {
+        WidgetSource.EveryList -> everyList(max)
+        is WidgetSource.OneList -> oneList(source.listId, max)
+    }
+
+    /**
+     * WIDGET-13, WIDGET-14: the first [max] of one list's queue, or
+     * [WidgetSurfaceData.sourceMissing] when that list is archived or deleted.
+     * Archived lists are not active, so restoring one brings its widget back.
+     */
+    private suspend fun oneList(listId: Long, max: Int): WidgetSurfaceData {
+        if (listRepo.observeActive().first().none { it.id == listId }) {
+            return WidgetSurfaceData(primary = null, alternatives = emptyList(), sourceMissing = true)
+        }
+        val shown = surfaceQueue(listId).first().take(max).map { it.contact }
+        return WidgetSurfaceData(
+            primary = shown.firstOrNull(),
+            alternatives = shown.drop(1),
+            listIdByContactId = shown.associate { it.id to listId },
+        )
+    }
+
+    private suspend fun everyList(max: Int): WidgetSurfaceData {
         val activeLists = listRepo.observeActive().first()
         val now = clock.now()
 
@@ -93,7 +129,7 @@ class WidgetSurfaceUseCase @Inject constructor(
             .sortedWith(compareBy<Candidate> { it.effectiveKey }.thenBy { it.contact.id })
             .distinctBy { it.contact.id }
 
-        val shown = sorted.take(3)
+        val shown = sorted.take(max)
         return WidgetSurfaceData(
             primary      = shown.firstOrNull()?.contact,
             alternatives = shown.drop(1).map { it.contact },
@@ -102,6 +138,11 @@ class WidgetSurfaceUseCase @Inject constructor(
             // list's deck, where they are the head.
             listIdByContactId = shown.associate { it.contact.id to it.listId },
         )
+    }
+
+    companion object {
+        /** The most any widget shows: "Call suggestions"' lead and two more (WIDGET-02). */
+        const val MAX_SHOWN = 3
     }
 }
 
@@ -130,4 +171,9 @@ data class WidgetSurfaceData(
      * need names.
      */
     val listIdByContactId: Map<Long, Long> = emptyMap(),
+    /**
+     * WIDGET-14: the widget's chosen list is archived or deleted, so it shows
+     * "Choose a list" instead of people. Never true for every list.
+     */
+    val sourceMissing: Boolean = false,
 )
