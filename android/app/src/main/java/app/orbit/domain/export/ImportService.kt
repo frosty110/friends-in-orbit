@@ -89,14 +89,40 @@ open class ImportService @Inject constructor(
      *
      * WIDGET-16: the backup's lists come back under the backup's own ids, so
      * a widget pointed at one list could start showing a different list's
-     * people. Every widget goes back to every list first: if that write
-     * fails, the import fails before touching the database (rules.md Code 3);
-     * if the transaction then fails, the widgets show every list, which is
-     * harmless. The refresh after it is the one a replaced database always
-     * needed (WIDGET-06) and, until 2026-11-09, did not ask for.
+     * people. Every widget goes back to every list before the transaction: if
+     * that write fails, the import fails before touching the database
+     * (rules.md Code 3). If the transaction then fails, each widget's list is
+     * put back, so a failed import changes nothing here either. A widget's
+     * names-and-faces switch names no list, so import never touches it: a
+     * widget that hides names keeps hiding them whatever the import does.
+     * The refresh after it is the one a replaced database always needed
+     * (WIDGET-06) and, until 2026-11-09, did not ask for.
      */
     open suspend fun apply(payload: ImportPayload): ImportSummary {
-        appPrefs.clearAllWidgetSettings()
+        val widgetSources = appPrefs.widgetSources()
+        appPrefs.clearAllWidgetSources()
+        try {
+            replaceDatabase(payload)
+        } catch (t: Throwable) {
+            // Put the widgets back, then report the failure the caller already
+            // handles (ApplyFailed). If even that write fails, the widgets show
+            // every list, not another list's people, and the import's own
+            // error is the one to surface.
+            runCatching { appPrefs.restoreWidgetSources(widgetSources) }
+                .exceptionOrNull()
+                ?.let { t.addSuppressed(it) }
+            throw t
+        }
+        widgetRefresh.scheduleRefresh()
+        return ImportSummary(
+            listCount = payload.lists.size,
+            contactCount = payload.contacts.size,
+            callEventCount = payload.callEvents.size,
+            noteCount = payload.notes.size,
+        )
+    }
+
+    private suspend fun replaceDatabase(payload: ImportPayload) {
         database.withTransaction {
             // Wipe child tables before parents so FK constraints never trip.
             // Raw DELETEs on the transaction connection — the repositories
@@ -120,13 +146,6 @@ open class ImportService @Inject constructor(
             payload.callEvents.forEach { database.callEventDao().insert(it) }
             payload.notes.forEach { database.noteDao().insert(it) }
         }
-        widgetRefresh.scheduleRefresh()
-        return ImportSummary(
-            listCount = payload.lists.size,
-            contactCount = payload.contacts.size,
-            callEventCount = payload.callEvents.size,
-            noteCount = payload.notes.size,
-        )
     }
 
     companion object {

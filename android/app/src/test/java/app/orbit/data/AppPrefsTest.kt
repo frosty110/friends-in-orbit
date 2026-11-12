@@ -139,16 +139,35 @@ class AppPrefsTest {
     }
 
     @Test
-    fun clearAllWidgetSettings_resets_every_widget_and_nothing_else() = runTest {
+    fun clearAllWidgetSources_resets_every_widgets_list_and_nothing_else() = runTest {
         prefs.setCallLogImportDays(30)
         prefs.setWidgetSource(appWidgetId = 3, source = WidgetSource.OneList(1L))
         prefs.setWidgetNamesHidden(appWidgetId = 4, hidden = true)
 
-        prefs.clearAllWidgetSettings()
+        prefs.clearAllWidgetSources()
 
         assertEquals(WidgetSettings.DEFAULT, prefs.widgetSettings(3).first())
-        assertEquals(WidgetSettings.DEFAULT, prefs.widgetSettings(4).first())
+        assertEquals(
+            WidgetSettings(WidgetSource.EveryList, namesHidden = true),
+            prefs.widgetSettings(4).first(),
+            "a widget's names switch names no list, so it stays",
+        )
         assertEquals(30, prefs.callLogImportDays.first(), "other settings stay")
+    }
+
+    @Test
+    fun widgetSources_and_restoreWidgetSources_round_trip() = runTest {
+        prefs.setWidgetSource(appWidgetId = 3, source = WidgetSource.OneList(1L))
+        prefs.setWidgetSource(appWidgetId = 4, source = WidgetSource.OneList(2L))
+        prefs.setWidgetNamesHidden(appWidgetId = 5, hidden = true)
+        val saved = prefs.widgetSources()
+
+        prefs.clearAllWidgetSources()
+        prefs.restoreWidgetSources(saved)
+
+        assertEquals(mapOf(3 to 1L, 4 to 2L), saved, "only widgets on one list, and never the names keys")
+        assertEquals(WidgetSource.OneList(1L), prefs.widgetSettings(3).first().source)
+        assertEquals(WidgetSource.OneList(2L), prefs.widgetSettings(4).first().source)
     }
 
     /** SET-06: reset wipes the store, widget settings with it. */

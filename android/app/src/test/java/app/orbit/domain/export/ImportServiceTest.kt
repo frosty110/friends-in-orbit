@@ -288,10 +288,10 @@ class ImportServiceTest {
     }
 
     @Test
-    fun `import puts every widget back to every list and refreshes them`() = runBlocking {
+    fun `import puts every widget back to every list, keeps hidden names, and refreshes them`() = runBlocking {
         // WIDGET-16: the backup's lists come back under its own ids, so a
         // widget pointed at list 1 must not quietly start showing whatever
-        // list 1 is now.
+        // list 1 is now. Its names switch names no list, so it stays.
         prefs.setWidgetSource(appWidgetId = 7, source = WidgetSource.OneList(1L))
         prefs.setWidgetNamesHidden(appWidgetId = 7, hidden = true)
         prefs.setWidgetSource(appWidgetId = 8, source = WidgetSource.OneList(2L))
@@ -306,9 +306,31 @@ class ImportServiceTest {
             file.delete()
         }
 
-        assertEquals(WidgetSettings.DEFAULT, prefs.widgetSettings(7).first())
+        assertEquals(WidgetSettings(WidgetSource.EveryList, namesHidden = true), prefs.widgetSettings(7).first())
         assertEquals(WidgetSettings.DEFAULT, prefs.widgetSettings(8).first())
         assertEquals(1, widgetRefreshes)
+    }
+
+    @Test
+    fun `a failed import leaves every widget's settings as they were`() = runBlocking {
+        // WIDGET-16 and the import's own contract: a rolled-back import
+        // changes nothing. Until this was fixed the widgets' settings were
+        // cleared before the transaction and stayed cleared, so a widget that
+        // hid names showed them after an import that had failed.
+        prefs.setWidgetSource(appWidgetId = 7, source = WidgetSource.OneList(1L))
+        prefs.setWidgetNamesHidden(appWidgetId = 7, hidden = true)
+        prefs.setWidgetSource(appWidgetId = 8, source = WidgetSource.OneList(2L))
+        // A membership in a list the backup does not carry: the foreign key
+        // fails the insert, and the transaction rolls back.
+        val broken = envelopeFixture().let { envelope ->
+            envelope.copy(memberships = envelope.memberships + MembershipExport(contactId = 1L, listId = 99L, addedAt = 10_000L, skipCount = 0))
+        }.toPayload(Instant.ofEpochMilli(0L))
+
+        assertFailsWith<Exception> { importService().apply(broken) }
+
+        assertEquals(WidgetSettings(WidgetSource.OneList(1L), namesHidden = true), prefs.widgetSettings(7).first())
+        assertEquals(WidgetSettings(WidgetSource.OneList(2L), namesHidden = false), prefs.widgetSettings(8).first())
+        assertEquals(0, widgetRefreshes, "nothing was replaced, so nothing to redraw")
     }
 
     @Test

@@ -439,15 +439,35 @@ open class AppPrefs(private val dataStore: DataStore<Preferences>) {
     }
 
     /**
-     * WIDGET-16: every widget back to [WidgetSettings.DEFAULT]. Import calls
-     * this because it re-inserts the backup's own list ids, so a stored id
-     * could name a different list afterwards. [resetAll] already covers reset.
+     * WIDGET-16: the list every widget pointed at one list follows, keyed by
+     * `appWidgetId`. Import reads it before [clearAllWidgetSources] so it can
+     * [restoreWidgetSources] if the database transaction rolls back.
      */
-    suspend fun clearAllWidgetSettings() {
+    suspend fun widgetSources(): Map<Int, Long> =
+        dataStore.data.first().asMap().entries.mapNotNull { (key, value) ->
+            val id = key.name.removePrefix(WIDGET_LIST_PREFIX).takeIf { it != key.name }?.toIntOrNull()
+            if (id != null && value is Long) id to value else null
+        }.toMap()
+
+    /**
+     * WIDGET-16: every widget back to every list. Import calls this because it
+     * re-inserts the backup's own list ids, so a stored id could name a
+     * different list afterwards. Only the list: whether a widget shows names
+     * and faces names no list, so import never touches it (a widget that hides
+     * names keeps hiding them). [resetAll] already covers reset.
+     */
+    suspend fun clearAllWidgetSources() {
         dataStore.edit { prefs ->
             prefs.asMap().keys
-                .filter { it.name.startsWith(WIDGET_KEY_PREFIX) }
+                .filter { it.name.startsWith(WIDGET_LIST_PREFIX) }
                 .forEach { prefs.remove(it) }
+        }
+    }
+
+    /** WIDGET-16: puts back what [widgetSources] read, after a failed import. */
+    suspend fun restoreWidgetSources(sources: Map<Int, Long>) {
+        dataStore.edit { prefs ->
+            sources.forEach { (id, listId) -> prefs[widgetListKey(id)] = listId }
         }
     }
 
@@ -496,12 +516,11 @@ open class AppPrefs(private val dataStore: DataStore<Preferences>) {
         // NOTIF-15: per-list record of who the last nudge named.
         private fun nudgeLastNamedKey(listId: Long) = longPreferencesKey("nudge_last_named_$listId")
 
-        // WIDGET-16: one prefix for both per-widget keys, so
-        // clearAllWidgetSettings finds them without knowing the ids.
-        private const val WIDGET_KEY_PREFIX = "widget_"
-        private fun widgetListKey(appWidgetId: Int) = longPreferencesKey("${WIDGET_KEY_PREFIX}list_$appWidgetId")
-        private fun widgetNamesHiddenKey(appWidgetId: Int) =
-            booleanPreferencesKey("${WIDGET_KEY_PREFIX}names_hidden_$appWidgetId")
+        // WIDGET-16: the list keys share a prefix, so import can find every
+        // widget's list (widgetSources, clearAllWidgetSources) without the ids.
+        private const val WIDGET_LIST_PREFIX = "widget_list_"
+        private fun widgetListKey(appWidgetId: Int) = longPreferencesKey("$WIDGET_LIST_PREFIX$appWidgetId")
+        private fun widgetNamesHiddenKey(appWidgetId: Int) = booleanPreferencesKey("widget_names_hidden_$appWidgetId")
 
         // NOTE-05: calls dismissed from Home's stack, "{id}:{dismissedAtMs}".
         private val KEY_POST_CALL_DISMISSED = stringSetPreferencesKey("post_call_dismissed")
